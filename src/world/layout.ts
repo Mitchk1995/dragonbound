@@ -53,6 +53,8 @@ export interface PropSpawn {
   s?: number;
   /** Builder argument for length-based props (bridge span, rail length). */
   len?: number;
+  /** Builder variant/seed for props that take one alongside a length (ruin walls, slabs). */
+  v?: number;
 }
 
 /** Liquid in a cell: rendered as a lowered bed with an animated surface. Bridges are walkable cells over it. */

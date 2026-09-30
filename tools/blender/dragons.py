@@ -213,7 +213,7 @@ def drakeling():
     box(head, (0.44, 0.36, 0.46), (0, 0.12, 0.04), main, bevel=0.05)                               # skull
     beam(head, (0, 0.06, 0.2), (0, 0.02, 0.8), 0.32, 0.23, main, taper=(0.72, 0.7), bevel=0.03)   # snout
     for s in (-1, 1):
-        box(head, (0.15, 0.06, 0.24), (s * 0.13, 0.29, 0.2), dark, rot=(0.2, 0, s * -0.3), bevel=0.015)  # brow
+        box(head, (0.17, 0.08, 0.2), (s * 0.13, 0.265, 0.22), main, rot=(0.12, 0, s * -0.12), bevel=0.02)  # brow shelf
         box(head, (0.12, 0.06, 0.04), (s * 0.13, 0.22, 0.27), 'eye', emissive='eye', strength=4, rot=(0, s * 0.3, s * 0.2), bevel=0)
         box(head, (0.05, 0.03, 0.04), (s * 0.06, 0.1, 0.8), 0x3A120C, bevel=0)  # nostril
         horn(head, curve((s * 0.13, 0.24, -0.04), (s * 0.24, 0.32, -0.5), (s * 0.02, 0.1, 0.02)), 0.11, horn_col)

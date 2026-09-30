@@ -105,29 +105,41 @@ svg { display: block; }
 /* ── Title & creation ─────────────────────────────────────────── */
 .screen { pointer-events: none; }
 .screen .frame, .screen button, .screen input, .screen label { pointer-events: auto; }
-.title-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(4, 2, 10, 0.85) 100%); }
-.logo { position: absolute; top: 11%; width: 100%; text-align: center; }
+/*
+ * Title: the keep orbits in the middle of the screen, so the logo and menu sit in a shaded left
+ * column and the centre stays clear. The menu is plain engraved text, not a box.
+ */
+.title-vignette {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, rgba(6, 4, 10, 0.9) 0%, rgba(6, 4, 10, 0.72) 22%, rgba(6, 4, 10, 0.3) 38%, transparent 55%),
+    radial-gradient(ellipse at 62% 48%, transparent 48%, rgba(4, 2, 10, 0.6) 100%);
+}
+.title .logo { position: absolute; left: clamp(28px, 6vw, 110px); top: 15%; text-align: left; }
 .logo-main {
-  font-family: var(--serif); font-weight: 800; font-size: clamp(30px, 6vw, 96px); letter-spacing: 0.12em; white-space: nowrap;
+  font-family: var(--serif); font-weight: 800; font-size: clamp(32px, 3.9vw, 66px); letter-spacing: 0.1em; white-space: nowrap; line-height: 1;
   background: linear-gradient(#fff4d0, #e8b654 45%, #8a5a1a 75%, #e8b654);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 4px 0 #1a0e04) drop-shadow(0 0 24px rgba(255, 110, 30, 0.45));
+  filter: drop-shadow(0 4px 0 #1a0e04) drop-shadow(0 0 22px rgba(255, 110, 30, 0.35));
 }
-.logo-rule { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--gold); margin: 6px 0; }
-.logo-rule span { width: 160px; height: 1px; background: linear-gradient(90deg, transparent, var(--gold)); }
-.logo-rule span:last-child { background: linear-gradient(90deg, var(--gold), transparent); }
-.logo-sub { font-family: var(--serif); font-size: 18px; letter-spacing: 6px; color: #d8c8a8; text-shadow: 0 2px 4px #000; }
-.menu { position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); width: 340px; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.logo-rule { display: flex; align-items: center; gap: 10px; color: var(--gold); font-size: 11px; margin: 14px 0 8px; }
+.logo-rule span { width: 150px; height: 1px; background: linear-gradient(90deg, var(--gold), transparent); }
+.logo-rule span:first-child { width: 36px; background: var(--gold); }
+.logo-sub { font-family: var(--serif); font-size: 16px; letter-spacing: 5px; color: #d8c8a8; text-shadow: 0 2px 4px #000; }
+.title .menu { position: absolute; left: clamp(28px, 6vw, 110px); top: calc(15% + clamp(32px, 3.9vw, 66px) + 112px); width: 320px; display: flex; flex-direction: column; gap: 2px; }
 .mbtn {
-  font-family: var(--serif); font-weight: 600; font-size: 18px; letter-spacing: 2px; padding: 12px;
-  color: #e8dcc0; background: linear-gradient(rgba(60,54,48,0.85), rgba(30,26,24,0.9));
-  border: 1px solid #0c0a08; border-radius: 3px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+  position: relative; text-align: left; padding: 9px 0 9px 22px; background: none; border: none; border-radius: 0;
+  font-family: var(--serif); font-weight: 600; font-size: 20px; letter-spacing: 3px; color: #cfc2a6; text-shadow: 0 2px 4px #000;
+  transition: color 0.12s, padding-left 0.12s;
 }
-.mbtn small { display: block; font-family: var(--sans); font-size: 12px; letter-spacing: 0; color: var(--dim); margin-top: 2px; }
-.mbtn:hover { color: #fff; background: linear-gradient(rgba(90,70,40,0.9), rgba(40,30,20,0.95)); }
-.mbtn.primary { color: #ffe8b0; background: linear-gradient(#7a4c18, #3a220a); }
-.mbtn.primary:hover { background: linear-gradient(#946020, #4a2c0e); }
-.title-foot { position: absolute; bottom: 20px; width: 100%; text-align: center; color: #8a7a68; font-size: 13px; letter-spacing: 1px; }
+.mbtn::before { content: "◆"; position: absolute; left: 0; top: 14px; font-size: 11px; color: var(--gold); opacity: 0; transition: opacity 0.12s; }
+.mbtn small { display: block; font-family: var(--sans); font-size: 13px; letter-spacing: 0.5px; color: var(--dim); margin-top: 3px; }
+.mbtn:hover { color: #fff4d8; padding-left: 26px; }
+.mbtn:hover::before, .mbtn.primary::before { opacity: 1; }
+.mbtn.primary { color: var(--gold-hi); font-size: 24px; margin-bottom: 8px; }
+.mbtn.primary::before { top: 17px; }
+.mbtn.primary::after { content: ''; position: absolute; left: 22px; bottom: 0; width: 180px; height: 1px; background: linear-gradient(90deg, var(--gold-dim), transparent); }
+.title-foot { position: absolute; left: clamp(28px, 6vw, 110px); bottom: 26px; color: #8a7a68; font-size: 13px; letter-spacing: 1px; text-shadow: 0 1px 3px #000; }
 
 .create-panel { position: absolute; left: 3%; top: 50%; transform: translateY(-50%); width: 400px; max-height: 96vh; display: flex; flex-direction: column; }
 .create-panel .pbody { overflow: auto; }
@@ -416,18 +428,29 @@ svg { display: block; }
 .stances { display: flex; gap: 4px; }
 .stance { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px 3px; font-size: 11.5px; background: var(--tex-inset); border: 1px solid #3a3a40; border-radius: 4px; color: var(--dim); }
 .stance.on { border-color: var(--gold); color: var(--gold-hi); box-shadow: 0 0 8px rgba(216,178,90,0.3), inset 0 0 8px rgba(216,178,90,0.15); }
-.skillgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+/* Square tiles on the inventory's own grid: icon above, level out of 99 below. Hover for the XP. */
+.skillgrid { display: grid; grid-template-columns: repeat(4, var(--slot)); gap: var(--gap); }
 .stile {
-  position: relative; display: flex; align-items: center; justify-content: space-between; gap: 2px; height: 42px; padding: 3px 6px 6px 4px;
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   background: var(--tex-inset); border: 1px solid #0a0806; border-radius: 4px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.8); pointer-events: auto;
 }
-.stile:hover { border-color: var(--gold-dim); }
-.stile b { font-family: var(--serif); font-weight: 800; font-size: 18px; color: var(--c); text-shadow: 0 1px 2px #000; }
-.stile .sbar { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 3px; background: #050403; border-radius: 2px; overflow: hidden; }
-.stile .sbar div { height: 100%; background: var(--c); }
-.stile.locked { opacity: 0.38; --c: #999; }
-.total { margin-top: 8px; font-size: 13px; color: var(--dim); text-align: center; }
-.total b { color: var(--gold); }
+.stile:hover { border-color: var(--gold-dim); box-shadow: inset 0 2px 6px rgba(0,0,0,0.8), 0 0 6px rgba(216,178,90,0.25); }
+.stile .si { display: grid; place-items: center; height: 26px; }
+.stile .slv { display: flex; align-items: baseline; line-height: 1; font-variant-numeric: tabular-nums; }
+.stile .slv b { font-family: var(--serif); font-weight: 800; font-size: 14px; color: var(--gold-hi); text-shadow: 0 1px 2px #000; }
+.stile .slv i { font-style: normal; font-size: 10.5px; color: var(--dim); margin-left: 1px; }
+.stile.locked .si { filter: grayscale(1) brightness(0.7); opacity: 0.55; }
+.stile.locked .slv i { font-size: 10px; letter-spacing: 0.5px; color: #6e6454; }
+.stile.stotal { background: linear-gradient(#2c2620, #17130f); border-color: #4a3a20; }
+.stile.stotal span { font-family: var(--serif); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
+.stile.stotal b { font-family: var(--serif); font-weight: 800; font-size: 16px; color: var(--gold); text-shadow: 0 1px 2px #000; }
+/* Skill hover card: label/value rows and a progress bar toward the next level. */
+.tt-lv { font-size: 14px; color: var(--gold-hi); margin-left: 4px; }
+.tt-row { display: flex; justify-content: space-between; gap: 18px; font-size: 13.5px; color: var(--dim); }
+.tt-row b { color: var(--text); font-variant-numeric: tabular-nums; }
+.tt-prog { position: relative; height: 16px; margin-top: 6px; background: #050403; border: 1px solid #3a2e1c; border-radius: 3px; overflow: hidden; }
+.tt-prog div { position: absolute; inset: 0 auto 0 0; background: linear-gradient(color-mix(in srgb, var(--c) 85%, #fff), color-mix(in srgb, var(--c) 70%, #000)); opacity: 0.85; }
+.tt-prog span { position: relative; display: block; text-align: center; font-size: 11.5px; line-height: 16px; color: #fff; text-shadow: 0 1px 2px #000; }
 
 .banktop { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; color: var(--dim); font-size: 13px; }
 .banktop .search { flex: 1; }

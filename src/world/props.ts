@@ -1305,13 +1305,172 @@ const BUILDERS: Record<string, Builder> = {
     chunk(k, g, 150, [0.4, 0.3, 0.35], [-0.5, 0, 0.4], BLOCKS[2], 1);
   },
   brazier: (k, g) => {
+    // Kept low: an iron bowl of coals giving a warm pool of light, not a beacon (bloom only just
+    // catches the coals).
     k.mesh(g, taper(0.6, 0.6, 0.3, 0.3, 0.16), IRON, [0, 0.08, 0]);
     cb(k, g, [0.16, 0.6, 0.16], [0, 0.46, 0], IRON, undefined, 0.02);
     k.mesh(g, taper(0.42, 0.42, 0.8, 0.8, 0.3), IRON, [0, 0.9, 0]);
-    k.box(g, [0.66, 0.06, 0.66], [0, 1.03, 0], PAL.fire, undefined, PAL.fire, 1.8);
-    const f = flame(k, g, 0, 0.95, 0, 0.8);
-    const l = light(g, 0xff6a2a, 8, 8, 1.4);
-    return { obj: g, light: l, tick: f };
+    k.box(g, [0.66, 0.06, 0.66], [0, 1.03, 0], 0x4a1c0c, undefined, PAL.fire, 0.4);
+    const f = flame(k, g, 0, 0.95, 0, 0.7);
+    g.traverse((o) => {
+      if (o.name === 'flame') ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5;
+    });
+    const l = light(g, 0xff7a3a, 3.2, 7, 1.5);
+    return { obj: g, light: l, tick: (t: number) => { f(t); l.intensity = 3.2 + Math.sin(t * 9 + g.id) * 0.3; } };
+  },
+  /**
+   * A length of ruined city wall along local X (`arg` = { len, v }): a sunk plinth course and a few
+   * courses of big ashlar blocks in running bond, broken down to a stepped top (the height and the
+   * way it has fallen come from `v`), with the odd block fallen at its foot. Bold, few pieces.
+   * `v` ≥ 10000: a drowned wall, only its broken top breaking the water.
+   */
+  ruin_wall: (k, g, arg) => {
+    const len = Math.max(1.6, arg?.len ?? 4), v = arg?.v ?? 800;
+    const drowned = v >= 10000, sd = v % 100;
+    const H = drowned ? 0.5 + hash01(sd, 1) * 0.5 : Math.max(0.6, Math.floor((v % 10000) / 100) / 10 * 1.5);
+    const shades = [0x7a7870, 0x6e6a66, 0x6a6860];
+    const D = 0.9, rowH = 0.6, y0 = drowned ? -1.25 : 0.2;
+    if (!drowned) cb(k, g, [q(len + 0.2), 1.3, D + 0.2], [0, -0.45, 0], 0x6a6860, undefined, 0.06);
+    const rows = Math.max(1, Math.round((H - (drowned ? -1.25 : 0.2)) / rowH));
+    // Broken profile: which fraction of the length still stands at each height.
+    const mode = Math.floor(hash01(sd, 2) * 4);
+    const prof = (x: number) => {
+      const t = x / len + 0.5;
+      return mode === 0 ? 1 - t * 0.75 : mode === 1 ? 0.25 + t * 0.75 : mode === 2 ? 1 - Math.sin(t * Math.PI) * 0.6 : 0.55 + Math.sin(t * Math.PI) * 0.45;
+    };
+    for (let r = 0; r < rows; r++) {
+      let x = -len / 2 + (r % 2 ? 0 : -0.5);
+      let b = 0;
+      while (x < len / 2 - 0.05) {
+        const bl = 1.2 + hash01(sd, r, b) * 1.0;
+        const a = Math.max(-len / 2, x), e = Math.min(len / 2, x + bl);
+        x += bl;
+        b++;
+        if (e - a < 0.45) continue;
+        const mid = (a + e) / 2;
+        // Rows above the standing profile are gone; the top row keeps only its highest stretch.
+        if ((r + 1) / rows > prof(mid) + 0.08) continue;
+        const inset = hash01(sd, r, b, 5) * 0.08;
+        cb(k, g, [q(e - a - 0.06), rowH - 0.04, q(D - inset)], [mid, y0 + r * rowH + rowH / 2, (hash01(sd, r, b, 6) - 0.5) * 0.08], shades[(r + b) % 3], undefined, 0.07);
+      }
+    }
+    if (!drowned && hash01(sd, 9) < 0.55) {
+      // One block fallen at the foot, lying askew.
+      const side = hash01(sd, 10) < 0.5 ? -1 : 1, fx = (hash01(sd, 11) - 0.5) * len * 0.6;
+      cb(k, g, [1.3, 0.55, 0.8], [fx, 0.22, side * 1.05], shades[1], [0.08 * side, 0.4 + hash01(sd, 12), 0.1], 0.07);
+    }
+  },
+  /** A dry-cracked market fountain: an octagonal curb (one block fallen out) round a pool of rainwater. */
+  fountain_ruin: (k, g) => {
+    const R = 2.75;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      if (i === 3) {
+        cb(k, g, [2.1, 0.55, 0.55], [Math.sin(a) * (R + 1.0), 0.2, Math.cos(a) * (R + 1.0)], 0x6e6a66, [0.1, a + 0.5, 0.25], 0.07);
+        continue;
+      }
+      cb(k, g, [2.25, 0.6, 0.55], [Math.sin(a) * R, 0.3, Math.cos(a) * R], i % 2 ? 0x7a7870 : 0x6e6a66, [0, a, 0], 0.07);
+    }
+    k.cyl(g, R - 0.2, R - 0.2, 0.1, [0, 0.12, 0], PUDDLE, [0, Math.PI / 8, 0], 8);
+  },
+  /** Big paving slabs keeping a narrow way across a slumped causeway (along local Z; `arg` = span). */
+  sunken_slabs: (k, g, arg) => {
+    const span = Math.max(2, arg ?? 4), n = Math.max(2, Math.round(span / 1.3));
+    for (let i = 0; i < n; i++) {
+      const z = -span / 2 + (i + 0.5) * (span / n), s = hash01(i, span, 3);
+      cb(k, g, [q(2.1 + s * 0.3), 0.36, q(span / n - 0.12)], [(s - 0.5) * 0.25, -0.16 + s * 0.08, z], i % 2 ? 0x6e6a66 : 0x7a7870, [(s - 0.5) * 0.06, (s - 0.5) * 0.2, (hash01(i, 7) - 0.5) * 0.08], 0.05);
+    }
+    // Slabs that went under, tipped at the sides of the gap.
+    for (const sx of [-1, 1]) cb(k, g, [1.3, 0.3, 1.5], [sx * 1.9, -0.42, (hash01(sx, span) - 0.5) * span * 0.5], 0x6a6860, [0, 0.3 * sx, sx * 0.32], 0.05);
+  },
+  /** The temple's stepped dais with the altar on top (faces +Z). */
+  temple_dais: (k, g) => {
+    const DAIS = [0x6a6860, 0x6e6a66, 0x7a7870];
+    const steps: [number, number, number][] = [[10.4, 5.4, 0.3], [8.2, 4.4, 0.3], [6.0, 3.4, 0.3]];
+    let y = -0.05;
+    steps.forEach(([sw, sd, sh], i) => {
+      cb(k, g, [sw, sh, sd], [0, y + sh / 2, -(5.4 - sd) / 2 * 0.6], DAIS[i], undefined, 0.06);
+      y += sh;
+    });
+    const top = y, zc = -(5.4 - 3.4) / 2 * 0.6;
+    // The altar: a heavy block on a footing, a darker slab lid, the seal's socket glowing faintly.
+    cb(k, g, [3.0, 0.3, 1.6], [0, top + 0.15, zc - 0.2], STONE_DD, undefined, 0.05);
+    cb(k, g, [2.6, 0.8, 1.2], [0, top + 0.7, zc - 0.2], 0x6e6a66, undefined, 0.06);
+    cb(k, g, [2.9, 0.2, 1.5], [0, top + 1.2, zc - 0.2], 0x7a7870, undefined, 0.04);
+    k.box(g, [0.9, 0.05, 0.6], [0, top + 1.32, zc - 0.2], 0x4a1c0c, undefined, PAL.fire, 0.35);
+    // Two tall broken stelae behind it.
+    for (const sx of [-1, 1]) cb(k, g, [0.9, sx > 0 ? 2.4 : 3.1, 0.6], [sx * 2.4, top + (sx > 0 ? 1.2 : 1.55), zc - 1.1], 0x6e6a66, [0, 0, sx * 0.03], 0.08);
+  },
+  /**
+   * The cultists' dais (the way in runs along local +X): three stepped
+   * square tiers of dark basalt-grey stone, a ritual circle inlaid in the top (a ring and four
+   * spokes, a faint ember glow), and the altar block at the back with the cult's sigil stone.
+   */
+  ritual_dais: (k, g) => {
+    const SH = [0x4a4440, 0x554c48, 0x5e5650];
+    const tiers: [number, number][] = [[8.2, 0.3], [6.6, 0.3], [5.0, 0.28]];
+    let y = -0.05;
+    tiers.forEach(([s, h], i) => {
+      cb(k, g, [s, h, s], [0, y + h / 2, 0], SH[i], undefined, 0.07);
+      y += h;
+    });
+    const top = y, GLOW = 0x6a2410;
+    // Ritual circle: an octagonal ring of thin inlaid strips with four spokes to a centre stone.
+    const R = 1.7;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      k.box(g, [1.36, 0.03, 0.12], [Math.sin(a) * R, top + 0.015, Math.cos(a) * R], GLOW, [0, a, 0], PAL.fire, 0.35);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      k.box(g, [0.09, 0.03, 1.1], [Math.sin(a) * 0.95, top + 0.015, Math.cos(a) * 0.95], GLOW, [0, a, 0], PAL.fire, 0.3);
+    }
+    cb(k, g, [0.6, 0.12, 0.6], [0, top + 0.06, 0], 0x3a3230, [0, Math.PI / 4, 0], 0.04);
+    // The altar at the back (−X), facing the way in: a heavy block, a slab lid, a sigil stone.
+    cb(k, g, [1.3, 0.9, 2.4], [-1.6, top + 0.45, 0], 0x3e3634, undefined, 0.06);
+    cb(k, g, [1.5, 0.18, 2.6], [-1.6, top + 0.99, 0], 0x554c48, undefined, 0.04);
+    k.mesh(g, taper(0.55, 0.3, 0.3, 0.16, 1.3, 0, 0), 0x3a3230, [-1.95, top + 1.73, 0]);
+    k.box(g, [0.05, 0.36, 0.16], [-1.66, top + 1.7, 0], GLOW, undefined, PAL.fire, 0.6);
+    k.box(g, [0.05, 0.12, 0.34], [-1.66, top + 1.62, 0], GLOW, undefined, PAL.fire, 0.6);
+  },
+  /**
+   * An obelisk of the processional way (`arg` = 0 standing, 1 broken off, 2 toppled): a tapered
+   * dark shaft on a stepped plinth with a pyramid cap and a line of faint runes on its face (+Z).
+   */
+  obelisk: (k, g, v) => {
+    const s = v ?? 0, OB = 0x3e3634, OB_L = 0x4a4240, RUNE = 0x8a2a14;
+    cb(k, g, [1.3, 0.3, 1.3], [0, 0.1, 0], 0x554c48, undefined, 0.05);
+    cb(k, g, [1.0, 0.3, 1.0], [0, 0.4, 0], OB_L, undefined, 0.05);
+    if (s === 0) {
+      k.mesh(g, taper(0.72, 0.72, 0.46, 0.46, 3.4, 0, 0), OB, [0, 2.25, 0]);
+      k.mesh(g, taper(0.5, 0.5, 0.02, 0.02, 0.5, 0, 0), OB_L, [0, 4.2, 0]);
+      for (const y of [1.3, 1.9, 2.5]) k.box(g, [0.18, 0.2, 0.04], [0, y, 0.33 - (y - 0.55) * 0.038], RUNE, undefined, PAL.fire, 0.4);
+    } else {
+      // Broken off at a slant, the top lying where it fell.
+      k.mesh(g, taper(0.72, 0.72, 0.6, 0.6, 1.5, 0, 0), OB, [0, 1.3, 0]);
+      k.mesh(g, taper(0.62, 0.62, 0.62, 0.62, 0.3, 0.12, 0), OB_L, [0, 2.1, 0], [0, 0, 0.12]);
+      k.box(g, [0.18, 0.2, 0.04], [0, 1.3, 0.35], RUNE, undefined, PAL.fire, 0.4);
+      if (s === 2) {
+        const top = new THREE.Group();
+        top.position.set(2.1, 0.3, 0.3);
+        top.rotation.set(0, 0.35, -Math.PI / 2 + 0.06);
+        g.add(top);
+        k.mesh(top, taper(0.6, 0.6, 0.46, 0.46, 2.1, 0, 0), OB, [0, 1.05, 0]);
+        k.mesh(top, taper(0.5, 0.5, 0.02, 0.02, 0.5, 0, 0), OB_L, [0, 2.35, 0]);
+      }
+    }
+  },
+  /** A cult banner: a tall iron-shod pole with a crossbar and a long crimson cloth bearing the sigil. */
+  cult_banner: (k, g) => {
+    cb(k, g, [0.6, 0.3, 0.6], [0, 0.1, 0], 0x4a4240, undefined, 0.05);
+    cb(k, g, [0.14, 3.8, 0.14], [0, 1.9, 0], WOOD_D, undefined, 0.02);
+    k.mesh(g, taper(0.14, 0.14, 0.01, 0.01, 0.4), IRON, [0, 4.0, 0]);
+    cb(k, g, [1.2, 0.1, 0.1], [0, 3.55, 0], IRON, undefined, 0.02);
+    cb(k, g, [1.0, 2.0, 0.05], [0, 2.5, 0.07], 0x6a2020, undefined, 0.01);
+    for (const x of [-0.27, 0.27]) cb(k, g, [0.46, 0.4, 0.05], [x, 1.31, 0.07], 0x6a2020, undefined, 0.01);
+    // The sigil: a dark ring with an ember eye.
+    cb(k, g, [0.46, 0.46, 0.04], [0, 2.75, 0.11], 0x2a1414, [0, 0, Math.PI / 4], 0.02);
+    k.box(g, [0.16, 0.16, 0.03], [0, 2.75, 0.135], 0xc85020, [0, 0, Math.PI / 4], PAL.fire, 0.35);
   },
   altar: (k, g) => {
     cb(k, g, [3.4, 0.3, 2.0], [0, 0.15, 0], STONE_DD, undefined, 0.05);

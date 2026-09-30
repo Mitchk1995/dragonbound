@@ -43,7 +43,7 @@ function groundModel(item: Item): THREE.Group {
     }
   }
   const kind = base.slot === 'amulet' || base.slot === 'ring' ? base.slot : base.model ?? 'ore';
-  g.add(buildMaterialModel(kind, base.color ?? base.palette?.main ?? 0x999999));
+  g.add(buildMaterialModel(kind, base.color ?? base.palette?.main ?? 0x999999, base.id));
   return g;
 }
 

@@ -1,8 +1,8 @@
 /**
  * Character and gear art rules from the owner's review, measured on the real exported GLBs: hair covers the whole
  * scalp (no bald patches at the temples), the tunic front is plain cloth (no floating V-neck wedge), kobolds are
- * short, drakelings have wings as wide as they are long, swords are long, the Emberforged set keeps its glow to two
- * spots, and the Scaleguard has no horns.
+ * short, drakelings have wings as wide as they are long, swords are long, every hairstyle is one sculpted piece, plate
+ * stays a few bold blocks, the Emberforged set keeps its glow to the visor slit, and the Scaleguard has no horns.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import * as THREE from 'three';
@@ -63,6 +63,16 @@ describe('hair', () => {
   }
 });
 
+describe('hair is one piece', () => {
+  // The owner: every style has to be one cohesive piece, not a base cap with wigs and locks stacked on top.
+  for (const style of [1, 2, 3, 4]) {
+    it(`style ${style} is a single hair mesh`, () => {
+      const hair = meshes(makeModel(`hair_${style}`).root).filter((m) => role(m) === 'hair');
+      expect(hair.length).toBe(1);
+    });
+  }
+});
+
 describe('hero base', () => {
   it('has a plain tunic front: no skin below the collar on the body (the V-neck wedge is gone)', () => {
     const m = makeModel('hero');
@@ -98,11 +108,20 @@ describe('gear', () => {
     expect(extent(makeModel('gear_sword').root).y).toBeGreaterThan(1.35);
     expect(extent(makeModel('gear_longsword').root).y).toBeGreaterThan(1.75);
   });
-  it('Emberforged keeps its glow to two spots: the heart and the visor', () => {
+  it('Emberforged keeps its glow to one spot: the ember line in the visor slit (no chest symbol)', () => {
     const glow = (f: string) => meshes(makeModel(f).root).filter((m) => role(m) === 'glow').length;
-    expect(glow('gear_body_plate_e')).toBe(1);
+    expect(glow('gear_body_plate_e')).toBe(0);
     expect(glow('gear_helm_full_e')).toBe(1);
     expect(glow('gear_gloves_e') + glow('gear_boots_e')).toBe(0);
+  });
+  it('plate is a few bold blocks, not a pile of ridges, rivets and trim bands', () => {
+    // Part counts per plate piece (bronze/iron/steel share set p; Emberforged adds only horns and the slit).
+    const parts = (f: string) => meshes(makeModel(f).root).length;
+    expect(parts('gear_body_plate_p')).toBeLessThanOrEqual(18);
+    expect(parts('gear_helm_full_p')).toBeLessThanOrEqual(5);
+    expect(parts('gear_gloves_p')).toBeLessThanOrEqual(6);
+    expect(parts('gear_boots_p')).toBeLessThanOrEqual(8);
+    expect(parts('gear_body_plate_e')).toBeLessThanOrEqual(parts('gear_body_plate_p'));
   });
   it('the Scaleguard has nothing sweeping back off the shoulders (no horns)', () => {
     const root = makeModel('gear_u_scaleguard').root;
