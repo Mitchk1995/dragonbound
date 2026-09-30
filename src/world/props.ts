@@ -30,6 +30,10 @@ const SLATE = 0x4e5564, PLASTER = 0xd6cab0, DARK = 0x1c1612;
 const IRON = 0x4a4a52, IRON_L = 0x6e7280;
 const BONE = 0xcbbd9c, BONE_D = 0xa8997a;
 const COAL = 0x161517, OBSIDIAN = 0x1a1418;
+/** Basalt (lair): cooled black rock with slightly lighter weathered tops. */
+const BASALT = 0x2e2626, BASALT_L = 0x453a36, BASALT_D = 0x201a1a;
+/** Standing water on a cave floor: dark and glossy (reflects like coal and obsidian). */
+const PUDDLE = 0x1a3238;
 const METALS = new Set([IRON, IRON_L, PAL.gold]);
 const GLOSSY = new Set([COAL, OBSIDIAN]);
 /** Cut blocks built as geometry (walls of the tower, forge bricks): painted as chiselled rock, no mortar. */
@@ -39,7 +43,7 @@ const BLOCKS = [0x8b8579, 0x979187, 0x6f6960];
 const PAINT_OF = new Map<number, PaintKind>();
 const paintAs = (kind: PaintKind, cols: number[]) => cols.forEach((c) => PAINT_OF.set(c, kind));
 paintAs('masonry', [STONE, STONE_L, STONE_D, STONE_DD, 0x7a7870, 0x6a6860, 0x6e6a66]);
-paintAs('rock', [...BLOCKS, BRICK, BRICK_L, BRICK_D, 0x4a4240, 0x3e3634, 0x554c48, 0x3a3230, 0x3a3232, 0x2a2424, 0x6a6258, 0x6e6a66, 0x3c3834, 0x2e2624, 0x7a7068, 0x6a6058, 0x4a4440, 0x6a5a40, 0x5a4a34, 0x2e2828, 0x241e1e, 0x1e1818]);
+paintAs('rock', [...BLOCKS, BASALT, BASALT_L, BASALT_D, 0x3a2e24, 0x241e1a, 0x1a1311, 0x0f0b0a, 0x2a1d17, BRICK, BRICK_L, BRICK_D, 0x4a4240, 0x3e3634, 0x554c48, 0x3a3230, 0x3a3232, 0x2a2424, 0x6a6258, 0x6e6a66, 0x3c3834, 0x2e2624, 0x7a7068, 0x6a6058, 0x4a4440, 0x6a5a40, 0x5a4a34, 0x2e2828, 0x241e1e, 0x1e1818]);
 paintAs('wood', [WOOD, WOOD_D, WOOD_L, 0x5a3a22, 0x3a2618, 0x5a3a20, 0x4a2e18, 0x8a6a44, 0x5a4a3a, 0x3a2a1e, 0xa08058]);
 paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438]);
 paintAs('bone', [BONE, BONE_D, PAL.bone]);
@@ -68,6 +72,40 @@ function cb(k: ModelKit, p: Obj, size: V3, pos: V3, color: number, rot?: V3, c =
 /** A faceted rock chunk (base at y = pos.y). */
 function chunk(k: ModelKit, p: Obj, seed: number, size: V3, pos: V3, color: number, rotY = 0, em = 0, int = 1) {
   return k.mesh(p, rockBlock(seed, size[0], size[1], size[2]), color, pos, [0, rotY, 0], em, int);
+}
+
+/**
+ * A flat, ragged disc lying on the ground (scorch marks, puddles): a triangle fan whose rim radius
+ * alternates between `inner` and `outer` (plus seeded jitter), facing up.
+ */
+const fanCache = new Map<string, THREE.BufferGeometry>();
+function raggedDisc(seed: number, spokes: number, inner: number, outer: number, jitter: number) {
+  const key = `${seed},${spokes},${inner},${outer},${jitter}`;
+  let geo = fanCache.get(key);
+  if (geo) return geo;
+  const rim: [number, number][] = [];
+  for (let i = 0; i < spokes; i++) {
+    const a = ((i + (hash01(seed, i, 7) - 0.5) * 0.5) / spokes) * Math.PI * 2;
+    const r = (i % 2 ? inner : outer) * (1 - jitter / 2 + hash01(seed, i) * jitter);
+    rim.push([Math.cos(a) * r, Math.sin(a) * r]);
+  }
+  const pos: number[] = [];
+  for (let i = 0; i < spokes; i++) {
+    const [ax, az] = rim[i], [bx, bz] = rim[(i + 1) % spokes];
+    // Wound so the face points up (+Y).
+    pos.push(0, 0, 0, bx, 0, bz, ax, 0, az);
+  }
+  geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  fanCache.set(key, geo);
+  return geo;
+}
+
+/** Ground-hugging parts (decals, seams) never cast shadows: flag their material. */
+function decal(m: THREE.Mesh) {
+  (m.material as THREE.Material).userData.decal = true;
+  return m;
 }
 
 interface WallSpec {
@@ -261,6 +299,31 @@ function bonePile(k: ModelKit, g: Obj, variant: number) {
 
 type Builder = (k: ModelKit, g: THREE.Group, arg?: any) => Prop | void;
 
+/**
+ * Mine support set across a tunnel (local X spans the tunnel, +Z is along it): squared posts on
+ * stone footings, a cap beam with corner braces, and an iron lantern hanging off-centre. The lit
+ * variant also casts light (used sparingly: every point light costs every material).
+ */
+function mineFrame(k: ModelKit, g: THREE.Group, span: number, lit: boolean): Prop {
+  const s = Math.max(3, span), px = s / 2 - 0.2, H = 3.0;
+  for (const sx of [-1, 1]) {
+    chunk(k, g, 160 + (sx > 0 ? 1 : 0), [0.6, 0.3, 0.55], [sx * px, -0.05, 0], 0x5a4a3c, sx);
+    cb(k, g, [0.32, H, 0.32], [sx * px, H / 2, 0], WOOD_D, [0, 0, sx * -0.04], 0.04);
+    cb(k, g, [0.14, 1.1, 0.14], [sx * (px - 0.45), H - 0.42, 0], WOOD_D, [0, 0, sx * 0.8], 0.02);
+  }
+  cb(k, g, [s + 0.5, 0.36, 0.4], [0, H + 0.1, 0], WOOD, undefined, 0.05);
+  for (const sx of [-1, 1]) k.box(g, [0.1, 0.44, 0.44], [sx * (px + 0.02), H + 0.1, 0], IRON);
+  const lx = s * 0.22;
+  k.box(g, [0.04, 0.5, 0.04], [lx, H - 0.33, 0.1], IRON);
+  cb(k, g, [0.3, 0.36, 0.3], [lx, H - 0.72, 0.1], IRON, undefined, 0.03);
+  k.box(g, [0.2, 0.26, 0.2], [lx, H - 0.72, 0.1], 0xffd080, undefined, 0xffb040, 2.4);
+  if (!lit) return { obj: g };
+  const l = light(g, 0xffa050, 9, 10, H - 0.9);
+  l.position.x = lx;
+  l.position.z = 0.4;
+  return { obj: g, light: l };
+}
+
 const BUILDERS: Record<string, Builder> = {
   // ─── Landmarks & world dressing ───────────────────────────────────────────
   /** Plank bridge along local +Z; `arg` = span length in cells. */
@@ -393,9 +456,19 @@ const BUILDERS: Record<string, Builder> = {
     k.box(g, [len, 0.14, 0.12], [0, 0.5, 0.2], 0x4a2e18);
   },
   signpost: (k, g) => {
-    cb(k, g, [0.16, 2.2, 0.16], [0, 1.1, 0], WOOD, undefined, 0.03);
-    cb(k, g, [1.1, 0.26, 0.07], [0.4, 1.8, 0], 0x8a6a44, [0, 0, 0.08], 0.02);
-    cb(k, g, [0.9, 0.24, 0.07], [-0.3, 1.45, 0.02], 0x8a6a44, [0, 0.4, -0.06], 0.02);
+    // A squared post in a cairn with two chunky arrow boards (pointed ends), readable from above.
+    for (let i = 0; i < 4; i++) chunk(k, g, 20 + i, [0.34, 0.24, 0.3], [Math.cos(i * 1.6) * 0.26, -0.04, Math.sin(i * 1.6) * 0.26], BLOCKS[i % 3], i);
+    cb(k, g, [0.2, 2.3, 0.2], [0, 1.15, 0], WOOD_D, undefined, 0.03);
+    k.mesh(g, taper(0.28, 0.28, 0.06, 0.06, 0.16), WOOD_D, [0, 2.38, 0]);
+    for (const [y, a, dir] of [[1.95, 0.08, 1], [1.5, 0.5, -1]] as [number, number, number][]) {
+      const arm = new THREE.Group();
+      arm.position.set(0, y, 0);
+      arm.rotation.y = a;
+      g.add(arm);
+      cb(k, arm, [1.0, 0.34, 0.1], [dir * 0.55, 0, 0.12], 0x8a6a44, undefined, 0.02);
+      k.mesh(arm, wedge(0.34, 0.3, 0.1), 0x8a6a44, [dir * 1.2, 0, 0.12], [0, 0, dir * -Math.PI / 2]);
+      k.box(arm, [0.6, 0.05, 0.02], [dir * 0.5, 0.04, 0.18], WOOD_D);
+    }
   },
   well: (k, g) => {
     // Square stone curb, timber frame, slate gable roof, bucket.
@@ -423,10 +496,11 @@ const BUILDERS: Record<string, Builder> = {
     }
   },
   obsidian: (k, g) => {
-    // Glossy volcanic glass shards with chisel tops.
-    k.mesh(g, taper(0.9, 0.7, 0.12, 0.2, 4.2, 0.18, 0), OBSIDIAN, [0, 2.0, 0], [0.05, 0, 0.08]);
-    k.mesh(g, taper(0.55, 0.5, 0.08, 0.14, 2.6, -0.1, 0.05), 0x241c22, [0.8, 1.2, 0.3], [-0.2, 0.6, -0.25]);
-    k.mesh(g, taper(0.45, 0.4, 0.06, 0.1, 1.8, 0.05, 0), OBSIDIAN, [-0.6, 0.8, -0.4], [0.25, 1.2, 0.3]);
+    // Chunky volcanic-glass blocks with chisel tops out of a basalt knuckle (blocky, not spikes).
+    chunk(k, g, 190, [1.8, 0.45, 1.5], [0, -0.12, 0], BASALT, 0.3);
+    k.mesh(g, taper(1.05, 0.85, 0.42, 0.34, 3.0, 0.12, 0), OBSIDIAN, [0, 1.4, 0], [0.04, 0, 0.06]);
+    k.mesh(g, taper(0.7, 0.6, 0.28, 0.24, 1.9, -0.08, 0.04), 0x241c22, [0.72, 0.85, 0.3], [-0.18, 0.6, -0.22]);
+    k.mesh(g, taper(0.6, 0.5, 0.24, 0.2, 1.3, 0.04, 0), OBSIDIAN, [-0.6, 0.55, -0.35], [0.22, 1.2, 0.26]);
   },
   crystal_big: (k, g) => {
     // Glows by itself (emissive + bloom): no point light.
@@ -510,34 +584,59 @@ const BUILDERS: Record<string, Builder> = {
     return { obj: g, light: light(g, 0xffb060, 6, 9, 2.7) };
   },
   bank: (k, g) => {
-    // A squared stone strongroom: plinth and steps, quoined corners, a cornice and parapet, an
-    // iron-bound double door under a pediment, barred windows and a hanging coin sign.
-    cb(k, g, [4.3, 0.36, 3.7], [0, 0.18, 0], STONE_D, undefined, 0.06);
-    cb(k, g, [2.0, 0.18, 0.5], [0, 0.09, 2.05], STONE_D, undefined, 0.04);
-    cb(k, g, [3.8, 2.7, 3.2], [0, 1.71, 0], STONE_L, undefined, 0.06);
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) for (let i = 0; i < 5; i++) {
-      const long = i % 2 === 0;
-      cb(k, g, [long ? 0.62 : 0.42, 0.5, long ? 0.42 : 0.62], [sx * (1.9 - (long ? 0.26 : 0.16)), 0.64 + i * 0.54, sz * (1.6 - (long ? 0.16 : 0.26))], STONE_D, undefined, 0.05);
+    // A squat stone strongroom that reads from above: thick rusticated walls between heavy corner
+    // buttresses, a crenellated flat roof with a stepped vault crown carrying a big gold coin, and
+    // on the front (+Z, toward the camera) steps up to an iron-banded double door under a coin
+    // pediment, flanked by barred slits and wall lanterns.
+    const W = 4.6, D = 3.0, base = 0.34, wallH = 2.8, front = D / 2;
+    cb(k, g, [W + 0.9, base, D + 0.9], [0, base / 2, 0], STONE_D, undefined, 0.06);
+    cb(k, g, [2.9, 0.18, 0.7], [0, 0.09, front + 0.8], STONE_D, undefined, 0.04);
+    cb(k, g, [W, wallH, D], [0, base + wallH / 2, 0], STONE, undefined, 0.05);
+    // Rusticated courses proud of the core, front and sides.
+    const shades = [STONE_L, STONE, 0x7a7870];
+    masonry(k, g, { x: 0, z: front, rot: 0, len: W - 0.3, y0: base, rows: 5, rowH: 0.52, thick: 0.16, seed: 41, shades, unit: 1.05, hole: { u: 0, w: 2.3, h: base + 2.7 } });
+    for (const sx of [-1, 1]) masonry(k, g, { x: sx * (W / 2), z: 0, rot: Math.PI / 2, len: D - 0.4, y0: base, rows: 5, rowH: 0.52, thick: 0.16, seed: 42 + sx, shades, unit: 1.05 });
+    // Corner buttresses, battered toward the top.
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      k.mesh(g, taper(0.95, 0.95, 0.72, 0.72, 3.2), STONE_DD, [sx * (W / 2), base + 1.6, sz * (D / 2)]);
+      cb(k, g, [0.86, 0.3, 0.86], [sx * (W / 2), base + 3.3, sz * (D / 2)], STONE_D, undefined, 0.05);
     }
-    cb(k, g, [4.1, 0.3, 3.5], [0, 3.18, 0], STONE_D, undefined, 0.05);
-    cb(k, g, [3.7, 0.5, 3.1], [0, 3.58, 0], STONE, undefined, 0.05);
-    k.mesh(g, taper(3.3, 2.7, 1.1, 0.5, 1.1), SLATE, [0, 4.35, 0]);
-    cb(k, g, [1.2, 0.14, 0.6], [0, 4.92, 0], 0x3e4450, undefined, 0.04);
-    k.mesh(g, wedge(0.5, 0.7, 2.2), STONE, [0, 3.7, 1.35], [0, Math.PI / 2, 0]);
-    // Door.
-    k.box(g, [1.3, 1.95, 0.1], [0, 1.33, 1.56], DARK);
-    for (const x of [-0.3, 0.3]) cb(k, g, [0.56, 1.8, 0.08], [x, 1.26, 1.62], WOOD_D, undefined, 0.02);
-    for (const y of [0.75, 1.3, 1.85]) k.box(g, [1.2, 0.07, 0.03], [0, y, 1.67], IRON);
-    for (const x of [-0.8, 0.8]) cb(k, g, [0.26, 2.2, 0.28], [x, 1.46, 1.6], STONE_D, undefined, 0.04);
-    cb(k, g, [1.9, 0.34, 0.3], [0, 2.5, 1.6], STONE_D, undefined, 0.05);
-    // Coin sign on an iron bracket above the door.
-    k.box(g, [0.06, 0.06, 0.5], [0.95, 2.95, 1.85], IRON);
-    cb(k, g, [0.72, 0.5, 0.06], [0.95, 2.62, 2.05], 0x3a2a1e, [0, Math.PI / 2, 0], 0.02);
-    for (const e of [-1, 1]) k.mesh(g, octagon(0.17, 0.05), PAL.gold, [0.95 + e * 0.04, 2.62, 2.05], undefined, 0x6a4a00);
-    // Barred windows.
-    for (const x of [-1.35, 1.35]) {
-      k.box(g, [0.5, 0.7, 0.06], [x, 1.95, 1.6], DARK);
-      for (const b of [-0.13, 0, 0.13]) k.box(g, [0.05, 0.72, 0.05], [x + b, 1.95, 1.63], IRON);
+    // Cornice, roof deck, parapet with merlons.
+    const top = base + wallH;
+    cb(k, g, [W + 0.4, 0.3, D + 0.4], [0, top + 0.15, 0], STONE_D, undefined, 0.05);
+    k.box(g, [W - 0.3, 0.1, D - 0.3], [0, top + 0.32, 0], 0x4e4a44);
+    for (const sz of [-1, 1]) cb(k, g, [W + 0.2, 0.34, 0.34], [0, top + 0.47, sz * (D / 2 + 0.03)], STONE, undefined, 0.04);
+    for (const sx of [-1, 1]) cb(k, g, [0.34, 0.34, D + 0.2], [sx * (W / 2 + 0.03), top + 0.47, 0], STONE, undefined, 0.04);
+    for (const u of [-1.6, -0.95, 0.95, 1.6]) for (const sz of [-1, 1]) cb(k, g, [0.42, 0.34, 0.42], [u, top + 0.81, sz * (D / 2 + 0.03)], STONE_L, undefined, 0.04);
+    // The vault crown: two stepped blocks and a big gold coin lying on top, seen from the camera.
+    cb(k, g, [2.4, 0.4, 1.8], [0, top + 0.55, -0.15], STONE, undefined, 0.05);
+    cb(k, g, [1.8, 0.3, 1.3], [0, top + 0.9, -0.15], STONE_L, undefined, 0.05);
+    k.mesh(g, octagon(0.56, 0.14), PAL.gold, [0, top + 1.1, -0.15], [0, 0, Math.PI / 2], 0x5a3a00, 0.35);
+    k.mesh(g, octagon(0.36, 0.18), 0xc8962a, [0, top + 1.11, -0.15], [0, 0, Math.PI / 2], 0x4a2a00, 0.35);
+    // Pediment over the door with a coin emblem facing the camera.
+    cb(k, g, [1.9, 0.9, 0.46], [0, top + 0.72, front + 0.02], STONE_L, undefined, 0.05);
+    k.mesh(g, wedge(1.9, 0.4, 0.46), STONE_L, [0, top + 1.37, front + 0.02]);
+    k.mesh(g, octagon(0.34, 0.12), PAL.gold, [0, top + 0.72, front + 0.27], [0, Math.PI / 2, 0], 0x5a3a00, 0.35);
+    k.mesh(g, octagon(0.2, 0.16), 0xc8962a, [0, top + 0.72, front + 0.28], [0, Math.PI / 2, 0], 0x4a2a00, 0.35);
+    // Door: deep stone frame, iron-banded planks, studs and ring pulls.
+    k.box(g, [1.56, 2.1, 0.3], [0, base + 1.05, front + 0.02], DARK);
+    for (const x of [-0.37, 0.37]) cb(k, g, [0.72, 2.02, 0.1], [x, base + 1.01, front + 0.14], WOOD_D, undefined, 0.02);
+    for (const y of [0.35, 1.0, 1.65]) {
+      k.box(g, [1.52, 0.12, 0.05], [0, base + y, front + 0.21], IRON);
+      for (const x of [-0.62, -0.2, 0.2, 0.62]) k.box(g, [0.07, 0.07, 0.04], [x, base + y, front + 0.25], IRON_L);
+    }
+    for (const x of [-0.14, 0.14]) k.mesh(g, octagon(0.08, 0.04), IRON_L, [x, base + 1.3, front + 0.25], [0, Math.PI / 2, 0]);
+    for (const x of [-1.0, 1.0]) cb(k, g, [0.4, 2.5, 0.5], [x, base + 1.25, front + 0.1], STONE_D, undefined, 0.05);
+    cb(k, g, [2.4, 0.46, 0.55], [0, base + 2.5, front + 0.12], STONE_D, undefined, 0.05);
+    k.mesh(g, taper(0.44, 0.5, 0.3, 0.5, 0.5), STONE_L, [0, base + 2.5, front + 0.18]);
+    // Barred slit windows and wall lanterns either side of the door.
+    for (const sx of [-1, 1]) {
+      const x = sx * 1.7;
+      k.box(g, [0.34, 1.0, 0.1], [x, base + 1.6, front + 0.1], DARK);
+      for (const b of [-0.08, 0.08]) k.box(g, [0.05, 1.02, 0.05], [x + b, base + 1.6, front + 0.17], IRON);
+      k.box(g, [0.06, 0.06, 0.34], [sx * 1.3, base + 2.3, front + 0.34], IRON);
+      cb(k, g, [0.26, 0.34, 0.26], [sx * 1.3, base + 2.13, front + 0.5], IRON, undefined, 0.03);
+      k.box(g, [0.18, 0.24, 0.18], [sx * 1.3, base + 2.13, front + 0.5], 0xffd080, undefined, 0xffb040, 2.2);
     }
   },
   furnace: (k, g) => {
@@ -620,22 +719,64 @@ const BUILDERS: Record<string, Builder> = {
       vault_expanded: [SLATE, PAL.gold], alchemy_lab: [0x4a6a48, 0x5ad07a], rune_altar: [0x4a4a78, 0x6aa8ff], hatchery: [0x9a5438, 0xffa050],
     };
     const [roof, mark] = sign[id as string] ?? [SLATE, 0xffc870];
-    cb(k, built, [4.6, 0.35, 4.2], [0, 0.175, 0], STONE_D, undefined, 0.06);
-    cb(k, built, [4.2, 1.2, 3.8], [0, 0.95, 0], STONE, undefined, 0.05);
-    cb(k, built, [4.08, 1.5, 3.68], [0, 2.3, 0], PLASTER, undefined, 0.03);
-    for (const y of [1.6, 3.05]) cb(k, built, [4.2, 0.16, 3.8], [0, y, 0], WOOD_D, undefined, 0.02);
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(k, built, [0.2, 1.5, 0.2], [sx * 2.02, 2.3, sz * 1.82], WOOD_D, undefined, 0.02);
+    // Restored: a timber-framed hall whose gable end faces the camera (+Z), so from above it shows
+    // a wall, a door, a glowing emblem window in the gable and a hanging sign, not just a roof.
+    const F = 1.6, eave = 3.0;
+    cb(k, built, [4.8, 0.3, 3.7], [0, 0.15, 0], STONE_D, undefined, 0.06);
+    cb(k, built, [4.4, 1.1, 3.3], [0, 0.85, 0], STONE, undefined, 0.05);
+    cb(k, built, [4.28, 1.5, 3.18], [0, 2.15, 0], PLASTER, undefined, 0.03);
+    for (const y of [1.42, 2.92]) cb(k, built, [4.4, 0.16, 3.3], [0, y, 0], WOOD_D, undefined, 0.02);
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(k, built, [0.2, 1.5, 0.2], [sx * 2.12, 2.15, sz * 1.57], WOOD_D, undefined, 0.02);
     for (const sx of [-1, 1]) {
-      cb(k, built, [0.14, 1.55, 0.1], [sx * 1.4, 2.3, 1.86], WOOD_D, [0, 0, sx * 0.6], 0.02);
-      k.box(built, [0.5, 0.55, 0.06], [sx * 1.25, 2.35, 1.85], 0xffc870, undefined, 0xffa040, 1.3);
+      cb(k, built, [0.14, 1.55, 0.1], [sx * 1.45, 2.15, F + 0.02], WOOD_D, [0, 0, sx * 0.6], 0.02);
+      k.box(built, [0.5, 0.55, 0.06], [sx * 1.3, 2.2, F + 0.01], 0xffc870, undefined, 0xffa040, 1.3);
     }
-    k.mesh(built, wedge(4.9, 1.7, 4.5, 0.06), roof, [0, 3.98, 0]);
-    cb(k, built, [5.0, 0.16, 0.24], [0, 4.86, 0], 0x3a3230, undefined, 0.03);
-    k.box(built, [1.1, 1.7, 0.1], [0, 1.2, 1.9], DARK);
-    cb(k, built, [0.95, 1.6, 0.08], [0, 1.15, 1.95], WOOD, undefined, 0.02);
-    k.box(built, [0.06, 0.06, 0.6], [1.7, 2.9, 2.1], IRON);
-    cb(k, built, [0.6, 0.45, 0.06], [1.7, 2.6, 2.35], 0x3a2a1e, [0, Math.PI / 2, 0], 0.02);
-    for (const e of [-1, 1]) cb(k, built, [0.05, 0.24, 0.24], [1.7 + e * 0.04, 2.6, 2.35], mark, [Math.PI / 4, 0, 0], 0.02, mark, 0.6);
+    // Roof: two slabs meeting at a ridge that runs back from the camera, gable walls front and back.
+    const rise = 1.6, half = 2.5, ang = Math.atan2(rise, half);
+    for (const sx of [-1, 1]) cb(k, built, [Math.hypot(rise, half) + 0.3, 0.18, 3.9], [sx * half / 2, eave + rise / 2 + 0.05, 0], roof, [0, 0, -sx * ang], 0.04);
+    cb(k, built, [0.26, 0.24, 4.05], [0, eave + rise + 0.1, 0], 0x3a3230, undefined, 0.04);
+    for (const sz of [-1, 1]) k.mesh(built, wedge(0.12, rise, 4.28), PLASTER, [0, eave + rise / 2, sz * (F - 0.04)], [0, Math.PI / 2, 0]);
+    // Gable timbers and a round emblem window glowing in the building's colour.
+    cb(k, built, [4.3, 0.16, 0.1], [0, eave + 0.02, F + 0.03], WOOD_D, undefined, 0.02);
+    k.mesh(built, octagon(0.5, 0.08), WOOD_D, [0, eave + 0.62, F + 0.04], [0, Math.PI / 2, 0]);
+    k.mesh(built, octagon(0.38, 0.1), mark, [0, eave + 0.62, F + 0.06], [0, Math.PI / 2, 0], mark, 0.9);
+    for (const sx of [-1, 1]) cb(k, built, [0.12, 1.0, 0.08], [sx * 0.95, eave + 0.45, F + 0.04], WOOD_D, [0, 0, sx * 0.9], 0.02);
+    // Door with a lamp over it.
+    k.box(built, [1.1, 1.75, 0.12], [0, 1.18, F + 0.02], DARK);
+    cb(k, built, [0.95, 1.62, 0.08], [0, 1.11, F + 0.08], WOOD, undefined, 0.02);
+    for (const y of [0.6, 1.5]) k.box(built, [0.97, 0.07, 0.04], [0, y, F + 0.13], IRON);
+    cb(k, built, [1.4, 0.2, 0.3], [0, 2.1, F + 0.1], WOOD_D, undefined, 0.02);
+    k.box(built, [0.2, 0.26, 0.2], [0, 2.38, F + 0.22], 0xffd080, undefined, 0xffb040, 2);
+    // Hanging sign on a bracket at the front corner, board facing the camera.
+    k.box(built, [0.07, 0.07, 0.9], [1.95, 2.75, F + 0.45], IRON);
+    cb(k, built, [0.9, 0.62, 0.07], [1.95, 2.33, F + 0.82], 0x3a2a1e, undefined, 0.02);
+    k.mesh(built, octagon(0.2, 0.06), mark, [1.95, 2.33, F + 0.87], [0, Math.PI / 2, 0], mark, 0.6);
+    // What the building is for, out front.
+    const d = new THREE.Group();
+    d.position.set(-1.6, 0, F + 0.75);
+    built.add(d);
+    switch (id) {
+      case 'alchemy_lab':
+        cb(k, d, [1.1, 0.5, 0.5], [0, 0.25, 0], WOOD, undefined, 0.03);
+        for (const [x, c] of [[-0.35, 0x5ad07a], [0, 0xd0a03a], [0.33, 0x7a6aff]] as [number, number][]) {
+          k.box(d, [0.16, 0.28, 0.16], [x, 0.64, 0], c, undefined, c, 0.9);
+          k.box(d, [0.07, 0.1, 0.07], [x, 0.83, 0], 0xe8dcc0);
+        }
+        break;
+      case 'rune_altar':
+        k.mesh(d, taper(0.7, 0.5, 0.45, 0.35, 1.3), 0x6e6a66, [0, 0.62, 0]);
+        k.box(d, [0.3, 0.3, 0.04], [0, 0.8, 0.27], 0x6aa8ff, [0, 0, Math.PI / 4], 0x3a6ad0, 1.6);
+        break;
+      case 'hatchery':
+        for (let i = 0; i < 7; i++) chunk(k, d, 170 + i, [0.34, 0.2, 0.28], [Math.cos(i * 0.9) * 0.42, -0.02, Math.sin(i * 0.9) * 0.42], 0x8a6a3a, i);
+        k.mesh(d, octagon(0.2, 0.3), 0xffa050, [0, 0.3, 0], [0, 0, Math.PI / 2], 0xff6a10, 0.8);
+        break;
+      case 'vault_expanded':
+        cb(k, d, [0.9, 0.55, 0.6], [0, 0.28, 0], WOOD_D, undefined, 0.03);
+        for (const x of [-0.3, 0.3]) k.box(d, [0.08, 0.59, 0.64], [x, 0.28, 0], IRON);
+        cb(k, d, [0.7, 0.12, 0.4], [0, 0.61, 0], PAL.gold, undefined, 0.04, 0x5a3a00, 0.35);
+        break;
+    }
     return { obj: g, setState: (s) => { ruined.visible = s !== 'restored'; built.visible = s === 'restored'; } };
   },
   forgeheart: (k, g) => {
@@ -691,16 +832,215 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [0.36, 0.3, 0.05], [0.28, 1.05, 0.12], IRON, [0.3, 0, 0.05], 0.02);
   },
   campfire: (k, g) => {
-    // A ring of stones, square logs crossed over glowing embers.
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      chunk(k, g, 50 + i, [0.34, 0.24, 0.28], [Math.cos(a) * 0.62, -0.02, Math.sin(a) * 0.62], BLOCKS[i % 3], -a);
+    // Read from above: a dark ash bed inside a ring of grey stones, two charred logs crossed over
+    // glowing coals, and a tall flame. The light hangs high so the stones stay stone-coloured.
+    decal(k.mesh(g, raggedDisc(61, 14, 0.8, 0.95, 0.2), 0x241e1a, [0, 0.03, 0]));
+    const stones = [0x6a6560, 0x5c5752, 0x77716a];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + hash01(i, 3) * 0.2;
+      chunk(k, g, 50 + i, [0.34, 0.26, 0.3], [Math.cos(a) * 0.82, -0.04, Math.sin(a) * 0.82], stones[i % 3], -a);
     }
-    k.box(g, [0.7, 0.06, 0.7], [0, 0.04, 0], PAL.fire, [0, 0.4, 0], PAL.fire, 1.6);
-    for (let i = 0; i < 3; i++) cb(k, g, [0.16, 0.16, 1.0], [0, 0.14 + i * 0.03, 0], 0x3a2618, [0, (i * Math.PI) / 3, 0.1], 0.04);
-    const f = flame(k, g, 0, 0.12, 0, 1);
-    const l = light(g, 0xff8a3a, 14, 10, 1.2);
-    return { obj: g, light: l, tick: (t) => { f(t); l.intensity = 13 + Math.sin(t * 13) * 2; } };
+    k.box(g, [0.62, 0.08, 0.62], [0, 0.06, 0], 0x5a1a04, [0, 0.4, 0], PAL.fire, 1.4);
+    for (const [a, y] of [[0.62, 0.16], [-0.62, 0.3]] as [number, number][]) {
+      cb(k, g, [0.22, 0.2, 1.35], [0, y, 0], 0x4a3020, [0, a, 0], 0.07);
+      for (const e of [-1, 1]) cb(k, g, [0.23, 0.21, 0.16], [Math.sin(a) * e * 0.6, y, Math.cos(a) * e * 0.6], 0x1e1612, [0, a, 0], 0.06);
+    }
+    const f = flame(k, g, 0, 0.22, 0, 1.3);
+    const f2 = flame(k, g, 0.22, 0.2, 0.12, 0.7), f3 = flame(k, g, -0.18, 0.2, -0.14, 0.6);
+    const l = light(g, 0xff8a3a, 10, 11, 2.6);
+    return { obj: g, light: l, tick: (t) => { f(t); f2(t + 0.4); f3(t + 0.9); l.intensity = 9.5 + Math.sin(t * 13) * 1.5; } };
+  },
+  // ─── Cinderwing's den ──────────────────────────────────────────────────────
+  /**
+   * A glowing lava fissure running along local +Z (variant `v` picks its wander): a molten core in a
+   * wider glowing crack, lipped both sides by cooled basalt, widest at its source (z = 0) and
+   * pinching out at the far end, with a couple of short side cracks. Walkable (it hugs the floor).
+   */
+  lava_seam: (k, g, v) => {
+    const seed = (v ?? 0) * 17 + 3;
+    const L = 6.5 + hash01(seed, 1) * 3, n = Math.round(L / 0.6);
+    const pts: [number, number][] = [];
+    let x = 0;
+    for (let i = 0; i <= n; i++) {
+      pts.push([x, (i / n) * L]);
+      x += (hash01(seed, i) - 0.5) * 0.7;
+    }
+    const lips = [BASALT, BASALT_D, BASALT_L];
+    const run = (p: [number, number][], w0: number, s: number) => {
+      for (let i = 0; i < p.length - 1; i++) {
+        const [ax, az] = p[i], [bx, bz] = p[i + 1];
+        const len = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az);
+        const t = i / (p.length - 1);
+        const w = q(Math.max(0.08, w0 * Math.pow(1 - t, 0.7) * (0.8 + hash01(s, i, 2) * 0.4)));
+        const mx = (ax + bx) / 2, mz = (az + bz) / 2, px = Math.cos(ang), pz = -Math.sin(ang);
+        // Deep red glow in the crack, a thin hot core only where it is wide (bloom does the rest).
+        decal(k.box(g, [w, 0.05, q(len + 0.14)], [mx, 0.06, mz], 0x3a0c02, [0, ang, 0], 0xc8300a, 0.9));
+        if (w > 0.3) decal(k.box(g, [q(w * 0.3), 0.05, q(len + 0.06)], [mx, 0.075, mz], 0xff9040, [0, ang, 0], 0xff7a20, 1.2));
+        for (const side of [-1, 1]) {
+          const lw = 0.26 + w * 0.35;
+          chunk(k, g, s + i * 2 + (side > 0 ? 1 : 0), [q(lw), q(0.12 + w * 0.18), q(len * 0.95 + 0.12)], [mx + px * side * (w / 2 + lw * 0.32), -0.03, mz + pz * side * (w / 2 + lw * 0.32)], lips[(i + (side > 0 ? 1 : 0)) % 3], ang);
+        }
+      }
+    };
+    run(pts, 0.7, seed);
+    // Side cracks off the main fissure.
+    for (const [at, turn] of [[Math.floor(n * 0.3), 0.9], [Math.floor(n * 0.6), -1.0]] as [number, number][]) {
+      const [sx, sz] = pts[at];
+      const dir = turn + (hash01(seed, at) - 0.5) * 0.4;
+      const branch: [number, number][] = [];
+      for (let i = 0; i < 4; i++) branch.push([sx + Math.sin(dir) * i * 0.55, sz + Math.cos(dir) * i * 0.55]);
+      run(branch, 0.32, seed + 50 + at);
+    }
+  },
+  /** Cooled lava crust: a patch of packed black basalt plates, a dull red glow in the cracks. */
+  crust: (k, g, v) => {
+    // An elongated tongue (along local X) of irregular plates; the glow sits under them, smaller
+    // than the plated area, so it shows only in the cracks.
+    const s = (v ?? 0) * 11 + 5;
+    const glow = decal(k.mesh(g, raggedDisc(s, 18, 0.8, 0.9, 0.3), 0x1a0602, [0, 0.03, 0], undefined, 0x8a1c04, 0.35));
+    glow.scale.set(1.8, 1, 0.75);
+    const cols = [BASALT, BASALT_D, 0x3a2e2a];
+    let i = 0;
+    for (let gz = -1; gz <= 1; gz++) for (let gx = -4; gx <= 4; gx++) {
+      const x = gx * 0.46 + (hash01(s, gx, gz) - 0.5) * 0.16, z = gz * 0.5 + (gx % 2 ? 0.22 : 0) + (hash01(s, gz, gx) - 0.5) * 0.14;
+      if (Math.hypot(x / 1.9, z / 0.8) > 1.0 + (hash01(s, gx + 9, gz) - 0.5) * 0.35) continue;
+      const w = 0.42 + hash01(s, i, 4) * 0.22;
+      chunk(k, g, s + i, [q(w), q(0.08 + hash01(s, i) * 0.07), q(w * 0.9)], [x, -0.03, z], cols[i % 3], hash01(s, i, 3) * 1.2);
+      i++;
+    }
+  },
+  /** Scorch mark: a ragged soot starburst burnt into the floor, a few embers still glowing. */
+  scorch: (k, g, v) => {
+    const s = (v ?? 0) + 1;
+    // Soft outer soot, then a darker burnt core: ragged, not spiky.
+    decal(k.mesh(g, raggedDisc(90 + s, 26, 1.05, 1.3, 0.35), 0x2a1d17, [0, 0.045, 0]));
+    decal(k.mesh(g, raggedDisc(92 + s, 20, 0.72, 0.9, 0.35), 0x1a1311, [0, 0.055, 0]));
+    decal(k.mesh(g, raggedDisc(95 + s, 14, 0.4, 0.5, 0.3), 0x0f0b0a, [0, 0.065, 0]));
+    for (let i = 0; i < 6; i++) {
+      const a = hash01(s, i) * 6.3, r = 0.2 + hash01(s, i, 1) * 0.9;
+      decal(k.box(g, [0.09, 0.03, 0.09], [Math.cos(a) * r, 0.075, Math.sin(a) * r], 0x5a1a04, [0, a, 0], 0xff5a10, 1.6));
+    }
+  },
+  /** A cluster of blocky basalt columns (octagonal, flat-topped, stepped heights), one fallen. */
+  basalt_columns: (k, g, v) => {
+    const s = (v ?? 0) * 7 + 1, n = 5 + ((v ?? 0) % 3);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(s, i) * 0.5;
+      const r = i === 0 ? 0 : 0.55 + hash01(s, i, 1) * 0.35;
+      const w = q(0.62 + hash01(s, i, 2) * 0.22), h = q((i === 0 ? 3.6 : 1.1 + hash01(s, i, 3) * 2.4) * (0.85 + hash01(s) * 0.3));
+      const x = Math.cos(a) * r, z = Math.sin(a) * r, rot = hash01(s, i, 4) * 0.8;
+      k.mesh(g, chamferBox(w, h, w, q(w * 0.24)), i % 2 ? BASALT : BASALT_D, [x, h / 2 - 0.2, z], [0, rot, 0]);
+      k.mesh(g, chamferBox(q(w * 0.9), 0.1, q(w * 0.9), q(w * 0.2)), BASALT_L, [x, h - 0.17, z], [0, rot, 0]);
+    }
+    const fa = hash01(s, 9) * 6.3;
+    k.mesh(g, chamferBox(0.6, 0.6, 2.0, 0.14), BASALT, [Math.cos(fa) * 1.5, 0.22, Math.sin(fa) * 1.5], [0, fa, 0.05]);
+    for (let i = 0; i < 4; i++) chunk(k, g, s + 30 + i, [0.4, 0.3, 0.35], [Math.cos(fa + 1 + i) * 1.3, -0.05, Math.sin(fa + 1 + i) * 1.3], BASALT_D, i);
+  },
+  /** Ember crystals: a burst of glowing orange-red shards out of a basalt knuckle. */
+  ember_crystals: (k, g, v) => {
+    const s = (v ?? 0) * 5 + 2;
+    chunk(k, g, 180 + s, [1.4, 0.5, 1.2], [0, -0.1, 0], BASALT, 0.4);
+    const n = 4 + ((v ?? 0) % 2);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(s, i) * 0.6, r = i === 0 ? 0 : 0.35;
+      const h = q(i === 0 ? 2.3 : 1.0 + hash01(s, i, 1) * 0.9), w = q(i === 0 ? 0.46 : 0.28 + hash01(s, i, 2) * 0.1);
+      k.mesh(g, prism(w, h, 0.3), i % 2 ? 0xff8a3a : 0xff5a1a, [Math.cos(a) * r, 0.1, Math.sin(a) * r], [Math.sin(a) * 0.45 * (r > 0 ? 1 : 0.2), a, -Math.cos(a) * 0.45 * (r > 0 ? 1 : 0.2)], 0xff3a08, 1.5);
+    }
+  },
+  /**
+   * Cinderwing's hoard ledge: a raised two-tier basalt shelf with steps down the front, heaped with
+   * gold, a chest, skulls and swords of the fallen, ember crystals at its back corners.
+   */
+  hoard_ledge: (k, g) => {
+    const slabs: [number, number, number, number, number, number][] = [
+      // x, z, w, d, h, y
+      [-1.6, 0.2, 3.6, 3.8, 0.7, -0.1], [1.7, -0.2, 3.4, 4.0, 0.72, -0.1], [0, -1.2, 5.8, 2.4, 0.7, -0.1],
+      [-0.6, -0.6, 3.4, 2.6, 0.55, 0.55], [1.2, -0.9, 2.6, 2.2, 0.55, 0.55],
+    ];
+    slabs.forEach(([x, z, w, d, h, y], i) => chunk(k, g, 200 + i, [w, h, d], [x, y, z], i < 3 ? BASALT : BASALT_L, hash01(i, 5) * 0.2 - 0.1));
+    for (let i = 0; i < 3; i++) cb(k, g, [2.4 - i * 0.3, 0.2, 0.5], [0.1, 0.1 + i * 0.2, 2.35 - i * 0.4], i % 2 ? BASALT_L : BASALT, undefined, 0.05);
+    const hoard = new THREE.Group();
+    hoard.position.set(0.2, 1.05, -0.6);
+    hoard.scale.setScalar(1.35);
+    g.add(hoard);
+    BUILDERS.hoard(k, hoard);
+    for (const [x, z, a] of [[-2.2, 0.9, 0.5], [2.4, 0.6, -0.8]] as [number, number, number][]) {
+      const bones = new THREE.Group();
+      bones.position.set(x, 0.6, z);
+      bones.rotation.y = a;
+      g.add(bones);
+      bonePile(k, bones, x > 0 ? 3 : 0);
+    }
+    for (const [x, tilt] of [[-1.0, 0.35], [1.6, -0.3]] as [number, number][]) {
+      cb(k, g, [0.08, 1.3, 0.04], [x, 1.5, 0.4], IRON_L, [0.2, 0, tilt], 0.01);
+      cb(k, g, [0.34, 0.07, 0.1], [x - tilt * 0.55, 1.0, 0.3], IRON, [0.2, 0, tilt], 0.02);
+    }
+    for (const sx of [-1, 1]) {
+      const c = new THREE.Group();
+      c.position.set(sx * 2.7, 0.5, -1.7);
+      g.add(c);
+      BUILDERS.ember_crystals(k, c, sx > 0 ? 1 : 0);
+    }
+  },
+  /** A cooled lava tongue: a low, lumpy run of black basalt plates along local +Z (`len` long). */
+  basalt_ridge: (k, g, arg) => {
+    const len = Math.max(2, arg ?? 5), n = Math.round(len / 0.9);
+    for (let i = 0; i < n; i++) {
+      const z = -len / 2 + (i + 0.5) * (len / n), t = Math.sin(((i + 0.5) / n) * Math.PI);
+      const w = q(1.2 + t * 0.8 + hash01(len, i) * 0.4), h = q(0.35 + t * 0.45 + hash01(len, i, 1) * 0.2);
+      chunk(k, g, 230 + i, [w, h, 1.1], [(hash01(len, i, 2) - 0.5) * 0.4, -0.08, z], i % 2 ? BASALT : BASALT_D, (hash01(len, i, 3) - 0.5) * 0.4);
+      if (t > 0.5) chunk(k, g, 250 + i, [q(w * 0.6), q(h * 0.6), 0.7], [(hash01(len, i, 4) - 0.5) * 0.3, h - 0.2, z], BASALT_L, hash01(i, 4));
+    }
+  },
+  // ─── Cave floor dressing ──────────────────────────────────────────────────
+  /** A heap of broken rock (variant picks the arrangement); `v` ≥ 10 uses basalt. */
+  rubble: (k, g, v) => {
+    const s = (v ?? 0) % 10, cols = (v ?? 0) >= 10 ? [BASALT, BASALT_D, BASALT_L] : [0x6a5a4a, 0x5a4a3c, 0x7a6a58];
+    const n = 5 + (s % 3);
+    for (let i = 0; i < n; i++) {
+      const a = hash01(s, i) * 6.3, r = i === 0 ? 0 : 0.35 + hash01(s, i, 1) * 0.55;
+      const sz = i === 0 ? 0.75 : 0.25 + hash01(s, i, 2) * 0.35;
+      chunk(k, g, 300 + s * 10 + i, [q(sz * 1.2), q(sz * 0.8), q(sz)], [Math.cos(a) * r, -0.04, Math.sin(a) * r], cols[i % 3], a);
+    }
+  },
+  /** A still puddle of seep water on the cave floor (dark, glossy). */
+  puddle: (k, g, v) => {
+    // A damp dark rim, the water inside it, a few stones at the edge.
+    decal(k.mesh(g, raggedDisc(120 + (v ?? 0), 22, 1.18, 1.3, 0.25), 0x3a2e24, [0, 0.035, 0]));
+    decal(k.mesh(g, raggedDisc(125 + (v ?? 0), 22, 0.95, 1.05, 0.25), PUDDLE, [0, 0.045, 0]));
+    // A glint of lantern light on the surface.
+    const glint = decal(k.mesh(g, raggedDisc(127, 10, 0.2, 0.24, 0.2), 0x2e4a52, [0.3, 0.05, -0.28], undefined, 0x2a4a52, 0.25));
+    glint.scale.set(1.8, 1, 0.6);
+    for (let i = 0; i < 3; i++) chunk(k, g, 130 + (v ?? 0) * 3 + i, [0.3, 0.14, 0.24], [Math.cos(i * 2.2) * 1.2, -0.03, Math.sin(i * 2.2) * 1.0], 0x5a4a3c, i);
+  },
+  /** Loose ore chips on the floor (`v` = 0 copper, 1 tin, 2 iron, 3 coal). */
+  ore_chips: (k, g, v) => {
+    const cols = [[0x46a88c, 0xd07a3a], [0xd8e0e8, 0xbcc8d0], [0xb4603a, 0x8a4028], [COAL, COAL]][(v ?? 0) % 4];
+    for (let i = 0; i < 7; i++) {
+      const a = hash01(v ?? 0, i) * 6.3, r = 0.2 + hash01(v ?? 0, i, 1) * 0.8;
+      chunk(k, g, 140 + (v ?? 0) * 7 + i, [0.2, 0.13, 0.17], [Math.cos(a) * r, -0.02, Math.sin(a) * r], cols[i % 2], a);
+    }
+  },
+  /** A timber support set spanning a tunnel (posts, cap beam, braces, a hanging lantern); `len` = span. */
+  mine_frame: (k, g, len) => mineFrame(k, g, len ?? 4, false),
+  mine_frame_lit: (k, g, len) => mineFrame(k, g, len ?? 4, true),
+  /** Timber shoring against a cave wall, facing +Z: posts, a cap beam and lagging planks. */
+  shoring: (k, g) => {
+    for (const x of [-1.2, 1.2]) cb(k, g, [0.26, 2.7, 0.26], [x, 1.35, 0], WOOD_D, undefined, 0.04);
+    cb(k, g, [3.0, 0.3, 0.32], [0, 2.75, 0], WOOD, undefined, 0.04);
+    for (let i = 0; i < 4; i++) cb(k, g, [2.2, 0.26, 0.08], [0, 0.5 + i * 0.55, -0.16], i % 2 ? WOOD : 0x5a3a22, [0, 0, (hash01(i) - 0.5) * 0.04], 0.02);
+    for (const sx of [-1, 1]) cb(k, g, [0.12, 0.8, 0.12], [sx * 0.95, 2.35, 0.02], WOOD_D, [0, 0, sx * 0.8], 0.02);
+    cb(k, g, [0.3, 0.3, 0.3], [-1.6, 0.15, 0.3], WOOD_L, [0, 0.3, 0], 0.04);
+  },
+  /** A mine cart tipped on its side, its ore spilled across the floor. */
+  minecart_tipped: (k, g) => {
+    const cart = new THREE.Group();
+    cart.position.set(0, 0.62, 0);
+    cart.rotation.z = 1.35;
+    g.add(cart);
+    BUILDERS.minecart(k, cart);
+    cart.traverse((o) => o.position.y -= o === cart ? 0 : 0.62);
+    for (let i = 0; i < 7; i++) chunk(k, g, 150 + i, [0.34, 0.24, 0.3], [-0.9 - hash01(i) * 0.9, -0.04, (hash01(i, 1) - 0.5) * 1.3], 0xb4743a, i, 0x3a1a00, 0.3);
   },
   crates: (k, g) => {
     // A crate stack with a lashed lid and an octagonal barrel.
@@ -880,7 +1220,11 @@ export function buildProp(kind: string, arg?: any): Prop {
     // stone detail (lined up in world space); everything else stays clean flat colour.
     const hex = m.color.getHex();
     if (METALS.has(hex)) applyFinish(m, 'metal');
-    else if (GLOSSY.has(hex)) {
+    else if (hex === PUDDLE) {
+      // Still water: dark teal (the mine's water colour) with a sheen of the cave light, no texture.
+      Object.assign(m, { roughness: 0.08, metalness: 0, envMap: studioEnv(), envMapIntensity: 0.55 });
+      m.needsUpdate = true;
+    } else if (GLOSSY.has(hex)) {
       Object.assign(m, { roughness: 0.2, metalness: 0.25, envMap: studioEnv(), envMapIntensity: 1.1 });
       m.needsUpdate = true;
     } else if (m.emissive.getHex() === 0 || m.emissiveIntensity === 0) {
@@ -890,7 +1234,7 @@ export function buildProp(kind: string, arg?: any): Prop {
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       const fx = o.material instanceof THREE.ShaderMaterial;
-      o.castShadow = !fx;
+      o.castShadow = !fx && !(o.material as THREE.Material).userData.decal;
       o.receiveShadow = !fx;
     }
   });

@@ -188,6 +188,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         // Fully inside relief: rugged top (noise breaks up the flat mesa look).
         const top = raisedH[k] / raisedN[k];
         y = top * (0.85 + noise(x * 0.35 + 9, z * 0.35) * 0.3) + (noise(x * 1.3, z * 1.3) - 0.5) * 0.5 + rise[k];
+        if (theme.wallRise) {
+          // Cave rock climbs in terraces (ledges and short steep risers), so the walls behind the
+          // strata read as layered rock rather than one smooth slope.
+          const step = 1.25, t = y / step, f = t - Math.floor(t);
+          y = (Math.floor(t) + sstep(0.55, 1, f)) * step;
+        }
       } else if (count[k] && fluidN[k] === count[k]) {
         // Under water: a long shallow shelf that deepens toward the middle, with noise shoals, so
         // the lighter shallows show. Lava keeps a steep bank (it is opaque; depth drives its crust).
@@ -252,7 +258,9 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     const g = new THREE.BufferGeometry();
     for (const k of ['position', 'normal', 'color', 'aSplat']) g.setAttribute(k, geo.getAttribute(k));
     g.setIndex(index);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+    // Cave rock is faceted (flat-shaded), so the walls read as broken rock with edges rather than
+    // one soft smear; open-air ground and cliffs stay smooth.
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: name === 'relief' && !!theme.wallRise });
     applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange);
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
