@@ -13,6 +13,7 @@ import { BowDraw } from '../src/render/bowDraw';
 import { HeroDresser, MODEL_FILES, hasModel, makeModel, registerModelScene } from '../src/render/registry';
 import { bowFacts, partCenter, partForward, shoulderCap, weaponFacts } from '../src/render/poseMetrics';
 import { makeItem } from '../src/loot/itemGen';
+import { BASES as BASES_FOR_TEST } from '../src/data/items';
 import type { Slot } from '../src/types';
 
 beforeAll(async () => {
@@ -27,7 +28,17 @@ beforeAll(async () => {
   }
 });
 
+/**
+ * A hero built on first use. describe() bodies run at collection time, before beforeAll loads
+ * the GLBs, so building there would silently audit the placeholder models instead.
+ */
+function lazyHero(equip: Partial<Record<Slot, string>>): ReturnType<typeof hero> {
+  let h: ReturnType<typeof hero> | undefined;
+  return new Proxy({} as ReturnType<typeof hero>, { get: (_, k) => (h ??= hero(equip))[k as keyof ReturnType<typeof hero>] });
+}
+
 function hero(equip: Partial<Record<Slot, string>>) {
+  if (!hasModel('hero')) throw new Error('hero() before the GLBs loaded: this would audit placeholder models');
   const model = makeModel('hero');
   const holder = new THREE.Group();
   holder.add(model.root);
@@ -72,7 +83,7 @@ describe('pose audit: models loaded', () => {
 describe('pose audit: one-handed melee weapons', () => {
   for (const weapon of ['bronze_sword', 'iron_longsword']) {
     describe(weapon, () => {
-      const h = hero({ weapon });
+      const h = lazyHero({ weapon });
       it('idle: blade held forward at a relaxed downward angle, edge vertical', () => {
         h.pose('swing', -1);
         const w = weaponFacts(h.root)!;
@@ -112,8 +123,39 @@ describe('pose audit: one-handed melee weapons', () => {
   }
 });
 
+describe('pose audit: mining (pickaxe tool override, as Player.dress uses it)', () => {
+  it('the pick head never goes below the ground through the whole swing', () => {
+    const model = makeModel('hero');
+    const holder = new THREE.Group();
+    holder.add(model.root);
+    const dresser = new HeroDresser(model);
+    const pick = BASES_FOR_TEST.steel_pickaxe;
+    dresser.dress(null, {}, { weaponModel: pick.model!, weaponPalette: pick.palette });
+    const rig = new Rig(model.root);
+    const v = new THREE.Vector3();
+    let lowest = Infinity, at = -1;
+    for (let k = 0; k <= 40; k++) {
+      const t = k / 40;
+      rig.update(0, { ...newAnimState(), attackKind: 'swing', attack: t });
+      holder.updateMatrixWorld(true);
+      model.root.getObjectByName('gear:sock_handR')!.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const pos = o.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const y = v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).y;
+          if (y < lowest) {
+            lowest = y;
+            at = t;
+          }
+        }
+      });
+    }
+    expect(lowest, `lowest point (at t=${at})`).toBeGreaterThan(0.02);
+  });
+});
+
 describe('pose audit: staff', () => {
-  const h = hero({ weapon: 'apprentice_staff' });
+  const h = lazyHero({ weapon: 'apprentice_staff' });
   it('idle: staff upright, head up', () => {
     h.pose('cast', -1);
     const w = weaponFacts(h.root)!;
@@ -148,16 +190,20 @@ describe('pose audit: bow', () => {
   }
 });
 
-describe('pose audit: plate pauldrons cap the shoulder in every pose', () => {
-  const h = hero({ weapon: 'iron_longsword', body: 'steel_platebody' });
-  const poses: [AttackKind, number][] = [['swing', -1], ['swing', 0.38], ['swing', 0.5], ['slam', 0.45], ['cast', 0.5]];
-  for (const [kind, t] of poses) {
-    it(`${kind} t=${t}`, () => {
-      h.pose(kind, t);
-      for (const side of ['L', 'R'] as const) expect(shoulderCap(h.root, side)!, side).toBeLessThan(-0.3);
-    });
-  }
-});
+// Each tier's plate design (items.ts PLATE_STYLE). The Knight's big dome covers the joint with its
+// centre nearer to it, so its cap reads weaker for the same coverage.
+for (const [body, style, cap] of [['bronze_platebody', 'Knight', -0.25], ['steel_platebody', 'Warlord', -0.35], ['ember_platebody', 'Dragonguard', -0.35]] as const) {
+  describe(`pose audit: ${style} plate pauldrons cap the shoulder in every pose`, () => {
+    const h = lazyHero({ weapon: 'iron_longsword', body });
+    const poses: [AttackKind, number][] = [['swing', -1], ['swing', 0.38], ['swing', 0.5], ['slam', 0.45], ['cast', 0.5]];
+    for (const [kind, t] of poses) {
+      it(`${kind} t=${t}`, () => {
+        h.pose(kind, t);
+        for (const side of ['L', 'R'] as const) expect(shoulderCap(h.root, side)!, side).toBeLessThan(cap);
+      });
+    }
+  });
+}
 
 describe('pose audit: dragons', () => {
   for (const name of ['cinderwing', 'drakeling', 'whelp']) {

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { ENEMIES } from '../data/enemies';
 import { BASES, TIER_ORDER, TIERS, UNIQUES } from '../data/items';
-import { ZONES } from '../data/zones';
+import { KEEP_STAGE, ZONES } from '../data/zones';
 import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
+import { startAction, type ActionKind } from '../ai/boss';
 import { Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
 import { BowDraw } from '../render/bowDraw';
 import { itemIconUrl } from '../render/icons3d';
@@ -33,7 +34,8 @@ interface ZoneReport {
   info: { calls: number; triangles: number; programs: number; geometries: number; textures: number };
 }
 interface LumStats { mean: number; p5: number; p95: number; clipped: number; crushed: number; cast: [number, number, number] }
-interface PerfStats { cpuMs: number; frameMs: number; frameP95: number }
+/** frameMs = max(cpu, gpu): the frame cost ignoring vsync. */
+interface PerfStats { cpuMs: number; gpuMs: number; gpuP95: number; frameMs: number; gpuRaw?: number[]; cpuRaw?: number[] }
 
 export async function runInspect(g: Game, suites: string) {
   const api = window.electronAPI!.inspect!;
@@ -80,13 +82,27 @@ export async function runInspect(g: Game, suites: string) {
   g.prog.refreshLevels();
   g.prog.recomputeStats();
   g.debug.god = true;
-  const fill = ['steel_longsword', 'worn_bow', 'apprentice_staff', 'iron_platebody', 'bronze_fullhelm', 'copper_ore', 'iron_bar', 'steel_pickaxe'];
+  const fill = ['steel_longsword', 'worn_bow', 'apprentice_staff', 'iron_platebody', 'bronze_fullhelm', 'steel_pickaxe'];
+  // Materials so crafting menus show enabled recipes (a stack each).
+  for (const [id, n] of [['copper_ore', 6], ['tin_ore', 6], ['iron_ore', 4], ['coal', 8], ['bronze_bar', 5], ['iron_bar', 3]] as [string, number][]) {
+    if (BASES[id]) g.items.add({ ...makeItem(id), qty: n } as any);
+  }
+  // A stocked bank and a collection log with finds in it.
+  for (const id of ['steel_bar', 'iron_bar', 'coal', 'copper_ore', 'tin_ore', 'bronze_sword', 'iron_medhelm', 'bronze_platebody', 'sapphire', 'ruby'])
+    if (BASES[id]) g.save.bank.push({ ...makeItem(id), qty: 1 + (id.length % 7) } as any);
+  for (const u of Object.values(UNIQUES).slice(0, 2)) g.save.collection[u.id] = 1;
+  g.save.collection.ember_whelp = 1;
+  g.save.kc.goblin = 212;
+  g.save.kc.drakeling = 37;
   for (const id of fill) if (BASES[id]) g.items.add(makeItem(id));
   equip(g, { weapon: 'steel_longsword', helm: 'steel_fullhelm', body: 'steel_platebody', gloves: 'steel_gauntlets', boots: 'steel_boots' });
   await frames(10);
 
   try {
     if (want('zones')) report.zones = await zonesSuite(g, shot);
+    if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
+    if (want('effects')) await effectsSuite(g, shot);
+    if (want('boss')) await bossSuite(g, shot);
     if (want('ui')) await uiSuite(g, shot);
     if (want('models')) await modelsSuite(g, shot);
     if (want('anims')) await animsSuite(g, shot);
@@ -139,25 +155,49 @@ function lumStats(g: Game): LumStats {
   };
 }
 
-/** CPU time of a frozen update+render, and wall time including a GPU sync (readPixels of one pixel). */
-function perf(g: Game, n = 60): PerfStats {
-  const gl = g.renderer.getContext();
-  const px = new Uint8Array(4);
-  const cpu: number[] = [], full: number[] = [];
+/**
+ * Frame cost with the world frozen (dt = 0, every system still runs its per-frame work):
+ * - cpuMs: update + render submission on the CPU;
+ * - gpuMs: GPU time of the whole render (EXT_disjoint_timer_query_webgl2), the real render cost.
+ * Wall-clock with a readPixels sync is NOT used: it quantises to the display's vsync period.
+ */
+async function perf(g: Game, n = 60): Promise<PerfStats> {
+  const gl = g.renderer.getContext() as WebGL2RenderingContext;
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const cpu: number[] = [];
+  const queries: WebGLQuery[] = [];
+  // Only our frames may touch the GPU while measuring (the frame loop would interleave its own).
+  const held = g.debug.hold;
+  g.debug.hold = () => true;
   for (let i = 0; i < n; i++) {
     const t0 = performance.now();
-    // dt = 0: the world stays frozen (comparable shots) while every system still runs its per-frame work.
+    const q = ext ? gl.createQuery() : null;
+    if (q && ext) gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
     g.update(0, 1 / 60);
     g.draw();
-    const t1 = performance.now();
-    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    const t2 = performance.now();
-    cpu.push(t1 - t0);
-    full.push(t2 - t0);
+    if (q && ext) {
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      queries.push(q);
+    }
+    cpu.push(performance.now() - t0);
+    await raf(); // one measured frame per display frame, like the game
   }
-  const med = (a: number[]) => a.sort((x, y) => x - y)[Math.floor(a.length / 2)];
-  const p95 = (a: number[]) => a.sort((x, y) => x - y)[Math.floor(a.length * 0.95)];
-  return { cpuMs: +med(cpu).toFixed(2), frameMs: +med(full).toFixed(2), frameP95: +p95(full).toFixed(2) };
+  const gpu: number[] = [];
+  for (let tries = 0; tries < 60 && gpu.length < queries.length; tries++) {
+    await raf();
+    for (const q of queries) {
+      if ((q as any).done) continue;
+      if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+        if (!gl.getParameter(ext!.GPU_DISJOINT_EXT)) gpu.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+        (q as any).done = true;
+      }
+    }
+  }
+  queries.forEach((q) => gl.deleteQuery(q));
+  g.debug.hold = held;
+  const med = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length / 2)] : NaN);
+  const p95 = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length * 0.95)] : NaN);
+  return { cpuMs: +med(cpu).toFixed(2), gpuMs: +med(gpu).toFixed(2), gpuP95: +p95(gpu).toFixed(2), frameMs: +Math.max(med(cpu), med(gpu)).toFixed(2), gpuRaw: gpu.map((v) => +v.toFixed(1)), cpuRaw: cpu.map((v) => +v.toFixed(1)) } as PerfStats;
 }
 
 // ─── Zones ──────────────────────────────────────────────────────────────────
@@ -205,17 +245,19 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
       const pois: [string, number, number][] = [['entry', L.entry.x, L.entry.z]];
       for (const s of L.stations.slice(0, 8)) pois.push([`${s.kind}-${s.id}`, s.x, s.z + 2.2]);
       for (const n of L.nodes.filter((n, i, a) => a.findIndex((m) => m.ore === n.ore) === i)) pois.push([`ore-${n.ore}`, n.x, n.z + 1.6]);
-      L.packs.slice(0, 4).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
-      if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 7]);
+      L.packs.slice(0, 10).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
+      if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 6]);
       let i = 1;
       for (const [label, x, zz] of pois) {
         const p = g.player;
         p.pos.set(x, 0, zz);
         p.stop();
         g.camPos.copy(p.pos);
+        // Big creatures need the widest zoom to be framed whole.
+        g.camZoom = label.startsWith('boss') ? 1.35 : 1;
         g.debug.timeScale = 0;
         g.update(0);
-        const perfStats = perf(g, 40);
+        const perfStats = await perf(g, 40);
         g.draw();
         const lum = lumStats(g);
         const shotName = `zone-${name}-${String(i++).padStart(2, '0')}-${label}`;
@@ -236,13 +278,239 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
   return out;
 }
 
+// ─── Effects ────────────────────────────────────────────────────────────────
+
+/**
+ * Combat effects captured mid-flight: every weapon style's basic attack and abilities against a
+ * few targets, plus loot drops. The simulation is stepped by hand (the frame loop only renders)
+ * so each capture lands at a fixed time after the trigger.
+ */
+async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
+  g.travel('foothills', true);
+  await frames(15);
+  // An open clearing (the southern goblin camp, emptied for the test).
+  const spot = { x: 106, z: 157 };
+  const p = g.player;
+  const step = (secs: number) => {
+    for (let i = 0; i < Math.round(secs * 60); i++) g.update(1 / 60);
+  };
+  g.debug.hold = () => false; // render only; the suite advances time itself
+  const setup = (weapon: string) => {
+    for (const e of g.zone.enemies) {
+      e.dead = true;
+      e.obj.removeFromParent();
+    }
+    g.zone.enemies = [];
+    for (const it of g.zone.items) it.group.removeFromParent();
+    g.zone.items = [];
+    g.text.clear();
+    equip(g, { weapon });
+    p.pos.set(spot.x, 0, spot.z);
+    p.stop();
+    p.cds = {};
+    p.action = null;
+    p.dash = null;
+    g.camPos.copy(p.pos);
+    const targets = [[0, -5.5], [-2, -6.5], [2, -6.8]].map(([dx, dz]) => g.combat.spawnEnemy('goblin', spot.x + dx, spot.z + dz, null));
+    for (const t of targets) t.faceTo(p.x, p.z, true);
+    g.hovered = targets[0];
+    g.ground.set(targets[0].x, 0, targets[0].z);
+    p.faceTo(targets[0].x, targets[0].z, true);
+    step(0.1);
+    return targets;
+  };
+  const cases: [string, string, (t: ReturnType<typeof setup>) => void, number[]][] = [
+    ['melee-basic', 'steel_sword', (t) => g.combat.startBasicAttack(t[0]), [0.2, 0.26, 0.34]],
+    ['melee-cleave', 'steel_sword', () => g.combat.useAbility('Q'), [0.15, 0.22, 0.3]],
+    ['melee-leap_slam', 'steel_longsword', () => g.combat.useAbility('W'), [0.25, 0.55]],
+    ['melee-war_cry', 'steel_sword', () => g.combat.useAbility('E'), [0.15, 0.5]],
+    ['ranged-basic', 'worn_bow', (t) => g.combat.startBasicAttack(t[0]), [0.3, 0.42]],
+    ['ranged-multishot', 'worn_bow', () => g.combat.useAbility('Q'), [0.3, 0.45]],
+    ['ranged-roll', 'worn_bow', () => g.combat.useAbility('W'), [0.12]],
+    ['ranged-arrow_rain', 'worn_bow', () => g.combat.useAbility('E'), [0.6, 1.2]],
+    ['magic-basic', 'apprentice_staff', (t) => g.combat.startBasicAttack(t[0]), [0.3, 0.42]],
+    ['magic-fireball', 'apprentice_staff', () => g.combat.useAbility('Q'), [0.35, 0.6]],
+    ['magic-frost_nova', 'apprentice_staff', () => g.combat.useAbility('W'), [0.15, 0.35]],
+    ['magic-chain_lightning', 'apprentice_staff', () => g.combat.useAbility('E'), [0.16, 0.24]],
+  ];
+  let n = 1;
+  for (const [name, weapon, trigger, times] of cases) {
+    const t = setup(weapon);
+    // Aim at the first target (hover is recomputed from the mouse each update, so set it last).
+    g.hovered = t[0];
+    g.ground.set(t[0].x, 0, t[0].z);
+    trigger(t);
+    let at = 0;
+    for (const time of times) {
+      step(time - at);
+      at = time;
+      await shot(`fx-${String(n++).padStart(2, '0')}-${name}-${time}s`);
+    }
+    step(1.5);
+  }
+  // Loot: a unique and a rare drop (beams, labels).
+  setup('steel_sword');
+  const u = Object.values(UNIQUES)[0];
+  g.items.drop({ ...makeItem(u.base), unique: u.id, rarity: 'unique' } as any, 0, spot.x + 1, spot.z - 2, 1);
+  g.items.drop({ ...makeItem('steel_platebody'), rarity: 'rare' } as any, 120, spot.x - 1.5, spot.z - 2.5, 1);
+  step(1.2);
+  await shot(`fx-${String(n++).padStart(2, '0')}-loot-drops`);
+  g.altHeld = true;
+  step(0.1);
+  await shot(`fx-${String(n++).padStart(2, '0')}-loot-labels`);
+  g.altHeld = false;
+  g.debug.hold = null;
+}
+
+// ─── Boss attacks ───────────────────────────────────────────────────────────
+
+/**
+ * Cinderwing's attacks, each triggered deterministically and captured at the telegraph and the
+ * hit: bite, breath (wind-up + fire cone), tail sweep, wing gust, and the phase-2 flight with
+ * meteor rain. The hero is invulnerable (god mode) and stands 6 units south in the arena.
+ */
+async function bossSuite(g: Game, shot: (n: string) => Promise<void>) {
+  g.travel('lair', true);
+  await frames(15);
+  const L = g.zone.layout;
+  const boss = g.zone.enemies.find((e) => e.def.behavior === 'boss')!;
+  const p = g.player;
+  const step = (secs: number) => {
+    for (let i = 0; i < Math.round(secs * 60); i++) g.update(1 / 60);
+  };
+  g.debug.hold = () => false;
+  g.debug.god = true;
+  g.camZoom = 1.35;
+  const reset = () => {
+    p.pos.set(L.boss!.x, 0, L.boss!.z + 6);
+    p.stop();
+    g.camPos.copy(p.pos);
+    boss.pos.set(L.boss!.x, 0, L.boss!.z);
+    boss.faceTo(p.x, p.z, true);
+    for (const t of g.zone.telegraphs) t.done = true;
+    g.zone.hazards = [];
+    step(0.05);
+  };
+  reset();
+  step(0.5); // engage
+  const b = boss.boss!;
+  const cases: [ActionKind, number[]][] = [
+    ['bite', [0.3, 0.6]], ['breath', [0.6, 1.3, 2.0]], ['tail', [0.5, 0.95]], ['gust', [0.5, 0.85]], ['flight', [1.5, 4, 6.5, 8.6]],
+  ];
+  let n = 1;
+  for (const [kind, times] of cases) {
+    reset();
+    b.action = null;
+    b.actionCd = 99;
+    if (kind === 'flight') b.phase = 2;
+    startAction(boss, b, kind, g);
+    let at = 0;
+    for (const time of times) {
+      step(time - at);
+      at = time;
+      await shot(`boss-${String(n++).padStart(2, '0')}-${kind}-${time}s`);
+    }
+    step(2);
+  }
+  g.debug.hold = null;
+  g.camZoom = 1;
+}
+
+// ─── Perf breakdown ─────────────────────────────────────────────────────────
+
+/**
+ * Where does the frame go? At a heavy spot, measure the frame with each feature switched off in
+ * turn (explicit suite: `npm run inspect -- perf`). Differences from the baseline are the cost.
+ */
+async function perfSuite(g: Game) {
+  const out: Record<string, Record<string, string>> = {};
+  for (const [zone, x, z] of [['foothills', 70, 162], ['foothills', 106, 156], ['foothills', 48, 128]] as [string, number, number][]) {
+    g.travel(zone, true);
+    await frames(20);
+    const p = g.player;
+    p.pos.set(x, 0, z);
+    g.camPos.copy(p.pos);
+    g.debug.timeScale = 0;
+    const game = g as any;
+    const byName = (test: (o: THREE.Object3D) => boolean) => {
+      const list: THREE.Object3D[] = [];
+      g.zone.group.traverse((o) => {
+        if (test(o)) list.push(o);
+      });
+      return list;
+    };
+    const toggles: [string, () => () => void][] = [
+      ['no shadows', () => {
+        g.sun.castShadow = false;
+        return () => (g.sun.castShadow = true);
+      }],
+      ['no bloom', () => {
+        game.bloom.enabled = false;
+        return () => (game.bloom.enabled = true);
+      }],
+      ['no vegetation', () => {
+        const l = byName((o) => o instanceof THREE.InstancedMesh);
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no terrain', () => {
+        const l = byName((o) => o.name === 'ground' || o.name === 'relief');
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no enemies', () => {
+        g.zone.enemies.forEach((e) => (e.obj.visible = false));
+        return () => g.zone.enemies.forEach((e) => (e.obj.visible = true));
+      }],
+      ['no water', () => {
+        const l = byName((o) => o.name === 'water' || o.name === 'lava');
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no props', () => {
+        const l = g.zone.view.props.map((p) => p.obj);
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no lights', () => {
+        const l = byName((o) => o instanceof THREE.PointLight);
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no MSAA', () => {
+        const rt = game.composer.renderTarget1;
+        const s = rt.samples;
+        rt.samples = 0;
+        game.composer.renderTarget2.samples = 0;
+        return () => {
+          rt.samples = s;
+          game.composer.renderTarget2.samples = s;
+        };
+      }],
+    ];
+    const row: Record<string, string> = {};
+    await perf(g, 20); // warm up programs
+    const fmt = (p: PerfStats) => `cpu ${p.cpuMs} gpu ${p.gpuMs}`;
+    row.baseline = fmt(await perf(g, 60));
+    for (const [name, off] of toggles) {
+      const undo = off();
+      await perf(g, 10);
+      row[name] = fmt(await perf(g, 60));
+      undo();
+    }
+    out[`${zone}@${x},${z}`] = row;
+    g.debug.timeScale = 1;
+  }
+  return out;
+}
+
 // ─── UI ─────────────────────────────────────────────────────────────────────
 
 async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   g.travel('keep', true);
   await frames(15);
   const p = g.player;
-  p.pos.set(27.5, 0, 33.5);
+  p.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
   g.camPos.copy(p.pos);
   await shot('ui-01-hud');
   const ui = g.ui as any;
@@ -285,6 +553,7 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   }
   ui.toggle('inventory', false);
   ui.levelBanner('smithing', 42);
+  await frames(45); // the banner animates in
   ui.xpDrop('smithing', 37.5);
   await shot(`ui-${String(i++).padStart(2, '0')}-level-banner`);
   // Title and creation screens.
@@ -304,7 +573,7 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
 
 class Studio {
   readonly scene = new THREE.Scene();
-  readonly cam = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
+  readonly cam = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
   private overlay: HTMLElement;
   constructor(private g: Game) {
     this.scene.background = new THREE.Color(0x3b3a40);
@@ -373,6 +642,25 @@ function views(h: number, dist = 2.2): [string, THREE.Vector3][] {
   ];
 }
 
+/**
+ * Camera placement that fits a posed object whole: its bounding sphere, seen from `dir`, fills a
+ * studio cell (FOV 38°, cells ~0.9 aspect so the horizontal FOV is the tighter one).
+ */
+function fit(o: THREE.Object3D, dir: THREE.Vector3) {
+  o.updateMatrixWorld(true);
+  const sphere = new THREE.Box3().setFromObject(o).getBoundingSphere(new THREE.Sphere());
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(19)) * 0.88);
+  const dist = (sphere.radius / Math.sin(half)) * 1.04;
+  return { eye: sphere.center.clone().add(dir.clone().normalize().multiplyScalar(dist)), at: sphere.center.clone() };
+}
+
+const VIEW_DIRS: [string, THREE.Vector3][] = [
+  ['front', new THREE.Vector3(0, 0.35, 1)],
+  ['left', new THREE.Vector3(1, 0.35, 0)],
+  ['back', new THREE.Vector3(0, 0.35, -1)],
+  ['3/4 top', new THREE.Vector3(-0.7, 1.1, 0.7)],
+];
+
 function sizeOf(o: THREE.Object3D) {
   o.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(o);
@@ -392,10 +680,9 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
       const holder = new THREE.Group();
       holder.add(m.root);
       new Rig(m.root).update(0, newAnimState());
-      const { h } = sizeOf(holder);
-      for (const [v, eye] of views(h)) {
+      for (const [v, dir] of VIEW_DIRS) {
         const obj = v === 'front' ? holder : holder.clone();
-        cells.push({ label: `${name} · ${v}`, obj, eye, at: new THREE.Vector3(0, h * 0.45, 0) });
+        cells.push({ label: `${name} · ${v}`, obj, ...fit(holder, dir) });
         objs.push(obj);
       }
     }
@@ -413,7 +700,7 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
   for (const [label, gear] of sets) {
     const cells: Parameters<Studio['sheet']>[0] = [];
     const objs: THREE.Object3D[] = [];
-    for (const [v, eye] of views(2.1, 2.1)) {
+    for (const [v, eye] of views(2.2, 2.4)) {
       const m = makeModel('hero');
       const holder = new THREE.Group();
       holder.add(m.root);
@@ -421,11 +708,29 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
       if (label === 'uniques') for (const u of Object.values(UNIQUES)) items[BASES[u.base].slot!] = { ...makeItem(u.base), unique: u.id, rarity: 'unique' } as any;
       new HeroDresser(m).dress({ name: '', skin: 1, hair: 2, hairColor: 1, beard: 1, cloth: 0, cloth2: 5 }, items);
       new Rig(m.root).update(0, newAnimState());
-      cells.push({ label: `${label} · ${v}`, obj: holder, eye, at: new THREE.Vector3(0, 1.0, 0) });
+      cells.push({ label: `${label} · ${v}`, obj: holder, eye, at: new THREE.Vector3(0, 1.15, 0) });
       objs.push(holder);
     }
     st.sheet(cells, 4, 1);
     await shot(`hero-${label.replace(/\s+/g, '_')}`);
+    st.clear(objs);
+  }
+  // Every hair style and beard, 3/4 from above (the gameplay angle shows the crown).
+  {
+    const looks: [string, number, number][] = [['hair 1', 1, 0], ['hair 2', 2, 0], ['hair 3', 3, 0], ['hair 4', 4, 0], ['bald', 0, 0], ['beard 1', 0, 1], ['beard 2', 0, 2], ['beard 3', 0, 3]];
+    const cells: Parameters<Studio['sheet']>[0] = [];
+    const objs: THREE.Object3D[] = [];
+    for (const [label, hair, beard] of looks) {
+      const m = makeModel('hero');
+      const holder = new THREE.Group();
+      holder.add(m.root);
+      new HeroDresser(m).dress({ name: '', skin: 1, hair, hairColor: 1, beard, cloth: 0, cloth2: 5 }, {});
+      new Rig(m.root).update(0, newAnimState());
+      cells.push({ label, obj: holder, eye: new THREE.Vector3(1.1, 2.9, 1.9), at: new THREE.Vector3(0, 1.8, 0) });
+      objs.push(holder);
+    }
+    st.sheet(cells, 4, 2);
+    await shot('hero-hair');
     st.clear(objs);
   }
   document.body.classList.remove('inspect-clean');
@@ -435,11 +740,12 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
   document.body.classList.add('inspect-clean');
   const st = new Studio(g);
   const times = [-1, 0.15, 0.3, 0.42, 0.5, 0.62, 0.8, 0.95];
-  const heroSets: [string, string, AttackKind][] = [
+  const heroSets: [string, string, AttackKind, string?][] = [
+    ['dragonguard slam', 'ember_longsword', 'slam', 'ember'], ['knight swing', 'iron_sword', 'swing', 'iron'],
     ['sword swing', 'steel_sword', 'swing'], ['longsword slam', 'steel_longsword', 'slam'],
     ['bow', 'worn_bow', 'bow'], ['staff cast', 'apprentice_staff', 'cast'], ['pickaxe', 'steel_pickaxe', 'swing'],
   ];
-  for (const [label, weapon, kind] of heroSets) {
+  for (const [label, weapon, kind, tier = 'steel'] of heroSets) {
     for (const side of ['left', 'front'] as const) {
       const cells: Parameters<Studio['sheet']>[0] = [];
       const objs: THREE.Object3D[] = [];
@@ -448,15 +754,15 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
         const holder = new THREE.Group();
         holder.add(m.root);
         const dresser = new HeroDresser(m);
-        dresser.dress(null, { weapon: makeItem(weapon), body: makeItem('steel_platebody'), helm: makeItem('steel_fullhelm') });
+        dresser.dress(null, { weapon: makeItem(weapon), body: makeItem(`${tier}_platebody`), helm: makeItem(`${tier}_fullhelm`), gloves: makeItem(`${tier}_gauntlets`), boots: makeItem(`${tier}_boots`) });
         const bow = new BowDraw(m.root);
         bow.attach();
         const rig = new Rig(m.root);
         const s: AnimState = { ...newAnimState(), attackKind: kind, attack: t };
         rig.update(0, s);
         bow.update(s, dresser.socket('sock_handL'));
-        const eye = side === 'left' ? new THREE.Vector3(4.6, 1.6, 0.6) : new THREE.Vector3(0.6, 1.6, 4.6);
-        cells.push({ label: `${label} t=${t}`, obj: holder, eye, at: new THREE.Vector3(0, 1.1, 0) });
+        const eye = side === 'left' ? new THREE.Vector3(6.2, 1.9, 0.6) : new THREE.Vector3(0.6, 1.9, 6.2);
+        cells.push({ label: `${label} t=${t}`, obj: holder, eye, at: new THREE.Vector3(0, 1.55, 0) });
         objs.push(holder);
       }
       st.sheet(cells, 4, 2);
@@ -501,12 +807,34 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
       const s = { ...newAnimState(), ...a };
       rig.update(0, s);
       for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, s);
-      const h = Math.max(1.2, m.height);
-      cells.push({ label: `${name} ${label}`, obj: holder, eye: new THREE.Vector3(h * 2.2, h * 0.9, h * 1.1), at: new THREE.Vector3(0, h * 0.45 + (a.fly ? h * 0.8 : 0), 0) });
+      cells.push({ label: `${name} ${label}`, obj: holder, ...fit(holder, new THREE.Vector3(1, 0.45, 0.5)) });
       objs.push(holder);
     }
     st.sheet(cells, 4, 2);
     await shot(`anim-${name}`);
+    st.clear(objs);
+  }
+  // Pets are cosmetic followers (Pet.follow): the whelp hovers, the golem walks.
+  const pets: [string, [string, Partial<AnimState>, number][]][] = [
+    ['whelp', [['hover', { fly: 0.35 }, 0.2], ['hover 0.6s', { fly: 0.35 }, 0.6], ['hover 1.1s', { fly: 0.35 }, 1.1], ['follow', { fly: 0.35, speed: 5 }, 0.3], ['follow 0.7s', { fly: 0.35, speed: 5 }, 0.7], ['follow fast', { fly: 0.35, speed: 10 }, 0.5]]],
+    ['golem', [['idle', {}, 0.5], ['idle 1.5s', {}, 1.5], ['walk', { speed: 3 }, 0.2], ['walk 0.45s', { speed: 3 }, 0.45], ['walk 0.7s', { speed: 3 }, 0.7], ['run', { speed: 8 }, 0.4]]],
+  ];
+  for (const [name, states] of pets) {
+    if (!hasModel(name)) continue;
+    const cells: Parameters<Studio['sheet']>[0] = [];
+    const objs: THREE.Object3D[] = [];
+    for (const [label, a, secs] of states) {
+      const m = makeModel(name);
+      const holder = new THREE.Group();
+      holder.add(m.root);
+      const rig = new Rig(m.root);
+      const st2 = { ...newAnimState(), ...a };
+      for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, st2);
+      cells.push({ label: `pet ${name} ${label}`, obj: holder, ...fit(holder, new THREE.Vector3(1, 0.45, 0.5)) });
+      objs.push(holder);
+    }
+    st.sheet(cells, 3, 2);
+    await shot(`anim-pet-${name}`);
     st.clear(objs);
   }
   document.body.classList.remove('inspect-clean');

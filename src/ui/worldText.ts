@@ -47,6 +47,7 @@ export class WorldText {
   }
 
   damage(amount: number, x: number, y: number, z: number, cls: 'dmg' | 'crit' | 'hurt') {
+    if (amount <= 0) return; // fully absorbed hits show no number
     this.float(cls === 'hurt' ? `-${amount}` : String(amount), x, y, z, cls);
   }
 

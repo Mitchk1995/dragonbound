@@ -59,19 +59,51 @@ export class Fx {
     });
   }
 
+  /**
+   * A weapon slash: the arc sweeps in behind a bright leading edge, then trails off. HDR colour
+   * (above 1) so bloom catches the edge; soft inner/outer rims so it reads as motion, not a disc.
+   */
   arc(x: number, z: number, dir: number, r: number, angle: number, color: number) {
+    const r0 = r * 0.45;
+    const uniforms = {
+      uColor: { value: new THREE.Color(color).multiplyScalar(1.7) },
+      uHead: { value: 0 },
+      uFade: { value: 1 },
+      uAngle: { value: angle },
+      uR: { value: new THREE.Vector2(r0, r) },
+    };
     const m = new THREE.Mesh(
-      new THREE.RingGeometry(r * 0.55, r, 20, 1, -angle / 2, angle),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.RingGeometry(r0, r, 28, 2, -angle / 2, angle),
+      new THREE.ShaderMaterial({
+        uniforms,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `varying vec2 vP;
+          uniform vec3 uColor; uniform float uHead; uniform float uFade; uniform float uAngle; uniform vec2 uR;
+          void main() {
+            float t = (atan(vP.y, vP.x) + uAngle * 0.5) / uAngle;      // 0..1 along the sweep
+            float rr = (length(vP) - uR.x) / (uR.y - uR.x);           // 0 inner .. 1 outer
+            if (t > uHead) discard;
+            float trail = smoothstep(uHead - 0.6, uHead, t) * 0.85;    // brightest at the leading edge
+            float rim = smoothstep(0.0, 0.3, rr) * smoothstep(1.0, 0.8, rr);
+            float a = trail * rim * uFade;
+            gl_FragColor = vec4(uColor * (0.3 + rr * rr), a);
+          }`,
+      }),
     );
     m.rotation.x = -Math.PI / 2;
     const g = new THREE.Group();
     g.add(m);
     g.position.set(x, 1.0, z);
     g.rotation.y = -dir;
-    this.add(g, 0.16, (f) => {
-      (m.material as THREE.MeshBasicMaterial).opacity = f * 0.7;
-      g.scale.setScalar(1 + (1 - f) * 0.25);
+    const life = 0.3;
+    this.add(g, life, (f) => {
+      const age = 1 - f; // 0 → 1 over the effect
+      uniforms.uHead.value = Math.min(1, age * 3.2); // the sweep completes in ~0.09 s
+      uniforms.uFade.value = age < 0.35 ? 1 : 1 - (age - 0.35) / 0.65;
     });
   }
 
@@ -118,8 +150,34 @@ export class Fx {
         from.z + (to.z - from.z) * t + (Math.random() - 0.5) * j,
       ));
     }
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xcfe8ff, transparent: true, blending: THREE.AdditiveBlending }));
-    this.add(line, 0.18, (f) => ((line.material as THREE.LineBasicMaterial).opacity = f));
+    // WebGL lines are always 1 px wide (invisible at game resolution), so the bolt is geometry:
+    // crossed ribbons (horizontal + vertical, readable from the top-down camera), a wide HDR halo
+    // for bloom and a thin white-hot core.
+    const ribbon = (width: number) => {
+      const pos: number[] = [];
+      const up = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const dir = b.clone().sub(a).normalize();
+        for (const side of [new THREE.Vector3().crossVectors(dir, up).normalize(), up]) {
+          const o = side.clone().multiplyScalar(width / 2);
+          const a0 = a.clone().sub(o), a1 = a.clone().add(o), b0 = b.clone().sub(o), b1 = b.clone().add(o);
+          for (const v of [a0, b0, b1, a0, b1, a1]) pos.push(v.x, v.y, v.z);
+        }
+      }
+      return new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    };
+    const group = new THREE.Group();
+    const mats = [
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6aa8ff).multiplyScalar(1.1), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0xeaf4ff).multiplyScalar(2.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    ];
+    group.add(new THREE.Mesh(ribbon(0.32), mats[0]), new THREE.Mesh(ribbon(0.08), mats[1]));
+    this.add(group, 0.22, (f) => {
+      mats[0].opacity = f * 0.45;
+      // A quick double flicker, like a real strike.
+      mats[1].opacity = f * (f > 0.55 && f < 0.7 ? 0.25 : 1);
+    });
     this.g.glow.burst(new THREE.Vector3(to.x, to.y, to.z), { count: 8, color: [0xcfe8ff, 0x6aa8ff], speed: 5, up: 1, life: 0.25, gravity: 0, size: 0.1 });
   }
 

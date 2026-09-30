@@ -5,7 +5,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import type { PlayerStats } from './combat/stats';
 import type { AbilityKey } from './data/abilities';
-import { ZONES } from './data/zones';
+import { KEEP_STAGE, ZONES } from './data/zones';
 import type { Enemy } from './entities/enemy';
 import type { GroundItem } from './entities/groundItem';
 import type { Interactable } from './entities/interactable';
@@ -16,7 +16,7 @@ import { Sfx } from './fx/sfx';
 import { Rig, newAnimState } from './render/anim';
 import { PAL } from './render/kit';
 import { makeModel } from './render/registry';
-import { getBackend, loadSave, newSave, type Appearance, type SaveBackend, type SaveData } from './save/save';
+import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
 import { Combat } from './systems/combat';
 import { Fx } from './systems/fx';
 import { Items } from './systems/items';
@@ -156,6 +156,7 @@ export class Game {
     this.hasSave = !!loaded?.character;
     this.save = loaded ?? newSave();
     this.sfx.setVolume(this.save.settings.volume);
+    this.applyGraphics(this.save.settings.graphics ?? 'high');
     this.prog.refreshLevels();
     this.prog.recomputeStats();
     this.enterZone('keep');
@@ -172,7 +173,7 @@ export class Game {
   showCreate() {
     this.mode = 'create';
     // Stage the preview on the open plaza, clear of the island's rim trees.
-    this.player.pos.set(27.5, 0, 33.5);
+    this.player.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
     this.player.facing = this.player.targetFacing = 0;
     this.player.obj.visible = true;
     this.ui.showCreate();
@@ -423,6 +424,24 @@ export class Game {
 
     this.saveT -= raw;
     if (this.saveT <= 0 || (this.dirty && this.saveT < 17)) this.persist();
+  }
+
+  /**
+   * Quality presets. High: up to 2× pixel ratio, 4× MSAA, 2048 shadows, bloom. Medium: 1.5×,
+   * MSAA, 1536 shadows, bloom. Low: 1× (no supersampling on HiDPI), no MSAA, 1024 shadows, no
+   * bloom — for integrated GPUs.
+   */
+  applyGraphics(level: Graphics) {
+    const p = { high: { ratio: 2, msaa: 4, shadow: 2048, bloom: true }, medium: { ratio: 1.5, msaa: 4, shadow: 1536, bloom: true }, low: { ratio: 1, msaa: 0, shadow: 1024, bloom: false } }[level];
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) rt.samples = p.msaa;
+    this.bloom.enabled = p.bloom;
+    if (this.sun.shadow.mapSize.x !== p.shadow) {
+      this.sun.shadow.mapSize.set(p.shadow, p.shadow);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    this.resize();
   }
 
   /** Render the current view through the post chain. */

@@ -104,6 +104,7 @@ export class ZoneRuntime {
     const p = this.g.player;
     for (const it of this.interactables) it.update(dt, it.kind === 'npc' && p.distTo(it) < 6 ? p.x : undefined, p.z);
     for (const f of this.view.followers) f.position.set(p.x, 0, p.z);
+    this.view.tick(this.g.time);
   }
 
   dispose() {

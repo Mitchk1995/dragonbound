@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { KEEP_STAGE } from '../data/zones';
 import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
 import { BOW_SOCKET, Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
@@ -21,7 +22,7 @@ export function installPoseCheck(g: Game) {
     g.prog.recomputeStats();
     g.dressHero();
     const p = g.player;
-    p.pos.set(27.5, 0, 33.5);
+    p.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
     p.obj.rotation.y = 0;
     p.anim.attackKind = kind;
     p.anim.attack = t;
@@ -77,7 +78,7 @@ export function installPoseCheck(g: Game) {
     const m = makeModel(model);
     unitObj = new THREE.Group();
     unitObj.add(m.root);
-    unitObj.position.set(27.5, 0, 33.5);
+    unitObj.position.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
     g.scene.add(unitObj);
     const rig = new Rig(m.root);
     const st = { ...newAnimState(), ...anim };

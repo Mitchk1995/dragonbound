@@ -23,7 +23,7 @@ interface SurfaceParams {
 export const SURFACES: Record<SurfaceKind, SurfaceParams> = {
   metal: { scale: 1.1, albedo: 0.2, bump: 0.3 },
   cloth: { scale: 4.5, albedo: 0.32, bump: 0.7 },
-  leather: { scale: 2.6, albedo: 0.34, bump: 0.8 },
+  leather: { scale: 5, albedo: 0.24, bump: 0.45 },
   wood: { scale: 1.5, albedo: 0.42, bump: 0.9 },
   stone: { scale: 0.9, albedo: 0.45, bump: 1.2 },
   skin: { scale: 3, albedo: 0.1, bump: 0.2 },
@@ -233,7 +233,7 @@ export function groundTexture(): THREE.Texture {
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const [p1] = pebbles(x, y);
-      const dirt = 0.35 + dirtN(x, y) * 0.4 + (p1 < 3.5 ? 0.25 : 0);
+      const dirt = 0.35 + dirtN(x, y) * 0.45 + (p1 < 2.6 ? 0.12 : 0);
       const grass = 0.3 + grassN(x, y) * 0.35 + grassSpeck(x, y) * 0.15 + (grassClump(x, y) - 0.5) * 0.3;
       const [f1, f2, id] = flag(x, y);
       const grout = Math.min(1, (f2 - f1) / 5);

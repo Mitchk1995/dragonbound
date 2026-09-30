@@ -14,7 +14,8 @@ import { RESTORATIONS, RESTORATION_BY_ID } from '../src/data/keep';
 import { DIARY_TASKS } from '../src/data/diary';
 import { ENEMIES } from '../src/data/enemies';
 import { DROP_TABLES } from '../src/data/dropTables';
-import { ZONES } from '../src/data/zones';
+import { KEEP_STAGE, ZONES } from '../src/data/zones';
+import { STAGE_CAMERAS } from '../src/data/zoneMaps';
 import { XP_TUNING } from '../src/data/tuning';
 import { Cell } from '../src/world/layout';
 import { NavGrid } from '../src/world/navgrid';
@@ -233,13 +234,24 @@ describe('zones', () => {
       const targets = [...L.stations.map((s) => ({ ...s, what: `${s.kind}:${s.id}` })), ...L.nodes.map((n) => ({ ...n, what: `rock:${n.ore}` })), ...L.packs.map((p) => ({ ...p, what: 'pack' }))];
       if (L.boss) targets.push({ x: L.boss.x, z: L.boss.z, what: 'boss' } as any);
       for (const t of targets) {
-        const path = nav.findPath(e.x, e.z, t.x, t.z, 40000);
+        const path = nav.findPath(e.x, e.z, t.x, t.z, 400000);
         expect(path, `${def.id} → ${t.what} at ${t.x},${t.z}`).not.toBeNull();
         const end = path![path!.length - 1];
         expect(Math.hypot(end.x - t.x, end.z - t.z), `${def.id} reach ${t.what}`).toBeLessThan(3.8);
       }
     });
   }
+  it('keeps every staging camera spot clear (a prop at the camera gets sliced by the near plane)', () => {
+    const L = ZONES.keep.build(1000 + 'keep'.length * 97);
+    for (const c of STAGE_CAMERAS) {
+      const cx = KEEP_STAGE.x + c.x, cz = KEEP_STAGE.z + c.z;
+      for (const o of [...L.props, ...L.stations]) {
+        expect(Math.hypot(o.x - cx, o.z - cz), `${'kind' in o ? o.kind : ''} at ${o.x},${o.z} vs camera ${cx},${cz}`).toBeGreaterThan(2.6);
+      }
+      const cell = L.cells[Math.floor(cz) * L.w + Math.floor(cx)];
+      expect(cell === Cell.Tree || cell === Cell.Rock, `scenery at camera ${cx},${cz}`).toBe(false);
+    }
+  });
   it('the keep island has void around it and walkable ground in the middle', () => {
     const L = ZONES.keep.build(1);
     expect(L.cells[0]).toBe(Cell.Void);

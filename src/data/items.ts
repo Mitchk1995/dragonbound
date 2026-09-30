@@ -92,6 +92,14 @@ export const pieceId = (tier: TierId, piece: string) => `${tier}_${piece}`;
 
 const list: BaseItem[] = [];
 
+/**
+ * Plate-set design per tier (Blender variants, tools/blender/plate_variants.py): A "Knight of the
+ * Keep" (rounded, noble), B "Warlord" (angular, spiked), C "Dragonguard" (scales, wing pauldrons).
+ * Gauntlets and boots follow the tier's style so full sets match.
+ */
+export const PLATE_STYLE: Record<TierId, 'a' | 'b' | 'c'> = { bronze: 'a', iron: 'a', steel: 'b', ember: 'c' };
+const STYLED = new Set(['body_plate', 'helm_full', 'gloves', 'boots']);
+
 TIER_ORDER.forEach((tierId, t) => {
   const tier = TIERS[tierId];
   for (const p of PIECES) {
@@ -102,7 +110,7 @@ TIER_ORDER.forEach((tierId, t) => {
       name: `${tier.name} ${p.name}`,
       kind: p.kind,
       slot: p.slot,
-      model: p.model,
+      model: STYLED.has(p.model) ? `${p.model}_${PLATE_STYLE[tierId]}` : p.model,
       palette: tier.palette,
       tier: tierId,
       minIlvl: p.kind === 'gear' ? tier.minIlvl + Math.floor(p.offset / 4) : undefined,

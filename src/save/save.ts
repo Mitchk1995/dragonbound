@@ -20,6 +20,9 @@ export interface QuestState {
   done: boolean;
 }
 
+/** Render quality preset (see Game.applyGraphics). */
+export type Graphics = 'high' | 'medium' | 'low';
+
 export interface SaveData {
   version: number;
   /** Null until character creation is finished. */
@@ -50,7 +53,7 @@ export interface SaveData {
   /** Tutorial step index; -1 when finished or skipped. */
   tutorial: number;
   stats: { deaths: number; kills: number; playtime: number; bestBossTime: number | null };
-  settings: { volume: number };
+  settings: { volume: number; graphics?: Graphics };
 }
 
 export const emptyEquipment = (): Record<Slot, Item | null> => ({
@@ -82,7 +85,7 @@ export function newSave(): SaveData {
     portals: {},
     tutorial: 0,
     stats: { deaths: 0, kills: 0, playtime: 0, bestBossTime: null },
-    settings: { volume: 0.6 },
+    settings: { volume: 0.6, graphics: 'high' },
   };
 }
 
@@ -98,6 +101,7 @@ export function migrate(raw: any): SaveData {
     stats: { ...fresh.stats, ...(raw.stats ?? {}) },
     settings: { ...fresh.settings, ...(raw.settings ?? {}) },
   };
+  if (!['high', 'medium', 'low'].includes(data.settings.graphics as string)) data.settings.graphics = 'high';
   for (const key of ['collection', 'kc', 'counters', 'keep', 'quests', 'diary', 'diaryClaimed', 'portals'] as const) {
     (data as any)[key] = raw[key] && typeof raw[key] === 'object' ? raw[key] : {};
   }

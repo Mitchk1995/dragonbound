@@ -1,7 +1,7 @@
 import type { Enemy } from '../entities/enemy';
 import type { Game } from '../game';
 
-type ActionKind = 'bite' | 'breath' | 'tail' | 'gust' | 'flight';
+export type ActionKind = 'bite' | 'breath' | 'tail' | 'gust' | 'flight';
 
 export interface BossState {
   engaged: boolean;
@@ -102,7 +102,8 @@ export function updateBoss(e: Enemy, dt: number, g: Game): number {
   return 0;
 }
 
-function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
+/** Begin a boss attack (exported for the dev inspect harness, which triggers each one in turn). */
+export function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
   const p = g.player;
   e.faceTo(p.x, p.z, true);
   const dir = Math.atan2(p.z - e.z, p.x - e.x);

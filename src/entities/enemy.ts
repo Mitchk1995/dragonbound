@@ -15,6 +15,8 @@ export interface PackState {
 }
 
 const LEASH = 26;
+/** Idle enemies farther than this from the hero sleep (see update). */
+const DORMANT_DIST = 42;
 
 export class Enemy extends Unit {
   readonly def: EnemyDef;
@@ -27,6 +29,8 @@ export class Enemy extends Unit {
   actDur = 0.6;
   actDone = false;
   repathT = 0;
+  /** The last path search failed (see chase). */
+  pathFailed = false;
   wanderT = Math.random() * 4;
   untargetable = false;
   /** Lunger state. */
@@ -76,6 +80,12 @@ export class Enemy extends Unit {
       this.updateCommon(dt, g.zone.nav);
       return;
     }
+    // Dormant when far away and idle: no AI, no animation, not drawn (big zones hold ~100 enemies;
+    // only the ones near the hero cost anything). DORMANT_DIST is well beyond the view and aggro range.
+    // Visibility is recomputed every frame, so an enemy woken by its pack (aggro) reappears.
+    const dormant = !this.aggro && !this.returning && this.def.behavior !== 'boss' && this.distTo(g.player) > DORMANT_DIST;
+    this.obj.visible = !dormant;
+    if (dormant) return;
     this.atkCd -= dt;
     let moved = 0;
     if (this.def.behavior === 'boss') {
@@ -276,8 +286,13 @@ export class Enemy extends Unit {
       this.path = [];
       return this.moveToward(dt, tx, tz, speed, g.zone.nav);
     }
-    if (this.repathT <= 0 || !this.path.length) {
-      this.path = g.zone.nav.findPath(this.x, this.z, tx, tz, 2500) ?? [];
+    // Re-path on the timer, or early when a good path ran out. A failed search (target
+    // unreachable, e.g. across water) waits for the timer: retrying every frame costs a full
+    // 2500-node search per enemy per frame.
+    if (this.repathT <= 0 || (!this.path.length && !this.pathFailed)) {
+      const found = g.zone.nav.findPath(this.x, this.z, tx, tz, 2500);
+      this.path = found ?? [];
+      this.pathFailed = !found;
       this.repathT = 0.5 + Math.random() * 0.3;
     }
     return this.followPath(dt, speed, g.zone.nav);

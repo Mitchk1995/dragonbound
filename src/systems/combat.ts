@@ -36,6 +36,9 @@ export interface Hazard {
   emit?: number;
 }
 
+/** Meteor fire-trail density in particles per second (≈3 per frame at 60 fps). */
+const METEOR_TRAIL_RATE = 180;
+
 /** Breath cone density in particles per second (≈10 per frame at 60 fps). */
 const BREATH_RATE = 600;
 
@@ -380,7 +383,18 @@ export class Combat {
 
   meteor(x: number, z: number, source: Enemy) {
     const g = this.g;
-    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), new THREE.MeshBasicMaterial({ color: PAL.fire }));
+    // A burning basalt rock: dark faces with a molten glow (lit, so it reads as a solid lump rather
+    // than a flat disc), a hot additive halo for bloom, spinning as it falls.
+    const rock = new THREE.Group();
+    rock.add(new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.55, 0),
+      new THREE.MeshStandardMaterial({ color: 0x2a1a14, emissive: 0xff4a10, emissiveIntensity: 0.9, roughness: 0.8, flatShading: true }),
+    ));
+    const halo = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.85, 1),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(PAL.fire).multiplyScalar(1.2), transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    rock.add(halo);
     rock.position.set(x, 14, z);
     const dur = 1.1;
     this.telegraph(x, z, { kind: 'circle', r: 1.7 }, dur, () => {
@@ -389,9 +403,18 @@ export class Combat {
       g.shake(0.15, 0.15);
       if (Math.hypot(g.player.x - x, g.player.z - z) < 1.7 + g.player.radius * 0.6) this.damagePlayer(12, source);
     }, source);
+    // Trail emission follows the effect's age (180 particles/s): the same density at any frame
+    // rate, and nothing while paused.
+    let emitted = 0;
     g.fx.add(rock, dur, (f) => {
       rock.position.y = 0.3 + 14 * f;
-      g.glow.spawn(rock.position.x, rock.position.y, rock.position.z, 0, 2, 0, 0.3, 0.3, PAL.ember, 0, 0);
+      rock.rotation.set(f * 9, f * 6, 0);
+      halo.scale.setScalar(0.9 + Math.sin(f * 40) * 0.1);
+      const due = Math.floor((1 - f) * dur * METEOR_TRAIL_RATE + 1e-6);
+      for (let k = emitted; k < due; k++) {
+        g.glow.spawn(rock.position.x + (Math.random() - 0.5) * 0.5, rock.position.y + 0.3, rock.position.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.6, 3 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.22 + Math.random() * 0.2, k % 3 ? PAL.ember : PAL.fire, 0, 0.5);
+      }
+      emitted = Math.max(emitted, due);
     });
   }
 
