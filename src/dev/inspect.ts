@@ -744,7 +744,7 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
   // Rest, wind-up, peak, impact (0.55), follow-through.
   const times = [-1, 0.15, 0.3, 0.44, 0.55, 0.66, 0.8, 0.95];
   const heroSets: [string, string, AttackKind, string?][] = [
-    ['dragonguard slam', 'ember_longsword', 'slam', 'ember'], ['knight swing', 'iron_sword', 'swing', 'iron'],
+    ['emberforged slam', 'ember_longsword', 'slam', 'ember'], ['bronze swing', 'bronze_sword', 'swing', 'bronze'],
     ['sword swing', 'steel_sword', 'swing'], ['longsword slam', 'steel_longsword', 'slam'],
     ['bow', 'worn_bow', 'bow'], ['staff cast', 'apprentice_staff', 'cast'], ['pickaxe', 'steel_pickaxe', 'swing'],
   ];

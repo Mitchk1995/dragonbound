@@ -275,12 +275,12 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     if (o instanceof THREE.Mesh && roleOf(o.material as THREE.Material) === 'glow') ownGlow = true;
   });
   applyRoles(root, paletteRoles(palette), !!palette.glow && !ownGlow);
-  // Forged palettes shine: their role parts reflect the studio environment.
-  if (palette.metal) {
-    for (const m of mats) {
-      const role = roleOf(m);
-      if (role === 'metal' || role === 'trim' || role === 'dark') applyFinish(m, role as Finish);
-    }
+  // Forged palettes shine: their role parts reflect the studio environment. So do fixed-colour parts
+  // authored as metal (unique gear: _common.metallic in the Blender scripts).
+  for (const m of mats) {
+    const role = roleOf(m);
+    if (palette.metal && (role === 'metal' || role === 'trim' || role === 'dark')) applyFinish(m, role as Finish);
+    else if (!role && m.metalness > 0.5) applyFinish(m, 'metal');
   }
   const sockets: THREE.Object3D[] = [];
   root.traverse((o) => {
@@ -331,8 +331,8 @@ export class HeroDresser {
     });
 
     const helm = equipment.helm ? gearLook(equipment.helm) : null;
-    // Tier design variants (helm_full_a/b/c) hide hair like their base model.
-    const hide = helm ? (HAIR_HIDDEN_BY[helm.model] ?? HAIR_HIDDEN_BY[helm.model.replace(/_[abc]$/, '')]) : undefined;
+    // Plate sets (helm_full_p/e, items.ts PLATE_STYLE) hide hair like their base model.
+    const hide = helm ? (HAIR_HIDDEN_BY[helm.model] ?? HAIR_HIDDEN_BY[helm.model.replace(/_[pe]$/, '')]) : undefined;
     if (a.hair > 0 && !hide) this.attachFile(`hair_${a.hair}`, { hair: HAIR_COLORS[a.hairColor] });
     if (a.beard > 0 && hide !== 'all') this.attachFile(`beard_${a.beard}`, { hair: HAIR_COLORS[a.hairColor] });
 
@@ -407,7 +407,7 @@ export const MODEL_FILES = [
   'hero', 'goblin', 'kobold', 'cultist', 'drakeling', 'cinderwing', 'whelp', 'golem', 'warden', 'quartermaster',
   'gear_sword', 'gear_longsword', 'gear_pickaxe', 'gear_bow', 'gear_staff', 'gear_helm_open', 'gear_helm_full',
   'gear_body_chain', 'gear_body_plate', 'gear_gloves', 'gear_boots',
-  ...['a', 'b', 'c'].flatMap((v) => [`gear_body_plate_${v}`, `gear_helm_full_${v}`, `gear_gloves_${v}`, `gear_boots_${v}`]),
+  ...['p', 'e'].flatMap((v) => [`gear_body_plate_${v}`, `gear_helm_full_${v}`, `gear_gloves_${v}`, `gear_boots_${v}`]),
   'gear_u_cinderfang', 'gear_u_emberstring', 'gear_u_kindled_ash', 'gear_u_ashen_crown', 'gear_u_scaleguard',
   'hair_1', 'hair_2', 'hair_3', 'hair_4', 'beard_1', 'beard_2', 'beard_3',
 ];

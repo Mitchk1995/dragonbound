@@ -16,12 +16,6 @@ import _common
 importlib.reload(_common)
 from _common import *
 
-# The curved-surface kit (loft_fn / surf / grow / sub) still lives in plate_variants.py; borrow it for the hood.
-_p = os.path.join(_ROOT, 'tools', 'blender', 'plate_variants.py')
-_pv = {'__name__': 'db_pv', '__file__': _p}
-exec(open(_p, encoding='utf-8').read(), _pv)
-loft_fn, surf, grow, sub = _pv['loft_fn'], _pv['surf'], _pv['grow'], _pv['sub']
-
 PI = math.pi
 SKIN_OLD = 0xE2B48E
 SKIN = 0xE8B48A

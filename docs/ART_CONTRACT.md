@@ -51,11 +51,15 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | open-faced helm; face visible; hides hair |
 | `helm_full` | `sock_head` | full helm with visor slit; hides hair and beard |
-| `body_chain` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | slimmer; mail texture via ridges |
+| `body_chain` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | rounded mail shirt, short mail sleeves; ring studs, no bands |
 | `body_plate` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | chunky breastplate + big pauldrons |
 | `gloves` | `sock_handL`, `sock_gloveR` | gauntlet cuffs, slightly bigger than bare hands |
 | `boots` | `sock_footL`, `sock_footR` | covers shoe, cuff at shin |
-| `u_<unique id>` | as its base | hand-built unique look (own colours allowed) |
+| `u_<unique id>` | as its base | hand-built unique look (own colours allowed; metal parts use `_common.metallic()` so they get the forged-metal finish) |
+
+Tier plate (full helm, platebody, gauntlets, boots) comes from `tools/blender/plate_variants.py` as
+`gear_<model>_<set>.glb`, one set per design (`items.ts` `PLATE_STYLE`): `p` for bronze / iron / steel (one design,
+palette only) and `e` for Emberforged. `export_variant('<set>')` writes them straight into `public/models`.
 
 ### Hair & beards: `hair_<1..4>.glb`, `beard_<1..3>.glb`
 One `sock_head` empty; meshes use `ROLE_hair`.
