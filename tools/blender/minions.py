@@ -1,4 +1,4 @@
-"""Goblin Grunt, Kobold Slinger and Ember Cultist."""
+"""Goblin Grunt, Kobold Slinger and Ember Cultist. Faces +Z; right-side parts (armR/legR) at -X."""
 import math
 import sys
 
@@ -28,8 +28,8 @@ def arm(parent, name, x, y, sleeve, hand, length):
 def goblin():
     scene, root = fresh_scene('DB_goblin')
     hip = 0.55
-    leg(root, 'legL', -0.15, hip, 'goblinDark', 'leatherDark', 0.4)
-    leg(root, 'legR', 0.15, hip, 'goblinDark', 'leatherDark', 0.4)
+    leg(root, 'legL', 0.15, hip, 'goblinDark', 'leatherDark', 0.4)
+    leg(root, 'legR', -0.15, hip, 'goblinDark', 'leatherDark', 0.4)
     body = pivot(root, 'body', (0, hip, 0))
     box(body, (0.58, 0.22, 0.38), (0, 0.02, 0), 'leather', bevel=0.04)
     box(body, (0.5, 0.26, 0.12), (0, -0.12, 0.14), 'leatherDark', taper=(1.2, 1), bevel=0.02)  # loincloth
@@ -45,8 +45,8 @@ def goblin():
         box(head, (0.11, 0.08, 0.02), (s * 0.14, 0.25, 0.255), 'eye', emissive='eye', strength=3, bevel=0)
         cone(head, 0.035, 0.1, (s * 0.1, 0.0, 0.25), 'bone', rot=(PI, 0, 0), seg=4)  # tusks
     box(head, (0.32, 0.05, 0.04), (0, 0.04, 0.26), 'black', bevel=0)
-    arm(body, 'armL', -0.38, 0.5, 'goblin', 'goblinDark', 0.42)
-    armR = arm(body, 'armR', 0.38, 0.5, 'goblin', 'goblinDark', 0.42)
+    arm(body, 'armL', 0.38, 0.5, 'goblin', 'goblinDark', 0.42)
+    armR = arm(body, 'armR', -0.38, 0.5, 'goblin', 'goblinDark', 0.42)
     w = pivot(armR, 'weapon', (0, -0.5, 0.04), (PI / 2, 0, 0))
     cyl(w, 0.08, 0.05, 0.85, (0, 0.36, 0), 'wood', seg=6)
     gem(w, 0.17, (0, 0.76, 0), 'wood')
@@ -55,15 +55,15 @@ def goblin():
         cone(w, 0.05, 0.16, (math.cos(ang) * 0.15, 0.78, math.sin(ang) * 0.15), 'bone', rot=(0, -ang, -PI / 2), seg=4)
     box(w, (0.2, 0.06, 0.2), (0, 0.55, 0), 'leather', bevel=0.02)
     export('DB_goblin', 'goblin.glb')
-    preview('goblin.png', target=(0, 0.7, 0), dist=3.6)
+    preview_sheet('goblin.png', target=(0, 0.7, 0), dist=3.6)
     remove_preview_rig()
 
 
 def kobold():
     scene, root = fresh_scene('DB_kobold')
     hip = 0.5
-    leg(root, 'legL', -0.14, hip, 'koboldDark', 'koboldDark', 0.36)
-    leg(root, 'legR', 0.14, hip, 'koboldDark', 'koboldDark', 0.36)
+    leg(root, 'legL', 0.14, hip, 'koboldDark', 'koboldDark', 0.36)
+    leg(root, 'legR', -0.14, hip, 'koboldDark', 'koboldDark', 0.36)
     body = pivot(root, 'body', (0, hip, 0))
     box(body, (0.46, 0.5, 0.36), (0, 0.26, 0), 'kobold', rot=(0.15, 0, 0), taper=(1.1, 1), bevel=0.05)
     box(body, (0.3, 0.38, 0.08), (0, 0.26, 0.19), 'belly', rot=(0.15, 0, 0), bevel=0.03)
@@ -84,15 +84,15 @@ def kobold():
         box(head, (0.03, 0.03, 0.02), (s * 0.06, 0.16, 0.48), 'black', bevel=0)
     for i in range(3):
         cone(head, 0.04, 0.14, (0, 0.36, -0.05 - i * 0.12), 'koboldDark', seg=4)
-    arm(body, 'armL', -0.3, 0.42, 'kobold', 'koboldDark', 0.36)
-    armR = arm(body, 'armR', 0.3, 0.42, 'kobold', 'koboldDark', 0.36)
+    arm(body, 'armL', 0.3, 0.42, 'kobold', 'koboldDark', 0.36)
+    armR = arm(body, 'armR', -0.3, 0.42, 'kobold', 'koboldDark', 0.36)
     w = pivot(armR, 'weapon', (0, -0.44, 0), (PI / 2, 0, 0))
     box(w, (0.025, 0.42, 0.025), (0.05, 0.2, 0), 'leather', bevel=0)
     box(w, (0.025, 0.42, 0.025), (-0.05, 0.2, 0), 'leather', bevel=0)
     box(w, (0.16, 0.12, 0.12), (0, 0.44, 0), 'leatherDark', bevel=0.03)
     gem(w, 0.07, (0, 0.5, 0), 'steelDark')
     export('DB_kobold', 'kobold.glb')
-    preview('kobold.png', target=(0, 0.6, 0), dist=3.2)
+    preview_sheet('kobold.png', target=(0, 0.6, 0), dist=3.2)
     remove_preview_rig()
 
 
@@ -113,7 +113,7 @@ def cultist():
     box(head, (0.32, 0.26, 0.1), (0, 0.16, 0.22), 'black', bevel=0.02)
     for s in (-1, 1):
         box(head, (0.07, 0.05, 0.02), (s * 0.08, 0.2, 0.28), 'fire', emissive='fire', strength=6, bevel=0)
-    for name, x in (('armL', -0.4), ('armR', 0.4)):
+    for name, x in (('armL', 0.4), ('armR', -0.4)):
         a = pivot(body, name, (x, 1.32, 0))
         box(a, (0.24, 0.62, 0.28), (0, -0.3, 0), 'robe', taper=(1.2, 1.2), bevel=0.04)
         box(a, (0.3, 0.1, 0.32), (0, -0.6, 0), 'gold', bevel=0.02)
@@ -126,7 +126,7 @@ def cultist():
                 box(w, (0.05, 0.3, 0.05), (s * 0.1, 1.2, 0), 'black', rot=(0, 0, s * 0.4), bevel=0.01)
             cone(w, 0.12, 0.32, (0, 1.2, 0), 'fire', rot=(PI, 0, 0), seg=4, emissive='fire', strength=5)
     export('DB_cultist', 'cultist.glb')
-    preview('cultist.png', target=(0, 1.0, 0), dist=4.2)
+    preview_sheet('cultist.png', target=(0, 1.0, 0), dist=4.2)
     remove_preview_rig()
 
 

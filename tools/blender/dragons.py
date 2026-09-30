@@ -1,4 +1,7 @@
-"""Dragons: Drakeling (minion), Cinderwing (boss) and the Ember Whelp pet, from one builder."""
+"""Dragons: Drakeling (minion), Cinderwing (boss) and the Ember Whelp pet, from one builder.
+
+Faces +Z; right-side parts (legFR/legBR/wingR) at -X, left at +X.
+"""
 import math
 import sys
 
@@ -17,7 +20,7 @@ def dragon(scene_name, file_name, scale, main, dark, belly, glow, membrane_col, 
     inner.scale = (scale, scale, scale)
     leg_h = 0.62
 
-    for name, x, z, front in (('legFL', -0.38, 0.42, True), ('legFR', 0.38, 0.42, True), ('legBL', -0.4, -0.45, False), ('legBR', 0.4, -0.45, False)):
+    for name, x, z, front in (('legFL', 0.38, 0.42, True), ('legFR', -0.38, 0.42, True), ('legBL', 0.4, -0.45, False), ('legBR', -0.4, -0.45, False)):
         l = pivot(inner, name, (x, leg_h + 0.08, z))
         box(l, (0.3, 0.5, 0.36) if not front else (0.26, 0.5, 0.3), (0, -0.22, 0), main, bevel=0.05)
         box(l, (0.2, 0.36, 0.22), (0, -0.52, 0.04 if front else -0.04), dark, bevel=0.04)
@@ -74,7 +77,7 @@ def dragon(scene_name, file_name, scale, main, dark, belly, glow, membrane_col, 
     box(parent, (0.34, 0.06, 0.36), (0, 0, -0.62), dark, rot=(0, PI / 4, 0), bevel=0.02)  # tail blade
 
     for s in (-1, 1):
-        wing = pivot(body, 'wingL' if s < 0 else 'wingR', (s * 0.4, 0.36, 0.3), (0, 0, s * 0.35))
+        wing = pivot(body, 'wingL' if s > 0 else 'wingR', (s * 0.4, 0.36, 0.3), (0, 0, s * 0.35))
         box(wing, (span, 0.09, 0.11), (s * span / 2, 0.02, 0), dark, bevel=0.03)
         for f, (ang, ln) in enumerate(((0.35, 0.72), (0.9, 0.8), (1.45, 0.62))):
             fx = s * span * (0.55 + f * 0.22)
@@ -84,7 +87,7 @@ def dragon(scene_name, file_name, scale, main, dark, belly, glow, membrane_col, 
 
     export(scene_name, file_name)
     h = (leg_h + 1.3) * scale
-    preview(file_name.replace('.glb', '.png'), target=(0, h * 0.5, 0), dist=h * 2.6 + 1.5, yaw=40, pitch=22)
+    preview_sheet(file_name.replace('.glb', '.png'), target=(0, h * 0.5, 0), dist=h * 2.4 + 1.2)
     remove_preview_rig()
 
 
