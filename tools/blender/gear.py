@@ -178,8 +178,9 @@ BELT_Y = -0.315
 
 def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True):
     """Cuirass of stacked slabs: a broad chest block (raised centre plate), two stepped abdominal lames, belt,
-    tassets and a box gorget. `seam` fills the grooves between the slabs (a dark line on plate, ember glow on
-    Emberforged)."""
+    tassets and a box gorget. `seam` fills the grooves between the slabs: one colour for all three grooves
+    (top first), or a tuple with one colour (or None) per groove."""
+    seams = tuple(seam) if isinstance(seam, (tuple, list)) else (seam,) * 3
     y, w, hgt, d = CHEST
     box(c, (w, hgt, d), (0, y, 0), R.metal, bevel=0.05)
     box(c, (w - 0.14, 0.05, d - 0.1), (0, y + hgt / 2 + 0.01, 0), R.metal, bevel=0.018)       # shoulder yoke step
@@ -193,13 +194,13 @@ def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True):
         rivet(c, (s * 0.3, y + 0.12, d / 2 + 0.004), trim, 0.02)
         rivet(c, (s * 0.3, y - 0.12, d / 2 + 0.004), trim, 0.02)
     prev = y - hgt / 2
-    for ly, lw, lh, ld in LAMES:
+    for i, (ly, lw, lh, ld) in enumerate(LAMES):
         box(c, (lw, lh, ld), (0, ly, 0), R.metal, bevel=0.03)
-        if seam:
-            box(c, (lw - 0.02, 0.016, ld - 0.02), (0, prev, 0), seam, bevel=0)                  # groove line
+        if seams[i]:
+            box(c, (lw - 0.02, 0.016, ld - 0.02), (0, prev, 0), seams[i], bevel=0)              # groove line
         prev = ly - lh / 2
-    if seam:
-        box(c, (0.74, 0.016, 0.53), (0, prev, 0), seam, bevel=0)
+    if seams[2]:
+        box(c, (0.74, 0.016, 0.53), (0, prev, 0), seams[2], bevel=0)
     box(c, (0.8, 0.09, 0.57), (0, BELT_Y, 0), R.leather, bevel=0.02)                           # belt
     box(c, (0.13, 0.1, 0.03), (0, BELT_Y, 0.29), trim, bevel=0.012)                            # buckle
     gorget(c, trim)
@@ -227,32 +228,154 @@ def plate_tassets(c, trim=R.trim):
     box(cul, (0.59, 0.03, 0.058), (0, -0.2, 0), trim, bevel=0.006)
 
 
-# Pauldron: blocks stepping down the outside of the shoulder like shingles, each (size, centre (x, y), outward
-# tilt) for the left side; the top block overlaps the chest's top edge.
-PAULDRON_STEPS = (
-    ((0.38, 0.13, 0.47), (0.05, 0.07), 0.16),
-    ((0.3, 0.12, 0.45), (0.14, -0.02), 0.42),
-    ((0.22, 0.11, 0.42), (0.19, -0.11), 0.72),
-)
+# Pauldron cap (left side): a top block over the shoulder corner, sloping down with the shoulder, over an outer
+# side block, the two forming one hard corner only a little wider than the arm. Each is (size, centre (x, y),
+# outward tilt). The top block sits on the shoulder socket (shoulder-socket space), which follows the arm by 75%
+# (anim.ts SHOULDER_FOLLOW), so it articulates over the joint. The side block and everything below it ride the arm
+# itself (arm space, on the palm sockets), so nothing lags off the arm when it swings or goes overhead.
+CAP_TOP = ((0.29, 0.13, 0.36), (0.04, 0.0), 0.26)
+CAP_SIDE = ((0.075, 0.18, 0.36), (0.16, 0.045), 0.08)
+SHOULDER_ARM = (('sock_shoulderL', 'sock_handL', 1), ('sock_shoulderR', 'sock_gloveR', -1))
 
 
-def block_pauldron(sh, s, color=R.metal, top=R.metal, edge=R.trim, seam=None, steps=PAULDRON_STEPS):
-    """Stacked chamfered blocks stepping down the shoulder, a raised plate on the top block and a rim along
-    the lowest block's outer edge. Returns the step frames (local +X runs outward along each block)."""
-    frames = []
-    for i, (size, (x, y), tilt) in enumerate(steps):
-        f = pivot(sh, 'pauldron_step', (s * x, y, 0), (0, 0, -s * tilt))
-        box(f, size, (0, 0, 0), color, bevel=0.035 if i == 0 else 0.03)
-        if seam and i:
-            box(f, (size[0] - 0.04, size[1] + 0.006, size[2] - 0.03), (-s * 0.015, 0, 0), seam, bevel=0)
-        frames.append(f)
-    w, hgt, d = steps[0][0]
-    box(frames[0], (w * 0.55, 0.05, d * 0.66), (-s * 0.02, hgt / 2 + 0.012, 0), top, bevel=0.016)
-    w, hgt, d = steps[-1][0]
-    box(frames[-1], (0.035, hgt + 0.014, d + 0.014), (s * (w / 2 - 0.012), 0, 0), edge, bevel=0.008)
-    for z in (-0.13, 0.13):
-        rivet(frames[0], (s * 0.1, steps[0][0][1] / 2 + 0.002, z), edge, 0.018, rot=(PI / 2, 0, PI / 4))
-    return frames
+def block_pauldron(S, s, color=R.metal, top=R.metal, edge=R.trim, rivets=R.dark):
+    """Blocky shoulder cap for side s: a top block with a raised plate, and an outer side block with a rim along
+    its lower edge. Returns the (top, side) frames: local +X runs outward along each block, +Y up out of it."""
+    sh_name, palm_name, _ = next(r for r in SHOULDER_ARM if r[2] == s)
+    (size, (x, y), tilt) = CAP_TOP
+    ft = pivot(S(sh_name), 'pauldron_top', (s * x, y, 0), (0, 0, -s * tilt))
+    box(ft, size, (0, 0, 0), color, bevel=0.035)
+    if top:
+        w, hgt, d = size
+        box(ft, (w * 0.55, 0.045, d * 0.66), (-s * 0.02, hgt / 2 + 0.012, 0), top, bevel=0.014)
+    (size, (x, y), tilt) = CAP_SIDE
+    fs = pivot(S(palm_name), 'pauldron_side', (s * x, y + PALM, 0), (0, 0, -s * tilt))
+    box(fs, size, (0, 0, 0), color, bevel=0.03)
+    w, hgt, d = size
+    if edge:
+        box(fs, (w + 0.02, 0.04, d + 0.02), (s * 0.005, -hgt / 2 + 0.01, 0), edge, bevel=0.01)
+    if rivets:
+        for z in (-0.12, 0.12):
+            rivet(fs, (s * (w / 2 + 0.002), 0.02, z), rivets, 0.018, rot=(PI / 4, PI / 2, 0))
+    return ft, fs
+
+
+# ─── Upper arm (body armour, on the palm sockets) ────────────────────────────
+# Upper-arm armour hangs on the palm sockets (sock_handL / sock_gloveR: unrotated, PALM below the arm pivot), so
+# it rides the upper arm exactly and never fans away from it. Authored in ARM space (origin = arm pivot, left arm,
+# outer side +X) and mirrored for the right. Arm space: sleeve x +-0.125, y -0.29..0.03, z +-0.135, sleeve band at
+# y -0.28; the gauntlet cuff rises to y -0.33; the chest block buries everything inside x -0.065.
+ARM_SOCKS = (('sock_handL', 1), ('sock_gloveR', -1))
+PALM = 0.63
+# Lames under the cap stepping down the outside of the upper arm: (size, centre).
+ARM_LAMES = (((0.25, 0.085, 0.35), (0.065, -0.07, 0)), ((0.235, 0.08, 0.335), (0.06, -0.14, 0)))
+
+
+def arm_box(g, s, size, pos, color, rot=(0, 0, 0), **kw):
+    """box() in arm space on a palm socket: pos/rot are for the left arm, mirrored when s < 0."""
+    return box(g, size, (pos[0] * s, pos[1] + PALM, pos[2]), color, rot=(rot[0], rot[1] * s, rot[2] * s), **kw)
+
+
+def arm_lames(g, s, colors=(R.metal, R.metal), edge=R.dark):
+    """The two lames stepping down the outside of the upper arm, each with a dark line under its lower edge."""
+    for (size, pos), col in zip(ARM_LAMES, colors):
+        arm_box(g, s, size, pos, col, rot=(0, 0, -0.06), bevel=0.025)
+        if edge:
+            w, h, d = size
+            arm_box(g, s, (w - 0.012, 0.018, d - 0.012), (pos[0], pos[1] - h / 2 - 0.004, pos[2]), edge,
+                    rot=(0, 0, -0.06), bevel=0)
+
+
+def upper_arm_plate(S, color=R.metal, rim=R.trim, edge=R.dark, couter=True):
+    """Plate rerebrace round the upper arm down to the gauntlet cuff, the pauldron's lames stepping down its
+    outside, a rolled lower rim and a couter over the elbow. Returns [(palm socket, side)]."""
+    out = []
+    for name, s in ARM_SOCKS:
+        g = S(name)
+        arm_box(g, s, (0.29, 0.36, 0.31), (0, -0.14, 0), color, bevel=0.035)                    # rerebrace
+        if rim:
+            arm_box(g, s, (0.305, 0.04, 0.325), (0, -0.305, 0), rim, bevel=0.012)
+        arm_lames(g, s, (color, color), edge)
+        if couter:
+            arm_box(g, s, (0.17, 0.12, 0.06), (0.0, -0.27, -0.175), color, rot=(0.2, 0, 0), bevel=0.02)
+        out.append((g, s))
+    return out
+
+
+def mail_sleeve(S, color=R.metal, hem=R.dark, link=R.dark):
+    """Mail sleeve block round the upper arm, from under the cap to over the gauntlet cuff, with a dark hem and
+    rows of mail links. Returns [(palm socket, side)]."""
+    out = []
+    for name, s in ARM_SOCKS:
+        g = S(name)
+        arm_box(g, s, (0.3, 0.39, 0.32), (0, -0.15, 0), color, bevel=0.03)
+        arm_box(g, s, (0.31, 0.045, 0.33), (0, -0.325, 0), hem, bevel=0.01)
+        for f, hw in faces(pivot(g, 'sleeve', (0, PALM - 0.15, 0)), 0.15, 0.16):
+            mail_links(f, hw - 0.02, [-0.14 + 0.05 * k for k in range(7)], link)
+        out.append((g, s))
+    return out
+
+
+def mail_links(f, half_w, ys, color=R.dark, pitch=0.05, fill=0.55, hgt=0.009, z=0.002):
+    """Mail read on a flat face (frame from faces(): local +Z out of the face): at each height in `ys` a row of
+    short flat dashes `pitch` apart, alternate rows shifted half a pitch, lying just on the face -- fine rows of
+    links, with no studs to catch the light. One mesh."""
+    bm = bmesh.new()
+    ln = pitch * fill
+    n = int(half_w * 2 / pitch)
+    for j, y in enumerate(ys):
+        x0 = -n * pitch / 2 + (pitch / 2 if j % 2 else 0)
+        for i in range(n):
+            x = x0 + i * pitch + (pitch - ln) / 2
+            if x < -half_w or x + ln > half_w:
+                continue
+            q = [(x, y, z), (x + ln, y, z), (x + ln, y + hgt, z), (x, y + hgt, z)]
+            bm.faces.new([bm.verts.new(c_) for c_ in q])
+    o = _common._mesh_obj(bm, f, (0, 0, 0), (0, 0, 0), color)
+    o.name = 'mail_link'
+    return o
+
+
+def scale_rows(f, half_w, rows, colors, gap_color, w=0.1, lift=0.004, flare=0.026, gap=0.06, pattern=None, nm='scale'):
+    """Overlapping rows of small flat scale plates on a flat face (frame from faces(): local +Z out). rows =
+    [(bottom y, top y)]; plates `w` wide, alternate rows shifted half a plate. Each plate lies on the face at its
+    top edge and stands `flare` off it at its bottom edge, so each row overlaps the top of the row below, and a
+    `gap_color` lip closes its bottom edge (the dark gap between rows). `pattern(i, j)` picks each plate's colour.
+    One mesh per colour."""
+    polys = {}
+
+    def add(col, pts, want):
+        v = [Vector(p_) for p_ in pts]
+        nrm = (v[1] - v[0]).cross(v[2] - v[0])
+        polys.setdefault(col, []).append(pts if nrm.dot(Vector(want)) >= 0 else pts[::-1])
+    for j, (y0, y1) in enumerate(rows):
+        n = int(half_w * 2 / w) + 2
+        x0 = -half_w - (w / 2 if j % 2 else 0)
+        for i in range(n):
+            a, b = x0 + i * w + gap * w / 2, x0 + (i + 1) * w - gap * w / 2
+            a, b = max(a, -half_w), min(b, half_w)
+            if b - a < w * 0.3:
+                continue
+            col = colors[(pattern(i, j) if pattern else 0) % len(colors)]
+            cw, ch = (b - a) * 0.22, (y1 - y0) * 0.3                    # clipped lower corners: a scale, not a brick
+
+            def z(y):
+                return lift + flare * (y1 - y) / (y1 - y0)
+            outline = [(a, y1), (a, y0 + ch), (a + cw, y0), (b - cw, y0), (b, y0 + ch), (b, y1)]
+            add(col, [(x, y, z(y)) for x, y in outline], (0, flare, 1))
+            mid = Vector(((a + b) / 2, (y0 + y1) / 2, 0))
+            for (xa, ya), (xb, yb) in (outline[2:4],):                     # lip along the lower edge
+                out_ = Vector(((xa + xb) / 2, (ya + yb) / 2, 0)) - mid
+                add(gap_color, [(xa, ya, z(ya)), (xb, yb, z(yb)), (xb, yb, 0.0), (xa, ya, 0.0)], tuple(out_))
+    out = []
+    for col, ps in polys.items():
+        bm = bmesh.new()
+        for pts in ps:
+            bm.faces.new([bm.verts.new(p_) for p_ in pts])
+        o = _common._mesh_obj(bm, f, (0, 0, 0), (0, 0, 0), col)
+        o.name = nm
+        out.append(o)
+    return out
 
 
 def plate_gauntlet(g, s, cuff_rim=R.trim):
@@ -322,50 +445,43 @@ def helm_full(S):
 
 # ─── Body armour (sock_chest + shoulders) ────────────────────────────────────
 
-def hauberk(c, mail=R.metal, dark=R.dark, belt=R.leather, buckle=R.trim, collar=None, studs=True):
-    """Box mail shirt from the collar to a short skirt block, with a belt, hem and collar. Staggered square
-    studs read as mail on the metal tiers and as studded leather on the leather set."""
+# Mail link rows on the hauberk: body block and skirt block (the skirt tapers in, so its rows sit a little out).
+MAIL_BODY_ROWS = [-0.3 + 0.05 * k for k in range(12)]
+MAIL_SKIRT_ROWS = (-0.56, -0.51, -0.46)
+
+
+def hauberk(c, mail=R.metal, dark=R.dark, belt=R.leather, buckle=R.trim, collar=None, links=True):
+    """Box mail shirt from the collar to a short skirt block, with a belt, hem and collar, covered in fine
+    staggered rows of flat links (mail on the metal tiers, stitched leather on the leather set)."""
     box(c, (0.78, 0.66, 0.52), (0, -0.01, 0), mail, bevel=0.045)
     box(c, (0.8, 0.26, 0.54), (0, -0.47, 0), mail, taper=(0.96, 0.96), bevel=0.035)          # skirt block
     box(c, (0.82, 0.04, 0.56), (0, -0.585, 0), dark, bevel=0.01)                             # hem
     box(c, (0.5, 0.07, 0.44), (0, 0.345, 0), collar or dark, bevel=0.02)                     # collar
     box(c, (0.82, 0.085, 0.56), (0, -0.37, 0), belt, bevel=0.02)
     box(c, (0.13, 0.1, 0.03), (0, -0.37, 0.285), buckle, bevel=0.012)
-    if not studs:
+    if not links:
         return
     for f, hw in faces(c, 0.39, 0.26):
-        cols = int(hw / 0.05)
-        for j, y in enumerate((0.25, 0.15, 0.05, -0.05, -0.15, -0.25)):
-            for i in range(-cols, cols + 1):
-                x = i * 0.05
-                if (i + j) % 2 == 0 and abs(x) < hw - 0.04:
-                    box(f, (0.028, 0.028, 0.02), (x, y, 0.004), dark, rot=(0, 0, PI / 4), bevel=0)
-        for j, y in enumerate((-0.44, -0.52)):
-            for i in range(-cols, cols + 1):
-                x = i * 0.05
-                if (i + j) % 2 == 0 and abs(x) < hw - 0.04:
-                    box(f, (0.028, 0.028, 0.02), (x, y, 0.012), dark, rot=(0, 0, PI / 4), bevel=0)
-
-
-MAIL_SHOULDER = (((0.3, 0.12, 0.36), (0.05, 0.02), 0.25), ((0.24, 0.12, 0.34), (0.15, -0.07), 0.62))
+        mail_links(f, hw - 0.03, MAIL_BODY_ROWS, dark)
+        mail_links(pivot(f, 'skirt_face', (0, 0, 0.01)), hw - 0.03, MAIL_SKIRT_ROWS, dark)
 
 
 def body_chain(S):
-    """Mail shirt: box hauberk with a short skirt block and small block shoulders."""
+    """Mail shirt: box hauberk with a short skirt block, blocky mail shoulder caps and mail sleeves down to the
+    gauntlets."""
     hauberk(S('sock_chest'))
-    for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
-        sh = S(name)
-        for i, (size, (x, y), tilt) in enumerate(MAIL_SHOULDER):
-            f = pivot(sh, 'mail_shoulder', (s * x, y, 0), (0, 0, -s * tilt))
-            box(f, size, (0, 0, 0), R.metal, bevel=0.03)
-        box(f, (0.035, size[1] + 0.012, size[2] + 0.012), (s * (size[0] / 2 - 0.012), 0, 0), R.dark, bevel=0.008)  # hem
+    for s in (1, -1):
+        block_pauldron(S, s, top=None, edge=R.dark, rivets=None)
+    mail_sleeve(S)
 
 
 def body_plate(S):
-    """Platebody (the plate sets in plate_variants.py build on this: set P is exactly it)."""
+    """Platebody (the plate sets in plate_variants.py build on this: set P is exactly it): stacked-slab cuirass,
+    blocky pauldron caps, and lames, rerebraces and couters down the upper arms."""
     plate_torso(S('sock_chest'))
-    for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
-        block_pauldron(S(name), s)
+    for s in (1, -1):
+        block_pauldron(S, s)
+    upper_arm_plate(S)
 
 
 # ─── Gloves & boots ──────────────────────────────────────────────────────────
@@ -504,29 +620,33 @@ def scale_plate(f, x, y, color, w=0.11, hgt=0.12, tilt=-0.28):
     return prism(f, pts, 0.024, (x, y, 0.016), color, rot=(tilt, 0, 0))
 
 
+SCALE_GAP = 0x3A0E0A
+
+
+def _scale_mix(i, j):
+    """Two close reds scattered over the scales (no stripes or checks)."""
+    return 1 if (i * 7 + j * 3) % 5 < 2 else 0
+
+
 def u_scaleguard(S):
-    """Hauberk of shed dragon scales: staggered rows of pointed red scales all round a dark mail box cuirass, a
-    longer row over the mail skirt, gold collar and buckle, stacked scale pauldrons with swept-back bone horns."""
+    """Hauberk of shed dragon scales: overlapping rows of small flat scale plates (two close reds, each standing
+    out a little at its lower edge, a dark gap under every row) all round a dark mail box cuirass and over the
+    skirt; gold collar and buckle; blocky scale shoulder caps with swept-back bone horns, red scale lames down a
+    dark mail sleeve."""
     c = S('sock_chest')
-    hauberk(c, mail=metallic(MAIL), dark=metallic(CHAR), belt=0x3A2A22, buckle=metallic(GOLD), collar=metallic(GOLD), studs=False)
+    hauberk(c, mail=metallic(CHAR2), dark=metallic(CHAR), belt=0x3A2A22, buckle=metallic(GOLD), collar=metallic(GOLD), links=False)
+    body = [(-0.33 + 0.09 * k, -0.33 + 0.09 * k + 0.115) for k in range(7)]
+    skirt = [(-0.59, -0.49), (-0.505, -0.405)]
     for f, hw in faces(c, 0.39, 0.26):
-        n = int((hw * 2) / 0.11)
-        for j, y in enumerate((0.25, 0.15, 0.05, -0.05, -0.15)):
-            off = 0.055 * (j % 2)
-            for i in range(n + 1):
-                x = -hw + 0.05 + off + i * 0.11
-                if x < hw - 0.04:
-                    scale_plate(f, x, y, SCALE if j % 2 == 0 else SCALE_MID)
-        for i in range(n + 1 if hw > 0.3 else 0):   # long skirt scales front and back
-            x = -hw + 0.06 + i * 0.11
-            if x < hw - 0.04:
-                scale_plate(f, x, -0.47, SCALE, hgt=0.2, tilt=-0.18)
-    for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
-        sh = S(name)
-        fr = block_pauldron(sh, s, color=SCALE, top=SCALE_DK, edge=metallic(GOLD))
-        top = fr[0]
-        beam(top, (-s * 0.04, 0.07, -0.08), (s * 0.02, 0.16, -0.24), 0.06, BONE, w1=0.03)
-        beam(top, (s * 0.02, 0.155, -0.235), (s * 0.05, 0.17, -0.36), 0.035, BONE, w1=0.008)
+        scale_rows(f, hw - 0.005, body, [SCALE, SCALE_MID], SCALE_GAP, w=0.13, flare=0.032, gap=0.04, pattern=_scale_mix)
+        scale_rows(pivot(f, 'skirt_face', (0, 0, 0.01)), hw - 0.005, skirt, [SCALE, SCALE_MID], SCALE_GAP, w=0.13, flare=0.032, gap=0.04,
+                   pattern=lambda i, j: _scale_mix(i, j + 1), nm='skirt_scale')
+    for s in (1, -1):
+        top = block_pauldron(S, s, color=SCALE, top=SCALE_DK, edge=metallic(GOLD), rivets=None)[0]
+        beam(top, (-s * 0.04, 0.06, -0.08), (s * 0.02, 0.15, -0.24), 0.06, BONE, w1=0.03)        # swept-back horn
+        beam(top, (s * 0.02, 0.145, -0.235), (s * 0.05, 0.16, -0.36), 0.035, BONE, w1=0.008)
+    for g, s in mail_sleeve(S, color=metallic(CHAR2), hem=metallic(GOLD), link=metallic(CHAR)):
+        arm_lames(g, s, (SCALE, SCALE_MID), SCALE_GAP)
 
 
 GEAR = {

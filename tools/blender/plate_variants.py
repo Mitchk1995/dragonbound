@@ -38,10 +38,10 @@ from mathutils.bvhtree import BVHTree
 _p = os.path.join(_ROOT, 'tools', 'blender', 'gear.py')
 _g = {'DB_RUN': False, '__name__': 'db_gear', '__file__': _p}
 exec(open(_p, encoding='utf-8').read(), _g)
-SOCKET_POS = _g['SOCKET_POS']
+SOCKET_POS, PALM = _g['SOCKET_POS'], _g['PALM']
 body_plate, helm_full, plate_torso, block_pauldron = _g['body_plate'], _g['helm_full'], _g['plate_torso'], _g['block_pauldron']
 plate_gauntlet, plate_sabaton, faces, scale_plate = _g['plate_gauntlet'], _g['plate_sabaton'], _g['faces'], _g['scale_plate']
-PAULDRON_STEPS = _g['PAULDRON_STEPS']
+upper_arm_plate, CAP_SIDE = _g['upper_arm_plate'], _g['CAP_SIDE']
 _p = os.path.join(_ROOT, 'tools', 'blender', 'fitcheck.py')
 _f = {'__name__': 'db_fit', '__file__': _p}
 exec(open(_p, encoding='utf-8').read(), _f)
@@ -441,7 +441,8 @@ def closeup(vid, file_name, pose='idle', views=(dict(yaw=0, pitch=8), dict(yaw=4
 
 # ═══ P: plate (bronze, iron, steel) ══════════════════════════════════════════
 # OSRS-style plate in modular blocks (gear.py plate kit): a broad chest block with a raised breastplate,
-# stepped lames, belt and box tassets; pauldrons of blocks stepping down the shoulder; a cube-over-cube full
+# stepped lames, belt and box tassets; blocky pauldron caps with lames, rerebraces and couters down the upper
+# arms; a cube-over-cube full
 # helm whose eye slit is the gap between brow band and face plates; box gauntlets and sabatons. Trim is a
 # lighter tint of the same metal (tier palette).
 
@@ -459,17 +460,17 @@ VARIANTS['p'] = {'name': 'Plate', 'body_plate': body_plate, 'helm_full': helm_fu
 
 
 # ═══ E: Emberforged ══════════════════════════════════════════════════════════
-# The same block plate forged from dragon parts: obsidian slabs split by glowing ember seams, staggered rows of
-# small pointed scales over the breast either side of a scute column, a dragon-heart gem in a claw setting,
-# pauldrons of stacked blocks tipped with wedge claws, and a blocky dragon-skull helm (long box snout, brow
-# ridge over angled glowing eye slits, segmented horns swept back and low).
+# The same block plate forged from dragon parts: obsidian slabs, staggered rows of small pointed scales over
+# the breast either side of a scute column, a dragon-heart gem in a claw setting, blocky pauldron caps under a
+# folded wing claw with claws hanging off the rim, and a blocky dragon-skull helm (long box snout, brow ridge
+# over angled glowing eye slits, segmented horns swept back and low). The ember glow is kept to a few places so
+# it stays special: the heart, the eye slits, the one seam right under the chest plate and the gauntlet cuffs.
 SLIT_E = 0x0C0A0A
 
 
 def E_body(S):
     c = S('sock_chest')
-    plate_torso(c, seam=R.glow, trim=R.dark, centre=False)
-    box(c, (0.57, 0.02, 0.51), (0, 0.32, 0), R.glow, bevel=0)                                  # gorget seam
+    plate_torso(c, seam=(R.glow, R.dark, R.dark), trim=R.dark, centre=False)
     box(c, (0.6, 0.26, 0.012), (0, 0.12, 0.292), R.dark, bevel=0)                               # dark bed under the scales
     fr = faces(c, 0.41, 0.29, sides=False)[0][0]
     for j, y in enumerate((0.25, 0.175, 0.1, 0.025)):
@@ -488,21 +489,22 @@ def E_body(S):
         beam(c, tuple(Vector((0, 0.2, 0.31)) + d * 0.13), tuple(Vector((0, 0.2, 0.37)) + d * 0.07), 0.04, R.trim, w1=0.01, d=0.03, d1=0.012)
     for y in (0.24, 0.1, -0.04):                                                                  # dorsal fins
         beam(c, (0, y - 0.03, -0.29), (0, y + 0.05, -0.43), 0.03, R.dark, d=0.11, w1=0.012, d1=0.02)
-    for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
-        claw_pauldron(S(name), s)
+    for s in (1, -1):
+        claw_pauldron(S, s)
+    for g, s in upper_arm_plate(S, rim=R.dark):
+        beam(g, (s * 0.16, PALM - 0.3, 0), (s * 0.175, PALM - 0.12, -0.02), 0.03, R.dark, d=0.13, w1=0.012, d1=0.06)   # arm scale
 
 
-def claw_pauldron(sh, s):
-    fr = block_pauldron(sh, s, top=R.dark, edge=R.dark, seam=R.glow)
-    (w, _, _), _, _ = PAULDRON_STEPS[-1]
-    for z in (-0.13, 0.0, 0.13):                                   # claws off the lowest block's edge
-        beam(fr[-1], (s * (w / 2 - 0.03), 0.0, z), (s * (w / 2 + 0.1), -0.035, z), 0.05, R.trim, d=0.05, w1=0.01, d1=0.012)
-    (w, _, _), _, _ = PAULDRON_STEPS[1]
-    for z in (-0.1, 0.1):
-        beam(fr[1], (s * (w / 2 - 0.03), 0.0, z), (s * (w / 2 + 0.07), -0.02, z), 0.045, R.trim, d=0.045, w1=0.01, d1=0.01)
-    top = fr[0]                                                    # wing claw sweeping back off the top block
-    beam(top, (-s * 0.03, 0.07, -0.1), (s * 0.03, 0.17, -0.26), 0.08, R.dark, w1=0.055)
-    beam(top, (s * 0.025, 0.16, -0.25), (s * 0.06, 0.18, -0.4), 0.055, R.trim, w1=0.01)
+def claw_pauldron(S, s):
+    """Blocky cap under a folded wing: a wing claw sweeps back off the top block and three finger claws hang off
+    the side block's rim."""
+    top, side = block_pauldron(S, s, top=R.dark, edge=R.dark, rivets=None)
+    w, hgt, _ = CAP_SIDE[0]
+    for z in (-0.12, 0.0, 0.12):                                   # finger claws off the rim
+        beam(side, (s * 0.01, -hgt / 2 + 0.01, z), (s * 0.05, -hgt / 2 - 0.08, z), 0.045, R.trim, d=0.045, w1=0.01, d1=0.012)
+    beam(top, (-s * 0.03, 0.07, -0.1), (s * 0.03, 0.16, -0.26), 0.08, R.dark, w1=0.055)            # wing claw
+    beam(top, (s * 0.025, 0.155, -0.25), (s * 0.06, 0.17, -0.4), 0.055, R.trim, w1=0.01)
+    beam(top, (-s * 0.02, 0.07, 0.1), (s * 0.0, 0.14, 0.2), 0.05, R.trim, w1=0.01)                  # thumb claw forward
 
 
 def E_helm(S):
@@ -513,7 +515,6 @@ def E_helm(S):
     box(h, (0.58, 0.46, 0.6), (0, 0.03, 0.0), R.metal, bevel=0.04)                             # skull
     box(h, (0.44, 0.08, 0.5), (0, 0.29, -0.03), R.metal, bevel=0.024)                           # top block
     box(h, (0.6, 0.05, 0.62), (0, -0.19, 0.0), R.dark, bevel=0.012)                             # neck rim
-    box(h, (0.585, 0.018, 0.605), (0, -0.157, 0.0), R.glow, bevel=0)                            # ember seam
     box(h, (0.5, 0.14, 0.02), (0, 0.07, 0.3), SLIT_E, bevel=0)                                  # shadow behind the eyes
     for s in (-1, 1):
         box(h, (0.3, 0.085, 0.17), (s * 0.145, 0.15, 0.29), R.dark, rot=(0, 0, s * 0.22), bevel=0.02)   # brow ridge
@@ -548,7 +549,7 @@ def E_gloves(S):
 def E_boots(S):
     for name in ('sock_footL', 'sock_footR'):
         f = S(name)
-        plate_sabaton(f, rim=R.glow)
+        plate_sabaton(f, rim=R.dark)
         for x in (-0.1, 0.0, 0.1):
             beam(f, (x, -0.1, 0.28), (x, -0.14, 0.4), 0.06, R.trim, w1=0.012)                    # talons
         beam(f, (0, 0.47, 0.19), (0, 0.56, 0.3), 0.07, R.dark, w1=0.012)                          # knee spike
