@@ -202,8 +202,9 @@ describe('pose audit: bow', () => {
 });
 
 // Each plate set (items.ts PLATE_STYLE): bronze, iron and steel share one design, Emberforged has its own.
-// The stacked shoulder blocks sit over the joint and step down the outside of the arm, so their centre stays
-// above it in every pose; the Emberforged claws off the lowest block pull its centre a little lower.
+// The pauldron's top block (the only part on the shoulder socket; its side block and the lames ride the arm)
+// sits over the joint, so its centre stays above it in every pose; the Emberforged wing claws on it shift its
+// centre a little.
 for (const [body, style, cap] of [['bronze_platebody', 'Plate', -0.3], ['steel_platebody', 'Plate (steel)', -0.3], ['ember_platebody', 'Emberforged', -0.25]] as const) {
   describe(`pose audit: ${style} plate pauldrons cap the shoulder in every pose`, () => {
     const h = lazyHero({ weapon: 'iron_longsword', body });
