@@ -368,39 +368,4 @@ export const PLACEHOLDER_GEAR: Record<string, () => THREE.Group> = {
 
 // ─── Material item models (ground loot + icons) ─────────────────────────────
 
-export function buildMaterialModel(kind: string, color: number): THREE.Group {
-  const k = new ModelKit();
-  const g = new THREE.Group();
-  switch (kind) {
-    case 'ore':
-      k.gem(g, 0.2, [0, 0.16, 0], 0x5a5048);
-      k.gem(g, 0.1, [0.08, 0.26, 0.08], color, color, 0.25);
-      k.gem(g, 0.08, [-0.1, 0.2, 0.06], color, color, 0.25);
-      break;
-    case 'bar':
-      k.box(g, [0.44, 0.14, 0.2], [0, 0.07, 0], color);
-      k.box(g, [0.36, 0.04, 0.14], [0, 0.16, 0], color);
-      break;
-    case 'gem':
-      k.gem(g, 0.16, [0, 0.16, 0], color, color, 0.5);
-      break;
-    case 'fragment':
-      k.box(g, [0.3, 0.06, 0.24], [0, 0.04, 0], 0x3a2a24, [0, 0.4, 0]);
-      k.box(g, [0.14, 0.02, 0.1], [0, 0.08, 0], color, [0, 0.4, 0], color, 1.5);
-      break;
-    case 'key':
-      k.box(g, [0.5, 0.06, 0.08], [0.05, 0.05, 0], 0x4a2a1a);
-      k.cyl(g, 0.12, 0.12, 0.06, [-0.24, 0.05, 0], color, undefined, 8, color);
-      k.box(g, [0.06, 0.06, 0.14], [0.26, 0.05, 0.06], 0x4a2a1a);
-      break;
-    case 'amulet':
-      k.gem(g, 0.14, [0, 0.14, 0], color, color, 0.6);
-      k.box(g, [0.36, 0.03, 0.03], [0, 0.05, -0.2], PAL.gold);
-      break;
-    case 'ring':
-      k.cyl(g, 0.12, 0.12, 0.06, [0, 0.05, 0], PAL.gold, undefined, 8);
-      k.gem(g, 0.07, [0, 0.12, 0], color, color, 0.6);
-      break;
-  }
-  return g;
-}
+export { buildMaterialModel } from './materialModels';

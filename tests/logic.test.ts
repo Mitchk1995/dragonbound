@@ -153,8 +153,10 @@ describe('mining', () => {
 describe('pacing', () => {
   it('early combat levels take real effort (per-enemy XP, not per-damage)', () => {
     const goblin = ENEMIES.goblin.xp;
+    // Kills are slower since the Diablo 2 pacing, so each is worth a little more (tests/balance.test.ts
+    // keeps XP per hour where it was); the kill counts still make early levels a real grind.
     expect(xpForLevel(10) / goblin).toBeGreaterThan(80);
-    expect(xpForLevel(30) / ENEMIES.drakeling.xp).toBeGreaterThan(500);
+    expect(xpForLevel(30) / ENEMIES.drakeling.xp).toBeGreaterThan(450);
     // Enemy XP stays well below the old 4-XP-per-hitpoint rate.
     for (const e of Object.values(ENEMIES)) expect(e.xp, e.id).toBeLessThan(e.hp * 4 * 0.5);
   });
