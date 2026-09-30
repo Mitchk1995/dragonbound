@@ -35,10 +35,10 @@ export class Interactable {
     this.radius = 1;
     this.height = 1.6;
     if (kind === 'rock') {
-      this.prop = buildProp(`rock_${id}`, ORES[id].color);
-      this.reach = 1.5;
-      this.radius = 0.8;
-      this.height = 1.3;
+      this.prop = buildProp(`rock_${id}`);
+      this.reach = 1.9;
+      this.radius = 1.1;
+      this.height = 1.6;
     } else if (kind === 'npc') {
       const m = makeModel(id);
       this.obj.add(m.root);
@@ -48,13 +48,14 @@ export class Interactable {
       this.height = m.height + 0.3;
     } else {
       const propKind: Record<string, string> = {
-        portal: 'arch', exit: 'arch', bank: 'bank', furnace: 'furnace', anvil: 'anvil', shop: 'shop', chest: 'chest', gate: 'gate', pedestal: 'pedestal',
+        portal: 'portal', exit: 'portal', bank: 'bank', furnace: 'furnace', anvil: 'anvil', shop: 'shop', chest: 'chest', gate: 'gate', pedestal: 'pedestal',
       };
       let pk = propKind[kind] ?? 'ruin';
       if (kind === 'restore') pk = id === 'board' ? 'board' : id === 'emberforge' ? 'forgeheart' : 'ruin';
-      this.prop = buildProp(pk, arg);
+      // Restoration sites get their id, so each building shows what it is (roof colour, sign).
+      this.prop = buildProp(pk, kind === 'restore' ? id : arg);
       const sizes: Partial<Record<StationKind, [number, number, number]>> = {
-        portal: [2.2, 1.6, 4.2], exit: [2.2, 1.6, 4.2], bank: [3.4, 2.2, 3.6], furnace: [2.6, 1.6, 3.4], anvil: [1.8, 0.9, 1.4],
+        portal: [2.4, 1.7, 4.0], exit: [2.4, 1.7, 4.0], bank: [3.4, 2.2, 3.6], furnace: [2.6, 1.6, 3.4], anvil: [1.8, 0.9, 1.4],
         shop: [2.8, 1.8, 3], chest: [1.6, 0.7, 1.2], gate: [3.6, 2.5, 5.5], pedestal: [1.6, 0.6, 1.6], restore: [3.6, 2.5, 3.5],
       };
       const [reach, radius, height] = sizes[kind] ?? [2, 1.5, 2];
@@ -79,7 +80,7 @@ export class Interactable {
       case 'restore':
         return this.id === 'board' ? 'Restoration Board' : RESTORATION_BY_ID[this.id]?.name ?? 'Ruin';
       case 'portal':
-        return 'Portal arch';
+        return 'Portal';
       case 'exit':
         return 'Return portal';
       case 'bank':

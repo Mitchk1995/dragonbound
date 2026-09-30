@@ -39,13 +39,13 @@ export const SURFACES: Record<SurfaceKind, SurfaceParams> = {
   generic: { scale: 1.8, albedo: 0.1, bump: 0 },
 };
 
-const SIZE = 256;
+export const SIZE = 256;
 
 /**
  * Tileable value noise on a SIZE×SIZE torus; `cellsY` ≠ `cells` stretches it (strands, grain).
  * Never scale the coordinates passed in: that breaks the wrap.
  */
-function tileNoise(seed: number, cells: number, cellsY = cells) {
+export function tileNoise(seed: number, cells: number, cellsY = cells) {
   const rng = mulberry32(seed);
   const g = Array.from({ length: cells * cellsY }, () => rng());
   const at = (x: number, y: number) => g[(((y % cellsY) + cellsY) % cellsY) * cells + (((x % cells) + cells) % cells)];
@@ -59,7 +59,7 @@ function tileNoise(seed: number, cells: number, cellsY = cells) {
   };
 }
 
-function fbm(seed: number, base: number, octaves = 4) {
+export function fbm(seed: number, base: number, octaves = 4) {
   const layers = Array.from({ length: octaves }, (_, i) => tileNoise(seed + i * 17, base << i));
   return (x: number, y: number) => {
     let v = 0, amp = 0.5, total = 0;
@@ -73,7 +73,7 @@ function fbm(seed: number, base: number, octaves = 4) {
 }
 
 /** Tileable Worley (cellular) noise: returns [F1, F2] distances in pixels and a random value for the nearest cell. */
-function worley(seed: number, cells: number) {
+export function worley(seed: number, cells: number) {
   const rng = mulberry32(seed);
   const pts = Array.from({ length: cells * cells }, (_, i) => [((i % cells) + rng()) * (SIZE / cells), (Math.floor(i / cells) + rng()) * (SIZE / cells)]);
   const cell = SIZE / cells;
@@ -95,7 +95,7 @@ function worley(seed: number, cells: number) {
   };
 }
 
-type Gen = (x: number, y: number) => number;
+export type Gen = (x: number, y: number) => number;
 
 /** Natural rock: lumpy fbm, soft ridges and a few thin hairline cracks (not a tiled pattern). */
 function rock(seed: number): Gen {
@@ -107,6 +107,23 @@ function rock(seed: number): Gen {
     const ridge = 1 - Math.abs(ridgeN(x, y) * 2 - 1);
     return 0.28 + n(x, y) * 0.52 + ridge * 0.1 - crack;
   };
+}
+
+/**
+ * Smooth floor rock for walkable cave, lair and scorched ground: lumpy fbm over broad swells (the
+ * lair's lava glows in the low hollows). No cracks or cell edges: at game zoom any line pattern
+ * that repeats reads as a decal.
+ */
+function floorRock(seed: number): Gen {
+  const n = fbm(seed, 3, 5), broad = fbm(seed + 4, 2, 3);
+  return (x, y) => paintSteps(0.22 + n(x, y) * 0.5 + broad(x, y) * 0.24, 5);
+}
+
+/** Flat painted tones in soft steps (see paint.ts posterize; duplicated to keep this module leaf). */
+function paintSteps(v: number, steps: number, soft = 0.4) {
+  const s = Math.max(0, Math.min(0.9999, v)) * steps, f = Math.floor(s), t = s - f;
+  const e = Math.max(0, Math.min(1, (t - (0.5 - soft / 2)) / soft));
+  return (f + e * e * (3 - 2 * e)) / steps;
 }
 
 const GENERATORS: Record<SurfaceKind, () => Gen> = {
@@ -216,24 +233,48 @@ export function surfaceTexture(kind: SurfaceKind): THREE.Texture {
   return cache.get(kind) ?? makeTexture(kind, GENERATORS[kind]());
 }
 
-/** Ground atlas: R dirt/pebbles, G grass, B flagstones, A cave rock. */
+/**
+ * Tileable noise normalised to the full 0..1 range: masks and animated fluids need real contrast
+ * (a raw fbm sits in a narrow band around 0.5).
+ */
+export function noiseTexture(): THREE.Texture {
+  const hit = cache.get('noise');
+  if (hit) return hit;
+  const n = fbm(301, 4, 5);
+  const v = new Float32Array(SIZE * SIZE);
+  let lo = 1, hi = 0;
+  for (let i = 0; i < v.length; i++) {
+    v[i] = n(i % SIZE, Math.floor(i / SIZE));
+    lo = Math.min(lo, v[i]);
+    hi = Math.max(hi, v[i]);
+  }
+  return makeTexture('noise', (x, y) => (v[y * SIZE + x] - lo) / (hi - lo));
+}
+
+/** Ground atlas: R dirt/pebbles, G grass, B flagstones, A smooth floor rock (cliff faces use 'stone'). */
 export function groundTexture(): THREE.Texture {
   const hit = cache.get('ground');
   if (hit) return hit;
-  const dirtN = fbm(201, 6), pebbles = worley(202, 20);
-  // Grass keeps only broad tonal patches: fine specks alias into fuzz at game zoom.
-  const grassN = fbm(203, 8, 2), grassClump = fbm(204, 6);
-  const flag = worley(205, 5), flagN = fbm(206, 8);
-  const cave = rock(208);
+  // Painted, calm and large-scale: flat tonal patches, soft clumps, a few big pebbles. No speckle.
+  const dirtN = fbm(201, 4, 3), pebbles = worley(202, 9), pebMask = fbm(207, 3, 2);
+  const grassN = fbm(203, 4, 3), grassClump = worley(204, 8);
+  const flag = worley(205, 5), flagN = fbm(206, 4, 3);
+  const cave = floorRock(208);
   const data = new Uint8Array(SIZE * SIZE * 4);
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const [p1] = pebbles(x, y);
-      const dirt = 0.35 + dirtN(x, y) * 0.45 + (p1 < 2.6 ? 0.12 : 0);
-      const grass = 0.35 + grassN(x, y) * 0.4 + (grassClump(x, y) - 0.5) * 0.3;
+      const pebble = pebMask(x, y) > 0.55 ? Math.max(0, 1 - p1 / 5.5) : 0;
+      const dirt = paintSteps(0.25 + dirtN(x, y) * 0.5, 5) + (pebble > 0 ? 0.1 + pebble * 0.06 : 0);
+      const [c1] = grassClump(x, y);
+      const clump = Math.max(0, 1 - c1 / 17);
+      const grass = paintSteps(0.22 + grassN(x, y) * 0.5, 5) + clump * clump * 0.16;
       const [f1, f2, id] = flag(x, y);
-      const grout = Math.min(1, (f2 - f1) / 5);
-      const stone = (0.4 + id * 0.25 + flagN(x, y) * 0.25) * (0.5 + 0.5 * Math.sqrt(grout));
+      const g = f2 - f1;
+      const grout = Math.max(0, Math.min(1, (g - 1.2) / 2.5));
+      const rim = Math.max(0, Math.min(1, (g - 2.5) / 3)) * Math.max(0, 1 - (g - 5.5) / 6);
+      const face = 0.4 + paintSteps(id, 5) * 0.26 + paintSteps(flagN(x, y), 4) * 0.14 + rim * 0.08;
+      const stone = 0.16 + (face - 0.16) * grout;
       const i = (y * SIZE + x) * 4;
       data[i] = Math.max(0, Math.min(1, dirt)) * 255;
       data[i + 1] = Math.max(0, Math.min(1, grass)) * 255;

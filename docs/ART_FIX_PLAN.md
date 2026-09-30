@@ -47,6 +47,8 @@ The owner rated 32 models and map areas and left notes. Average score 2.1 / 5. F
 - Dragons: a real bat wing, a chibi whelp, and a boss-only Cinderwing (horn crown, heavy head, glowing throat).
 
 ### Phase 3: world tech and zones
+**3a (world pass) is done:** modular block props (`src/render/blocks.ts`), hand-painted albedo for the world (`src/render/paint.ts`: one atlas fetch, box-projected, colour only, reusable for characters later), painted anti-tiled ground, new water and lava, cave walls that climb into darkness, distinct ore rocks, portal platforms with a flowing portal, the Wyrmwood rename and the goblin camp. Still open from this phase: organic re-layouts of the mine, Foothills, lair and ruin, and Blender-made props.
+
 - Ground anti-tiling and a smooth floor-rock channel (fixes repeated cracks and uniform tiles everywhere).
 - A pipeline for Blender-made props (GLB) with ruined/restored states and attached flames and lights.
 - Water and lava shaders: reflections, ripples, crusted lava in craters. Cave walls that rise into darkness.

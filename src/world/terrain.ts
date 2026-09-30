@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { ZoneTheme } from '../data/zones';
 import { applyGround } from '../render/surface';
-import { surfaceTexture } from '../render/textures';
+import { noiseTexture } from '../render/textures';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
 
 /**
@@ -117,22 +117,84 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     }
     return best;
   };
+  const fullRelief = (k: number) => count[k] > 0 && raisedN[k] === count[k];
+  /** Chamfer distance (in vertices) from every vertex to the nearest seed vertex. */
+  const distField = (seed: (k: number) => boolean) => {
+    const d = new Float32Array(nV).fill(1e6);
+    for (let k = 0; k < nV; k++) if (seed(k)) d[k] = 0;
+    const relax = (k: number, j: number, c: number) => {
+      if (d[j] + c < d[k]) d[k] = d[j] + c;
+    };
+    for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+      const k = vi(x, z);
+      if (x > 0) relax(k, k - 1, 1);
+      if (z > 0) {
+        relax(k, k - VW, 1);
+        if (x > 0) relax(k, k - VW - 1, 1.414);
+        if (x < w) relax(k, k - VW + 1, 1.414);
+      }
+    }
+    for (let z = h; z >= 0; z--) for (let x = w; x >= 0; x--) {
+      const k = vi(x, z);
+      if (x < w) relax(k, k + 1, 1);
+      if (z < h) {
+        relax(k, k + VW, 1);
+        if (x < w) relax(k, k + VW + 1, 1.414);
+        if (x > 0) relax(k, k + VW - 1, 1.414);
+      }
+    }
+    return d;
+  };
+  const sstep = (a: number, b: number, v: number) => {
+    const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  // Cave walls climb away from the floor into darkness instead of stopping at one flat plateau.
+  // Walls on the camera side (+z) of open floor stay low, so they never hide the cavern.
+  const rise = new Float32Array(nV);
+  if (theme.wallRise) {
+    const open = distField((k) => !fullRelief(k));
+    for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+      const k = vi(x, z);
+      if (!open[k]) continue;
+      let north = Infinity;
+      for (let s2 = 1; s2 <= 10 && z - s2 >= 0; s2++) if (open[vi(x, z - s2)] === 0) {
+        north = s2;
+        break;
+      }
+      const want = theme.wallRise * sstep(0.6, 4.5, open[k]) * (0.7 + noise(x * 0.23 + 5, z * 0.23) * 0.6);
+      rise[k] = Math.min(want, Math.max(0, north - 1.5) * 1.1);
+    }
+  }
+  // Ambient occlusion in caves: floor darkens toward the foot of the walls.
+  if ((theme.topShade ?? 1) < 1) {
+    const near = distField((k) => raisedN[k] > 0);
+    for (let k = 0; k < nV; k++) {
+      if (fullRelief(k)) continue;
+      const f = 0.68 + 0.32 * sstep(0, 3.5, near[k]);
+      for (let j = 0; j < 3; j++) col[k * 3 + j] *= f;
+    }
+  }
   const hgt = new Float32Array(nV);
   for (let z = 0; z <= h; z++) {
     for (let x = 0; x <= w; x++) {
       const k = vi(x, z);
       const n = count[k] || 1;
-      for (let j = 0; j < 3; j++) col[k * 3 + j] /= n;
+      // A third, slow tone on top of the per-ground colour pair (breaks up large floors).
+      const tone = 0.86 + 0.14 * noise(x * 0.035 + 70, z * 0.035);
+      for (let j = 0; j < 3; j++) col[k * 3 + j] = (col[k * 3 + j] / n) * tone;
       let y = (noise(x * 0.15, z * 0.15) - 0.5) * 0.06 + (noise(x * 0.5 + 40, z * 0.5) - 0.5) * 0.03;
-      if (count[k] && raisedN[k] === count[k]) {
+      if (fullRelief(k)) {
         // Fully inside relief: rugged top (noise breaks up the flat mesa look).
         const top = raisedH[k] / raisedN[k];
-        y = top * (0.85 + noise(x * 0.35 + 9, z * 0.35) * 0.3) + (noise(x * 1.3, z * 1.3) - 0.5) * 0.5;
+        y = top * (0.85 + noise(x * 0.35 + 9, z * 0.35) * 0.3) + (noise(x * 1.3, z * 1.3) - 0.5) * 0.5 + rise[k];
       } else if (count[k] && fluidN[k] === count[k]) {
-        // Under water: a shallow shelf near land that deepens toward the middle (smooth colour
-        // gradient in the water instead of a hard cell-shaped edge).
+        // Under water: a long shallow shelf that deepens toward the middle, with noise shoals, so
+        // the lighter shallows show. Lava keeps a steep bank (it is opaque; depth drives its crust).
         const dLand = distToLand(x, z);
-        y = Math.max(BED_Y, WATER_Y - 0.12 - dLand * 0.32) + (noise(x * 0.4, z * 0.4) - 0.5) * 0.2;
+        const lava = layout.fluid[Math.min(h - 1, z) * w + Math.min(w - 1, x)] === Fluid.Lava;
+        const shoal = lava ? 0 : (noise(x * 0.12 + 31, z * 0.12) - 0.5) * 0.5;
+        y = Math.max(BED_Y, Math.min(WATER_Y - 0.16, WATER_Y - 0.1 - dLand * (lava ? 0.32 : 0.13) + shoal)) + (noise(x * 0.4, z * 0.4) - 0.5) * 0.12;
       } else if (fluidN[k] > 0) {
         // Waterline: some shore corners just above the surface, some just below, so the visible
         // edge (where the bank meets the water) wanders instead of following the cell grid.
@@ -191,10 +253,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     for (const k of ['position', 'normal', 'color', 'aSplat']) g.setAttribute(k, geo.getAttribute(k));
     g.setIndex(index);
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
-    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null);
+    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange);
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
-    mesh.castShadow = name === 'relief';
+    // Towering cave walls would throw the whole floor into sun shadow (there is no sun
+    // underground anyway): only open-air relief casts shadows.
+    mesh.castShadow = name === 'relief' && !theme.wallRise;
     mesh.name = name;
     return mesh;
   };
@@ -250,66 +314,98 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
 }
 
 /**
- * Stylised animated liquid. Water: depth-tinted, scrolling ripples, fresnel sky sheen and a
- * foam line where the bed comes up to the surface. Lava: glowing, slowly churning crust.
+ * Stylised animated liquids.
+ * - Water: depth-tinted over a long shelf (shallows show), two layers of drifting ripples in the
+ *   normal, a sky reflection tinted from the zone's sky and background (stronger at grazing
+ *   angles, broken up by the ripples), glints on ripple crests, soft caustics in the shallows and
+ *   a foam line where the bed meets the surface.
+ * - Lava: cooled black crust plates drifting slowly, with glowing seams that widen toward the
+ *   hot, deep middle; open molten patches churn in the deepest spots. Emission stays moderate so
+ *   bloom shows seams, not a blown-out disc.
  */
 function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) {
   const lava = kind === Fluid.Lava;
+  const skyHigh = new THREE.Color(theme.hemi[0]).multiplyScalar(0.75);
+  const skyLow = new THREE.Color(theme.bg).lerp(new THREE.Color(theme.hemi[0]), 0.25);
   const uniforms = {
     uTime: { value: 0 },
-    uNoise: { value: surfaceTexture('generic') },
+    uNoise: { value: noiseTexture() },
     uShallow: { value: new THREE.Color(lava ? 0xff6a10 : (theme.water?.[0] ?? 0x3f8fa8)) },
     uDeep: { value: new THREE.Color(lava ? 0x5a0c02 : (theme.water?.[1] ?? 0x123a52)) },
+    uSkyHigh: { value: skyHigh },
+    uSkyLow: { value: skyLow },
   };
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, roughness: lava ? 0.9 : 0.12, metalness: 0,
+    color: 0xffffff, roughness: lava ? 0.55 : 0.1, metalness: 0,
     transparent: !lava, opacity: lava ? 1 : 0.86, depthWrite: lava,
   });
+  const common = `
+    uniform float uTime;
+    uniform sampler2D uNoise;
+    uniform vec3 uShallow;
+    uniform vec3 uDeep;
+    uniform vec3 uSkyHigh;
+    uniform vec3 uSkyLow;
+    varying float vDepth;
+    varying vec3 vFluidPos;
+    float fluidN(vec2 p) { return texture2D(uNoise, p).r; }
+    vec2 fluidGrad(vec2 p, float e) { float c = fluidN(p); return vec2(fluidN(p + vec2(e, 0.0)) - c, fluidN(p + vec2(0.0, e)) - c) / e; }
+    vec2 lavaHash(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
+    // Cellular noise: x = distance to nearest cell, y = to second nearest, z = nearest cell id.
+    vec3 lavaCells(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      float f1 = 8.0, f2 = 8.0, id = 0.0;
+      for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+        vec2 o = vec2(float(x), float(y));
+        vec2 h = lavaHash(i + o);
+        float d = length(o + 0.15 + h * 0.7 - f);
+        if (d < f1) { f2 = f1; f1 = d; id = h.x; } else if (d < f2) f2 = d;
+      }
+      return vec3(f1, f2, id);
+    }`;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aDepth;\nvarying float vDepth;\nvarying vec3 vFluidPos;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvDepth = aDepth;\nvFluidPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        uniform float uTime;
-        uniform sampler2D uNoise;
-        uniform vec3 uShallow;
-        uniform vec3 uDeep;
-        varying float vDepth;
-        varying vec3 vFluidPos;
-        float fluidN(vec2 p) { return texture2D(uNoise, p).r; }`,
-      )
+      .replace('#include <common>', `#include <common>\n${common}`)
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
         vec2 fp = vFluidPos.xz;
-        float n1 = fluidN(fp * 0.08 + vec2(uTime * 0.012, uTime * 0.007));
-        float n2 = fluidN(fp * 0.19 - vec2(uTime * 0.017, -uTime * 0.011));
+        vec2 q1 = fp * 0.07 + vec2(uTime * 0.011, uTime * 0.006);
+        vec2 q2 = fp * 0.23 - vec2(uTime * 0.021, -uTime * 0.014);
+        float n1 = fluidN(q1), n2 = fluidN(q2);
         float ripple = n1 * 0.6 + n2 * 0.4;
-        float deep = smoothstep(0.03, 0.45, vDepth + (ripple - 0.5) * 0.15);
         ${lava
-          ? `vec3 lavaCol = mix(uShallow, uDeep, smoothstep(0.35, 0.65, ripple));
-             // Cooled black crust toward the banks hides the mesh edge.
-             float lavaEdge = smoothstep(0.02, 0.45, vDepth + (n2 - 0.5) * 0.25);
-             diffuseColor.rgb = mix(vec3(0.05, 0.03, 0.03), lavaCol * 0.25, lavaEdge);`
-          : `diffuseColor.rgb = mix(uShallow, uDeep, deep);
+          ? `// Crust plates drift and slowly deform; seams widen with depth (heat).
+             vec2 warp = vec2(fluidN(fp * 0.05 + uTime * 0.004), fluidN(fp * 0.05 + 0.5 - uTime * 0.003)) - 0.5;
+             vec3 cells = lavaCells(fp * 0.45 + warp * 1.4 + vec2(uTime * 0.014, uTime * 0.009));
+             float heat = smoothstep(0.02, 0.6, vDepth + (n1 - 0.5) * 0.2);
+             float gap = cells.y - cells.x;
+             float seam = 1.0 - smoothstep(0.015, 0.035 + heat * 0.075, gap);
+             float glowNear = 1.0 - smoothstep(0.0, 0.2 + heat * 0.2, gap);
+             float molten = smoothstep(0.82, 0.98, heat * 0.45 + n2 * 0.65);
+             vec3 crust = vec3(0.06, 0.045, 0.042) * (0.75 + cells.z * 0.5);
+             crust = mix(crust, vec3(0.22, 0.05, 0.015), glowNear * heat * 0.7);
+             diffuseColor.rgb = mix(crust, vec3(0.3, 0.08, 0.02), max(seam, molten));`
+          : `float deep = smoothstep(0.02, 0.62, vDepth + (ripple - 0.5) * 0.12);
+             diffuseColor.rgb = mix(uShallow, uDeep, deep);
+             // Soft caustics dance on the shallow bed.
+             float ca = fluidN(fp * 0.31 + vec2(uTime * 0.035, 0.0)), cb = fluidN(fp * 0.27 + vec2(0.37, 0.61) - vec2(0.0, uTime * 0.03));
+             float caus = pow(clamp(1.0 - abs(ca - cb) * 3.2, 0.0, 1.0), 5.0);
+             diffuseColor.rgb += vec3(0.55, 0.7, 0.62) * caus * (1.0 - deep) * 0.1;
              float foam = smoothstep(0.08, 0.0, vDepth + (n2 - 0.5) * 0.06) * (0.55 + 0.45 * n1);
-             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.86, 0.88), foam * 0.42);
-             diffuseColor.a = mix(0.8, 0.97, deep) + foam * 0.15;`}`,
+             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.88, 0.9), foam * 0.45);
+             diffuseColor.a = mix(0.7, 0.95, deep) + foam * 0.15;`}`,
       )
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
         {
-          float e = 0.02;
-          vec2 q = fp * 0.19 - vec2(uTime * 0.017, -uTime * 0.011);
-          float hx = fluidN(q + vec2(e, 0.0)) - fluidN(q);
-          float hz = fluidN(q + vec2(0.0, e)) - fluidN(q);
-          vec3 g = vec3(hx, 0.0, hz) / e * ${lava ? '0.004' : '0.012'};
-          vec3 gv = (viewMatrix * vec4(g, 0.0)).xyz;
+          vec2 g = fluidGrad(q1, 0.01) * ${lava ? '0.0' : '0.005'} + fluidGrad(q2, 0.01) * ${lava ? '0.002' : '0.0045'};
+          vec3 gv = (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz;
           normal = normalize(normal - gv + dot(gv, normal) * normal);
         }`,
       )
@@ -317,13 +413,24 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         ${lava
-          ? `float crust = smoothstep(0.42, 0.62, ripple);
-             totalEmissiveRadiance += mix(vec3(2.4, 0.75, 0.12), vec3(0.25, 0.04, 0.0), crust) * (0.85 + 0.15 * sin(uTime * 1.3 + fp.x * 0.3)) * lavaEdge;`
-          : `float fres = pow(1.0 - abs(dot(normalize(vViewPosition), normal)), 3.0);
-             totalEmissiveRadiance += vec3(0.35, 0.45, 0.55) * fres * 0.35;`}`,
+          ? `vec3 hot = mix(vec3(1.2, 0.3, 0.04), vec3(1.5, 0.6, 0.12), heat);
+             float pulse = 0.85 + 0.15 * sin(uTime * 1.3 + fp.x * 0.3 + fp.y * 0.2);
+             totalEmissiveRadiance += max(hot * seam, vec3(1.25, 0.34, 0.05) * molten * (0.6 + 0.3 * n2)) * pulse;
+             totalEmissiveRadiance += vec3(0.3, 0.05, 0.005) * glowNear * heat * 0.35;`
+          : `// Sky reflection: the reflected ray picks a colour from a sky gradient, so ripples
+             // show as moving light and dark bands; stronger toward grazing angles.
+             vec3 vdir = normalize(vViewPosition);
+             float ndv = clamp(dot(vdir, normal), 0.0, 1.0);
+             vec3 rw = (vec4(reflect(-vdir, normal), 0.0) * viewMatrix).xyz;
+             vec3 sky = mix(uSkyLow, uSkyHigh, smoothstep(-0.1, 0.9, rw.y) * (0.75 + 0.25 * smoothstep(0.3, -0.6, rw.z)));
+             float fres = 0.12 + 0.88 * pow(1.0 - ndv, 4.0);
+             totalEmissiveRadiance += sky * fres * 0.9;
+             // Glints: only on ripple crests, and only where a crest tilts toward a bright sky patch.
+             float glint = pow(max(dot(normalize(rw), normalize(vec3(0.5, 0.72, -0.48))), 0.0), 900.0) * smoothstep(0.8, 0.95, n2);
+             totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * glint * 0.5;`}`,
       );
   };
-  mat.customProgramCacheKey = () => (lava ? 'fluid-lava' : 'fluid-water');
+  mat.customProgramCacheKey = () => (lava ? 'fluid2-lava' : 'fluid2-water');
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = lava ? 'lava' : 'water';
   mesh.receiveShadow = !lava;

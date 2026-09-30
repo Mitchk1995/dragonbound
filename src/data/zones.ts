@@ -32,6 +32,10 @@ export interface ZoneTheme {
   flowers?: number[];
   /** Brightness multiplier for the tops of high relief (caves: rock falls away into darkness). */
   topShade?: number;
+  /** Height band (y from, to) over which relief darkens to `topShade`. */
+  topRange?: [number, number];
+  /** Cave walls: extra height the rock climbs to away from the floor (towering walls, not a plateau). */
+  wallRise?: number;
   /** Ground on top of cliffs/mesas (their steep faces are rock); undefined = rock all over. */
   mesaTop?: Ground;
 }
@@ -69,14 +73,16 @@ export const ZONES: Record<string, ZoneDef> = {
     theme: {
       bg: 0x0c0908, fog: [26, 60], hemi: [0xc8b098, 0x4a3828, 1.3], sun: [0xffd0a0, 1.5], exposure: 1.35,
       ambient: 'cave', trees: 'pine', wall: 'cave',
-      ground: { [Ground.Cave]: [0x6a5a4a, 0x7a6854] },
-      cliff: [0x3e342c, 0x2e2622],
-      water: [0x2a6a7a, 0x0a2230],
+      ground: { [Ground.Cave]: [0x5e5042, 0x86725a] },
+      cliff: [0x6e5c4a, 0x56463a],
+      water: [0x2e7282, 0x0a2632],
       topShade: 0.3,
+      topRange: [2.5, 12],
+      wallRise: 7,
     },
   },
   foothills: {
-    id: 'foothills', name: 'Ashen Foothills', kind: 'hunt', arch: 0xff6a2a, build: buildFoothills,
+    id: 'foothills', name: 'Wyrmwood Foothills', kind: 'hunt', arch: 0xff6a2a, build: buildFoothills,
     theme: {
       bg: 0x3a3440, fog: [46, 110], hemi: [0xb8c8e8, 0x5a4636, 1.25], sun: [0xffe2b8, 2.6], exposure: 1.05,
       ambient: 'embers', trees: 'pine', wall: 'cave', ground: FOOTHILLS_GROUND,
@@ -96,7 +102,7 @@ export const ZONES: Record<string, ZoneDef> = {
       ground: { [Ground.Stone]: [0x6a7070, 0x5a6060], [Ground.Grass]: [0x3a5a3a, 0x4a6a44] },
       forest: { grove: 0.7, ash: 0.3 },
       cliff: [0x4a5456, 0x3a4244],
-      water: [0x2c5c5c, 0x0e2a30],
+      water: [0x3a7a74, 0x0f3036],
     },
   },
   lair: {
