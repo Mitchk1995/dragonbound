@@ -274,6 +274,24 @@ export class UI {
     this.bossTarget = e;
   }
 
+  /** Reset overlays and interactions belonging to the zone being left. */
+  clearZoneState() {
+    for (const id of STATION_PANELS) this.toggle(id, false);
+    this.closeDialogue();
+    this.stationAt = null;
+    this.bossTarget = null;
+    this.hurtAmt = 0;
+    this.xpAcc.clear();
+    this.overUI = false;
+    this.tooltip.hide();
+    for (const selector of ['.chat', '.banner', '.zonetitle', '.xpdrops', '.hoverlabel']) {
+      const node = this.$(selector);
+      if (!node) continue; // The initial zone loads before the HUD is built.
+      node.innerHTML = '';
+      node.classList.remove('show');
+    }
+  }
+
   // ─── Panels ──────────────────────────────────────────────────────────────
 
   /** Get (creating if needed) the element for an open panel; null if it's closed. */
