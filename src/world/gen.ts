@@ -48,6 +48,63 @@ export class Gen {
     }
   }
 
+  /**
+   * Visit every cell whose centre lies in a rectangle of half-size hw × hd centred on (cx, cz) and
+   * turned by `rot` (radians, about Y: local X runs along (cos, -sin)). `lx`, `lz` are the cell's
+   * coordinates in the rectangle's own frame.
+   */
+  rect(cx: number, cz: number, hw: number, hd: number, rot: number, fn: (i: number, x: number, z: number, lx: number, lz: number) => void) {
+    const c = Math.cos(rot), s = Math.sin(rot), R = Math.ceil(Math.hypot(hw, hd)) + 1;
+    for (let z = Math.floor(cz - R); z <= cz + R; z++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
+      if (!this.inside(x, z)) continue;
+      const dx = x + 0.5 - cx, dz = z + 0.5 - cz;
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      if (Math.abs(lx) <= hw && Math.abs(lz) <= hd) fn(this.idx(x, z), x, z, lx, lz);
+    }
+  }
+
+  /** A paved (or other ground) open floor in a turned rectangle: a plaza, a precinct, a quay. */
+  floor(cx: number, cz: number, hw: number, hd: number, rot: number, ground: Ground) {
+    this.rect(cx, cz, hw, hd, rot, (i) => {
+      this.l.cells[i] = Cell.Ground;
+      this.l.fluid[i] = Fluid.None;
+      this.l.ground[i] = ground;
+      if (this.reserved[i] !== 1) this.reserved[i] = 3;
+    });
+  }
+
+  /**
+   * Distance (in cells, 8-connected chamfer) from every cell to the nearest cell where `seed` is
+   * true: used to grow organic bands (forest margins, terraced relief) outward from a shape.
+   */
+  distance(seed: (i: number) => boolean) {
+    const { w, h } = this;
+    const d = new Float32Array(w * h).fill(1e6);
+    for (let i = 0; i < w * h; i++) if (seed(i)) d[i] = 0;
+    const relax = (k: number, j: number, c: number) => {
+      if (d[j] + c < d[k]) d[k] = d[j] + c;
+    };
+    for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+      const k = z * w + x;
+      if (x > 0) relax(k, k - 1, 1);
+      if (z > 0) {
+        relax(k, k - w, 1);
+        if (x > 0) relax(k, k - w - 1, 1.414);
+        if (x < w - 1) relax(k, k - w + 1, 1.414);
+      }
+    }
+    for (let z = h - 1; z >= 0; z--) for (let x = w - 1; x >= 0; x--) {
+      const k = z * w + x;
+      if (x < w - 1) relax(k, k + 1, 1);
+      if (z < h - 1) {
+        relax(k, k + w, 1);
+        if (x < w - 1) relax(k, k + w + 1, 1.414);
+        if (x > 0) relax(k, k + w - 1, 1.414);
+      }
+    }
+    return d;
+  }
+
   /** Visit every cell within `width/2` of a polyline (with wobble along its length). */
   along(poly: Vec2[], width: number, wobble: number, fn: (i: number, x: number, z: number, t: number) => void) {
     const minX = Math.min(...poly.map((p) => p.x)) - width - wobble - 2, maxX = Math.max(...poly.map((p) => p.x)) + width + wobble + 2;
@@ -182,12 +239,15 @@ export class Gen {
     }
   }
 
-  /** Impassable frame so the camera never sees past the map: cliffs with a ragged inner edge. */
-  frame(depth: number, cell: Cell = Cell.Cliff, height = 4) {
+  /**
+   * Impassable frame so the camera never sees past the map: cliffs with a ragged inner edge.
+   * `wobble` scales how far the edge wanders (× depth) and `freq` how broad its bays are.
+   */
+  frame(depth: number, cell: Cell = Cell.Cliff, height = 4, wobble = 0.8, freq = 0.1) {
     for (let z = 0; z < this.h; z++) {
       for (let x = 0; x < this.w; x++) {
         const d = Math.min(x, z, this.w - 1 - x, this.h - 1 - z);
-        const edge = depth + (this.noise(x * 0.1, z * 0.1) - 0.5) * depth * 0.8;
+        const edge = depth + (this.noise(x * freq, z * freq) - 0.5) * depth * wobble;
         const i = this.idx(x, z);
         if (d < edge && this.reserved[i] !== 1 && this.reserved[i] !== 3) {
           this.l.cells[i] = cell;

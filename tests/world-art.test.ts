@@ -4,7 +4,7 @@ import { chamferBox, octagon, prism, rockBlock, taper, wedge } from '../src/rend
 import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/paint';
 import { patchKeys } from '../src/render/surface';
 import { ZONES } from '../src/data/zones';
-import { Cell } from '../src/world/layout';
+import { Cell, Ground } from '../src/world/layout';
 import { buildProp, PROP_KINDS } from '../src/world/props';
 
 const finite = (geo: THREE.BufferGeometry) => {
@@ -127,6 +127,104 @@ describe('zones', () => {
         expect(L.fluid[z * L.w + x], `palisade at ${p.x},${p.z}`).toBe(0);
       }
     }
+  });
+  const build = (id: string) => ZONES[id].build(1000 + id.length * 97);
+  const walk = (L: ReturnType<typeof build>, x: number, z: number) => x >= 0 && z >= 0 && x < L.w && z < L.h && L.cells[z * L.w + x] === Cell.Ground;
+  it('mine, ruin and lair layouts are not mirror-symmetric', () => {
+    for (const id of ['mine', 'ruin', 'lair']) {
+      const L = build(id);
+      // (The lair is judged on its caldera half: the badlands below are open ground either way.)
+      const zMax = id === 'lair' ? 64 : L.h;
+      let both = 0, either = 0;
+      for (let z = 0; z < zMax; z++) for (let x = 0; x < L.w; x++) {
+        const a = walk(L, x, z), b = walk(L, L.w - 1 - x, z);
+        if (a && b) both++;
+        if (a || b) either++;
+      }
+      expect(both / either, id).toBeLessThan(0.6);
+    }
+  });
+  it('the drowned city is built from a few bold wall pieces, not per-cell masonry stacks', () => {
+    const L = build('ruin');
+    expect(L.cells.some((c) => c === Cell.Wall)).toBe(false);
+    const walls = L.props.filter((p) => p.kind === 'ruin_wall');
+    expect(walls.length).toBeGreaterThan(20);
+    for (const p of walls) expect(p.len ?? 0).toBeGreaterThanOrEqual(1.6);
+    // Every wall piece builds with only a handful of blocks.
+    for (const p of walls.slice(0, 12)) {
+      let n = 0;
+      buildProp('ruin_wall', { len: p.len, v: p.v }).obj.traverse((o) => (n += o instanceof THREE.Mesh ? 1 : 0));
+      expect(n).toBeLessThan(20);
+    }
+    // The temple, the market fountain and the broken causeways are all there.
+    for (const kind of ['temple_dais', 'fountain_ruin', 'sunken_slabs']) expect(L.props.some((p) => p.kind === kind), kind).toBe(true);
+  });
+  it('the Foothills shrine is composed: a dais, its processional way, obelisks, braziers and banners', () => {
+    const L = build('foothills');
+    const dais = L.props.find((p) => p.kind === 'ritual_dais')!;
+    expect(dais).toBeDefined();
+    const near = (kind: string) => L.props.filter((p) => p.kind === kind && Math.hypot(p.x - dais.x, p.z - dais.z) < 30);
+    const obelisks = near('obelisk');
+    expect(obelisks.length).toBe(4);
+    expect(new Set(obelisks.map((o) => o.len))).toEqual(new Set([0, 1, 2]));
+    expect(near('brazier').length).toBe(2);
+    expect(near('cult_banner').length).toBe(4);
+    // The way in is paved, and the cultists stand on it.
+    expect(L.ground[Math.floor(dais.z) * L.w + Math.floor(dais.x + 8)]).toBe(Ground.Stone);
+    expect(L.packs.some((p) => p.comp.includes('cultist') && Math.hypot(p.x - dais.x, p.z - dais.z) < 15)).toBe(true);
+  });
+  it('the Foothills rim is organic: the open land does not stop along a straight line', () => {
+    const L = build('foothills');
+    const firstOpen: number[] = [];
+    for (let z = 40; z < L.h - 40; z += 2) {
+      let x = 0;
+      while (x < L.w && !walk(L, x, z)) x++;
+      firstOpen.push(x);
+    }
+    const mean = firstOpen.reduce((a, b) => a + b, 0) / firstOpen.length;
+    const sd = Math.sqrt(firstOpen.reduce((a, b) => a + (b - mean) ** 2, 0) / firstOpen.length);
+    expect(sd).toBeGreaterThan(2);
+    // Terraced relief: the rim climbs in more than one step.
+    const heights = new Set<number>();
+    for (let i = 0; i < L.w * L.h; i++) if (L.cells[i] === Cell.Cliff) heights.add(Math.round(L.elev[i]));
+    expect(heights.size).toBeGreaterThanOrEqual(3);
+  });
+  it('mine ore runs in veins along the cavern walls, every metal well stocked', () => {
+    const L = build('mine');
+    const count: Record<string, number> = {};
+    for (const n of L.nodes) {
+      count[n.ore] = (count[n.ore] ?? 0) + 1;
+      let wall = Infinity;
+      for (let z = Math.floor(n.z - 5); z <= n.z + 5; z++) for (let x = Math.floor(n.x - 5); x <= n.x + 5; x++) {
+        if (L.cells[z * L.w + x] === Cell.Wall) wall = Math.min(wall, Math.hypot(x + 0.5 - n.x, z + 0.5 - n.z));
+      }
+      expect(wall, `${n.ore} at ${n.x},${n.z}`).toBeLessThan(4.5);
+      // A vein: another ore rock within a few steps (copper and tin share veins).
+      expect(L.nodes.some((m) => m !== n && Math.hypot(m.x - n.x, m.z - n.z) < 6.5), `${n.ore} at ${n.x},${n.z}`).toBe(true);
+    }
+    for (const ore of ['copper', 'tin', 'iron']) expect(count[ore], ore).toBeGreaterThanOrEqual(8);
+    expect(count.coal).toBeGreaterThanOrEqual(7);
+  });
+  it('the caldera floor is irregular, with room to fight round the roost', () => {
+    const L = build('lair');
+    const b = L.boss!;
+    expect(walk(L, Math.floor(b.x), Math.floor(b.z))).toBe(true);
+    // Most of the fighting circle is open floor.
+    let open = 0, all = 0;
+    for (let z = Math.floor(b.z - b.r); z <= b.z + b.r; z++) for (let x = Math.floor(b.x - b.r); x <= b.x + b.r; x++) {
+      if (Math.hypot(x + 0.5 - b.x, z + 2.5 - b.z - 2) > b.r - 4) continue;
+      all++;
+      if (L.cells[z * L.w + x] !== Cell.Cliff) open++;
+    }
+    expect(open / all).toBeGreaterThan(0.75);
+    // Not a round bowl: how far the floor reaches from the roost varies a lot by direction.
+    const reach = Array.from({ length: 16 }, (_, k) => {
+      const a = (k / 16) * Math.PI * 2;
+      let r = 0;
+      while (r < 40 && L.cells[Math.floor(b.z + Math.sin(a) * r) * L.w + Math.floor(b.x + Math.cos(a) * r)] !== Cell.Cliff) r += 0.5;
+      return r;
+    });
+    expect(Math.max(...reach) - Math.min(...reach)).toBeGreaterThan(6);
   });
   it('no walkable pocket is cut off from the entry (clicks never target one)', () => {
     for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {
