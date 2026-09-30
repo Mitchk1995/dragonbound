@@ -1,2 +1,14 @@
-// Chapter 1 rebuild lands via the feat/ch1-foundations pull request.
-document.getElementById('splash')!.querySelector('p')!.textContent = 'Chapter 1 in progress';
+import { Game } from './game';
+import { MODEL_FILES, preloadModels } from './render/registry';
+
+async function boot() {
+  await preloadModels(MODEL_FILES);
+  const canvas = document.getElementById('game') as HTMLCanvasElement;
+  const game = new Game(canvas);
+  await game.start();
+  const splash = document.getElementById('splash');
+  splash?.classList.add('hide');
+  setTimeout(() => splash?.remove(), 800);
+}
+
+boot();
