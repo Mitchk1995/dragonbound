@@ -150,17 +150,22 @@ export function getBackend(): SaveBackend {
       describe: () => 'save file',
     };
   }
+  // A damaged primary must not hide a usable backup or replace it on the next save.
+  const readStoredJson = (key: string): string | null => {
+    try {
+      const text = localStorage.getItem(key);
+      if (!text) return null;
+      JSON.parse(text);
+      return text;
+    } catch {
+      return null;
+    }
+  };
   return {
-    read: async () => {
-      try {
-        return localStorage.getItem(LS_KEY) ?? localStorage.getItem(LS_KEY + '.backup');
-      } catch {
-        return null;
-      }
-    },
+    read: async () => readStoredJson(LS_KEY) ?? readStoredJson(LS_KEY + '.backup'),
     write: async (json) => {
       try {
-        const prev = localStorage.getItem(LS_KEY);
+        const prev = readStoredJson(LS_KEY);
         if (prev) localStorage.setItem(LS_KEY + '.backup', prev);
         localStorage.setItem(LS_KEY, json);
       } catch {}
