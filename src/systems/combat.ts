@@ -153,7 +153,8 @@ export class Combat {
             }
           }
         }
-        if (!pr.dead && pr.traveled >= pr.o.range && pr.o.aoe) this.explode(pr.x, pr.z, pr.o.aoe, pr.o.dmg);
+        // step() marks range expiry dead; an enemy impact may already have exploded it.
+        if (pr.traveled >= pr.o.range && pr.o.aoe && pr.hit.size === 0) this.explode(pr.x, pr.z, pr.o.aoe, pr.o.dmg);
       } else if (!pr.dead && !p.dead && Math.hypot(p.x - pr.x, p.z - pr.z) < p.radius + 0.3) {
         this.damagePlayer(pr.o.dmg, pr.o.source ?? null);
         pr.dead = true;
