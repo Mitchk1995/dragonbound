@@ -87,6 +87,20 @@ describe('metal reads as metal', () => {
     }
   });
 
+  it('unique gear authored as metal reflects too; its other parts stay matte', () => {
+    const model = makeModel('hero');
+    const crown = { ...makeItem('iron_fullhelm'), unique: 'ashen_crown', rarity: 'unique' } as ReturnType<typeof makeItem>;
+    new HeroDresser(model).dress(null, { helm: crown });
+    const gear = new Set<THREE.MeshStandardMaterial>();
+    model.root.getObjectByName('gear:sock_head')!.traverse((o) => {
+      if (o instanceof THREE.Mesh) gear.add(o.material as THREE.MeshStandardMaterial);
+    });
+    const shiny = [...gear].filter((m) => m.envMap === studioEnv());
+    expect(shiny.length).toBeGreaterThan(0);
+    for (const m of shiny) expect(m.metalness).toBeGreaterThan(0.7);
+    expect([...gear].some((m) => m.envMap === null && m.emissiveIntensity > 0), 'ember glow stays unlit by the studio').toBe(true);
+  });
+
   it('studio environment: warm bright top, dark ground, bounded softbox highlights', () => {
     const up = studioRadiance(new THREE.Vector3(0, 1, 0));
     const down = studioRadiance(new THREE.Vector3(0, -1, 0));

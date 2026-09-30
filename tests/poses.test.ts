@@ -201,9 +201,10 @@ describe('pose audit: bow', () => {
   }
 });
 
-// Each tier's plate design (items.ts PLATE_STYLE). The Knight's big dome covers the joint with its
-// centre nearer to it, so its cap reads weaker for the same coverage.
-for (const [body, style, cap] of [['bronze_platebody', 'Knight', -0.25], ['steel_platebody', 'Warlord', -0.35], ['ember_platebody', 'Dragonguard', -0.35]] as const) {
+// Each plate set (items.ts PLATE_STYLE): bronze, iron and steel share one design, Emberforged has its own.
+// The rounded domes sit over the joint and hug the arm, so their centre stays above it in every pose; the
+// Emberforged wing plates hang down the arm, pulling its centre a little lower.
+for (const [body, style, cap] of [['bronze_platebody', 'Plate', -0.3], ['steel_platebody', 'Plate (steel)', -0.3], ['ember_platebody', 'Emberforged', -0.25]] as const) {
   describe(`pose audit: ${style} plate pauldrons cap the shoulder in every pose`, () => {
     const h = lazyHero({ weapon: 'iron_longsword', body });
     const poses: [AttackKind, number][] = [['swing', -1], ['swing', IMPACT - 0.11], ['swing', IMPACT], ['slam', IMPACT - 0.1], ['cast', IMPACT]];

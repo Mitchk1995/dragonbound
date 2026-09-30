@@ -40,8 +40,9 @@ def hex_rgba(h):
     return tuple(srgb_to_linear(((h >> s) & 255) / 255) for s in (16, 8, 0)) + (1.0,)
 
 
-def mat(color, emissive=None, strength=2.0, double_sided=False):
-    key = f'db_{color:06x}_{emissive or 0:06x}_{strength}_{int(double_sided)}'
+def mat(color, emissive=None, strength=2.0, double_sided=False, metal=False):
+    """Fixed-colour material. `metal` marks forged metal: the game gives it the shiny metal finish."""
+    key = f'db_{color:06x}_{emissive or 0:06x}_{strength}_{int(double_sided)}' + ('_metal' if metal else '')
     m = bpy.data.materials.get(key)
     if m:
         return m
@@ -50,8 +51,8 @@ def mat(color, emissive=None, strength=2.0, double_sided=False):
     m.use_backface_culling = not double_sided
     bsdf = m.node_tree.nodes.get('Principled BSDF')
     bsdf.inputs['Base Color'].default_value = hex_rgba(color)
-    bsdf.inputs['Roughness'].default_value = 0.75
-    bsdf.inputs['Metallic'].default_value = 0.0
+    bsdf.inputs['Roughness'].default_value = 0.35 if metal else 0.75
+    bsdf.inputs['Metallic'].default_value = 1.0 if metal else 0.0
     if emissive is not None:
         bsdf.inputs['Emission Color'].default_value = hex_rgba(emissive)
         bsdf.inputs['Emission Strength'].default_value = strength
@@ -60,6 +61,11 @@ def mat(color, emissive=None, strength=2.0, double_sided=False):
 
 def c(name):
     return PAL[name] if isinstance(name, str) else name
+
+
+def metallic(color):
+    """Colour spec for a forged-metal part of a fixed colour (unique gear): pass it anywhere a colour is accepted."""
+    return mat(c(color), metal=True)
 
 
 # ─── Role materials (recoloured at runtime, see docs/ART_CONTRACT.md) ─────────
@@ -236,6 +242,249 @@ def ring(parent, r_out, r_in, h, pos, color, rot=(0, 0, 0), seg=8, emissive=None
             bm.faces.new((a[i], a[j], b[j], b[i]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return _mesh_obj(bm, parent, pos, rot, color, emissive, strength)
+
+
+# ─── Curved-surface kit ──────────────────────────────────────────────────────
+# Parametric surfaces fn(u, v) -> (x, y, z) with u, v in [0, 1], turned into thick flat-shaded shells by
+# surf(). loft_fn() builds rounded (superellipse) bodies from cross-section rows; bell_fn() builds shoulder
+# domes; grow()/sub()/mirror() derive trims, straps and the other side from a surface.
+
+def V(*a):
+    return Vector(a if len(a) == 3 else a[0])
+
+
+def rot_to(n):
+    """ZYX euler (what _link uses) that turns local +Y onto direction n."""
+    e = Vector((0, 1, 0)).rotation_difference(Vector(n).normalized()).to_euler('ZYX')
+    return (e.x, e.y, e.z)
+
+
+def face_rot(n):
+    """ZYX euler that turns local +Z onto n (thin boxes lying on a surface)."""
+    e = Vector((0, 0, 1)).rotation_difference(Vector(n).normalized()).to_euler('ZYX')
+    return (e.x, e.y, e.z)
+
+
+def ssin(t, e):
+    s = math.sin(t)
+    return math.copysign(abs(s) ** (2 / e), s)
+
+
+def scos(t, e):
+    c_ = math.cos(t)
+    return math.copysign(abs(c_) ** (2 / e), c_)
+
+
+def surf_normal(fn, u, v, inside, h=1e-3):
+    """Unit normal of fn at (u, v), pointing away from the point `inside`."""
+    u0, u1 = max(0, u - h), min(1, u + h)
+    v0, v1 = max(0, v - h), min(1, v + h)
+    du = V(fn(u1, v)) - V(fn(u0, v))
+    dv = V(fn(u, v1)) - V(fn(u, v0))
+    n = du.cross(dv)
+    p = V(fn(u, v))
+    if n.length < 1e-9:
+        n = p - V(inside)
+    n.normalize()
+    return n if n.dot(p - V(inside)) >= 0 else -n
+
+
+def sub(fn, u0, u1, v0, v1):
+    return lambda u, v: fn(u0 + (u1 - u0) * u, v0 + (v1 - v0) * v)
+
+
+def grow(fn, d, inside=(0, 0, 0)):
+    """Surface pushed d along its outward normal (for trims/straps laid on a plate)."""
+    return lambda u, v: tuple(V(fn(u, v)) + surf_normal(fn, u, v, inside) * d)
+
+
+def mirror(fn, s):
+    """fn for the -X side when s < 0."""
+    return fn if s > 0 else (lambda u, v: (lambda p: (-p[0], p[1], p[2]))(fn(u, v)))
+
+
+def surf(p, fn, nu, nv, thick, color, closed_u=False, inside=(0, 0, 0), bevel=0.0, nm=None, inner=True, walls=(0, 1)):
+    """Thick shell from a parametric surface fn(u, v) -> (x, y, z), u, v in [0, 1].
+
+    Outer skin + side walls `thick` deep (+ inner skin unless inner=False, for plates whose inside is
+    never seen, e.g. hoops around the torso), flat shaded. `inside` is any point on the inner side
+    (orients normals). `bevel` chamfers the outer rim so edges read as rolled plate. Poles are welded.
+    """
+    ins = V(inside)
+    U = nu if closed_u else nu + 1
+    P = [[V(fn(i / nu, j / nv)) for i in range(U)] for j in range(nv + 1)]
+    N = [[None] * U for _ in range(nv + 1)]
+    tot = 0.0
+    for j in range(nv + 1):
+        for i in range(U):
+            i0, i1 = ((i - 1) % U, (i + 1) % U) if closed_u else (max(i - 1, 0), min(i + 1, U - 1))
+            j0, j1 = max(j - 1, 0), min(j + 1, nv)
+            n = (P[j][i1] - P[j][i0]).cross(P[j1][i] - P[j0][i])
+            if n.length > 1e-9:
+                N[j][i] = n.normalized()
+                tot += N[j][i].dot(P[j][i] - ins)
+    sg = 1 if tot >= 0 else -1
+    for j in range(nv + 1):
+        adj = P[j + 1] if j < nv else P[j - 1]
+        cen = sum(adj, Vector()) / len(adj)
+        for i in range(U):
+            if N[j][i] is None:      # pole
+                N[j][i] = (P[j][i] - cen).normalized()
+                if N[j][i].dot(P[j][i] - ins) < 0:
+                    N[j][i] = -N[j][i]
+            else:
+                N[j][i] = N[j][i] * sg
+    bm = bmesh.new()
+    kind = bm.faces.layers.int.new('kind')
+    O = [[bm.verts.new(P[j][i]) for i in range(U)] for j in range(nv + 1)]
+    I = [[bm.verts.new(P[j][i] - N[j][i] * thick) for i in range(U)] for j in range(nv + 1)]
+
+    def face(vs, k):
+        try:
+            f = bm.faces.new(vs)
+            f[kind] = k
+        except ValueError:
+            pass
+    cols = range(nu)
+    nxt = (lambda i: (i + 1) % U) if closed_u else (lambda i: i + 1)
+    for j in range(nv):
+        for i in cols:
+            face((O[j][i], O[j][nxt(i)], O[j + 1][nxt(i)], O[j + 1][i]), 1)
+            if inner:
+                face((I[j + 1][i], I[j + 1][nxt(i)], I[j][nxt(i)], I[j][i]), 2)
+    for i in cols:   # walls (v = 0 row, v = 1 row), wound consistently with the outer skin
+        if 0 in walls:
+            face((I[0][i], I[0][nxt(i)], O[0][nxt(i)], O[0][i]), 3)
+        if 1 in walls:
+            face((O[nv][i], O[nv][nxt(i)], I[nv][nxt(i)], I[nv][i]), 3)
+    if not closed_u:
+        for j in range(nv):
+            face((O[j][0], O[j + 1][0], I[j + 1][0], I[j][0]), 3)
+            face((I[j][U - 1], I[j + 1][U - 1], O[j + 1][U - 1], O[j][U - 1]), 3)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    for f in [f for f in bm.faces if f.calc_area() < 1e-10]:
+        bm.faces.remove(f)
+    for v in [v for v in bm.verts if not v.link_faces]:
+        bm.verts.remove(v)
+    bm.normal_update()
+    # outer skin must face away from `inside`
+    s_ = sum((f.normal.dot(f.calc_center_median() - ins)) * f.calc_area() for f in bm.faces if f[kind] == 1)
+    if s_ < 0:
+        bmesh.ops.reverse_faces(bm, faces=list(bm.faces))
+    if bevel > 0:
+        edges = [e for e in bm.edges if len(e.link_faces) == 2 and {f[kind] for f in e.link_faces} == {1, 3}]
+        if edges:
+            bmesh.ops.bevel(bm, geom=edges, offset=bevel, segments=1, affect='EDGES', profile=0.5, clamp_overlap=True)
+    o = _mesh_obj(bm, p, (0, 0, 0), (0, 0, 0), color)
+    if nm:
+        o.name = nm
+    return o
+
+
+def loft_fn(rows, e=3.0, rw=0.5, t0=0.0, t1=2 * math.pi, zig=None, chev=0.0):
+    """Superellipse cross-sections lofted along Y. rows: (y, a, b, ridge_front, ridge_back[, dz]).
+    u sweeps the angle t0..t1 (t = 0 is +Z front, t = pi/2 is +X); v walks the rows."""
+    def fn(u, v):
+        k = v * (len(rows) - 1)
+        i = min(int(k), len(rows) - 2)
+        f = k - i
+        r = [a + (b - a) * f for a, b in zip(rows[i] + (0,) * (6 - len(rows[i])), rows[i + 1] + (0,) * (6 - len(rows[i + 1])))]
+        y, a, b, rf, rb, dz = r
+        t = t0 + (t1 - t0) * u
+        tf = math.atan2(math.sin(t), math.cos(t))
+        tb = math.atan2(math.sin(t - math.pi), math.cos(t - math.pi))
+        z = b * scos(t, e) + rf * max(0.0, 1 - abs(tf) / rw) - rb * max(0.0, 1 - abs(tb) / rw) + dz
+        y -= chev * max(0.0, 1 - abs(tf) / (rw * 2))   # chevron: the front dips down
+        if zig:   # scalloped / toothed lower edge: (depth, teeth) -- teeth = nu / 2 puts a tip on every odd column
+            x_ = u * zig[1]
+            y -= zig[0] * (1 - abs(2 * (x_ - math.floor(x_)) - 1)) * (1 - v)
+        return (a * ssin(t, e), y, z)
+    return fn
+
+
+def hoop(p, y0, y1, ab0, ab1, thick, color, nu=12, e=3.0, rf=(0, 0), bevel=0.0, t0=0.0, t1=2 * math.pi, nm=None, dz=0.0,
+         inner=False, zig=None, rw=0.5, walls=(0, 1), chev=0.0):
+    """Band around local Y from y0 (bottom) to y1 (top); ab = (half width, half depth) at each end."""
+    rows = [(y0, ab0[0], ab0[1], rf[0], 0, dz), (y1, ab1[0], ab1[1], rf[1], 0, dz)]
+    closed = abs(t1 - t0 - 2 * math.pi) < 1e-6
+    return surf(p, loft_fn(rows, e, rw=rw, t0=t0, t1=t1, zig=zig, chev=chev), nu, 1, thick, color, closed_u=closed,
+                inside=(0, (y0 + y1) / 2, dz), bevel=bevel, nm=nm, inner=inner, walls=walls)
+
+
+def bell_fn(O, phi, R, Rh, th0, th1, a0, a1, flare=0.0, drop=0.0, inner_scale=1.0, front_scale=1.0, zig=None):
+    """Shoulder bell (L side, socket space): dome/bands around an axis tilted outward by phi.
+    theta th0..th1 from the axis (v), azimuth a0..a1 (u, 0 = outward-down, +pi/2 = +Z front)."""
+    A = Vector((math.sin(phi), math.cos(phi), 0))
+    X = Vector((math.cos(phi), -math.sin(phi), 0))
+    Z = Vector((0, 0, 1))
+    O = V(O)
+
+    def fn(u, v):
+        al = a0 + (a1 - a0) * u
+        th = th0 + (th1 + drop * (1 - math.cos(al)) / 2 - th0) * v   # drop: reach further down on the neck side
+        if zig:   # toothed lower edge (amount in radians, teeth)
+            x_ = u * zig[1]
+            th += zig[0] * (1 - abs(2 * (x_ - math.floor(x_)) - 1)) * v
+        rh = Rh * math.sin(th) * (1 + flare * v) * (1 - (1 - inner_scale) * (1 - math.cos(al)) / 2)
+        rh *= 1 - (1 - front_scale) * abs(math.sin(al))
+        d = X * math.cos(al) + Z * math.sin(al)
+        return tuple(O + A * (R * math.cos(th)) + d * rh)
+    return fn
+
+
+def blade_fn(base, d, up, length, width, curl=0.0, bulge=0.02, taper=0.8, tipw=0.004):
+    """Long tapering curved plate (wing finger / feather / fin): v along its length, u across it.
+    Returns (fn, a point on its inner side)."""
+    base, d = V(base), V(d).normalized()
+    side = d.cross(V(up)).normalized()
+    up2 = side.cross(d).normalized()
+
+    def fn(u, v):
+        w = width * max(0.0, 1 - v) ** taper + tipw
+        x = 2 * u - 1
+        cen = base + d * (length * v) + up2 * (curl * v * v)
+        return tuple(cen + side * (x * w) + up2 * (bulge * (1 - x * x) * (1 - v)))
+    return fn, tuple(base - up2 * 0.08)
+
+
+def stud(p, pos, n, color=R.trim, r=0.022, h=0.03):
+    return cone(p, r, h, tuple(V(pos) + V(n).normalized() * (h * 0.3)), color, rot=rot_to(n), seg=4)
+
+
+def stud_on(p, fn, u, v, inside, color=R.trim, r=0.022):
+    n = surf_normal(fn, u, v, inside)
+    return stud(p, V(fn(u, v)) + n * 0.004, n, color, r)
+
+
+def strap(p, fn, u0, u1, v0, v1, inside, nv=2, color=R.leather, lift=0.008, thick=0.018, buckle=None):
+    """Leather strap laid on a surface patch; optional buckle at v = buckle."""
+    s = surf(p, grow(sub(fn, u0, u1, v0, v1), lift, inside), 1, nv, thick, color, inside=inside)
+    if buckle is not None:
+        um = (u0 + u1) / 2
+        n = surf_normal(fn, um, buckle, inside)
+        pos = V(fn(um, buckle)) + n * (lift + 0.01)
+        w = (V(fn(u1, buckle)) - V(fn(u0, buckle))).length
+        box(p, (w * 1.35, 0.055, 0.02), tuple(pos), R.trim, rot=face_rot(n), bevel=0.006)
+    return s
+
+
+def horn(p, pts, radii, color, seg=5):
+    """Chain of tapered cylinders through points (horns, claws, bones)."""
+    for (a, b), (ra, rb) in zip(zip(pts, pts[1:]), zip(radii, radii[1:])):
+        a, b = V(a), V(b)
+        d = b - a
+        cyl(p, max(rb, 0.0015), ra, d.length * 1.08, tuple((a + b) / 2), color, rot=rot_to(d), seg=seg)
+
+
+def spike(p, pos, d, r, h, color=R.trim, seg=4):
+    d = V(d).normalized()
+    return cone(p, r, h, tuple(V(pos) + d * (h / 2)), color, rot=rot_to(d), seg=seg)
+
+
+def tag(o, nm):
+    """Name a part (gear files merge every part, so names only help the Blender-side audits)."""
+    o.name = nm
+    return o
 
 
 def tri_count(scene=None):
