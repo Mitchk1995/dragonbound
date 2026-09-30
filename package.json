@@ -1,0 +1,49 @@
+{
+  "name": "dragonbound",
+  "productName": "Dragonbound",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Diablo-style combat, OSRS-length progression, dragons.",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev:web": "vite --port 5173",
+    "dev": "concurrently -k -n vite,electron \"vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build": "tsc --noEmit && vite build",
+    "start": "electron .",
+    "play": "vite build && electron .",
+    "dist": "npm run build && electron-builder --win portable",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.dragonbound.game",
+    "productName": "Dragonbound",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**"
+    ],
+    "win": {
+      "target": "portable"
+    }
+  },
+  "dependencies": {
+    "@fontsource/alegreya-sans": "^5.3.0",
+    "@fontsource/cinzel": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^44.5.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2",
+    "wait-on": "^9.5.1"
+  }
+}

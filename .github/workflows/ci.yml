@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # CI never launches the desktop app; skip the ~100MB Electron download.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npx vite build
+      - name: No mojibake or BOMs in sources
+        run: |
+          set +e
+          bad=$(LC_ALL=C grep -rlP '^\xEF\xBB\xBF' src tests electron tools index.html package.json --include='*.ts' --include='*.css' --include='*.py' --include='*.cjs' --include='*.html' --include='*.json')
+          moj=$(grep -rlE 'â€|â”|âˆ|Ã[©¨ª]' src tests electron tools --include='*.ts' --include='*.css' --include='*.py' --include='*.cjs')
+          if [ -n "$bad$moj" ]; then echo "BOM or mojibake found in:"; echo "$bad"; echo "$moj"; exit 1; fi
