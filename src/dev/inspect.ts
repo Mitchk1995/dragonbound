@@ -4,6 +4,7 @@ import { BASES, TIER_ORDER, TIERS, UNIQUES } from '../data/items';
 import { KEEP_STAGE, ZONES } from '../data/zones';
 import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
+import { startAction, type ActionKind } from '../ai/boss';
 import { Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
 import { BowDraw } from '../render/bowDraw';
 import { itemIconUrl } from '../render/icons3d';
@@ -101,6 +102,7 @@ export async function runInspect(g: Game, suites: string) {
     if (want('zones')) report.zones = await zonesSuite(g, shot);
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     if (want('effects')) await effectsSuite(g, shot);
+    if (want('boss')) await bossSuite(g, shot);
     if (want('ui')) await uiSuite(g, shot);
     if (want('models')) await modelsSuite(g, shot);
     if (want('anims')) await animsSuite(g, shot);
@@ -360,6 +362,60 @@ async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
   g.debug.hold = null;
 }
 
+// ─── Boss attacks ───────────────────────────────────────────────────────────
+
+/**
+ * Cinderwing's attacks, each triggered deterministically and captured at the telegraph and the
+ * hit: bite, breath (wind-up + fire cone), tail sweep, wing gust, and the phase-2 flight with
+ * meteor rain. The hero is invulnerable (god mode) and stands 6 units south in the arena.
+ */
+async function bossSuite(g: Game, shot: (n: string) => Promise<void>) {
+  g.travel('lair', true);
+  await frames(15);
+  const L = g.zone.layout;
+  const boss = g.zone.enemies.find((e) => e.def.behavior === 'boss')!;
+  const p = g.player;
+  const step = (secs: number) => {
+    for (let i = 0; i < Math.round(secs * 60); i++) g.update(1 / 60);
+  };
+  g.debug.hold = () => false;
+  g.debug.god = true;
+  g.camZoom = 1.35;
+  const reset = () => {
+    p.pos.set(L.boss!.x, 0, L.boss!.z + 6);
+    p.stop();
+    g.camPos.copy(p.pos);
+    boss.pos.set(L.boss!.x, 0, L.boss!.z);
+    boss.faceTo(p.x, p.z, true);
+    for (const t of g.zone.telegraphs) t.done = true;
+    g.zone.hazards = [];
+    step(0.05);
+  };
+  reset();
+  step(0.5); // engage
+  const b = boss.boss!;
+  const cases: [ActionKind, number[]][] = [
+    ['bite', [0.3, 0.6]], ['breath', [0.6, 1.3, 2.0]], ['tail', [0.5, 0.95]], ['gust', [0.5, 0.85]], ['flight', [1.5, 4, 6.5, 8.6]],
+  ];
+  let n = 1;
+  for (const [kind, times] of cases) {
+    reset();
+    b.action = null;
+    b.actionCd = 99;
+    if (kind === 'flight') b.phase = 2;
+    startAction(boss, b, kind, g);
+    let at = 0;
+    for (const time of times) {
+      step(time - at);
+      at = time;
+      await shot(`boss-${String(n++).padStart(2, '0')}-${kind}-${time}s`);
+    }
+    step(2);
+  }
+  g.debug.hold = null;
+  g.camZoom = 1;
+}
+
 // ─── Perf breakdown ─────────────────────────────────────────────────────────
 
 /**
@@ -586,6 +642,25 @@ function views(h: number, dist = 2.2): [string, THREE.Vector3][] {
   ];
 }
 
+/**
+ * Camera placement that fits a posed object whole: its bounding sphere, seen from `dir`, fills a
+ * studio cell (FOV 38°, cells ~0.9 aspect so the horizontal FOV is the tighter one).
+ */
+function fit(o: THREE.Object3D, dir: THREE.Vector3) {
+  o.updateMatrixWorld(true);
+  const sphere = new THREE.Box3().setFromObject(o).getBoundingSphere(new THREE.Sphere());
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(19)) * 0.88);
+  const dist = (sphere.radius / Math.sin(half)) * 1.04;
+  return { eye: sphere.center.clone().add(dir.clone().normalize().multiplyScalar(dist)), at: sphere.center.clone() };
+}
+
+const VIEW_DIRS: [string, THREE.Vector3][] = [
+  ['front', new THREE.Vector3(0, 0.35, 1)],
+  ['left', new THREE.Vector3(1, 0.35, 0)],
+  ['back', new THREE.Vector3(0, 0.35, -1)],
+  ['3/4 top', new THREE.Vector3(-0.7, 1.1, 0.7)],
+];
+
 function sizeOf(o: THREE.Object3D) {
   o.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(o);
@@ -605,10 +680,9 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
       const holder = new THREE.Group();
       holder.add(m.root);
       new Rig(m.root).update(0, newAnimState());
-      const { h } = sizeOf(holder);
-      for (const [v, eye] of views(h)) {
+      for (const [v, dir] of VIEW_DIRS) {
         const obj = v === 'front' ? holder : holder.clone();
-        cells.push({ label: `${name} · ${v}`, obj, eye, at: new THREE.Vector3(0, h * 0.45, 0) });
+        cells.push({ label: `${name} · ${v}`, obj, ...fit(holder, dir) });
         objs.push(obj);
       }
     }
@@ -733,12 +807,34 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
       const s = { ...newAnimState(), ...a };
       rig.update(0, s);
       for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, s);
-      const h = Math.max(1.2, m.height);
-      cells.push({ label: `${name} ${label}`, obj: holder, eye: new THREE.Vector3(h * 2.2, h * 0.9, h * 1.1), at: new THREE.Vector3(0, h * 0.45 + (a.fly ? h * 0.8 : 0), 0) });
+      cells.push({ label: `${name} ${label}`, obj: holder, ...fit(holder, new THREE.Vector3(1, 0.45, 0.5)) });
       objs.push(holder);
     }
     st.sheet(cells, 4, 2);
     await shot(`anim-${name}`);
+    st.clear(objs);
+  }
+  // Pets are cosmetic followers (Pet.follow): the whelp hovers, the golem walks.
+  const pets: [string, [string, Partial<AnimState>, number][]][] = [
+    ['whelp', [['hover', { fly: 0.35 }, 0.2], ['hover 0.6s', { fly: 0.35 }, 0.6], ['hover 1.1s', { fly: 0.35 }, 1.1], ['follow', { fly: 0.35, speed: 5 }, 0.3], ['follow 0.7s', { fly: 0.35, speed: 5 }, 0.7], ['follow fast', { fly: 0.35, speed: 10 }, 0.5]]],
+    ['golem', [['idle', {}, 0.5], ['idle 1.5s', {}, 1.5], ['walk', { speed: 3 }, 0.2], ['walk 0.45s', { speed: 3 }, 0.45], ['walk 0.7s', { speed: 3 }, 0.7], ['run', { speed: 8 }, 0.4]]],
+  ];
+  for (const [name, states] of pets) {
+    if (!hasModel(name)) continue;
+    const cells: Parameters<Studio['sheet']>[0] = [];
+    const objs: THREE.Object3D[] = [];
+    for (const [label, a, secs] of states) {
+      const m = makeModel(name);
+      const holder = new THREE.Group();
+      holder.add(m.root);
+      const rig = new Rig(m.root);
+      const st2 = { ...newAnimState(), ...a };
+      for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, st2);
+      cells.push({ label: `pet ${name} ${label}`, obj: holder, ...fit(holder, new THREE.Vector3(1, 0.45, 0.5)) });
+      objs.push(holder);
+    }
+    st.sheet(cells, 3, 2);
+    await shot(`anim-pet-${name}`);
     st.clear(objs);
   }
   document.body.classList.remove('inspect-clean');
