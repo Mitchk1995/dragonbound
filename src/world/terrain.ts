@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ZoneTheme } from '../data/zones';
-import { applyGround } from '../render/surface';
+import { applyGround, CAVE_TERRACE, GROUND_TIME } from '../render/surface';
 import { noiseTexture } from '../render/textures';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
 
@@ -90,9 +90,9 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         c.setHex(top[0]).lerp(c2.setHex(top[1]), noise(x * 0.09, z * 0.09));
       } else if (relief) c.copy(cliffC.setHex(cliffShades[0]).lerp(c2.setHex(cliffShades[1]), noise(x * 0.21 + 50, z * 0.21)));
       const bed = layout.fluid[i] !== Fluid.None && cell !== Cell.Ground;
-      // Under water the bed is dark silt/rock, never the paving or grass of the land around it.
-      if (bed) c.multiplyScalar(0.5);
-      const ch = bed ? 3 : mesaTop ? (theme.splat?.[theme.mesaTop!] ?? SPLAT[theme.mesaTop!] ?? 1) : relief ? 3 : (theme.splat?.[g] ?? SPLAT[g] ?? 0);
+      // Under water the bed is dark silt/rock; in the drowned city it is the old paving, sunk.
+      if (bed) c.multiplyScalar(theme.wall === 'ruin' ? 0.62 : 0.5);
+      const ch = bed ? (theme.wall === 'ruin' ? 2 : 3) : mesaTop ? (theme.splat?.[theme.mesaTop!] ?? SPLAT[theme.mesaTop!] ?? 1) : relief ? 3 : (theme.splat?.[g] ?? SPLAT[g] ?? 0);
       const elev = relief ? (layout.elev[i] || (cell === Cell.Wall ? CAVE_WALL_H : CLIFF_H)) : 0;
       const fluid = layout.fluid[i] !== Fluid.None;
       for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) {
@@ -224,12 +224,15 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       if (fullRelief(k)) {
         // Fully inside relief: rugged top (noise breaks up the flat mesa look).
         const top = raisedH[k] / raisedN[k];
-        y = top * (0.85 + noise(x * 0.35 + 9, z * 0.35) * 0.3) + (noise(x * 1.3, z * 1.3) - 0.5) * 0.5 + rise[k];
         if (theme.wallRise) {
-          // Cave rock climbs in terraces (ledges and short steep risers), so the walls behind the
-          // strata read as layered rock rather than one smooth slope.
-          const step = 1.25, t = y / step, f = t - Math.floor(t);
-          y = (Math.floor(t) + sstep(0.55, 1, f)) * step;
+          // Cave rock: one continuous mass climbing in broad terraces (wide ledges, short steep
+          // risers) whose edges wander slowly, so the walls read as layered strata in a single
+          // body of rock. Only slow noise: fine per-vertex noise made the tops lumpy.
+          y = top * (0.9 + noise(x * 0.18 + 9, z * 0.18) * 0.2) + (noise(x * 0.16 + 20, z * 0.16) - 0.5) * 3.0 + (noise(x * 0.4 + 40, z * 0.4) - 0.5) * 1.2 + rise[k];
+          const step = CAVE_TERRACE, t = y / step, f = t - Math.floor(t);
+          y = (Math.floor(t) + sstep(0.66, 0.98, f)) * step + (noise(x * 0.9 + 3, z * 0.9) - 0.5) * 0.06;
+        } else {
+          y = top * (0.85 + noise(x * 0.35 + 9, z * 0.35) * 0.3) + (noise(x * 1.3, z * 1.3) - 0.5) * 0.5 + rise[k];
         }
       } else if (count[k] && fluidN[k] === count[k]) {
         // Under water: a long shallow shelf that deepens toward the middle, with noise shoals, so
@@ -291,14 +294,15 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   geo.setAttribute('aSplat', new THREE.BufferAttribute(splat, 4));
   geo.setIndex([...flat, ...rough]);
   geo.computeVertexNormals();
+  const wet = layout.fluid.some((f) => f === Fluid.Water);
   const make = (index: number[], name: string) => {
     const g = new THREE.BufferGeometry();
     for (const k of ['position', 'normal', 'color', 'aSplat']) g.setAttribute(k, geo.getAttribute(k));
     g.setIndex(index);
-    // Cave rock is faceted (flat-shaded), so the walls read as broken rock with edges rather than
-    // one soft smear; open-air ground and cliffs stay smooth.
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: name === 'relief' && !!theme.wallRise });
-    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange);
+    // Smooth-shaded everywhere: cave rock gets its edges from painted strata and crevices
+    // (surface.ts), not from per-triangle facets (which read as a heap of separate lumps).
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange, !!theme.wallRise, wet ? WATER_Y : null, theme.water?.[1]);
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
     // Towering cave walls would throw the whole floor into sun shadow (there is no sun
@@ -355,7 +359,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     const a = hgt[vi(x0, z0)], b = hgt[vi(x0 + 1, z0)], cc = hgt[vi(x0, z0 + 1)], d = hgt[vi(x0 + 1, z0 + 1)];
     return a + (b - a) * fx + (cc - a) * fz + (a - b - cc + d) * fx * fz;
   };
-  return { meshes, relief, heightAt, tick: (t) => ticks.forEach((f) => f(t)) };
+  return { meshes, relief, heightAt, tick: (t) => { GROUND_TIME.value = t; ticks.forEach((f) => f(t)); } };
 }
 
 /**
@@ -435,21 +439,26 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
              vec3 crust = vec3(0.06, 0.045, 0.042) * (0.75 + cells.z * 0.5);
              crust = mix(crust, vec3(0.22, 0.05, 0.015), glowNear * heat * 0.7);
              diffuseColor.rgb = mix(crust, vec3(0.3, 0.08, 0.02), max(seam, molten));`
-          : `float deep = smoothstep(0.02, 0.62, vDepth + (ripple - 0.5) * 0.12);
+          : `// Depth colour: clear turquoise shallows (the bed shows through, see the ground's wet
+             // patch) deepening to opaque blue-green.
+             float deep = smoothstep(0.03, 0.72, vDepth + (ripple - 0.5) * 0.1);
              diffuseColor.rgb = mix(uShallow, uDeep, deep);
-             // Soft caustics dance on the shallow bed.
-             float ca = fluidN(fp * 0.31 + vec2(uTime * 0.035, 0.0)), cb = fluidN(fp * 0.27 + vec2(0.37, 0.61) - vec2(0.0, uTime * 0.03));
-             float caus = pow(clamp(1.0 - abs(ca - cb) * 3.2, 0.0, 1.0), 5.0);
-             diffuseColor.rgb += vec3(0.55, 0.7, 0.62) * caus * (1.0 - deep) * 0.1;
-             float foam = smoothstep(0.08, 0.0, vDepth + (n2 - 0.5) * 0.06) * (0.55 + 0.45 * n1);
-             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.88, 0.9), foam * 0.45);
-             diffuseColor.a = mix(0.7, 0.95, deep) + foam * 0.15;`}`,
+             // Foam: a broken rim where the bank meets the water, and a second line that laps
+             // in and out a little way offshore.
+             float n3 = fluidN(fp * 0.61 + vec2(uTime * 0.05, -uTime * 0.04));
+             float rim = (1.0 - smoothstep(0.0, 0.07, vDepth + (n2 - 0.5) * 0.05)) * smoothstep(0.28, 0.5, n3 + 0.12);
+             float lap = smoothstep(0.62, 0.92, 0.5 + 0.5 * sin(uTime * 0.8 - vDepth * 30.0 + n1 * 5.0));
+             float band = lap * (1.0 - smoothstep(0.06, 0.2, vDepth)) * smoothstep(0.4, 0.62, n3);
+             float foam = max(rim, band * 0.65);
+             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.94, 0.95), foam * 0.85);
+             diffuseColor.a = mix(0.38, 0.94, smoothstep(0.0, 0.6, vDepth)) + foam * 0.4;`}`,
       )
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
         {
-          vec2 g = fluidGrad(q1, 0.01) * ${lava ? '0.0' : '0.005'} + fluidGrad(q2, 0.01) * ${lava ? '0.002' : '0.0045'};
+          // Water: long swells, a cross-chop and fine wind ripples; lava: a slow heave.
+          vec2 g = fluidGrad(q1, 0.01) * ${lava ? '0.0' : '0.007'} + fluidGrad(q2, 0.01) * ${lava ? '0.002' : '0.005'}${lava ? '' : ' + fluidGrad(fp * 0.7 + vec2(uTime * 0.06, uTime * 0.045), 0.01) * 0.0025'};
           vec3 gv = (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz;
           normal = normalize(normal - gv + dot(gv, normal) * normal);
         }`,
@@ -468,14 +477,21 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
              float ndv = clamp(dot(vdir, normal), 0.0, 1.0);
              vec3 rw = (vec4(reflect(-vdir, normal), 0.0) * viewMatrix).xyz;
              vec3 sky = mix(uSkyLow, uSkyHigh, smoothstep(-0.1, 0.9, rw.y) * (0.75 + 0.25 * smoothstep(0.3, -0.6, rw.z)));
-             float fres = 0.12 + 0.88 * pow(1.0 - ndv, 4.0);
-             totalEmissiveRadiance += sky * fres * 0.9;
-             // Glints: only on ripple crests, and only where a crest tilts toward a bright sky patch.
-             float glint = pow(max(dot(normalize(rw), normalize(vec3(0.5, 0.72, -0.48))), 0.0), 900.0) * smoothstep(0.8, 0.95, n2);
-             totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * glint * 0.5;`}`,
+             // Drifting cloud shadows in the reflection keep open water from reading as one flat sheet.
+             float cloud = smoothstep(0.35, 0.75, fluidN(rw.xz / max(0.25, rw.y) * 0.05 + fp * 0.012 + vec2(uTime * 0.004, 0.0)));
+             sky *= 0.8 + 0.35 * cloud;
+             float fres = 0.1 + 0.9 * pow(1.0 - ndv, 4.0);
+             totalEmissiveRadiance += sky * fres * (0.55 + 0.45 * smoothstep(0.0, 0.5, vDepth));
+             // Sun glints: a sun low ahead of the camera, reflected by the ripple normals, so a
+             // path of sparkles flickers on the crests (HDR: they bloom).
+             vec3 sunDir = normalize(vec3(0.25, 0.5, -0.83));
+             float spec = pow(max(dot(normalize(rw), sunDir), 0.0), 400.0);
+             // Two samples at unrelated scales and angles multiplied, so the sparkles never line up on the noise lattice.
+             float twinkle = smoothstep(0.42, 0.62, fluidN(fp * 1.13 + vec2(uTime * 0.11, -uTime * 0.07)) * fluidN(mat2(0.8, 0.6, -0.6, 0.8) * fp * 1.71 - vec2(uTime * 0.05, uTime * 0.09)));
+             totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * (spec * twinkle * 2.2 + pow(max(dot(normalize(rw), sunDir), 0.0), 18.0) * 0.06);`}`,
       );
   };
-  mat.customProgramCacheKey = () => (lava ? 'fluid2-lava' : 'fluid2-water');
+  mat.customProgramCacheKey = () => (lava ? 'fluid3-lava' : 'fluid3-water');
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = lava ? 'lava' : 'water';
   mesh.receiveShadow = !lava;

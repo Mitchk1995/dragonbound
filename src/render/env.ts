@@ -83,3 +83,42 @@ export function applyFinish(mat: THREE.Material, finish: Finish) {
   mat.envMap = studioEnv();
   mat.needsUpdate = true;
 }
+
+// ─── Zone lighting ──────────────────────────────────────────────────────────
+
+/** The theme fields zone lighting reads (a ZoneTheme satisfies it). */
+export interface LightingTheme {
+  hemi: [number, number, number];
+  sun: [number, number];
+  wallRise?: number;
+}
+
+export interface ZoneLighting {
+  key: THREE.Color;
+  keyIntensity: number;
+  hemiIntensity: number;
+  fill: THREE.Color;
+  fillIntensity: number;
+}
+
+const WARM = new THREE.Color(0xffcf9a), COOL = new THREE.Color(0x8fb0ff);
+const warmth = (c: THREE.Color) => c.r - c.b;
+
+/**
+ * The lights for a zone, from its theme: a slightly warmer key (sun), a little less flat
+ * hemisphere ambient, and a cool fill from the side away from the sun (sky colour pushed toward
+ * blue; underground it stays close to the cave's own warm bounce). Warm lit sides against cool
+ * shaded sides carve form without darkening the scene: the total light stays about the same.
+ */
+export function zoneLighting(t: LightingTheme): ZoneLighting {
+  const under = !!t.wallRise;
+  const sun = new THREE.Color(t.sun[0]);
+  return {
+    // Only nudged if the sun is cooler than WARM (the lair's is warmer already).
+    key: warmth(sun) < warmth(WARM) ? sun.lerp(WARM, 0.2) : sun,
+    keyIntensity: t.sun[1] * 1.05,
+    hemiIntensity: t.hemi[2] * 0.8,
+    fill: new THREE.Color(t.hemi[0]).lerp(COOL, under ? 0.15 : 0.4),
+    fillIntensity: t.sun[1] * (under ? 0.2 : 0.32),
+  };
+}

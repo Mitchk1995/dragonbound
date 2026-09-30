@@ -187,11 +187,6 @@ function grassClump() {
   return clumpGeo;
 }
 
-const sstep = (a: number, b: number, v: number) => {
-  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
 /** World instancing tile size in cells (see inst()). */
 const CHUNK = 24;
 
@@ -375,7 +370,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     while (y < H) {
       const th = 0.42 + rng() * 0.4, inset = layer * step + rng() * 0.1;
       p.set(x + 0.5 - nx * inset + (rng() - 0.5) * 0.14, y, z + 0.5 - nz * inset + (rng() - 0.5) * 0.14);
-      q.setFromEuler(e.set((rng() - 0.5) * 0.06, face + (rng() - 0.5) * 0.3, (rng() - 0.5) * 0.06));
+      q.setFromEuler(e.set((rng() - 0.5) * 0.04, face + (rng() - 0.5) * 0.12, (rng() - 0.5) * 0.04));
       strata.push(m.compose(p, q, s.set(1.2 + rng() * 0.45 - layer * 0.04, th, 1.25)).clone());
       // Bands follow height (with a slow wander), so neighbouring stacks line up into strata.
       const band = Math.floor((y + 0.2 + strataNoise(x * 0.05 + 3, z * 0.05) * 0.9) / 0.6);
@@ -384,65 +379,6 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       layer++;
     }
   };
-  // Behind the strata stacks the cave rock climbs on in blocky ledges: one slab per rock cell,
-  // its top snapped to a 0.5 grid just above the terrain so neighbouring slabs line up into
-  // stepped strata, with the odd dark crevice; they darken as they climb into the dark.
-  // Slab tops sit on the terrain surface, so they never rise above the rock they dress.
-  const ledges: THREE.Matrix4[] = [], ledgeCols: THREE.Color[] = [];
-  if (theme.wallRise) {
-    const ring = new Uint8Array(w * h).fill(255);
-    const queue: number[] = [];
-    for (let i = 0; i < w * h; i++) if (layout.cells[i] !== Cell.Wall) {
-      ring[i] = 0;
-      queue.push(i);
-    }
-    for (let qi = 0; qi < queue.length; qi++) {
-      const i = queue[qi], x = i % w, z = (i - x) / w;
-      if (ring[i] >= 7) continue;
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        const xx = x + dx, zz = z + dz, j = zz * w + xx;
-        if (xx < 0 || zz < 0 || xx >= w || zz >= h || ring[j] <= ring[i] + 1) continue;
-        ring[j] = ring[i] + 1;
-        queue.push(j);
-      }
-    }
-    const dAt = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= h ? 255 : ring[z * w + x]);
-    for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
-      const d = ring[z * w + x];
-      if (d < 2 || d > 6) continue;
-      const hs = [heightAt(x, z), heightAt(x + 1, z), heightAt(x + 1, z + 1), heightAt(x, z + 1), heightAt(x + 0.5, z + 0.5)];
-      const hi = Math.max(...hs), lo = Math.min(...hs);
-      // Face toward the open floor (down the distance field).
-      let nx = 0, nz = 0;
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        const dd = d - Math.min(dAt(x + dx, z + dz), 20);
-        nx += dx * dd;
-        nz += dz * dd;
-      }
-      const face = Math.atan2(nx, nz) + (rng() - 0.5) * 0.25;
-      const top = Math.ceil((hi + 0.05) / 0.5) * 0.5 - (rng() < 0.3 ? 0.25 : 0);
-      if (rng() < 0.07) {
-        // A dark cleft between the ledges.
-        p.set(x + 0.5, Math.max(lo - 0.3, top - 1.6), z + 0.5);
-        q.setFromEuler(e.set(0, face, 0));
-        crevices.push(m.compose(p, q, s.set(0.9, Math.max(0.3, top - 0.5 - p.y), 0.9)).clone());
-        continue;
-      }
-      const fade = 1 - 0.62 * sstep(2.5, 11, top);
-      const band = Math.floor(top / 0.5 + strataNoise(x * 0.07 + 9, z * 0.07) * 1.5);
-      // Tall risers split into two courses, the upper set back a little.
-      const base = Math.max(lo - 0.3, top - 2.4), span = top - base;
-      const courses = span > 1.3 ? 2 : 1;
-      for (let c = 0; c < courses; c++) {
-        const y0 = base + (span * c) / courses, th = span / courses + 0.08;
-        const inset = c === courses - 1 ? 0.12 : 0;
-        p.set(x + 0.5 - Math.sin(face) * inset + (rng() - 0.5) * 0.12, y0, z + 0.5 - Math.cos(face) * inset + (rng() - 0.5) * 0.12);
-        q.setFromEuler(e.set((rng() - 0.5) * 0.05, face, (rng() - 0.5) * 0.05));
-        ledges.push(m.compose(p, q, s.set(1.3 + rng() * 0.35, th / 0.9, 1.35 + rng() * 0.2)).clone());
-        ledgeCols.push(strataPal[(((band - courses + 1 + c) % 4) + 4) % 4].clone().offsetHSL(0, 0, (rng() - 0.5) * 0.04).multiplyScalar(fade));
-      }
-    }
-  }
   // Loose rock on cave and caldera floors: rubble heaped at the foot of the walls, pebbles between.
   const debris: THREE.Matrix4[] = [], debrisCols: THREE.Color[] = [];
   const debrisBase = new THREE.Color(theme.cliff?.[0] ?? 0x6e5c4a);
@@ -577,8 +513,6 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   inst(rockBlock(32, 1, 1, 1), half(strata, 1), half(strataCols, 1), 0, true, 'rock');
   inst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), crevices, null, 0x120e0b, true, undefined, false);
   inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false);
-  inst(rockBlock(34, 1, 1, 1), half(ledges, 0), half(ledgeCols, 0), 0, true, 'rock', false);
-  inst(rockBlock(35, 1, 1, 1), half(ledges, 1), half(ledgeCols, 1), 0, true, 'rock', false);
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
   const masonry = mergeGeometries([
     new THREE.BoxGeometry(1, 0.45, 1).translate(0, -0.275, 0),

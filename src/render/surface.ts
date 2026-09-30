@@ -536,6 +536,25 @@ function floorVariation(kind: 'lair' | 'mine' | null) {
   }`;
 }
 
+/** Height of one cave-rock terrace (terrain.ts builds them; the riser shading below keys to it). */
+export const CAVE_TERRACE = 1.5;
+
+/** Cave walls' painted rock (inside the strata block: needs onRock, vSurfNrm, vSurfPos, uMixTex). */
+const CAVE_ROCK = `
+              // Crevices: long dark vertical cracks down the steep faces (noise stretched along Y,
+              // on the face's own horizontal axis), so the mass reads as fractured rock.
+              vec3 cn = normalize(vSurfNrm);
+              float steepF = smoothstep(0.3, 0.65, 1.0 - abs(cn.y));
+              float hx = abs(cn.x) > abs(cn.z) ? vSurfPos.z : vSurfPos.x;
+              float cv = texture2D(uMixTex, vec2(hx * 0.23, vSurfPos.y * 0.035 + 0.5)).r;
+              float crack = (1.0 - smoothstep(0.0, 0.022, abs(cv - 0.5))) * steepF * onRock;
+              diffuseColor.rgb *= 1.0 - crack * 0.6;
+              // Risers: dark in the crease at their foot, catching light on the lip at their top,
+              // so each terrace reads as a slab of rock standing on the one below.
+              float tf = fract(vSurfPos.y / ${CAVE_TERRACE.toFixed(2)});
+              diffuseColor.rgb *= mix(1.0, mix(0.5, 1.12, smoothstep(0.02, 0.9, tf)), steepF * onRock);
+`;
+
 /**
  * Ground: a four-channel painted atlas (dirt, grass, flagstone, smooth floor rock) projected
  * top-down in world space and blended per vertex by the `aSplat` attribute. Colour only (no
@@ -543,9 +562,21 @@ function floorVariation(kind: 'lair' | 'mine' | null) {
  * blended by a low-frequency noise mask, so no 4-unit repeat is visible (small flagstones give way
  * to big slabs, and back). Steep faces take the painted rock strata (V = up, so bands stay level).
  */
-/** `cliff`: colour steep faces blend to (slope-based texturing: mesa tops keep their grass). */
-export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null, topRange: [number, number] = [0.8, 3.4]) {
+/** Shared clock for animated ground (the refracted, caustic-lit bed under water); terrain ticks it. */
+export const GROUND_TIME = { value: 0 };
+
+/**
+ * `cliff`: colour steep faces blend to (slope-based texturing: mesa tops keep their grass).
+ * `cave`: towering cave walls (terraced rock mass: crevices, lit risers, chiselled faces).
+ * `waterY`: the water surface height when the zone has water: the bed below it wobbles as if
+ * seen through moving water, takes dancing caustics and fades to the water's colour with depth.
+ */
+export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null, topRange: [number, number] = [0.8, 3.4], cave = false, waterY: number | null = null, waterTint = 0x2e6a70) {
+  const wet = waterY !== null;
   const uniforms = {
+    uTime: GROUND_TIME,
+    uWaterY: { value: waterY ?? 0 },
+    uWaterTint: { value: new THREE.Color(waterTint) },
     uLava: { value: lava },
     uTopShade: { value: topShade },
     uTopRange: { value: new THREE.Vector2(...topRange) },
@@ -561,7 +592,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
     uSurfBump: { value: 0 },
   };
   addPatch(mat, {
-    key: `ground3${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}${cliff !== null ? ':cliff' : ''}`,
+    key: `ground3${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}${cliff !== null ? ':cliff' : ''}${cave ? ':cave' : ''}${wet ? ':wet' : ''}`,
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
       commonInject(
@@ -575,6 +606,9 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
         uniform float uSurfBump;
         uniform float uLava;
         uniform float uPaintAmt;
+        uniform float uTime;
+        uniform float uWaterY;
+        uniform vec3 uWaterTint;
         varying vec4 vSplat;
         // 37° rotation (column-major) for the second, larger-scale sample.
         const mat2 GROT = mat2(0.7986, 0.6018, -0.6018, 0.7986);
@@ -586,6 +620,9 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           w /= (w.x + w.y + w.z);
           // Top: the splatted atlas at two scales, blended by a slow noise mask.
           vec2 p = vSurfPos.xz;
+          ${wet ? `// Under water the bed is seen through moving ripples: its pattern wobbles.
+          float sub = smoothstep(uWaterY + 0.02, uWaterY - 0.12, vSurfPos.y);
+          p += (vec2(texture2D(uMixTex, p * 0.21 + vec2(uTime * 0.03, 0.0)).r, texture2D(uMixTex, p * 0.17 + vec2(0.5, uTime * 0.025)).r) - 0.5) * 0.3 * sub;` : ''}
           vec4 t1 = texture2D(uGroundTex, p * uSurfScale);
           vec4 t2 = texture2D(uGroundTex, GROT * p * (uSurfScale * GSCALE2) + vec2(0.31, 0.57));
           float m = smoothstep(0.36, 0.64, texture2D(uMixTex, p * 0.019 + vec2(0.13, 0.71)).r);
@@ -613,6 +650,32 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
         { float paintV = surfH; diffuseColor.rgb *= ${PAINT_TINT}; }
         ${floorVariation(lava > 0 ? 'lair' : topShade < 1 ? 'mine' : null)}`,
       );
+      if (wet) {
+        // The drowned bed: absorbed toward the water colour with depth, lit by caustics that
+        // dance across it (brightest in the shallows).
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          {
+            float d = uWaterY - vSurfPos.y;
+            float sub = smoothstep(0.02, 0.14, d);
+            vec2 cp = vSurfPos.xz;
+            // Two drifting ridged layers multiplied: a fine web of light, like sun through ripples.
+            float ca = texture2D(uMixTex, cp * 0.62 + vec2(uTime * 0.03, uTime * 0.011)).r;
+            float cb = texture2D(uMixTex, cp * 0.81 + vec2(0.37, 0.61) - vec2(uTime * 0.012, uTime * 0.027)).r;
+            float caus = pow((1.0 - abs(ca * 2.0 - 1.0)) * (1.0 - abs(cb * 2.0 - 1.0)), 5.0);
+            float shallow = 1.0 - smoothstep(0.05, 0.4, d);
+            totalEmissiveRadiance += vec3(0.7, 0.95, 0.88) * caus * shallow * sub * 0.3;
+          }`,
+        ).replace(
+          '#include <roughnessmap_fragment>',
+          `#include <roughnessmap_fragment>
+          {
+            float d = uWaterY - vSurfPos.y;
+            diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5 + uWaterTint * 0.35, smoothstep(0.02, 0.5, d));
+          }`,
+        );
+      }
       if (cliff !== null) {
         // Steep faces take the cliff rock colour whatever the vertex colour (tops stay grassy).
         shader.fragmentShader = shader.fragmentShader
@@ -623,7 +686,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           );
       }
       if (topShade < 1) {
-        // Cave rock: painted strata (level bands of rock, each its own tone, a dark crease under
+        // Cave and caldera rock: painted strata (level bands of rock, each its own tone, a dark crease under
         // each band) that wander gently, so the faceted rock reads as layered stone rather than
         // one flat-shaded sheet; the higher the rock, the deeper in shadow (walls rise into darkness).
         shader.fragmentShader = shader.fragmentShader
@@ -638,7 +701,24 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
               float tone = fract(sin(id * 12.9898 + 4.1) * 43758.5453) - 0.5;
               float crease = 1.0 - smoothstep(0.0, 0.14, fb);
               diffuseColor.rgb *= 1.0 + onRock * (tone * 0.22 + fb * 0.08 - crease * 0.34);
-              diffuseColor.rgb *= mix(1.0, uTopShade, smoothstep(uTopRange.x, uTopRange.y, vSurfPos.y));
+              ${cave ? CAVE_ROCK : ''}
+              // Rock falls away into darkness as it climbs (eased in caves, so the first ledges stay readable).
+              float climb = smoothstep(uTopRange.x, uTopRange.y, vSurfPos.y);
+              diffuseColor.rgb *= mix(1.0, uTopShade, ${cave ? 'sqrt(climb)' : 'climb'});
+            }`,
+          );
+      }
+      if (topShade < 1 && cave) {
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            '#include <normal_fragment_maps>',
+            `#include <normal_fragment_maps>
+            {
+              // Chiselled risers, calm tops: steep rock takes its flat face normal (hard-edged
+              // facets), the ledge tops keep the smooth normal, so the mass reads as cut strata.
+              vec3 fn = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+              float st = smoothstep(0.35, 0.7, 1.0 - abs(normalize(vSurfNrm).y)) * smoothstep(0.5, 1.1, vSurfPos.y);
+              normal = normalize(mix(normal, fn, st * 0.85));
             }`,
           );
       }

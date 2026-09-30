@@ -17,6 +17,7 @@ import { Particles } from './fx/particles';
 import { Sfx } from './fx/sfx';
 import { Rig, newAnimState } from './render/anim';
 import { PAL } from './render/kit';
+import { zoneLighting } from './render/env';
 import { makeModel } from './render/registry';
 import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
 import { Combat } from './systems/combat';
@@ -42,6 +43,11 @@ export class Game {
   readonly camera = new THREE.PerspectiveCamera(42, 1, 0.5, 400);
   readonly sun = new THREE.DirectionalLight(0xffe2b8, 2.6);
   readonly hemi = new THREE.HemisphereLight(0xb8c8e8, 0x5a4636, 1.25);
+  /**
+   * Cool fill from the side opposite the sun (no shadows): shadowed sides pick up sky colour
+   * instead of going flat, so forms read warm-lit / cool-shaded like a painting.
+   */
+  readonly fill = new THREE.DirectionalLight(0x9ab4ff, 0.5);
   readonly particles = new Particles(2500, false);
   readonly glow = new Particles(3000, true);
   readonly sfx = new Sfx();
@@ -124,7 +130,8 @@ export class Game {
     sc.far = 90;
     this.sun.shadow.bias = -0.0005;
     this.sun.shadow.normalBias = 0.04;
-    this.scene.add(this.sun, this.sun.target, this.particles.mesh, this.glow.mesh, this.player.obj);
+    this.fill.target = this.sun.target;
+    this.scene.add(this.sun, this.sun.target, this.fill, this.particles.mesh, this.glow.mesh, this.player.obj);
     this.player.bind(this);
 
     this.text = new WorldText(document.getElementById('world-ui')!, this);
@@ -254,8 +261,12 @@ export class Game {
     this.hemi.color.setHex(t.hemi[0]);
     this.hemi.groundColor.setHex(t.hemi[1]);
     this.hemi.intensity = t.hemi[2];
-    this.sun.color.setHex(t.sun[0]);
-    this.sun.intensity = t.sun[1];
+    const lit = zoneLighting(t);
+    this.sun.color.copy(lit.key);
+    this.sun.intensity = lit.keyIntensity;
+    this.hemi.intensity = lit.hemiIntensity;
+    this.fill.color.copy(lit.fill);
+    this.fill.intensity = lit.fillIntensity;
     this.renderer.toneMappingExposure = t.exposure;
     this.hovered = null;
     this.hoveredItem = null;
@@ -491,6 +502,7 @@ export class Game {
     OCCLUDE.uOccCam.value.copy(this.camera.position);
     this.sun.position.set(p.x + 14, 28, p.z + 10);
     this.sun.target.position.set(p.x, 0, p.z);
+    this.fill.position.set(p.x - 18, 14, p.z - 6);
   }
 
   private buildTitleDragon() {
@@ -516,6 +528,7 @@ export class Game {
       this.camera.position.set(p.x + off, 2.2, p.z + 5.2);
       this.camera.lookAt(p.x + off, 1.15, p.z);
       this.sun.position.set(p.x + 6, 14, p.z + 10);
+      this.fill.position.set(p.x - 8, 6, p.z - 2);
       this.sun.target.position.set(p.x, 0, p.z);
       OCCLUDE.uOccOn.value = 0;
       for (const f of this.zone.view.followers) f.position.set(p.x, 0, p.z);
@@ -534,6 +547,7 @@ export class Game {
     fog.far = R * 2.6;
     OCCLUDE.uOccOn.value = 0;
     this.sun.position.set(cx + 20, 40, cz + 10);
+    this.fill.position.set(cx - 24, 20, cz - 8);
     this.sun.target.position.set(cx, 0, cz);
     const d = this.titleDragon;
     if (d) {

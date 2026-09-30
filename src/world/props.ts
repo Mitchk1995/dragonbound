@@ -5,7 +5,7 @@ import { hasModel, makeModel } from '../render/registry';
 import { applyFinish, studioEnv } from '../render/env';
 import { applyPaint, type PaintKind } from '../render/paint';
 import { chamferBox, hash01, octagon, prism, rockBlock, taper, wedge } from '../render/blocks';
-import { buildPortalFx } from './portalFx';
+import { makePortal, type PortalSpec } from './portalFx';
 
 export interface Prop {
   obj: THREE.Group;
@@ -275,14 +275,18 @@ function dais(k: ModelKit, g: Obj, size: number, rune: number | null, seed: numb
   return top;
 }
 
-/** Portal platform. `color` null = dormant (dark runes, no portal). */
-function portal(k: ModelKit, g: THREE.Group, color: number | null): Prop {
-  const top = dais(k, g, 3.0, color, 5);
-  if (color === null) return { obj: g };
-  const fx = buildPortalFx(color, top, 0.82, 3.2);
-  g.add(fx.obj);
-  const l = light(g, color, 3.5, 6, 1.4);
-  return { obj: g, light: l, tick: (t) => { fx.tick(t); l.intensity = 3.2 + Math.sin(t * 2.2) * 0.6; } };
+/**
+ * Portal platform projecting the portal window and its title (src/world/portalFx.ts). `arg` is a
+ * PortalSpec (destination, name, colour) or just a colour; a null colour = sealed/dormant.
+ */
+function portal(k: ModelKit, g: THREE.Group, arg: PortalSpec | number | null): Prop {
+  const spec: PortalSpec = arg !== null && typeof arg === 'object' ? arg : { color: arg };
+  const top = dais(k, g, 3.0, spec.color, 5);
+  const fx = makePortal(spec, top);
+  if (fx) g.add(fx.obj);
+  if (spec.color === null) return { obj: g, tick: fx?.tick };
+  const l = light(g, spec.color, 3.5, 6, 1.6);
+  return { obj: g, light: l, tick: (t) => { fx?.tick(t); l.intensity = 3.2 + Math.sin(t * 2.2) * 0.6; } };
 }
 
 /**
