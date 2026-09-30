@@ -136,11 +136,13 @@ EMBROIDERY = 0x2A0A14    # near-black inlay in the back sigil
 
 
 # Hood rows (head space, y up from the neck): (y, half width, half depth, z offset, half-angle of the front
-# opening in degrees). A wide mantle over the shoulders, the neck, round the face, over the crown, and a peak that
-# leans back; the opening is a V under the chin, widest round the face and closes toward the peak.
-HOOD_ROWS = ((-0.2, 0.52, 0.37, -0.02, 9), (-0.05, 0.36, 0.32, -0.02, 18), (0.1, 0.29, 0.3, 0.0, 44),
-             (0.27, 0.28, 0.29, -0.02, 42), (0.42, 0.21, 0.24, -0.07, 30), (0.54, 0.11, 0.14, -0.15, 16),
-             (0.63, 0.0, 0.0, -0.25, 4))
+# opening in degrees). A monk's cowl: a wide mantle over the shoulders, the neck, round the face, then the upper
+# rows move forward so the hood drapes over the brow; the opening is a V under the chin, widest round the face and
+# closing in a pointed arch well in front of the face (shadowing it), and the peak falls forward over the arch.
+HOOD_ROWS = ((-0.2, 0.52, 0.37, -0.02, 9), (-0.05, 0.36, 0.32, -0.01, 18), (0.1, 0.3, 0.31, 0.02, 42),
+             (0.26, 0.29, 0.31, 0.05, 40), (0.38, 0.27, 0.3, 0.08, 28), (0.48, 0.23, 0.28, 0.1, 12),
+             (0.56, 0.17, 0.24, 0.12, 0), (0.61, 0.09, 0.15, 0.17, 0), (0.6, 0.0, 0.0, 0.26, 0))
+HOOD_ARCH = 5 / 8     # v of the last row with an opening (the lip stops there)
 
 
 def hood_fn(u, v):
@@ -175,15 +177,16 @@ def cultist():
     box(body, (0.12, 0.12, 0.03), (0, 1.15, 0.262), 'gold', rot=(0, 0, PI / 4), bevel=0.01)          # amulet setting
     facet_gem(body, 0.07, (0, 1.15, 0.285), 'fire', emissive='fire', strength=5)                     # amulet
     head = pivot(body, 'head', (0, 1.42, 0))
-    # Hood: one continuous cloth shell (hood_fn) from a mantle over the shoulders up round the head to a peak that
-    # leans back, open at the front: the opening narrows to a V under the chin and widens round the face. A lighter
-    # lip follows the opening's edges, the face is a dark void inside with the glowing eyes set back in it.
-    surf(head, hood_fn, 16, 8, 0.035, 'robeDark', inside=(0, 0.15, -0.02), bevel=0.01)
+    # Hood: one continuous cloth shell (hood_fn), a monk's cowl from a mantle over the shoulders up round the head,
+    # draped forward over the brow with its peak falling forward; open at the front: the opening narrows to a V
+    # under the chin, widens round the face and closes in an arch well in front of it. A lighter lip follows the
+    # opening's edges, the face is a dark void deep inside with the glowing eyes set back in it.
+    surf(head, hood_fn, 16, 16, 0.035, 'robeDark', inside=(0, 0.15, -0.02), bevel=0.01)
     for u0, u1 in ((0.0, 0.045), (0.955, 1.0)):
-        surf(head, grow(sub(hood_fn, u0, u1, 0.0, 0.9), 0.004, (0, 0.15, -0.02)), 1, 7, 0.03, HOOD_EDGE, inside=(0, 0.15, -0.02))
-    box(head, (0.34, 0.42, 0.34), (0, 0.2, -0.04), 'black', taper=(0.6, 1), bevel=0.03)                 # face shadow
+        surf(head, grow(sub(hood_fn, u0, u1, 0.0, HOOD_ARCH), 0.004, (0, 0.15, -0.02)), 1, 10, 0.03, HOOD_EDGE, inside=(0, 0.15, -0.02))
+    box(head, (0.4, 0.46, 0.3), (0, 0.2, 0.03), 'black', taper=(0.7, 1), bevel=0.03)                   # face shadow
     for s in (-1, 1):
-        box(head, (0.07, 0.045, 0.02), (s * 0.07, 0.17, 0.14), 'fire', emissive='fire', strength=6, bevel=0)
+        box(head, (0.07, 0.045, 0.02), (s * 0.07, 0.17, 0.185), 'fire', emissive='fire', strength=6, bevel=0)
     for name, x in (('armL', 0.4), ('armR', -0.4)):
         a = pivot(body, name, (x, 1.32, 0))
         box(a, (0.24, 0.62, 0.28), (0, -0.3, 0), 'robe', taper=(1.2, 1.2), bevel=0.04)

@@ -441,11 +441,9 @@ def closeup(vid, file_name, pose='idle', views=(dict(yaw=0, pitch=8), dict(yaw=4
 
 
 # ═══ P: plate (bronze, iron, steel) ══════════════════════════════════════════
-# OSRS-style plate in modular blocks (gear.py plate kit): a broad chest block with a raised breastplate,
-# stepped lames, belt and box tassets; blocky pauldron caps with lames, rerebraces and couters down the upper
-# arms; a cube-over-cube full
-# helm whose eye slit is the gap between brow band and face plates; box gauntlets and sabatons. Trim is a
-# lighter tint of the same metal (tier palette).
+# OSRS-style plate in a few bold blocks (gear.py plate kit), like a toy knight readable at ~100px: a chest block
+# over a waist block, belt, gorget and single-slab tassets; block pauldron caps and plain rerebraces; the cube-over-
+# cube full helm with a T visor; three-block gauntlets and sabatons. No lames, ridges, rivets or trim bands.
 
 def P_gloves(S):
     for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
@@ -461,17 +459,11 @@ VARIANTS['p'] = {'name': 'Plate', 'body_plate': body_plate, 'helm_full': helm_fu
 
 
 # ═══ E: Emberforged ══════════════════════════════════════════════════════════
-# The same clean plate as set P, forged in obsidian (the ember palette's metal) with lighter forged edges (EDGE_E),
-# and a restrained dragon identity: a crimson tabard (ROLE_dark), crimson pauldron tops with two pointed dragon
-# scales shingled down each upper arm, bone claws on the gauntlets, and the great helm with a crimson crest and two
-# swept horns. The ember glow is kept to two places so it stays special: the dragon heart on the breastplate and
-# the burning visor slit. The orange trim colour is not used on the set at all (it would read as more glow).
+# The same bold, plain plate as set P, forged in obsidian (the ember palette's metal): a black knight. Its identity
+# is kept to a few strong notes and nothing fiddly: a crimson tabard (ROLE_dark) and belt, the great
+# helm with a crimson crest and two swept horns, and one ember glow: a thin line burning inside the visor's eye
+# slit. No chest symbol, scales, claws or trim edges. The orange trim colour is not used on the set at all.
 SLIT_E = 0x0C0A0A
-
-
-def EDGE_E():
-    """Lighter obsidian for plate edges and rims, so the black slabs separate."""
-    return metallic(0x6A5E62)
 
 
 def HORN_E():
@@ -480,16 +472,11 @@ def HORN_E():
 
 def E_body(S):
     c = S('sock_chest')
-    plate_torso(c, trim=EDGE_E())
+    plate_torso(c)
     plate_accent(c, tabard=R.dark, under=SLIT_E)
-    box(c, (0.15, 0.15, 0.04), (0, 0.19, 0.335), R.dark, rot=(0, 0, PI / 4), bevel=0.012)          # heart setting
-    facet_gem(c, 0.065, (0, 0.19, 0.36), R.glow)                                                    # dragon heart
     for s in (1, -1):
-        block_pauldron(S, s, top=R.dark, edge=EDGE_E(), rivets=None)
-    for g, s in upper_arm_plate(S, rim=EDGE_E(), edge=None):
-        for k, (y, w, hgt) in enumerate(((-0.07, 0.3, 0.18), (-0.16, 0.26, 0.16))):              # two dragon scales
-            f = pivot(g, 'scale_at', (s * (0.155 - 0.008 * k), PALM + y, 0), (0, s * PI / 2, 0))
-            scale_plate(f, 0, 0, R.dark, w=w, hgt=hgt, tilt=-0.3)
+        block_pauldron(S, s, top=None, edge=None, rivets=None)
+    upper_arm_plate(S, lames=False)
 
 
 def chain(p, pts, widths, color, depth=None):
@@ -504,10 +491,9 @@ def E_helm(S):
     """The plate great helm forged in obsidian: a crimson crest, a visor slit that burns, and two horns sweeping up
     and back from the sides of the top block (short enough to stay a helm, not a mask)."""
     h = S('sock_head')
-    # The slit gap stays dark; only a thin ember line burns inside it (a narrow slit, not a lit band), so the
-    # set reads as armour first and the glow as eyes behind the visor.
-    great_helm(h, crest=R.dark, slit=SLIT_E, trim=EDGE_E(), studs=EDGE_E())
-    box(h, (0.3, 0.016, 0.012), (0, 0.089, 0.322), R.glow, bevel=0)                               # ember slit
+    # The slit stays dark; only a thin ember line burns inside it (eyes behind the visor, not a lit band).
+    great_helm(h, crest=R.dark, slit=SLIT_E)
+    box(h, (0.32, 0.016, 0.012), (0, 0.09, 0.315), R.glow, bevel=0)                               # ember slit
     for s in (-1, 1):
         chain(h, [(s * 0.25, 0.2, 0.02), (s * 0.36, 0.28, -0.1), (s * 0.41, 0.38, -0.27), (s * 0.38, 0.5, -0.45)],
               ((0.11, 0.09), (0.09, 0.06), (0.06, 0.012)), HORN_E())
@@ -515,15 +501,12 @@ def E_helm(S):
 
 def E_gloves(S):
     for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
-        g = S(name)
-        plate_gauntlet(g, s, cuff_rim=EDGE_E())
-        for x in (-0.08, 0.0, 0.08):
-            beam(g, (x, -0.12, 0.12), (x, -0.19, 0.21), 0.045, HORN_E(), w1=0.01)                  # claws
+        plate_gauntlet(S(name), s)
 
 
 def E_boots(S):
     for name in ('sock_footL', 'sock_footR'):
-        plate_sabaton(S(name), rim=EDGE_E())
+        plate_sabaton(S(name))
 
 
 VARIANTS['e'] = {'name': 'Emberforged', 'body_plate': E_body, 'helm_full': E_helm, 'gloves': E_gloves, 'boots': E_boots}
