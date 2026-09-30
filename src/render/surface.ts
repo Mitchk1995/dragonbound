@@ -510,17 +510,19 @@ export function setPaintGain(root: THREE.Object3D, gain: number) {
 }
 
 /**
- * Large painted colour drifts on the walkable floor rock (flat, low, rock-splatted ground only),
- * from two slow noise fetches: in the lair pale ash drifts and dark scorch marks, in the mine
- * ochre mineral stains and cool damp patches. Nothing for other zones.
+ * Painted colour drifts on the walkable floor rock (flat, low, rock-splatted ground only), from
+ * slow noise fetches: in the lair a fine, low-contrast ash tone (a slightly greyer, lighter film
+ * on the ruddy rock; the soot around the roost and the seams is painted into the terrain's
+ * vertex colour), in the mine ochre mineral stains and cool damp patches. Nothing elsewhere.
  */
 function floorVariation(kind: 'lair' | 'mine' | null) {
   if (!kind) return '';
   const tint = kind === 'lair'
-    ? `float ash = smoothstep(0.64, 0.7, n1 + (surfH - 0.5) * 0.3) * floorW;
-       float scorch = smoothstep(0.26, 0.2, n2 - (surfH - 0.5) * 0.2) * floorW;
-       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.18, 0.165) * (0.8 + surfH * 0.5), ash * 0.5);
-       diffuseColor.rgb *= 1.0 - scorch * 0.35;`
+    ? `float nf = texture2D(uMixTex, vSurfPos.xz * 0.19 + vec2(0.37, 0.11)).r;
+       float ash = smoothstep(0.38, 0.8, nf * 0.65 + n1 * 0.35) * floorW;
+       vec3 ashCol = vec3(dot(diffuseColor.rgb, vec3(0.3, 0.5, 0.2))) * vec3(1.14, 1.06, 1.0);
+       diffuseColor.rgb = mix(diffuseColor.rgb, ashCol, ash * 0.42);
+       diffuseColor.rgb *= 1.0 + (n2 - 0.5) * 0.2 * floorW;`
     : `float stain = smoothstep(0.6, 0.66, n1) * floorW;
        float damp = smoothstep(0.32, 0.26, n2) * floorW;
        diffuseColor.rgb *= mix(vec3(1.0), vec3(1.2, 0.98, 0.74), stain);
@@ -621,10 +623,24 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           );
       }
       if (topShade < 1) {
-        // Cave rock: the higher the rock, the deeper in shadow (walls rise away into darkness).
+        // Cave rock: painted strata (level bands of rock, each its own tone, a dark crease under
+        // each band) that wander gently, so the faceted rock reads as layered stone rather than
+        // one flat-shaded sheet; the higher the rock, the deeper in shadow (walls rise into darkness).
         shader.fragmentShader = shader.fragmentShader
           .replace('uniform float uLava;', 'uniform float uLava;\nuniform float uTopShade;\nuniform vec2 uTopRange;')
-          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\ndiffuseColor.rgb *= mix(1.0, uTopShade, smoothstep(uTopRange.x, uTopRange.y, vSurfPos.y));');
+          .replace(
+            '#include <roughnessmap_fragment>',
+            `#include <roughnessmap_fragment>
+            {
+              float sb = (vSurfPos.y + (texture2D(uMixTex, vSurfPos.xz * 0.06 + vec2(0.4, 0.2)).r - 0.5) * 1.1) / 0.5;
+              float id = floor(sb), fb = sb - id;
+              float onRock = smoothstep(0.5, 1.1, vSurfPos.y);
+              float tone = fract(sin(id * 12.9898 + 4.1) * 43758.5453) - 0.5;
+              float crease = 1.0 - smoothstep(0.0, 0.14, fb);
+              diffuseColor.rgb *= 1.0 + onRock * (tone * 0.22 + fb * 0.08 - crease * 0.34);
+              diffuseColor.rgb *= mix(1.0, uTopShade, smoothstep(uTopRange.x, uTopRange.y, vSurfPos.y));
+            }`,
+          );
       }
       if (lava > 0) {
         // Lava pools in the floor rock's deepest fissures, pulsing slowly. Emissive, so it glows

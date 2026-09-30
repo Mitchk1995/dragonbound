@@ -102,6 +102,80 @@ function raggedDisc(seed: number, spokes: number, inner: number, outer: number, 
   return geo;
 }
 
+/**
+ * Cooled crust plates: Voronoi cells over an elliptical patch (radii CRUST_RX × CRUST_RZ along
+ * X/Z), split by a narrow crack and extruded a few centimetres, merged into three geometries (one
+ * per colour). The rim follows a ragged ellipse, so the patch has no clean outline.
+ */
+const CRUST_RX = 1.55, CRUST_RZ = 1.0;
+const plateCache = new Map<number, THREE.BufferGeometry[]>();
+function crustPlates(seed: number) {
+  const hit = plateCache.get(seed);
+  if (hit) return hit;
+  const RX = CRUST_RX, RZ = CRUST_RZ, GAP = 0.045;
+  // Scattered seeds with a varying minimum spacing: plates of mixed sizes, no honeycomb.
+  const seeds: [number, number][] = [];
+  for (let i = 0; i < 90 && seeds.length < 16; i++) {
+    const a = hash01(seed, i, 1) * Math.PI * 2, r = Math.sqrt(hash01(seed, i, 2)) * 0.92;
+    const x = Math.cos(a) * r * RX, z = Math.sin(a) * r * RZ;
+    const gap = 0.34 + hash01(seed, i, 3) * 0.3;
+    if (seeds.every(([sx, sz]) => Math.hypot(sx - x, sz - z) > gap)) seeds.push([x, z]);
+  }
+  const rim: [number, number][] = [];
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2, r = 0.8 + hash01(seed, i, 5) * 0.24;
+    rim.push([Math.cos(a) * RX * r, Math.sin(a) * RZ * r]);
+  }
+  const parts: number[][] = [[], [], []];
+  seeds.forEach(([sx, sz], si) => {
+    let poly = rim.slice();
+    for (const [ox, oz] of seeds) {
+      if (ox === sx && oz === sz) continue;
+      const dl = Math.hypot(ox - sx, oz - sz), dx = (ox - sx) / dl, dz = (oz - sz) / dl, mx = (ox + sx) / 2, mz = (oz + sz) / 2;
+      const f = (p: [number, number]) => (p[0] - mx) * dx + (p[1] - mz) * dz + GAP / 2;
+      const out: [number, number][] = [];
+      poly.forEach((a, i) => {
+        const b = poly[(i + 1) % poly.length], fa = f(a), fb = f(b);
+        if (fa <= 0) out.push(a);
+        if (fa <= 0 !== fb <= 0) {
+          const t = fa / (fa - fb);
+          out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+      });
+      poly = out;
+      if (poly.length < 3) return;
+    }
+    const cx = poly.reduce((t, p) => t + p[0], 0) / poly.length, cz = poly.reduce((t, p) => t + p[1], 0) / poly.length;
+    const top = 0.03 + hash01(seed, si, 3) * 0.03, bot = -0.02;
+    const pos = parts[si % 3];
+    const tri = (a: number[], b: number[], c: number[], want: number[]) => {
+      // Wind each triangle so its normal faces `want` (up for the top, outward for the sides).
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const n = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+      if (n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0) pos.push(...a, ...c, ...b);
+      else pos.push(...a, ...b, ...c);
+    };
+    // A slight tilt per plate, so neighbours catch the light differently.
+    const tx = (hash01(seed, si, 7) - 0.5) * 0.05, tz = (hash01(seed, si, 8) - 0.5) * 0.05;
+    const yt = (x: number, z: number) => top + (x - cx) * tx + (z - cz) * tz;
+    for (let i = 0; i < poly.length; i++) {
+      const [ax, az] = poly[i], [bx, bz] = poly[(i + 1) % poly.length];
+      tri([cx, yt(cx, cz), cz], [ax, yt(ax, az), az], [bx, yt(bx, bz), bz], [0, 1, 0]);
+      const out = [(ax + bx) / 2 - cx, 0, (az + bz) / 2 - cz];
+      tri([ax, yt(ax, az), az], [bx, yt(bx, bz), bz], [bx, bot, bz], out);
+      tri([ax, yt(ax, az), az], [bx, bot, bz], [ax, bot, az], out);
+    }
+  });
+  const geos = parts.filter((p) => p.length).map((p) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+    geo.computeVertexNormals();
+    return geo;
+  });
+  plateCache.set(seed, geos);
+  return geos;
+}
+
 /** Ground-hugging parts (decals, seams) never cast shadows: flag their material. */
 function decal(m: THREE.Mesh) {
   (m.material as THREE.Material).userData.decal = true;
@@ -422,9 +496,44 @@ const BUILDERS: Record<string, Builder> = {
     k.mesh(g, prism(0.28, 1.8, 0.5), BONE_D, [0.85, 0.7, 7.9], [-1.1, 0.3, -0.35]);
     for (let i = 0; i < 8; i++) cb(k, g, [0.3 - i * 0.025, 0.25 - i * 0.02, 0.6], [0, 0.15, -7.5 - i * 0.65], i % 2 ? BONE : BONE_D, [0, i * 0.06, 0], 0.04);
   },
-  standing_stone: (k, g) => {
-    k.mesh(g, taper(0.95, 0.65, 0.7, 0.5, 3.2, 0.05, 0), 0x6e6a66, [0, 1.45, 0], [0.04, 0, 0.05]);
-    k.box(g, [0.82, 0.06, 0.62], [0, 2.2, 0.01], 0x6aa8ff, [0.04, 0, 0.05], 0x3a6ad0, 1.2);
+  /**
+   * A weathered menhir of an old stone circle (`v` picks its build): a tapered shaft leaning a
+   * little, its crown broken off at a slant, standing in a half-buried footing with a fallen
+   * chip at its foot, and a column of faint rune glyphs cut into its front (+Z, toward the ring's
+   * centre). `v` = 99 builds the recumbent altar stone that lies in the middle of the ring.
+   */
+  standing_stone: (k, g, v) => {
+    const s = v ?? 0, MEN = 0x6c675f, MEN_D = 0x5a554e, MEN_L = 0x7a746a, RUNE = 0x9ec8ff;
+    const glyph = (x: number, y: number, z: number, tall: boolean, a = 0) =>
+      k.box(g, tall ? [0.09, 0.26, 0.03] : [0.26, 0.08, 0.03], [x, y, z], RUNE, [0, a, 0], 0x3a78e0, 1.1);
+    if (s === 99) {
+      // Recumbent stone: a long low slab on two chocks, glyphs along its top.
+      for (const x of [-0.8, 0.8]) chunk(k, g, 400 + x * 10, [0.6, 0.35, 0.8], [x, -0.05, 0], MEN_D, x);
+      k.mesh(g, chamferBox(2.6, 0.5, 1.1, 0.12), MEN, [0, 0.5, 0], [0, 0, 0.03]);
+      for (let i = 0; i < 4; i++) {
+        const b = k.box(g, i % 2 ? [0.07, 0.03, 0.26] : [0.24, 0.03, 0.07], [-0.75 + i * 0.5, 0.76, 0], RUNE, undefined, 0x3a78e0, 0.8);
+        b.rotation.z = 0.03;
+      }
+      return;
+    }
+    // Squat and broad (tall stones stretch into beams at the edge of the high camera's view).
+    const h = 1.75 + hash01(s, 1) * 0.6, lean = (hash01(s, 2) - 0.5) * 0.14;
+    const shaft = new THREE.Group();
+    shaft.rotation.set(-0.06, 0, lean);
+    g.add(shaft);
+    chunk(k, g, 410 + s, [1.5, 0.42, 1.15], [0, -0.14, 0], MEN_D, hash01(s, 3));
+    const wb = 1.15 + hash01(s, 5) * 0.2, db = 0.8;
+    k.mesh(shaft, taper(q(wb), db, q(wb * 0.72), 0.56, q(h), 0.05, 0), MEN, [0, h / 2 + 0.1, 0]);
+    // Weathered top: the crown worn down at a slant, paler where the rain has bleached it.
+    k.mesh(shaft, taper(q(wb * 0.74), 0.58, q(wb * 0.5), 0.4, 0.3, 0.08 * (s % 2 ? 1 : -1), 0), MEN_L, [0.05, h + 0.25, 0]);
+    const ys = [0.7, 1.05, 1.4].filter((y) => y < h - 0.25);
+    ys.forEach((y, i) => {
+      const t = (y - 0.1) / h, d = db / 2 - t * (db - 0.56) / 2 + 0.01;
+      const b = glyph(0.05 * t, y, d, (i + s) % 2 === 0);
+      g.remove(b);
+      shaft.add(b);
+    });
+    chunk(k, g, 420 + s, [0.42, 0.28, 0.36], [0.8, -0.04, 0.55], MEN_D, s);
   },
   rails: (k, g, arg) => {
     const len = Math.max(2, arg ?? 6);
@@ -892,33 +1001,29 @@ const BUILDERS: Record<string, Builder> = {
       run(branch, 0.32, seed + 50 + at);
     }
   },
-  /** Cooled lava crust: a patch of packed black basalt plates, a dull red glow in the cracks. */
+  /**
+   * Cooled lava crust set into the floor: an elongated patch (along local X) of flat basalt plates,
+   * cut like a dried mud flat (Voronoi cells with a narrow gap between them) and standing barely
+   * proud of the ground, a dull red glow down in the cracks.
+   */
   crust: (k, g, v) => {
-    // An elongated tongue (along local X) of irregular plates; the glow sits under them, smaller
-    // than the plated area, so it shows only in the cracks.
     const s = (v ?? 0) * 11 + 5;
-    const glow = decal(k.mesh(g, raggedDisc(s, 18, 0.8, 0.9, 0.3), 0x1a0602, [0, 0.03, 0], undefined, 0x8a1c04, 0.35));
-    glow.scale.set(1.8, 1, 0.75);
-    const cols = [BASALT, BASALT_D, 0x3a2e2a];
-    let i = 0;
-    for (let gz = -1; gz <= 1; gz++) for (let gx = -4; gx <= 4; gx++) {
-      const x = gx * 0.46 + (hash01(s, gx, gz) - 0.5) * 0.16, z = gz * 0.5 + (gx % 2 ? 0.22 : 0) + (hash01(s, gz, gx) - 0.5) * 0.14;
-      if (Math.hypot(x / 1.9, z / 0.8) > 1.0 + (hash01(s, gx + 9, gz) - 0.5) * 0.35) continue;
-      const w = 0.42 + hash01(s, i, 4) * 0.22;
-      chunk(k, g, s + i, [q(w), q(0.08 + hash01(s, i) * 0.07), q(w * 0.9)], [x, -0.03, z], cols[i % 3], hash01(s, i, 3) * 1.2);
-      i++;
-    }
+    // The glow bed stops short of the rim: the cracks glow in the heart of the patch and go dark
+    // toward its edge.
+    const glow = decal(k.mesh(g, raggedDisc(s, 18, 0.95, 1.02, 0.12), 0x140402, [0, 0.015, 0], undefined, 0x7a1804, 0.4));
+    glow.scale.set(CRUST_RX * 0.62, 1, CRUST_RZ * 0.62);
+    decal(k.mesh(g, raggedDisc(s + 1, 18, 0.95, 1.02, 0.12), 0x1e1614, [0, 0.01, 0])).scale.set(CRUST_RX * 0.95, 1, CRUST_RZ * 0.95);
+    const cols = [0x3a2e2a, 0x322828, BASALT];
+    crustPlates(s).forEach((geo, i) => decal(k.mesh(g, geo, cols[i % 3], [0, 0, 0])));
   },
-  /** Scorch mark: a ragged soot starburst burnt into the floor, a few embers still glowing. */
+  /** Scorch mark: a small charred core (the terrain paints the wide soft burn), embers still glowing. */
   scorch: (k, g, v) => {
     const s = (v ?? 0) + 1;
-    // Soft outer soot, then a darker burnt core: ragged, not spiky.
-    decal(k.mesh(g, raggedDisc(90 + s, 26, 1.05, 1.3, 0.35), 0x2a1d17, [0, 0.045, 0]));
-    decal(k.mesh(g, raggedDisc(92 + s, 20, 0.72, 0.9, 0.35), 0x1a1311, [0, 0.055, 0]));
-    decal(k.mesh(g, raggedDisc(95 + s, 14, 0.4, 0.5, 0.3), 0x0f0b0a, [0, 0.065, 0]));
-    for (let i = 0; i < 6; i++) {
-      const a = hash01(s, i) * 6.3, r = 0.2 + hash01(s, i, 1) * 0.9;
-      decal(k.box(g, [0.09, 0.03, 0.09], [Math.cos(a) * r, 0.075, Math.sin(a) * r], 0x5a1a04, [0, a, 0], 0xff5a10, 1.6));
+    decal(k.mesh(g, raggedDisc(92 + s, 18, 0.46, 0.58, 0.35), 0x1e1512, [0, 0.03, 0]));
+    decal(k.mesh(g, raggedDisc(95 + s, 12, 0.24, 0.3, 0.3), 0x0f0b0a, [0, 0.04, 0]));
+    for (let i = 0; i < 5; i++) {
+      const a = hash01(s, i) * 6.3, r = 0.12 + hash01(s, i, 1) * 0.45;
+      decal(k.box(g, [0.07, 0.02, 0.07], [Math.cos(a) * r, 0.05, Math.sin(a) * r], 0x5a1a04, [0, a, 0], 0xff5a10, 1.4));
     }
   },
   /** A cluster of blocky basalt columns (octagonal, flat-topped, stepped heights), one fallen. */

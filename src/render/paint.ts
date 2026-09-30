@@ -153,14 +153,15 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
     };
   },
   leaves: () => {
-    // Overlapping leaf clumps: each lit from the upper left and shaded to a dark lower rim, tucked
-    // under the clumps above, with a few painted leaf dabs. Big enough to read from the camera.
+    // Leaf clusters of mixed sizes (a few big masses, many small sprigs), each an irregular lobed
+    // blob turned its own way and lit from a slightly different side, tucked under whichever
+    // cluster lies over it, with a few painted leaf dabs. No row order, so no fish-scale repeat.
     const dabs = worley(592, 14), blot = fbm(593, 3, 2);
     return clumps(591, 4, (c, x, y) => {
       const [f1] = dabs(x, y);
       const dab = f1 < 3.5 ? (c.light > 0.55 ? 0.08 : -0.06) : 0;
-      return posterize(0.3 + c.light * 0.36 + (c.tone - 0.5) * 0.16 - c.rim * 0.16 - c.tuck * 0.2 + dab + (blot(x, y) - 0.5) * 0.06, 5);
-    });
+      return posterize(0.3 + c.light * 0.36 + (c.tone - 0.5) * 0.2 - c.rim * 0.15 - c.tuck * 0.2 + dab + (blot(x, y) - 0.5) * 0.08, 5);
+    }, { size: [0.6, 1.35], lobes: 0.07, stretch: 0.3, turn: 0.6, order: 0.8 });
   },
   needles: () => {
     // Pine: tiers of needle tufts hanging over the ones below, streaked along the needles, pale
@@ -187,33 +188,70 @@ interface Clump {
   tone: number;
 }
 
+interface ClumpStyle {
+  /** Radius range, as a share of the grid cell (default 0.95..1.15: even clumps). */
+  size?: [number, number];
+  /** Lobed outline: how far the rim wanders in and out (0 = round). */
+  lobes?: number;
+  /** Up to this much longer along a random axis (0 = round). */
+  stretch?: number;
+  /** Up to this much (radians) each clump's light direction turns either way. */
+  turn?: number;
+  /** Stacking order jitter, in cells (0 = strictly the higher clump on top). */
+  order?: number;
+}
+
 /**
- * Jittered round clumps, n × n per tile, where the higher clump overlaps the lower one (V is up on
- * side faces), shaded by `shade`. Tiles seamlessly.
+ * Jittered clumps, n × n per tile, where the higher clump overlaps the lower one (V is up on side
+ * faces), shaded by `shade`. `style` varies their size, outline, orientation, lighting and
+ * stacking so they need not form regular rows. Tiles seamlessly.
  */
-function clumps(seed: number, n: number, shade: (c: Clump, x: number, y: number) => number): Gen {
-  const cell = SIZE / n, R = cell * 0.9, rng = mulberry32(seed);
-  const pts = Array.from({ length: n * n }, (_, i) => ({ x: ((i % n) + 0.15 + rng() * 0.7) * cell, y: (Math.floor(i / n) + 0.15 + rng() * 0.7) * cell, t: rng(), r: R * (0.95 + rng() * 0.2) }));
+function clumps(seed: number, n: number, shade: (c: Clump, x: number, y: number) => number, style: ClumpStyle = {}): Gen {
+  const cell = SIZE / n, rng = mulberry32(seed);
+  const [s0, s1] = style.size ?? [0.95 * 0.9, 1.15 * 0.9];
+  const lobes = style.lobes ?? 0, stretch = style.stretch ?? 0, turn = style.turn ?? 0, order = style.order ?? 0;
+  const styled = style.size !== undefined;
+  const pts = Array.from({ length: n * n }, (_, i) => {
+    const x = ((i % n) + 0.15 + rng() * 0.7) * cell, y = (Math.floor(i / n) + 0.15 + rng() * 0.7) * cell, t = rng();
+    // Styled: skewed toward small, a few big masses among many smaller sprigs.
+    const sz = s0 + (s1 - s0) * (styled ? Math.pow(rng(), 1.6) : rng());
+    const ax = styled ? rng() * Math.PI : 0, turnA = styled ? (rng() - 0.5) * 2 * turn : 0;
+    return {
+      x, y, t, r: cell * sz,
+      ca: Math.cos(ax), sa: Math.sin(ax), k: 1 + (styled ? rng() : 0) * stretch, lc: Math.cos(turnA), ls: Math.sin(turnA),
+      pri: styled ? (rng() - 0.5) * order * cell : 0, lobeN: styled ? 6 + Math.floor(rng() * 4) : 0, lobeP: styled ? rng() * 6.283 : 0,
+    };
+  });
+  type P = (typeof pts)[number];
   const wrap = (i: number) => ((i % n) + n) % n;
+  const reach = Math.ceil(s1 * (1 + stretch) * (1 + lobes) + 0.9);
   return (x, y) => {
     const px = x + 0.5, py = y + 0.5, cx = Math.floor(px / cell), cy = Math.floor(py / cell);
-    const near: { ox: number; oy: number; d: number; t: number; r: number }[] = [];
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const near: { ox: number; oy: number; d: number; p: P; ux: number; uy: number }[] = [];
+    for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {
       const gx = wrap(cx + dx), gy = wrap(cy + dy), p = pts[gy * n + gx];
       const ox = p.x + (cx + dx - gx) * cell, oy = p.y + (cy + dy - gy) * cell;
-      near.push({ ox, oy, d: Math.hypot(px - ox, py - oy), t: p.t, r: p.r });
+      // Distance in the clump's own frame (stretched along its axis), rim pushed in and out by lobes.
+      const rx = px - ox, ry = py - oy;
+      const u = (rx * p.ca + ry * p.sa) / p.k, v = -rx * p.sa + ry * p.ca;
+      // Scalloped: a row of rounded leaf tips round the rim.
+      const lobe = 1 + lobes * (Math.abs(Math.sin(Math.atan2(v, u) * p.lobeN * 0.5 + p.lobeP)) * 2 - 1);
+      near.push({ ox, oy, d: Math.hypot(u, v) / lobe, p, ux: rx, uy: ry });
     }
     let hit: (typeof near)[number] | null = null;
-    for (const c of near) if (c.d < c.r && (!hit || c.oy > hit.oy)) hit = c;
+    for (const c of near) if (c.d < c.p.r && (!hit || c.oy + c.p.pri > hit.oy + hit.p.pri)) hit = c;
     if (!hit) return 0.3;
     let above = Infinity;
-    for (const c of near) if (c.oy > hit.oy) above = Math.min(above, c.d - c.r);
-    const lx = (px - hit.ox) / hit.r, ly = (py - hit.oy) / hit.r, d = hit.d / hit.r;
+    for (const c of near) if (c.oy + c.p.pri > hit.oy + hit.p.pri) above = Math.min(above, c.d - c.p.r);
+    const r = hit.p.r, d = hit.d / r;
+    // Light from the upper left, turned per clump.
+    const lx0 = hit.ux / r, ly0 = hit.uy / r;
+    const lx = lx0 * hit.p.lc - ly0 * hit.p.ls, ly = lx0 * hit.p.ls + ly0 * hit.p.lc;
     return shade({
       light: Math.max(0, Math.min(1, 0.5 + ly * 0.55 - lx * 0.3)),
       rim: smooth(0.72, 0.98, d) * (ly < 0.2 ? 1 : 0.45),
       tuck: 1 - smooth(0, cell * 0.12, above),
-      d, ly, tone: hit.t,
+      d, ly, tone: hit.p.t,
     }, x, y);
   };
 }

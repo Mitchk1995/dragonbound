@@ -76,6 +76,20 @@ export interface ZoneLayout {
   nodes: { ore: string; x: number; z: number }[];
   stations: StationSpawn[];
   props: PropSpawn[];
+  /**
+   * Scorched ground: soft soot gradients painted into the floor's vertex colour, darkest on the
+   * source (a point, or a segment to x2/z2) and fading out over `r`; `k` is the strength (0..1).
+   */
+  burns?: Burn[];
+}
+
+export interface Burn {
+  x: number;
+  z: number;
+  x2?: number;
+  z2?: number;
+  r: number;
+  k: number;
 }
 
 export const emptyLayout = (w: number, h: number): ZoneLayout => ({
