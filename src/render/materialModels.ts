@@ -9,12 +9,13 @@ import { ModelKit, PAL, type V3 } from './kit';
  * Materials, quest items and trinkets: the small models behind their inventory icons and ground
  * drops. Each ore is its own shape and colour so a full inventory reads at a glance:
  *   copper  warm brown rock with two copper nuggets and a fleck of green verdigris
- *   tin     pale grey rock with flat silvery plates
+ *   tin     grey rock studded with small silvery-white crystals
  *   iron    a squarish rust-red lump with gunmetal nodules
  *   coal    a cluster of glossy black chunks
  *   emberite dark basalt with glowing orange crystal spikes
  * Bars are proper ingots: a trapezoid block, sloped sides and a bevelled top, in a forged-metal
- * finish. Uncut gems are raw crystals, a different cut per stone.
+ * finish. Uncut gems are raw crystals, a different habit per stone: a double-pointed sapphire, square
+ * emerald columns, a cluster of ruby points.
  */
 
 const cache = new Map<string, THREE.BufferGeometry>();
@@ -58,16 +59,19 @@ function bipyramid(r: number, body: number, tip: number) {
   return g;
 }
 
-/** A flat hexagonal tablet with bevelled faces (ruby): radius r, thickness t, along Y. */
-function tablet(r: number, t: number, bevel: number) {
-  const key = `tb${r},${t},${bevel}`;
+/**
+ * A single-terminated crystal point (ruby, tin): a hexagonal column standing on a flat base with a
+ * six-faced pyramid tip, slightly irregular so it reads as grown, not cut. Along Y, base at y = 0.
+ */
+function crystalPoint(r: number, body: number, tip: number, seed = 0) {
+  const key = `cp${r},${body},${tip},${seed}`;
   let g = cache.get(key);
   if (!g) {
-    const pts: THREE.Vector3[] = [];
+    const pts: THREE.Vector3[] = [V(0.12 * r * Math.sin(seed), body + tip, 0.12 * r * Math.cos(seed))];
     for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-      for (const y of [-t / 2, t / 2]) pts.push(V(Math.cos(a) * r, y, Math.sin(a) * r));
-      for (const y of [-t / 2 - bevel, t / 2 + bevel]) pts.push(V(Math.cos(a) * (r - bevel * 1.6), y, Math.sin(a) * (r - bevel * 1.6)));
+      const a = (i / 6) * Math.PI * 2 + seed;
+      const rr = r * (0.85 + 0.3 * (((i * 7 + seed * 13) % 5) / 5));
+      pts.push(V(Math.cos(a) * rr, 0, Math.sin(a) * rr), V(Math.cos(a) * rr * 0.92, body, Math.sin(a) * rr * 0.92));
     }
     g = new ConvexGeometry(pts);
     cache.set(key, g);
@@ -108,12 +112,18 @@ function ore(k: Kit, g: THREE.Group, id: string, color: number) {
       break;
     }
     case 'tin_ore': {
-      put(k, g, rockBlock(21, 0.44, 0.26, 0.36), 0x5e6068, [0, 0, 0], [0, -0.4, 0]);
-      // Flat silvery plates, stacked at a slant like cleaved crystal.
-      for (const [p, r] of [[[-0.04, 0.27, 0.02], [0.2, 0.3, 0.35]], [[0.07, 0.3, -0.05], [0.25, -0.5, -0.2]]] as [V3, V3][]) {
-        const plate = put(k, g, chamferBox(0.22, 0.05, 0.16, 0.015), 0xdfe6ee, p, r);
-        forged(plate, 0.28);
-        (plate.material as THREE.MeshStandardMaterial).metalness = 0.5;
+      // A grey rock studded with small silvery-white tin crystals catching the light.
+      put(k, g, rockBlock(21, 0.46, 0.3, 0.38), 0x6b6d74, [0, 0, 0], [0, -0.4, 0]);
+      for (const [p, r, h, seed, rot] of [
+        [[-0.06, 0.19, 0.08], 0.07, 0.18, 1, [0.45, 0, 0.35]],
+        [[0.09, 0.2, 0.05], 0.06, 0.15, 2, [0.3, 0, -0.5]],
+        [[0.02, 0.23, -0.07], 0.055, 0.14, 3, [-0.35, 0, 0.1]],
+        [[0.15, 0.12, 0.13], 0.04, 0.09, 4, [0.7, 0, -0.8]],
+        [[-0.15, 0.13, -0.02], 0.045, 0.1, 5, [0.1, 0, 0.9]],
+      ] as [V3, number, number, number, V3][]) {
+        const c = put(k, g, crystalPoint(r, h, r * 1.3, seed), 0xe2e7ee, p, rot);
+        forged(c, 0.22);
+        (c.material as THREE.MeshStandardMaterial).metalness = 0.6;
       }
       break;
     }
@@ -133,9 +143,11 @@ function ore(k: Kit, g: THREE.Group, id: string, color: number) {
       break;
     }
     case 'emberite_ore': {
-      put(k, g, rockBlock(41, 0.46, 0.22, 0.38), 0x443a36, [0, 0, 0], [0, 0.2, 0]);
+      // Basalt light enough to read in the slot, so the glowing crystals sit on a visible rock.
+      // A faint warm self-glow (the rock is still hot) lifts the faces the icon light misses.
+      put(k, g, rockBlock(41, 0.46, 0.22, 0.38), 0x7a665c, [0, 0, 0], [0, 0.2, 0], 0x5a2410, 0.5);
       for (const [p, w, h, r] of [[[-0.03, 0.14, 0], 0.11, 0.36, [0.15, 0, 0.2]], [[0.1, 0.13, 0.06], 0.08, 0.24, [0.3, 0.4, -0.45]], [[-0.13, 0.12, 0.08], 0.07, 0.18, [0.4, 0, 0.55]]] as [V3, number, number, V3][]) {
-        put(k, g, prism(w, h, 0.35), color, p, r, color, 0.9);
+        put(k, g, prism(w, h, 0.35), color, p, r, color, 1.3);
       }
       break;
     }
@@ -158,7 +170,8 @@ function barFinish(m: THREE.Mesh, roughness: number) {
 function bar(k: Kit, g: THREE.Group, id: string, color: number) {
   if (id === 'ember_bar') {
     // Blackened dragon-forged metal with the ember still glowing through a channel in the top.
-    barFinish(put(k, g, ingot(...INGOT), 0x4a4246, [0, 0, 0]), 0.42);
+    // Blackened metal warmed from within, so its shaded faces still read in the slot.
+    barFinish(put(k, g, ingot(...INGOT), 0x6a5e62, [0, 0, 0], undefined, 0x4a1c0c, 0.45), 0.42);
     put(k, g, chamferBox(0.26, 0.02, 0.07, 0.008), color, [0, INGOT[2] - 0.004, 0], undefined, color, 1.6);
     return;
   }
@@ -177,9 +190,18 @@ function gem(k: Kit, g: THREE.Group, id: string, color: number) {
       glassy(put(k, g, chamferBox(0.09, 0.17, 0.09, 0.025), color, [0.1, 0.09, 0.06], [0, 0.2, -0.5], color, 0.3));
       break;
     }
-    case 'uncut_ruby':
-      glassy(put(k, g, tablet(0.15, 0.1, 0.035), color, [0, 0.12, 0], [1.1, 0, 0.25], color, 0.3));
+    case 'uncut_ruby': {
+      // A raw cluster: three crystal points of different sizes growing out of one base at splayed angles.
+      for (const [p, r, h, seed, rot] of [
+        [[0, 0.02, 0], 0.085, 0.26, 0.3, [0, 0, 0.15]],
+        [[-0.08, 0.02, 0.04], 0.06, 0.17, 1.7, [0.25, 0, 0.7]],
+        [[0.08, 0.02, 0.05], 0.055, 0.14, 2.9, [0.35, 0, -0.65]],
+        [[0.02, 0.02, -0.08], 0.045, 0.1, 4.1, [-0.6, 0, -0.1]],
+      ] as [V3, number, number, number, V3][]) {
+        glassy(put(k, g, crystalPoint(r, h, r * 1.4, seed), color, p, rot, color, 0.35));
+      }
       break;
+    }
     default:
       glassy(put(k, g, prism(0.16, 0.3, 0.3), color, [0, 0, 0], undefined, color, 0.3));
   }

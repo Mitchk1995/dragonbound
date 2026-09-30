@@ -321,12 +321,14 @@ def mail_links(f, half_w, ys, color=R.dark, pitch=0.05, fill=0.55, hgt=0.009, z=
     return o
 
 
-def scale_rows(f, half_w, rows, colors, gap_color, w=0.1, lift=0.004, flare=0.026, gap=0.06, pattern=None, nm='scale'):
+def scale_rows(f, half_w, rows, colors, gap_color, w=0.1, lift=0.004, flare=0.026, gap=0.06, pattern=None, nm='scale',
+               shade=None):
     """Overlapping rows of small flat scale plates on a flat face (frame from faces(): local +Z out). rows =
     [(bottom y, top y)]; plates `w` wide, alternate rows shifted half a plate. Each plate lies on the face at its
     top edge and stands `flare` off it at its bottom edge, so each row overlaps the top of the row below, and a
     `gap_color` lip closes its bottom edge (the dark gap between rows). `pattern(i, j)` picks each plate's colour.
-    One mesh per colour."""
+    `shade` = (dark, light) paints each plate in three bands: dark where it tucks under the row above, its own colour,
+    and a light tip. One mesh per colour."""
     polys = {}
 
     def add(col, pts, want):
@@ -347,7 +349,14 @@ def scale_rows(f, half_w, rows, colors, gap_color, w=0.1, lift=0.004, flare=0.02
             def z(y):
                 return lift + flare * (y1 - y) / (y1 - y0)
             outline = [(a, y1), (a, y0 + ch), (a + cw, y0), (b - cw, y0), (b, y0 + ch), (b, y1)]
-            add(col, [(x, y, z(y)) for x, y in outline], (0, flare, 1))
+            if shade:
+                yt = y1 - (y1 - y0) * 0.4
+                for c_, pts_ in ((shade[0], [(a, y1), (a, yt), (b, yt), (b, y1)]),
+                                 (col, [(a, yt), (a, y0 + ch), (b, y0 + ch), (b, yt)]),
+                                 (shade[1], [(a, y0 + ch), (a + cw, y0), (b - cw, y0), (b, y0 + ch)])):
+                    add(c_, [(x, y, z(y)) for x, y in pts_], (0, flare, 1))
+            else:
+                add(col, [(x, y, z(y)) for x, y in outline], (0, flare, 1))
             mid = Vector(((a + b) / 2, (y0 + y1) / 2, 0))
             for (xa, ya), (xb, yb) in (outline[2:4],):                     # lip along the lower edge
                 out_ = Vector(((xa + xb) / 2, (ya + yb) / 2, 0)) - mid
@@ -406,16 +415,51 @@ def helm_open(S):
     open_helm(S('sock_head'))
 
 
+def slotted_plate(p, xs, ys, holes, depth, z, color, bevel=0.01):
+    """A flat plate facing +Z (front at z + depth) over the grid of cells between the breakpoints xs, ys, with the
+    cells in `holes` ((i, j) pairs) cut clean through: a real opening with walls, whose lower wall faces up and takes
+    the light (a lit lip) while its upper wall faces down into shadow. One mesh; every edge lightly chamfered."""
+    bm = bmesh.new()
+    vf, vb = {}, {}
+
+    def v(d, i, j, zz):
+        if (i, j) not in d:
+            d[(i, j)] = bm.verts.new((xs[i], ys[j], zz))
+        return d[(i, j)]
+    nx, ny = len(xs) - 1, len(ys) - 1
+    keep = {(i, j) for i in range(nx) for j in range(ny) if (i, j) not in holes}
+    for i, j in keep:
+        bm.faces.new((v(vf, i, j, z + depth), v(vf, i + 1, j, z + depth), v(vf, i + 1, j + 1, z + depth), v(vf, i, j + 1, z + depth)))
+        bm.faces.new((v(vb, i, j + 1, z), v(vb, i + 1, j + 1, z), v(vb, i + 1, j, z), v(vb, i, j, z)))
+        for (di, dj), (a, b) in (((0, -1), ((i, j), (i + 1, j))), ((1, 0), ((i + 1, j), (i + 1, j + 1))),
+                                 ((0, 1), ((i + 1, j + 1), (i, j + 1))), ((-1, 0), ((i, j + 1), (i, j)))):
+            if (i + di, j + dj) not in keep:            # boundary: a wall between the front and the back
+                bm.faces.new((v(vf, *b, z + depth), v(vf, *a, z + depth), v(vb, *a, z), v(vb, *b, z)))
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    if bevel > 0:
+        edges = [e for e in bm.edges if len(e.link_faces) == 2 and abs(e.link_faces[0].normal.dot(e.link_faces[1].normal)) < 0.5]
+        bmesh.ops.bevel(bm, geom=edges, offset=bevel, segments=1, affect='EDGES', profile=0.5, clamp_overlap=True)
+    return _common._mesh_obj(bm, p, (0, 0, 0), (0, 0, 0), color)
+
+
 def great_helm(h, crest=R.cloth, slit=SLIT):
     """Cube-over-cube great helm, kept bold and plain: a box shell over the head cube, a smaller block on top with a
-    low crest, and a T visor cut into the front (the eye slit and a breathing slot below it, lined by `slit`). Every
-    heavy tier wears it."""
+    low crest, and a T visor: a face plate standing proud of the shell with the eye slit and the breathing slot below
+    it cut right through it, so the T is a real recess (lit lower lip, shadowed upper wall) onto a dark lining
+    (`slit`). Every heavy tier wears it."""
     box(h, (0.58, 0.5, 0.6), (0, 0.02, 0.01), R.metal, bevel=0.045)                          # shell
     box(h, (0.46, 0.08, 0.48), (0, 0.3, 0.01), R.metal, bevel=0.028)                          # top block
     if crest:
         box(h, (0.08, 0.12, 0.4), (0, 0.395, -0.02), crest, taper=(1, 0.8), bevel=0.022)       # crest
-    box(h, (0.46, 0.055, 0.02), (0, 0.09, 0.307), slit, bevel=0)                              # eye slit
-    box(h, (0.06, 0.17, 0.02), (0, -0.05, 0.307), slit, bevel=0)                              # breathing slot
+    # Face plate: columns / rows round the T (eye slit y 0.062..0.118 across x +-0.2, breathing slot x +-0.032
+    # from the slit down to y -0.13).
+    xs = (-0.255, -0.2, -0.032, 0.032, 0.2, 0.255)
+    ys = (-0.2, -0.13, 0.062, 0.118, 0.245)
+    holes = {(1, 2), (2, 2), (3, 2), (2, 1)}
+    slotted_plate(h, xs, ys, holes, 0.04, 0.3, R.metal, bevel=0.009)
+    box(h, (0.44, 0.1, 0.02), (0, 0.09, 0.305), slit, bevel=0)                                # dark lining: eye slit
+    box(h, (0.1, 0.24, 0.02), (0, -0.04, 0.305), slit, bevel=0)                               # dark lining: breathing slot
 
 
 def helm_full(S):
@@ -593,9 +637,12 @@ GOLD = 0xD9A640
 BRONZE = 0x9A6432
 MAIL = 0x5A5E66
 BONE = 0xEEE4CC
-SCALE = 0xB42A1E
-SCALE_DK = 0x6E1812
-SCALE_MID = 0x9A2218
+SCALE = 0x8E1D16          # Scaleguard: deep dragon crimson scales ...
+SCALE_MID = 0x7A1712
+SCALE_DK = 0x3E0A0A       # ... shaded dark where they tuck under the row above ...
+SCALE_TIP = 0x9C3322      # ... and catching the light at their tips
+OXBLOOD = 0x3E0C0E        # the plate under the scales
+WING = 0x9A2218           # Emberstring's wing membranes
 
 
 def u_cinderfang(S):
@@ -630,7 +677,7 @@ def u_emberstring(S):
         beam(b, (0, s * 0.72, z0 + 0.16), (0, s * 0.9, z0 + 0.06), 0.08, metallic(CHAR2), w1=0.015)   # horn tips
         pts = [(0.16, 0.0), (0.4, 0.1), (0.62, 0.17), (0.7, 0.03), (0.58, -0.08), (0.49, 0.0), (0.37, -0.16),
                (0.27, -0.06), (0.17, -0.1)]
-        prism(b, [(-(z + z0), s * y) for y, z in (pts if s < 0 else pts[::-1])], 0.024, (0, 0, 0), SCALE_MID, rot=(0, PI / 2, 0))  # wing
+        prism(b, [(-(z + z0), s * y) for y, z in (pts if s < 0 else pts[::-1])], 0.024, (0, 0, 0), WING, rot=(0, PI / 2, 0))  # wing
     box(b, (0.026, 1.24, 0.026), (0, 0, z0 + 0.195), EMBER_HOT, emissive=EMBER, strength=6, bevel=0)  # burning string
 
 
@@ -699,31 +746,46 @@ def _scale_mix(i, j):
 
 
 def u_scaleguard(S):
-    """Dragon-scale armour: the bold plate cuirass forged in dark crimson, faced front and back with a few rows of
-    big, bright red scales (each standing out a little at its point); heavy red pauldron caps with two big pointed
-    scales shingled down each upper arm; pointed scale tassets; a gold collar, buckle and pauldron rims. No horns or spikes: the power is in the broad, layered shoulders and the big scales."""
+    """Legendary dragon-scale armour: the bold plate cuirass forged in oxblood and faced front and back with rows of big
+    crimson scales, each dark where it tucks under the row above and light at its tip; gold edging on the collar,
+    belt and pauldrons; big layered pauldrons (a raised cap plate over the block cap, two lames stepping down the arm);
+    scaled sleeves over the upper arms and scaled vambraces down to the wrists (no bare shirt or forearm); long
+    layered scale tassets over the thighs. No horns or spikes: the power is in the broad shoulders and the scales."""
     c = S('sock_chest')
-    dk, red, mid, gold = metallic(SCALE_DK), metallic(SCALE), metallic(SCALE_MID), metallic(GOLD)
-    plate_torso(c, color=dk, belt=metallic(CHAR))
-    box(c, (0.56, 0.045, 0.5), (0, 0.41, 0), gold, bevel=0.012)                               # gold collar
-    box(c, (0.14, 0.11, 0.03), (0, BELT_Y, 0.29), gold, bevel=0.012)                          # buckle
+    ox, red, mid, gold = metallic(OXBLOOD), metallic(SCALE), metallic(SCALE_MID), metallic(GOLD)
+    shade = (metallic(SCALE_DK), metallic(SCALE_TIP))
+    plate_torso(c, color=ox, belt=metallic(CHAR))
+    box(c, (0.56, 0.05, 0.5), (0, 0.41, 0), gold, bevel=0.014)                                # gold collar
+    for dy in (-0.043, 0.043):                                                                 # gold belt edges
+        box(c, (0.79, 0.014, 0.58), (0, BELT_Y + dy, 0), gold, bevel=0.004)
+    box(c, (0.15, 0.12, 0.03), (0, BELT_Y, 0.29), gold, bevel=0.012)                          # buckle
     box(c, (0.78, 0.28, 0.49), (0, -0.49, 0), metallic(CHAR), bevel=0.02)                      # under-skirt
     rows = [(0.18, 0.33), (0.06, 0.21), (-0.06, 0.09)]
     for f, hw in faces(c, 0.4, 0.29, sides=False):
-        scale_rows(f, hw - 0.05, rows, [red, mid], SCALE_GAP, w=0.2, flare=0.035, gap=0.05, pattern=_scale_mix)
+        scale_rows(f, hw - 0.05, rows, [red, mid], SCALE_GAP, w=0.2, flare=0.035, gap=0.05, pattern=_scale_mix, shade=shade)
     for f, hw in faces(c, 0.37, 0.27, sides=False):
         scale_rows(pivot(f, 'waist_face', (0, 0, 0.006)), hw - 0.04, [(-0.2, -0.06)], [red, mid], SCALE_GAP, w=0.2,
-                   flare=0.035, gap=0.05, pattern=lambda i, j: _scale_mix(i, j + 3), nm='waist_scale')
-    for x, z, ry, rx in ((-0.19, 0.28, 0, -0.12), (0.19, 0.28, 0, -0.12), (0, -0.28, PI, -0.12)):   # pointed scale tassets
+                   flare=0.035, gap=0.05, pattern=lambda i, j: _scale_mix(i, j + 3), nm='waist_scale', shade=shade)
+    # Long layered tassets: a long pointed scale plate over each thigh (and the seat) under a shorter one.
+    for x, z, ry, rx in ((-0.19, 0.28, 0, -0.1), (0.19, 0.28, 0, -0.1), (0, -0.28, PI, -0.1)):
         f = pivot(c, 'tasset', (x, -0.33, z), (rx, ry, 0))
         w = 0.3 if x else 0.56
-        prism(f, [(-w / 2, 0), (-w / 2, -0.2), (0, -0.3), (w / 2, -0.2), (w / 2, 0)], 0.05, (0, 0, 0), red, bevel=0.012)
+        prism(f, [(-w / 2, 0), (-w / 2, -0.32), (0, -0.44), (w / 2, -0.32), (w / 2, 0)], 0.045, (0, 0, 0), shade[0], bevel=0.012)
+        prism(f, [(-w / 2 - 0.01, 0.01), (-w / 2 - 0.01, -0.16), (0, -0.25), (w / 2 + 0.01, -0.16), (w / 2 + 0.01, 0.01)], 0.045,
+              (0, 0, 0.035), red, bevel=0.012)
     for s in (1, -1):
-        block_pauldron(S, s, color=red, top=None, edge=gold, rivets=None)
-    for g, s in upper_arm_plate(S, color=metallic(CHAR2), lames=False):
-        for k, (y, w, hgt, col) in enumerate(((-0.09, 0.34, 0.22, mid), (-0.19, 0.3, 0.2, red))):
-            f = pivot(g, 'big_scale', (s * (0.168 - 0.008 * k), PALM + y, 0), (0, s * PI / 2, 0))
-            scale_plate(f, 0, 0, col, w=w, hgt=hgt, tilt=-0.3)
+        block_pauldron(S, s, color=red, top=mid, edge=gold, rivets=None)
+    for g, s in upper_arm_plate(S, color=ox, lames=False):
+        arm_lames(g, s, (red, mid), SCALE_GAP)                                                 # layered pauldron lames
+        for f, hw in faces(pivot(g, 'sleeve', (0, PALM - 0.14, 0)), 0.145, 0.155):           # scaled sleeve
+            scale_rows(f, hw - 0.012, [(-0.17, -0.08), (-0.11, -0.02), (-0.05, 0.04)], [red, mid], SCALE_GAP, w=0.1,
+                       flare=0.02, gap=0.06, pattern=_scale_mix, nm='sleeve_scale', shade=shade)
+        arm_box(g, s, (0.305, 0.035, 0.325), (0, -0.305, 0), gold, bevel=0.01)                # gold hem
+        arm_box(g, s, (0.25, 0.2, 0.27), (0, -0.41, 0), ox, bevel=0.025)                       # vambrace
+        for f, hw in faces(pivot(g, 'vambrace', (0, PALM - 0.41, 0)), 0.125, 0.135):
+            scale_rows(f, hw - 0.01, [(-0.07, 0.01), (-0.02, 0.06)], [red, mid], SCALE_GAP, w=0.09, flare=0.016,
+                       gap=0.06, pattern=_scale_mix, nm='vambrace_scale', shade=shade)
+        arm_box(g, s, (0.262, 0.03, 0.282), (0, -0.495, 0), gold, bevel=0.008)                # gold wrist rim
 
 
 GEAR = {

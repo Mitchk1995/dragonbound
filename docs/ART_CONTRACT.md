@@ -58,7 +58,7 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `bow` | `sock_handR` | vertical bow in hand (counter-rotate −90° X inside the socket) |
 | `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
-| `helm_full` | `sock_head` | plain cube-over-cube great helm (`gear.py` `great_helm`): shell, top block, a low `ROLE_cloth` crest and a T visor (eye slit + breathing slot); no rivets, bands or ridges. Every heavy tier wears it (Emberforged adds a crimson crest, horns and a thin ember line in the slit); hides hair and beard |
+| `helm_full` | `sock_head` | plain cube-over-cube great helm (`gear.py` `great_helm`): shell, top block, a low `ROLE_cloth` crest and a T visor cut right through a face plate standing proud of the shell (`slotted_plate`: a real recess with a lit lower lip, over a dark lining); no rivets, bands or ridges. Every heavy tier wears it (Emberforged adds a crimson crest, horns and a thin ember line in the slit); hides hair and beard |
 | `body_chain` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | box mail shirt with a skirt block, fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
 | `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | a few bold blocks, like a toy knight readable at ~100px: chest block over a waist block, belt, gorget, one slab tasset per thigh and one accent (a plain `ROLE_cloth` tabard dyed like the wearer's tunic); block pauldron caps and a plain rerebrace down each upper arm (same as plate set `p`). No lames, ridges, straps, rivets or trim bands |
 | `body_leather` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
@@ -72,9 +72,16 @@ rerebrace or mail sleeve and the couter hang on the palm sockets `sock_handL` / 
 pivot), so they ride the upper arm exactly and never fan away from it (`gear.py` `block_pauldron`, `arm_box`).
 Keep shoulder caps only a little wider than the arm.
 
+Forged metal is textured by the game, not by extra geometry: `ROLE_metal` / `ROLE_dark` of forged palettes (and
+`metallic()` unique parts) get the painted forge recipe (`surface.ts` `forge`, `textures.ts` `forgeTexture`): soft
+hammer marks and draw-marks, a lighter worn lip on every edge and bevel, grime along each plate's foot and a tone of
+its own per plate. Keep plate shapes plain; never add ridges or rivet rows to make metal read as metal.
+
 Tier plate (full helm, platebody, gauntlets, boots) comes from `tools/blender/plate_variants.py` as
 `gear_<model>_<set>.glb`, one set per design (`items.ts` `PLATE_STYLE`): `p` for bronze / iron / steel (one design,
-palette only) and `e` for Emberforged. `export_variant('<set>')` writes them straight into `public/models`.
+palette only) and `e` for Emberforged (blackened gunmetal, a crimson cloth tabard and crest, and one accent: thin
+fixed-colour ember seams glowing in the gaps between the cuirass slabs and under each pauldron, plus the line in the
+visor slit). `export_variant('<set>')` writes them straight into `public/models`.
 
 ### Hair & beards: `hair_<1..4>.glb`, `beard_<1..3>.glb`
 One `sock_head` empty; meshes use `ROLE_hair`. Every hairstyle is ONE sculpted hair mesh (`hair.py` `Mass`), never a base
@@ -83,6 +90,10 @@ nape), shaped only by moving its points (volume, lock ridges, tips, spikes; the 
 pole in the same surface; only its leather tie is a separate part). The head is a cube, so the scalp is a rounded box
 that wraps its corners; `check_cover` refuses a mass that would let the head show through above the hairline (bald
 patches), and `tests/character-art.test.ts` checks the exported hair from outside and that each style is one mesh.
+The edge of the hair sits on the skin (`hug`: the closer a point is to the hairline, the more it is pulled onto the
+head), so no shell floats off the head with a dark gap under it, and `even_rim` spaces the flow lines evenly along
+the hairline. Every hairline point must be reachable from the pole without crossing bare skin: with a pole low behind
+the head the side lines run level, so the temples cannot come lower than the hair over the ear.
 
 ### Enemies/NPCs/props
 Rig names per `src/render/anim.ts` (humanoid: body/head/armL/armR/legL/legR/weapon; quadruped: legFL/legFR/legBL/legBR,

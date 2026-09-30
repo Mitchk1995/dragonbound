@@ -7,6 +7,45 @@ import { SKILL_INFO } from '../progression/skills';
 import type { Item, Slot } from '../types';
 import { cap, esc } from './dom';
 
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+/** The side panel's box when `anchor` sits inside it (and the panel is showing), else null. */
+function sidePanelRect(anchor: Box): Box | null {
+  const side = document.querySelector<HTMLElement>('.sidepanel');
+  if (!side || !side.offsetParent) return null;
+  const r = side.getBoundingClientRect();
+  const cx = anchor.left + anchor.width / 2, cy = anchor.top + anchor.height / 2;
+  return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom ? r : null;
+}
+
+/**
+ * Where a w×h tooltip for the element at `anchor` goes. Inside the side panel it sits OUTSIDE the panel, to its
+ * left, level with the hovered element (so it never covers the panel's other tiles or headers); elsewhere it sits
+ * above the element (below when there is no room). Always clamped on screen.
+ */
+export function tooltipPos(anchor: Box, w: number, h: number, view: { w: number; h: number }, side: Box | null) {
+  const gap = 10, margin = 8;
+  let x: number, y: number;
+  if (side) {
+    x = side.left - w - gap;
+    y = anchor.top + anchor.height / 2 - h / 2;
+  } else {
+    x = anchor.left + anchor.width / 2 - w / 2;
+    y = anchor.top - h - gap;
+    if (y < margin) y = anchor.bottom + gap;
+  }
+  x = Math.max(margin, Math.min(view.w - w - margin, x));
+  y = Math.max(margin, Math.min(view.h - h - margin, y));
+  return { x, y };
+}
+
 const SLOT_LABEL: Record<Slot, string> = { weapon: 'Weapon', helm: 'Helm', body: 'Body', gloves: 'Gloves', boots: 'Boots', amulet: 'Amulet', ring: 'Ring' };
 
 export class Tooltip {
@@ -69,11 +108,7 @@ export class Tooltip {
     const t = this.tip;
     t.style.display = 'block';
     const w = t.offsetWidth, h = t.offsetHeight;
-    let x = rect.left + rect.width / 2 - w / 2;
-    let y = rect.top - h - 10;
-    if (y < 8) y = rect.bottom + 10;
-    x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
-    y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
+    const { x, y } = tooltipPos(rect, w, h, { w: window.innerWidth, h: window.innerHeight }, sidePanelRect(rect));
     t.style.left = `${x}px`;
     t.style.top = `${y}px`;
   }

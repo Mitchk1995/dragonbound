@@ -102,6 +102,42 @@ def head_points(n=16):
     return pts
 
 
+def head_depth(p):
+    """How far the point p (sock_head space) lies inside the chamfered head cube (negative outside)."""
+    h, r = HEAD_HALF, HEAD_BEVEL
+    a = [abs(p[0]), abs(p[1]), abs(p[2])]
+    d = min(h - a[0], h - a[1], h - a[2])
+    for i, j in ((0, 1), (0, 2), (1, 2)):
+        d = min(d, (2 * h - r - a[i] - a[j]) / math.sqrt(2))
+    return d
+
+
+def to_head(q, c, lift=0.004):
+    """The point where the line from the scalp centre c out through q crosses the head surface, `lift` outside it:
+    where a hairline has to sit so the hair meets the skin instead of floating off it."""
+    d = (q - c).normalized()
+    lo, hi = 0.0, 0.6
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if head_depth(c + d * mid) > 0 else (lo, mid)
+    return c + d * (lo + lift)
+
+
+def hug(q, o, m, band=0.16, keep=0.0):
+    """The grid offset `o` of the scalp point q, blended toward the head surface the closer q lies to the hairline of
+    the mass m (fully on it, fading out `band` above it): the rim meets the skin at the temples and sides, with no dark
+    gap under a floating shell, and the hair swells from there into its volume instead of stepping out in a brim.
+    Measured by height above the hairline, not by grid row, because along the sides the lower edge of a mass whose
+    pole is at the back is a flow line (it runs over the ear to the temple), not the first row. `keep` (0..1) spares
+    part of the volume above the hairline row itself (a quiff rising off the forehead)."""
+    above = q.y - m.lo(math.degrees(math.atan2(q.x, q.z - m.sc.c.z)))
+    f = max(0.0, 1 - above / band)
+    f = 1.0 if above < 0.01 else f * f * (3 - 2 * f) * (1 - keep)
+    # Above the rim the target stands a little off the skin (more the higher it is), so the mass never cuts in
+    # across the head's chamfered corners between two grid points.
+    return o + (to_head(q, m.sc.c, 0.004 + 0.35 * max(0.0, above)) - (q + o)) * f
+
+
 class Mass:
     """One cohesive mass of hair over the scalp `sc`, down to the (bearing, y) hairline `line`, laid out as a grid of
     flow lines that all run from the hairline to one `pole` on the scalp (the crown whorl, or the nape where the hair
@@ -117,6 +153,26 @@ class Mass:
         self.e1 = (r - a * r.dot(a)).normalized()
         self.e2 = a.cross(self.e1)
         self._edge = {}
+        self.warp = None
+
+    def even_rim(self, samples=720):
+        """Space the flow lines evenly along the hairline instead of evenly round the pole. A pole far back (a nape or
+        a tie) otherwise bunches the columns at the back and leaves a few long straight rim segments across the
+        temples, which cut the corners and float off the head."""
+        psis = [2 * PI * k / samples for k in range(samples + 1)]
+        pts = [self.point(ps, self.edge(ps)) for ps in psis]
+        acc = [0.0]
+        for p0, p1 in zip(pts, pts[1:]):
+            acc.append(acc[-1] + (p1 - p0).length)
+        total = acc[-1]
+
+        def warp(u):
+            t = (u % 1.0) * total
+            k = max(0, min(samples - 1, next((i for i, a in enumerate(acc) if a >= t), samples) - 1))
+            f = (t - acc[k]) / max(1e-9, acc[k + 1] - acc[k])
+            return psis[k] + (psis[k + 1] - psis[k]) * f + (2 * PI if u >= 1.0 else 0.0)
+        self.warp = warp
+        return self
 
     def point(self, psi, th):
         d = self.a * math.cos(th) + (self.e1 * math.cos(psi) + self.e2 * math.sin(psi)) * math.sin(th)
@@ -145,7 +201,7 @@ class Mass:
         pole (below 1 they end on a ring round it, for a tail to continue from)."""
         def fn(u, v):
             i, j = round(u * nu), round(v * nv)
-            psi = 2 * PI * u
+            psi = self.warp(u) if self.warp else 2 * PI * u
             s = 1 - v * v_end
             th = self.edge(psi) * s
             q = self.point(psi, th)
@@ -198,8 +254,6 @@ def ridge(i, s, amp, fade=0.35):
 # Shared hairline (bearing from the forehead in degrees, y): high over the forehead, down at the temples into a
 # sideburn in front of the ear, up and over the ear, down behind it and low at the nape.
 LINE = [(0, 0.155), (28, 0.145), (45, 0.1), (68, -0.03), (80, 0.065), (102, 0.065), (114, -0.03), (145, -0.1), (180, -0.13)]
-# Swept or tied back: the temples are pulled up with the rest (no sideburn in front of the ear).
-LINE_SWEPT = [(0, 0.16), (28, 0.15), (45, 0.11), (68, 0.06), (80, 0.06), (102, 0.06), (114, -0.03), (145, -0.1), (180, -0.13)]
 DOWN = Vector((0, -1, 0))
 
 
@@ -226,40 +280,60 @@ def hair_1(h):
     build_mass(h, m, 24, 6, shape)
 
 
+# Every point of a hairline has to be reachable along a flow line from the pole without crossing bare skin first,
+# or the rim cuts straight across the gap. A pole low behind the head makes the side lines run level, so the temple
+# fill could not come down past the height it has over the ear; the swept style therefore combs to a whorl at the back
+# of the crown and the tied style's tie sits high, and the side hairline runs over the ear at the top of the ear.
+# Swept back: a clear forehead with the hairline sitting on it, temple fill to the top of the ear, over the ear and
+# down behind it to the nape.
+LINE_COMB = [(0, 0.172), (25, 0.165), (45, 0.112), (62, 0.064), (78, 0.058), (104, 0.058), (118, -0.04), (145, -0.1),
+             (180, -0.13)]
+# Long and tied: parted in the middle, the hair frames the face down to the temples, runs back over the ear and falls
+# behind it to the jaw, then round to the nape and the tie.
+LINE_LONG = [(0, 0.175), (8, 0.15), (28, 0.11), (45, 0.072), (60, 0.058), (106, 0.058), (120, -0.2), (138, -0.2),
+             (165, -0.12), (180, -0.11)]
+
+
 def hair_2(h):
-    """Swept back: every flow line runs from the brow over the crown to the nape, with volume rising off the
-    forehead, ridged like combed locks, ending in a short ducktail at the nape."""
-    sc = Scalp(top=0.33, dz=-0.012)
-    m = Mass(sc, LINE_SWEPT, (0, -0.06, -0.3), ref=(0, 1, 0))
+    """Swept back: every flow line runs from the brow over the crown to the nape; the front rises off the forehead in
+    a tall combed-back wave (clear forehead below it), ridged like combed locks, down to the
+    nape. The rim meets the head all round: short temple fill in front of the ear, no gap at the sides."""
+    sc = Scalp(a=0.256, top=0.33, dz=-0.012)
+    m = Mass(sc, LINE_COMB, (0, 0.3, -0.2)).even_rim()          # whorl at the back of the crown: every line is combed to it
+    nv = 10
 
     def shape(i, j, psi, s, q, n):
-        front = facing(q, 0) * max(0.0, (q.y - 0.05) / 0.25)
-        o = n * (0.008 + ridge(i, s, 0.018) + 0.05 * front * s)
-        if j == 0 and i % 2 == 0:
-            back = facing(q, 180)
-            o += DOWN * 0.045 * back + n * (0.01 + 0.03 * back)
-        return o
-    build_mass(h, m, 32, 7, shape)
+        front = max(0.0, 1 - abs(math.degrees(math.atan2(q.x, q.z))) / 80) ** 0.8   # broad: the wave spans the brow
+        # The combed-back wave: it rises from the hairline (a slope up off the forehead, not a brim over it), is
+        # highest a little behind it and settles toward the crown.
+        rise = min(1.0, (1 - s) / 0.25)
+        wave = front * rise * rise * (3 - 2 * rise) * max(0.0, min(1.0, (s - 0.3) / 0.35)) * 0.078
+        o = n * (0.008 + ridge(i, s, 0.018) + wave * 0.35) + Vector((0, wave, -wave * 0.25))
+        return hug(q, o, m, keep=front * 0.6)
+    build_mass(h, m, 48, nv, shape)
 
 
 def hair_3(h):
-    """Long and tied back: parted in the middle, every flow line runs back to a tie at the back of the head and
-    carries on, unbroken, into a thick tail hanging down the back (one piece: the tail is the same surface as the
-    cap)."""
+    """Long and tied back: a clear centre parting, the hair framing the face down to the temples, running back over
+    each ear and falling behind it to the jaw in a full side mass that shows from the front; every flow line runs back to a tie at
+    the back of the head and carries on, unbroken, into a thick tail hanging down the back (one piece: the tail is
+    the same surface as the cap)."""
     sc = Scalp(top=0.315)
-    pole = Vector((0, 0.05, -0.33))
-    m = Mass(sc, LINE_SWEPT, pole, ref=(0, 1, 0))
-    nu, nv_cap, v_end = 28, 6, 0.8
+    pole = Vector((0, 0.14, -0.33))                     # a high tie: the side lines slope down to the temples
+    m = Mass(sc, LINE_LONG, pole, ref=(0, 1, 0)).even_rim()
+    nu, nv_cap, v_end = 36, 10, 0.8
     # Tail rings after the cap: (centre, radius), ending in the tip.
-    tail = [((0, 0.05, -0.37), 0.075), ((0, 0.0, -0.42), 0.1), ((0, -0.13, -0.44), 0.1), ((0, -0.28, -0.42), 0.08),
-            ((0, -0.42, -0.39), 0.05), ((0, -0.53, -0.36), 0.0)]
+    tail = [((0, 0.14, -0.37), 0.075), ((0, 0.08, -0.43), 0.1), ((0, -0.06, -0.46), 0.1), ((0, -0.22, -0.44), 0.08),
+            ((0, -0.37, -0.4), 0.05), ((0, -0.49, -0.36), 0.0)]
     nv = nv_cap + len(tail)
 
     def cap_shape(i, j, psi, s, q, n):
-        rim = -0.012 if j == 0 else 0.0                                              # a tapered hairline, not a brim
         k = min(i % nu, nu - i % nu)                                                 # columns from the centre line
-        part = facing(q, 0) * min(1.0, s / 0.5) * (-0.03 if k == 0 else 0.018 if k == 1 else 0.0)  # centre parting
-        return n * (0.01 + rim + part + ridge(i, s, 0.022, 0.2) + 0.03 * max(0, 0.45 - s))
+        front = facing(q, 0)
+        part = front * min(1.0, s / 0.3) * (-0.045 if k == 0 else 0.03 if k in (1, 2) else 0.012 if k == 3 else 0.0)  # centre parting
+        side = max(facing(q, 125), facing(q, -125))                                 # the fall behind the ears
+        o = n * (0.012 + part + ridge(i, s, 0.02, 0.2) + 0.03 * max(0, 0.45 - s) + 0.035 * side * min(1.0, s / 0.4))
+        return hug(q, o, m)
     cap = m.grid(nu, nv_cap, cap_shape, v_end)
     check_cover(m, cap, nu, nv_cap, skip_pole=0.5)
     a = m.a
@@ -273,11 +347,11 @@ def hair_3(h):
         prev = Vector(tail[k - 1][0]) if k else pole
         rot = a.rotation_difference((c - prev).normalized())
         e1, e2 = rot @ m.e1, rot @ m.e2
-        psi = 2 * PI * u
+        psi = m.warp(u)                                  # the same columns as the cap, so the tail joins untwisted
         rr = r * (1.08 if round(u * nu) % 2 == 0 else 0.92)
         return tuple(c + (e1 * math.cos(psi) + e2 * math.sin(psi)) * rr)
     surf(h, fn, nu, nv, 0.05, H, closed_u=True, inside=tuple(sc.c), inner=False, walls=(0,))
-    cyl(h, 0.088, 0.088, 0.05, (0, 0.05, -0.37), BAND, rot=(PI / 2, 0, 0), seg=10)       # the tie
+    cyl(h, 0.088, 0.088, 0.05, (0, 0.14, -0.37), BAND, rot=(PI / 2, 0, 0), seg=10)       # the tie
 
 
 def hair_4(h):
