@@ -150,8 +150,34 @@ export class Fx {
         from.z + (to.z - from.z) * t + (Math.random() - 0.5) * j,
       ));
     }
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xcfe8ff, transparent: true, blending: THREE.AdditiveBlending }));
-    this.add(line, 0.18, (f) => ((line.material as THREE.LineBasicMaterial).opacity = f));
+    // WebGL lines are always 1 px wide (invisible at game resolution), so the bolt is geometry:
+    // crossed ribbons (horizontal + vertical, readable from the top-down camera), a wide HDR halo
+    // for bloom and a thin white-hot core.
+    const ribbon = (width: number) => {
+      const pos: number[] = [];
+      const up = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const dir = b.clone().sub(a).normalize();
+        for (const side of [new THREE.Vector3().crossVectors(dir, up).normalize(), up]) {
+          const o = side.clone().multiplyScalar(width / 2);
+          const a0 = a.clone().sub(o), a1 = a.clone().add(o), b0 = b.clone().sub(o), b1 = b.clone().add(o);
+          for (const v of [a0, b0, b1, a0, b1, a1]) pos.push(v.x, v.y, v.z);
+        }
+      }
+      return new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    };
+    const group = new THREE.Group();
+    const mats = [
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6aa8ff).multiplyScalar(1.1), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0xeaf4ff).multiplyScalar(2.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    ];
+    group.add(new THREE.Mesh(ribbon(0.32), mats[0]), new THREE.Mesh(ribbon(0.08), mats[1]));
+    this.add(group, 0.22, (f) => {
+      mats[0].opacity = f * 0.45;
+      // A quick double flicker, like a real strike.
+      mats[1].opacity = f * (f > 0.55 && f < 0.7 ? 0.25 : 1);
+    });
     this.g.glow.burst(new THREE.Vector3(to.x, to.y, to.z), { count: 8, color: [0xcfe8ff, 0x6aa8ff], speed: 5, up: 1, life: 0.25, gravity: 0, size: 0.1 });
   }
 

@@ -314,7 +314,7 @@ async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
     ['magic-basic', 'apprentice_staff', (t) => g.combat.startBasicAttack(t[0]), [0.3, 0.42]],
     ['magic-fireball', 'apprentice_staff', () => g.combat.useAbility('Q'), [0.35, 0.6]],
     ['magic-frost_nova', 'apprentice_staff', () => g.combat.useAbility('W'), [0.15, 0.35]],
-    ['magic-chain_lightning', 'apprentice_staff', () => g.combat.useAbility('E'), [0.1, 0.25]],
+    ['magic-chain_lightning', 'apprentice_staff', () => g.combat.useAbility('E'), [0.16, 0.24]],
   ];
   let n = 1;
   for (const [name, weapon, trigger, times] of cases) {
