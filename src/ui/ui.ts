@@ -284,7 +284,7 @@ export class UI {
     this.xpAcc.clear();
     this.overUI = false;
     this.tooltip.hide();
-    for (const selector of ['.chat', '.banner', '.zonetitle', '.xpdrops', '.hoverlabel']) {
+    for (const selector of ['.banner', '.zonetitle', '.xpdrops', '.hoverlabel']) {
       const node = this.$(selector);
       if (!node) continue; // The initial zone loads before the HUD is built.
       node.innerHTML = '';
