@@ -36,6 +36,9 @@ export interface Hazard {
   emit?: number;
 }
 
+/** Meteor fire-trail density in particles per second (≈3 per frame at 60 fps). */
+const METEOR_TRAIL_RATE = 180;
+
 /** Breath cone density in particles per second (≈10 per frame at 60 fps). */
 const BREATH_RATE = 600;
 
@@ -400,13 +403,18 @@ export class Combat {
       g.shake(0.15, 0.15);
       if (Math.hypot(g.player.x - x, g.player.z - z) < 1.7 + g.player.radius * 0.6) this.damagePlayer(12, source);
     }, source);
+    // Trail emission follows the effect's age (180 particles/s): the same density at any frame
+    // rate, and nothing while paused.
+    let emitted = 0;
     g.fx.add(rock, dur, (f) => {
       rock.position.y = 0.3 + 14 * f;
       rock.rotation.set(f * 9, f * 6, 0);
       halo.scale.setScalar(0.9 + Math.sin(f * 40) * 0.1);
-      for (let k = 0; k < 3; k++) {
-        g.glow.spawn(rock.position.x + (Math.random() - 0.5) * 0.5, rock.position.y + 0.3, rock.position.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.6, 3 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.22 + Math.random() * 0.2, k ? PAL.ember : PAL.fire, 0, 0.5);
+      const due = Math.floor((1 - f) * dur * METEOR_TRAIL_RATE + 1e-6);
+      for (let k = emitted; k < due; k++) {
+        g.glow.spawn(rock.position.x + (Math.random() - 0.5) * 0.5, rock.position.y + 0.3, rock.position.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.6, 3 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.22 + Math.random() * 0.2, k % 3 ? PAL.ember : PAL.fire, 0, 0.5);
       }
+      emitted = Math.max(emitted, due);
     });
   }
 

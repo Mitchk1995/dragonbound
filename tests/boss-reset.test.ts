@@ -4,6 +4,7 @@ import type { Enemy } from '../src/entities/enemy';
 import type { Game } from '../src/game';
 import { Combat, type Hazard } from '../src/systems/combat';
 import { Telegraph } from '../src/fx/telegraph';
+import { Fx } from '../src/systems/fx';
 
 function fixture() {
   const zone = { group: new THREE.Group(), telegraphs: [] as Telegraph[], hazards: [] as Hazard[] };
@@ -71,6 +72,20 @@ describe('boss retreat cleanup', () => {
       return vi.mocked(game.glow.spawn).mock.calls.length;
     });
     for (const count of counts) expect(count).toBeGreaterThanOrEqual(599);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+  });
+
+  it('emits no meteor trail while paused and the same density across frame rates', () => {
+    const counts = [30, 60, 144].map(fps => {
+      const { combat, game, boss } = fixture();
+      (game as { fx: Fx }).fx = new Fx(game);
+      combat.meteor(4, 4, boss);
+      for (let i = 0; i < 10; i++) game.fx.update(0);
+      expect(game.glow.spawn).not.toHaveBeenCalled();
+      for (let i = 0; i < fps; i++) game.fx.update(1 / fps);
+      return vi.mocked(game.glow.spawn).mock.calls.length;
+    });
+    for (const count of counts) expect(count).toBeGreaterThanOrEqual(179);
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 });
