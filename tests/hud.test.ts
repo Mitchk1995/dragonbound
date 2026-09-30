@@ -3,6 +3,7 @@ import { canAfford, computeStats, manaRegenFor, maxManaFor } from '../src/combat
 import { ABILITIES, ABILITY_ELEMENT, abilityFor } from '../src/data/abilities';
 import { MANA_TUNING } from '../src/data/tuning';
 import { SKILLS, type SkillId, type Style } from '../src/types';
+import { tooltipPos } from '../src/ui/tooltip';
 import { SIDE_TABS, TAB_KEYS, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, swapSlots } from '../src/ui/hudLayout';
 
 const levels = (n: number, over: Partial<Record<SkillId, number>> = {}) =>
@@ -117,5 +118,31 @@ describe('inventory drag-rearrange', () => {
     expect(swapSlots(inv, 1, 0)).toBe(false);
     expect(swapSlots(inv, 0, 5)).toBe(false);
     expect(inv).toEqual(['a', null]);
+  });
+});
+
+describe('tooltips never cover the side panel', () => {
+  const box = (left: number, top: number, width: number, height: number) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const view = { w: 1600, h: 900 };
+  const side = box(1260, 380, 330, 510);
+
+  it('a hovered side-panel tile gets its card outside the panel, to its left, level with the tile', () => {
+    const tile = box(1270, 540, 60, 60);
+    const { x, y } = tooltipPos(tile, 240, 160, view, side);
+    expect(x + 240).toBeLessThanOrEqual(side.left);
+    expect(y).toBeLessThanOrEqual(tile.top + 30);
+    expect(y + 160).toBeGreaterThanOrEqual(tile.top + 30);
+  });
+
+  it('stays on screen near the bottom of the panel', () => {
+    const tile = box(1270, 860, 60, 30);
+    const { y } = tooltipPos(tile, 240, 300, view, side);
+    expect(y + 300).toBeLessThanOrEqual(view.h);
+  });
+
+  it('elsewhere the card still sits above its element', () => {
+    const slot = box(700, 800, 60, 60);
+    const { y } = tooltipPos(slot, 200, 100, view, null);
+    expect(y + 100).toBeLessThanOrEqual(slot.top);
   });
 });

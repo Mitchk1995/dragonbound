@@ -897,6 +897,25 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
     await shot('hero-hair');
     st.clear(objs);
   }
+  // Every hair style from the front and from the side at eye level (the gaps under a shell and the hairline show here).
+  {
+    const cells: Parameters<Studio['sheet']>[0] = [];
+    const objs: THREE.Object3D[] = [];
+    for (const [view, eye] of [['front', new THREE.Vector3(0, 1.95, 2.3)], ['side', new THREE.Vector3(2.3, 1.95, -0.2)]] as const) {
+      for (const hair of [1, 2, 3, 4]) {
+        const m = makeModel('hero');
+        const holder = new THREE.Group();
+        holder.add(m.root);
+        new HeroDresser(m).dress({ name: '', skin: 1, hair, hairColor: 1, beard: 0, cloth: 0, cloth2: 5 }, {});
+        new Rig(m.root).update(0, newAnimState());
+        cells.push({ label: `hair ${hair} · ${view}`, obj: holder, eye, at: new THREE.Vector3(0, 1.85, 0) });
+        objs.push(holder);
+      }
+    }
+    st.sheet(cells, 4, 2);
+    await shot('hero-hair-front');
+    st.clear(objs);
+  }
   document.body.classList.remove('inspect-clean');
 }
 

@@ -40,7 +40,7 @@ function dressed(equip: Record<string, string>) {
 }
 
 const glows = (m: THREE.MeshStandardMaterial) => (m.emissive.r * 0.3 + m.emissive.g * 0.59 + m.emissive.b * 0.11) * m.emissiveIntensity > 0.2;
-const recipe = (m: THREE.Material) => m.userData.charPaint as { uPaintW: { value: THREE.Vector4 }; uPaintX: { value: THREE.Vector4 } } | undefined;
+const recipe = (m: THREE.Material) => m.userData.charPaint as { uPaintW: { value: THREE.Vector4 }; uPaintX: { value: THREE.Vector4 }; uPaintY: { value: THREE.Vector4 } } | undefined;
 
 describe('models are hand-painted', () => {
   it('every creature, character, hair and gear material is painted (glows excepted) and graded; no bump', () => {
@@ -97,6 +97,10 @@ describe('models are hand-painted', () => {
     const metalW = (id: string) => materials(dressed({ body: id }).root).filter((m) => m.name.startsWith('ROLE_metal')).map((m) => recipe(m)!.uPaintW.value);
     for (const w of metalW('steel_platebody')) expect(w.y, 'brushed').toBeGreaterThan(w.x);
     for (const w of metalW('leather_body')) expect(w.x, 'mottled').toBeGreaterThan(w.y);
+    // Forged plate carries the forged-metal paint (hammered grain, worn edges, grime); leather does not.
+    const forge = (id: string) => materials(dressed({ body: id }).root).filter((m) => m.name.startsWith('ROLE_metal')).map((m) => recipe(m)!.uPaintY.value.x);
+    for (const f of forge('steel_platebody')) expect(f, 'forged').toBeGreaterThan(0.5);
+    for (const f of forge('leather_body')) expect(f, 'leather is not forged').toBe(0);
   });
 
   it('item icons paint softer than the game', () => {
