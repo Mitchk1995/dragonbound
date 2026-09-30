@@ -6,6 +6,7 @@ import type { Appearance } from '../save/save';
 import type { Item, Slot } from '../types';
 import type { Model } from './kit';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
+import { surfaceForModelMaterial } from './surface';
 
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
@@ -83,7 +84,7 @@ export async function preloadModels(names: string[]) {
 export const hasModel = (name: string) => loaded.has(name);
 
 /** Clone with per-instance materials so hit flashes and recolours stay local. */
-function cloneWithMaterials(src: THREE.Object3D) {
+function cloneWithMaterials(src: THREE.Object3D, file: string) {
   const root = src.clone(true);
   const cloned = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   root.traverse((o) => {
@@ -95,6 +96,7 @@ function cloneWithMaterials(src: THREE.Object3D) {
       m = orig.clone();
       m.userData.baseEmissive = m.emissive.clone();
       m.userData.baseIntensity = m.emissiveIntensity;
+      surfaceForModelMaterial(file, m);
       cloned.set(orig, m);
     }
     o.material = m;
@@ -105,7 +107,7 @@ function cloneWithMaterials(src: THREE.Object3D) {
 export function makeModel(name: string): Model {
   const src = loaded.get(name);
   if (!src) return MODEL_BUILDERS[name]();
-  const { root, mats } = cloneWithMaterials(src.scene);
+  const { root, mats } = cloneWithMaterials(src.scene, name);
   return { root: root as THREE.Group, mats, height: src.height };
 }
 
@@ -164,7 +166,7 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     if (!ph) return parts;
     src = ph;
   }
-  const { root } = cloneWithMaterials(src);
+  const { root } = cloneWithMaterials(src, file);
   applyRoles(root, paletteRoles(palette), !!palette.glow);
   const sockets: THREE.Object3D[] = [];
   root.traverse((o) => {
@@ -245,7 +247,7 @@ export class HeroDresser {
   private attachFile(file: string, colors: RoleColors) {
     const src = loaded.get(file)?.scene ?? PLACEHOLDER_GEAR[file]?.();
     if (!src) return;
-    const { root } = cloneWithMaterials(src);
+    const { root } = cloneWithMaterials(src, file);
     applyRoles(root, colors);
     const parts = new Map<string, THREE.Object3D>();
     root.traverse((o) => {

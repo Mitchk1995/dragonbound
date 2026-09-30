@@ -57,7 +57,7 @@ export interface Tier {
 export const TIERS: Record<TierId, Tier> = {
   bronze: { id: 'bronze', name: 'Bronze', palette: { main: 0xb4743a, trim: 0xe3a45a, dark: 0x6a4020 }, req: 1, smith: 1, xpPerBar: 12.5, bar: 'bronze_bar', minIlvl: 1 },
   iron: { id: 'iron', name: 'Iron', palette: { main: 0x8a9098, trim: 0xb8bec6, dark: 0x484c52 }, req: 10, smith: 15, xpPerBar: 25, bar: 'iron_bar', minIlvl: 4 },
-  steel: { id: 'steel', name: 'Steel', palette: { main: 0xc6ced8, trim: 0xe0b44a, dark: 0x5e6874 }, req: 20, smith: 30, xpPerBar: 37.5, bar: 'steel_bar', minIlvl: 9 },
+  steel: { id: 'steel', name: 'Steel', palette: { main: 0x9aa4b0, trim: 0xe0b44a, dark: 0x3e444c }, req: 20, smith: 30, xpPerBar: 37.5, bar: 'steel_bar', minIlvl: 9 },
   ember: { id: 'ember', name: 'Emberforged', palette: { main: 0x4a2622, trim: 0xff7a1a, dark: 0x201010, glow: true }, req: 30, smith: 40, xpPerBar: 60, bar: 'ember_bar', minIlvl: 15 },
 };
 export const TIER_ORDER: TierId[] = ['bronze', 'iron', 'steel', 'ember'];

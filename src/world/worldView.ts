@@ -4,6 +4,8 @@ import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { Cell, Ground, type ZoneLayout } from './layout';
 import { buildProp, type Prop } from './props';
+import { addPatch, applyGround, applySurface } from '../render/surface';
+import type { SurfaceKind } from '../render/textures';
 
 // ─── See-through occlusion ──────────────────────────────────────────────────
 
@@ -22,7 +24,7 @@ export const OCCLUDE = {
  * never hide the hero, and nothing pops in or out.
  */
 export function makeOccludable(mat: THREE.Material) {
-  mat.onBeforeCompile = (shader) => {
+  addPatch(mat, { key: 'occlude', apply: (shader) => {
     Object.assign(shader.uniforms, OCCLUDE);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vOccWorld;')
@@ -69,8 +71,7 @@ export function makeOccludable(mat: THREE.Material) {
           }
         }`,
       );
-  };
-  mat.customProgramCacheKey = () => 'occludable';
+  } });
 }
 
 // ─── Sky ────────────────────────────────────────────────────────────────────
@@ -126,6 +127,19 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) heights[z * (w + 1) + x] = (rng() - 0.5) * 0.1;
   const pos: number[] = [];
   const col: number[] = [];
+  const splat: number[] = [];
+  // Ground-texture weights per grid vertex: the average of the (up to four) cells touching it,
+  // so dirt, grass, flagstone and cave rock blend across cell borders.
+  const SPLAT: Record<number, number> = {
+    [Ground.Dirt]: 0, [Ground.Path]: 0, [Ground.Camp]: 0, [Ground.Grass]: 1,
+    [Ground.Arena]: 2, [Ground.Stone]: 2, [Ground.Cave]: 3, [Ground.Scorch]: 3,
+  };
+  const vSplat = new Float32Array((w + 1) * (h + 1) * 4);
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    if (at(x, z) === Cell.Void) continue;
+    const ch = SPLAT[layout.ground[z * w + x]] ?? 0;
+    for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) vSplat[(zz * (w + 1) + xx) * 4 + ch] += 1;
+  }
   const c = new THREE.Color(), c2 = new THREE.Color();
   for (let z = 0; z < h; z++) {
     for (let x = 0; x < w; x++) {
@@ -137,26 +151,33 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       c.offsetHSL(0, 0, (rng() - 0.5) * 0.05);
       const y = (xx: number, zz: number) => (cell === Cell.Cliff || cell === Cell.Wall ? 0.2 : heights[zz * (w + 1) + xx]);
       const v = [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]].map(([xx, zz]) => [xx, y(xx, zz), zz]);
+      const corners = [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]];
       for (const i of [0, 2, 1, 0, 3, 2]) {
         pos.push(...v[i]);
         col.push(c.r, c.g, c.b);
+        const o = (corners[i][1] * (w + 1) + corners[i][0]) * 4;
+        splat.push(vSplat[o], vSplat[o + 1], vSplat[o + 2], vSplat[o + 3]);
       }
     }
   }
   const groundGeo = new THREE.BufferGeometry();
   groundGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  groundGeo.setAttribute('aSplat', new THREE.Float32BufferAttribute(splat, 4));
   groundGeo.computeVertexNormals();
-  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 }));
+  const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
+  applyGround(groundMat);
+  const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
   ground.name = 'ground';
   group.add(ground);
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const e = new THREE.Euler();
-  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean) => {
+  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind) => {
     if (!mats.length) return;
     const mat = new THREE.MeshStandardMaterial({ color: cols ? 0xffffff : color, flatShading: true, roughness: 0.9 });
+    if (surface) applySurface(mat, surface, 'world');
     if (occlude) makeOccludable(mat);
     const mesh = new THREE.InstancedMesh(geo, mat, mats.length);
     mats.forEach((mm, i) => {
@@ -249,15 +270,17 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       }
     }
   }
-  inst(trunkGeo, trees, null, theme.trees === 'ash' ? 0x2a2420 : 0x4a3020, true);
-  inst(canopy[theme.trees], trees, treeCols, 0, true);
-  inst(new THREE.DodecahedronGeometry(0.62, 0), rocks, rockCols, 0, true);
+  inst(trunkGeo, trees, null, theme.trees === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark');
+  inst(canopy[theme.trees], trees, treeCols, 0, true, theme.trees === 'ash' ? 'bark' : 'leaves');
+  inst(new THREE.DodecahedronGeometry(0.62, 0), rocks, rockCols, 0, true, 'stone');
   const wallGeo = theme.wall === 'cave' ? new THREE.DodecahedronGeometry(0.7, 0).scale(1, 0.72, 1) : new THREE.BoxGeometry(1, 1, 1);
-  inst(wallGeo, walls, wallCols, 0, true);
+  inst(wallGeo, walls, wallCols, 0, true, 'stone');
   if (under.length) {
-    inst(new THREE.ConeGeometry(0.7, 1, 6).rotateX(Math.PI).translate(0, 0, 0), under, null, 0x4a3e38, false);
+    inst(new THREE.ConeGeometry(0.7, 1, 6).rotateX(Math.PI).translate(0, 0, 0), under, null, 0x4a3e38, false, 'stone');
     // A solid core under the whole island so it reads as one mass.
-    const core = new THREE.Mesh(new THREE.ConeGeometry(w * 0.38, 16, 9).rotateX(Math.PI), new THREE.MeshStandardMaterial({ color: 0x3a302c, flatShading: true }));
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0x3a302c, flatShading: true });
+    applySurface(coreMat, 'stone', 'world', 0.5);
+    const core = new THREE.Mesh(new THREE.ConeGeometry(w * 0.38, 16, 9).rotateX(Math.PI), coreMat);
     core.position.set(w / 2, -8.2, h / 2);
     group.add(core);
   }
