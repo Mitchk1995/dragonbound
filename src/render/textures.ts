@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { mulberry32 } from '../core/rng';
 
 /**
- * Procedural surface textures. The Blender models have no UVs, so detail is projected
- * triplanar and used to modulate albedo and, for rock, as a gentle bump map. Everything is
- * generated at startup: no files. Detail is opt-in per call site (stone props, rocks, walls,
- * tree trunks): characters, gear, foliage and most props stay clean flat colour.
+ * Procedural textures, generated at startup (no files). The Blender models have no UVs, so
+ * detail is projected in the shader. This module holds the pattern generators and three atlases:
+ * the ground atlas (surface.ts applyGround), the character atlas (surface.ts applyCharPaint:
+ * painted albedo for characters, creatures and gear) and the legacy per-kind surface textures
+ * (applySurface, kept for callers without a painted kind). World props use paint.ts.
  */
 
 export type SurfaceKind =
@@ -107,16 +108,6 @@ function rock(seed: number): Gen {
     const ridge = 1 - Math.abs(ridgeN(x, y) * 2 - 1);
     return 0.28 + n(x, y) * 0.52 + ridge * 0.1 - crack;
   };
-}
-
-/**
- * Smooth floor rock for walkable cave, lair and scorched ground: lumpy fbm over broad swells (the
- * lair's lava glows in the low hollows). No cracks or cell edges: at game zoom any line pattern
- * that repeats reads as a decal.
- */
-function floorRock(seed: number): Gen {
-  const n = fbm(seed, 3, 5), broad = fbm(seed + 4, 2, 3);
-  return (x, y) => paintSteps(0.22 + n(x, y) * 0.5 + broad(x, y) * 0.24, 5);
 }
 
 /** Flat painted tones in soft steps (see paint.ts posterize; duplicated to keep this module leaf). */
@@ -251,15 +242,102 @@ export function noiseTexture(): THREE.Texture {
   return makeTexture('noise', (x, y) => (v[y * SIZE + x] - lo) / (hi - lo));
 }
 
-/** Ground atlas: R dirt/pebbles, G grass, B flagstones, A smooth floor rock (cliff faces use 'stone'). */
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const sstep = (a: number, b: number, x: number) => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+const hash2 = (a: number, b: number, seed: number) => {
+  let h = Math.imul((a * 73856093) ^ (b * 19349663) ^ (seed * 83492791), 0x5bd1e995);
+  h ^= h >>> 15;
+  return ((Math.imul(h, 0x27d4eb2d) ^ (h >>> 13)) >>> 0) / 4294967296;
+};
+const wrap = (i: number, n: number) => ((i % n) + n) % n;
+
+/**
+ * Rescale a generator so its values span 0..1 over the tile (between the 2nd and 98th
+ * percentile): raw fbm sits in a narrow band around 0.5 and paints almost nothing. The result
+ * only accepts the integer texel coordinates the texture builders pass.
+ */
+export function stretch(gen: Gen): Gen {
+  const v = new Float32Array(SIZE * SIZE);
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) v[y * SIZE + x] = gen(x, y);
+  const sorted = Float32Array.from(v).sort();
+  const lo = sorted[Math.floor(v.length * 0.02)], hi = sorted[Math.floor(v.length * 0.98)];
+  return (x, y) => clamp01((v[y * SIZE + x] - lo) / Math.max(1e-6, hi - lo));
+}
+
+/**
+ * Laid paving: a grid of 16 Ã— 16 half-unit cells packed with stones one to three cells long and
+ * one or two deep (so sizes vary and joints never run in long straight lines), dark mortar gaps
+ * with a slightly wobbly painted edge, a worn darker bevel round each stone, a paler far edge,
+ * and its own tone per stone.
+ */
+function paving(seed: number): Gen {
+  const N = 16, cell = SIZE / N, rng = mulberry32(seed);
+  const id = new Int32Array(N * N).fill(-1);
+  const rects: [number, number, number, number][] = [];
+  for (let cy = 0; cy < N; cy++) {
+    for (let cx = 0; cx < N; cx++) {
+      if (id[cy * N + cx] >= 0) continue;
+      const r = rng();
+      let w = r < 0.3 ? 1 : r < 0.75 ? 2 : 3;
+      let h = rng() < 0.4 ? 2 : 1;
+      w = Math.min(w, N - cx);
+      h = Math.min(h, N - cy);
+      let free = 0;
+      while (free < w && id[cy * N + cx + free] < 0) free++;
+      w = free;
+      if (h === 2) for (let i = 0; i < w; i++) if (id[(cy + 1) * N + cx + i] >= 0) h = 1;
+      const k = rects.length;
+      rects.push([cx, cy, w, h]);
+      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) id[(cy + dy) * N + cx + dx] = k;
+    }
+  }
+  const jitter = fbm(seed + 1, 8, 2), mott = stretch(fbm(seed + 2, 6, 3)), broad = stretch(fbm(seed + 3, 2, 2));
+  return (x, y) => {
+    const k = id[Math.floor(y / cell) * N + Math.floor(x / cell)];
+    const [x0, y0, w, h] = rects[k];
+    const px = x + 0.5, py = y + 0.5;
+    const top = py - y0 * cell;
+    // Distance to the stone's edge with worn, rounded corners.
+    const dx = Math.min(px - x0 * cell, (x0 + w) * cell - px), dy = Math.min(top, (y0 + h) * cell - py), rc = 4;
+    const edge = dx < rc && dy < rc ? rc - Math.hypot(rc - dx, rc - dy) : Math.min(dx, dy);
+    const d = edge + (jitter(x, y) - 0.5) * 2.5;
+    const tone = 0.54 + (hash2(k, 3, seed) - 0.5) * 0.32 + (broad(x, y) - 0.5) * 0.1 + (paintSteps(mott(x, y), 4, 0.45) - 0.5) * 0.1;
+    const bevel = 1 - sstep(1.6, 5.5, d);
+    const far = (1 - sstep(1.5, 5, top)) * sstep(1, 2.5, d);
+    const face = tone - bevel * 0.12 + far * 0.08;
+    return 0.12 + (face - 0.12) * sstep(0.6, 1.8, d);
+  };
+}
+
+/**
+ * Walkable cave and lair floor: wandering strata bands in flat painted tones, broad light and
+ * dark patches and scattered pale pebbles. Never darker than ~0.38, so the lair's lava only
+ * glows in the rim pools, not through the floor.
+ */
+function floorStrata(seed: number): Gen {
+  const warp = fbm(seed, 2, 3), bands = tileNoise(seed + 1, 1, 7), broad = stretch(fbm(seed + 2, 2, 3)), blot = stretch(fbm(seed + 3, 6, 3));
+  const peb = worley(seed + 4, 12), pebMask = fbm(seed + 5, 3, 2);
+  const strata = stretch((x, y) => bands(x, y + (warp(x, y) - 0.5) * 110));
+  return (x, y) => {
+    const [p1] = peb(x, y);
+    const pebble = pebMask(x, y) > 0.54 ? 1 - sstep(2.5, 4.5, p1) : 0;
+    const v = paintSteps(strata(x, y) * 0.6 + broad(x, y) * 0.4, 5, 0.35);
+    return 0.4 + v * 0.42 + (blot(x, y) - 0.5) * 0.06 + pebble * 0.1;
+  };
+}
+
+/** Ground atlas: R dirt/pebbles, G grass, B laid paving, A cave/lair floor rock (cliff faces use the painted rock). */
 export function groundTexture(): THREE.Texture {
   const hit = cache.get('ground');
   if (hit) return hit;
   // Painted, calm and large-scale: flat tonal patches, soft clumps, a few big pebbles. No speckle.
   const dirtN = fbm(201, 4, 3), pebbles = worley(202, 9), pebMask = fbm(207, 3, 2);
   const grassN = fbm(203, 4, 3), grassClump = worley(204, 8);
-  const flag = worley(205, 5), flagN = fbm(206, 4, 3);
-  const cave = floorRock(208);
+  const stone = paving(205);
+  const cave = floorStrata(208);
   const data = new Uint8Array(SIZE * SIZE * 4);
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
@@ -269,17 +347,11 @@ export function groundTexture(): THREE.Texture {
       const [c1] = grassClump(x, y);
       const clump = Math.max(0, 1 - c1 / 17);
       const grass = paintSteps(0.22 + grassN(x, y) * 0.5, 5) + clump * clump * 0.16;
-      const [f1, f2, id] = flag(x, y);
-      const g = f2 - f1;
-      const grout = Math.max(0, Math.min(1, (g - 1.2) / 2.5));
-      const rim = Math.max(0, Math.min(1, (g - 2.5) / 3)) * Math.max(0, 1 - (g - 5.5) / 6);
-      const face = 0.4 + paintSteps(id, 5) * 0.26 + paintSteps(flagN(x, y), 4) * 0.14 + rim * 0.08;
-      const stone = 0.16 + (face - 0.16) * grout;
       const i = (y * SIZE + x) * 4;
-      data[i] = Math.max(0, Math.min(1, dirt)) * 255;
-      data[i + 1] = Math.max(0, Math.min(1, grass)) * 255;
-      data[i + 2] = Math.max(0, Math.min(1, stone)) * 255;
-      data[i + 3] = Math.max(0, Math.min(1, cave(x, y))) * 255;
+      data[i] = clamp01(dirt) * 255;
+      data[i + 1] = clamp01(grass) * 255;
+      data[i + 2] = clamp01(stone(x, y)) * 255;
+      data[i + 3] = clamp01(cave(x, y)) * 255;
     }
   }
   const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
@@ -289,5 +361,84 @@ export function groundTexture(): THREE.Texture {
   tex.anisotropy = 8;
   tex.needsUpdate = true;
   cache.set('ground', tex);
+  return tex;
+}
+
+// ─── Character atlas ────────────────────────────────────────────────────────
+
+/**
+ * Overlapping dragon scales in rows (four across the tile): free edges point down (V is up on
+ * side faces), each scale lit across its bulge with its own tone, a darker rim along its edge and
+ * a soft shadow where it tucks under the row above.
+ */
+function scaleRows(seed: number): Gen {
+  const cols = 4, w = SIZE / cols, rh = w / 2, rows = SIZE / rh, R = w * 0.6;
+  const blot = fbm(seed + 1, 4, 2);
+  const inRow = (j: number, x: number, y: number) => {
+    const off = wrap(j, 2) * 0.5, cy = j * rh;
+    const k0 = Math.round(x / w - off);
+    let best = Infinity, bk = 0;
+    for (let k = k0 - 1; k <= k0 + 1; k++) {
+      const d = Math.hypot(x - (k + off) * w, y - cy);
+      if (d < best) {
+        best = d;
+        bk = k;
+      }
+    }
+    return { d: best, k: bk, cx: (bk + off) * w, cy };
+  };
+  return (x, y) => {
+    const px = x + 0.5, py = y + 0.5;
+    // Highest row first: a scale overlaps the ones below it.
+    for (let j = Math.floor((py + R) / rh); j >= Math.ceil((py - R) / rh); j--) {
+      const s = inRow(j, px, py);
+      if (s.d >= R) continue;
+      const above = inRow(j + 1, px, py).d - R;
+      const tuck = 1 - sstep(0, 7, above);
+      const rr = s.d / R;
+      const bulge = 1 - sstep(0.05, 0.75, Math.hypot(px - s.cx, py - (s.cy - R * 0.3)) / R);
+      const v = 0.55 + (hash2(wrap(j, rows), wrap(s.k, cols), seed) - 0.5) * 0.12 + bulge * 0.12 - sstep(0.7, 0.98, rr) * 0.26 - tuck * 0.16 + (blot(x, y) - 0.5) * 0.06;
+      return paintSteps(v, 6, 0.55);
+    }
+    return 0.4;
+  };
+}
+
+/**
+ * The character atlas: four calm painted patterns, one per channel, 0.5 = the base colour.
+ * R mottle (leather, skin, hide, stone, bone), G vertical brushing (metal, wood grain, hair
+ * strands), B cloth folds with a faint large weave, A dragon scales. One texture, one fetch.
+ */
+export function charTexture(): THREE.Texture {
+  const hit = cache.get('char');
+  if (hit) return hit;
+  const mottle = stretch(fbm(701, 3, 4)), mottleFine = stretch(fbm(702, 8, 2));
+  const streak = tileNoise(711, 40, 1), streak2 = tileNoise(712, 17, 1), brushBroad = stretch(fbm(713, 2, 3));
+  const foldWarp = fbm(721, 2, 2), folds = tileNoise(722, 5, 1), clothBlot = stretch(fbm(723, 3, 3));
+  const scales = scaleRows(731);
+  const foldN = stretch((x, y) => folds(x + (foldWarp(x, y) - 0.5) * 70, y));
+  const data = new Uint8Array(SIZE * SIZE * 4);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const r = 0.5 + (paintSteps(mottle(x, y), 5, 0.5) - 0.5) * 0.85 + (mottleFine(x, y) - 0.5) * 0.15;
+      const g = 0.5 + (streak(x, y) - 0.5) * 0.4 + (streak2(x, y) - 0.5) * 0.2 + (brushBroad(x, y) - 0.5) * 0.5;
+      const weave = ((Math.floor(x / 8) + Math.floor(y / 8)) % 2 ? 1 : -1) * 0.025;
+      const b = 0.5 + (paintSteps(foldN(x, y), 4, 0.7) - 0.5) * 0.6 + (clothBlot(x, y) - 0.5) * 0.25 + weave;
+      const i = (y * SIZE + x) * 4;
+      data[i] = clamp01(r) * 255;
+      data[i + 1] = clamp01(g) * 255;
+      data[i + 2] = clamp01(b) * 255;
+      data[i + 3] = clamp01(scales(x, y)) * 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  tex.name = 'char';
+  cache.set('char', tex);
   return tex;
 }

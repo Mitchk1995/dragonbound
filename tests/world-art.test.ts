@@ -96,7 +96,8 @@ describe('painted albedo', () => {
       // The wrap-around seam is no harsher than an ordinary step inside the tile.
       expect(wrap / (2 * n), 'seam').toBeLessThan(inner / (2 * n) * 1.6 + 3);
       expect(max - min, 'contrast').toBeGreaterThan(40);
-      expect(p.amount, 'calm').toBeLessThanOrEqual(0.36);
+      // Foliage paints strongest (leaf clumps must read from the gameplay camera); still calm.
+      expect(p.amount, 'calm').toBeLessThanOrEqual(0.5);
     });
   }
   it('paint replaces any surface patch in the same slot and keeps V up on side faces', () => {

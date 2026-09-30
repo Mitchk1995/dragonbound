@@ -1,5 +1,5 @@
 /**
- * The clean look: models are flat colour with a soft vertical grade, forged metal reflects the
+ * The painted look: models carry hand-painted albedo and a soft vertical grade, forged metal reflects the
  * studio environment, and item icons fill their slot. Uses the real exported GLBs.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeItem } from '../src/loot/itemGen';
 import { studioEnv, studioRadiance } from '../src/render/env';
-import { iconSubject } from '../src/render/icons3d';
+import { ICON_PAINT_GAIN, iconSubject } from '../src/render/icons3d';
 import { HeroDresser, MODEL_FILES, makeModel, registerModelScene } from '../src/render/registry';
 import { patchKeys } from '../src/render/surface';
 
@@ -39,16 +39,78 @@ function dressed(equip: Record<string, string>) {
   return model;
 }
 
-describe('models are clean', () => {
-  it('no creature, character, hair or gear material carries a surface texture; all are graded', () => {
+const glows = (m: THREE.MeshStandardMaterial) => (m.emissive.r * 0.3 + m.emissive.g * 0.59 + m.emissive.b * 0.11) * m.emissiveIntensity > 0.2;
+const recipe = (m: THREE.Material) => m.userData.charPaint as { uPaintW: { value: THREE.Vector4 }; uPaintX: { value: THREE.Vector4 } } | undefined;
+
+describe('models are hand-painted', () => {
+  it('every creature, character, hair and gear material is painted (glows excepted) and graded; no bump', () => {
     const roots = ['goblin', 'kobold', 'drakeling', 'cinderwing', 'whelp', 'warden', 'golem'].map((n) => makeModel(n).root);
     roots.push(dressed({ helm: 'steel_fullhelm', body: 'bronze_platebody', gloves: 'iron_gauntlets', boots: 'iron_boots', weapon: 'steel_sword' }).root);
     for (const root of roots) {
       for (const m of materials(root)) {
-        expect(patchKeys(m).some((k) => k.startsWith('surface')), `${root.name} ${m.name}`).toBe(false);
-        expect(patchKeys(m), `${root.name} ${m.name}`).toContain('grade:root');
+        const keys = patchKeys(m);
+        expect(keys.some((k) => k.startsWith('surface')), `${root.name} ${m.name}: old bump surface`).toBe(false);
+        expect(keys, `${root.name} ${m.name}`).toContain('grade:root');
+        if (!glows(m) && !m.name.startsWith('ROLE_glow')) expect(keys.some((k) => k.startsWith('cpaint:')), `${root.name} ${m.name} painted`).toBe(true);
       }
     }
+  });
+
+  it('merged parts carry one continuous rest frame: a limb\'s pattern lines up with the body at rest', () => {
+    const model = makeModel('goblin');
+    model.root.updateMatrixWorld(true);
+    const inv = model.root.matrixWorld.clone().invert();
+    let checked = 0;
+    model.root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || !o.geometry.getAttribute('aRest')) return;
+      const pos = o.geometry.attributes.position, rest = o.geometry.attributes.aRest;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i += 17) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).applyMatrix4(inv);
+        expect(rest.getX(i)).toBeCloseTo(v.x, 4);
+        expect(rest.getY(i)).toBeCloseTo(v.y, 4);
+        expect(rest.getZ(i)).toBeCloseTo(v.z, 4);
+        checked++;
+      }
+    });
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  it('creatures take their own recipes: scaled dragons, mossy stone golem', () => {
+    const weightsOf = (name: string) => {
+      const out: THREE.Vector4[] = [];
+      makeModel(name).root.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const w = o.geometry.getAttribute('aPaintW');
+        if (w) for (let i = 0; i < w.count; i += 3) out.push(new THREE.Vector4().fromBufferAttribute(w, i));
+      });
+      return out;
+    };
+    for (const d of ['drakeling', 'kobold', 'cinderwing']) expect(weightsOf(d).some((w) => w.w > 0.3), `${d} scales`).toBe(true);
+    const whelp = weightsOf('whelp');
+    expect(whelp.some((w) => w.w > 0), 'whelp scales').toBe(true);
+    expect(Math.max(...whelp.map((w) => w.w)), 'whelp softer').toBeLessThan(0.25);
+    expect(weightsOf('golem').every((w) => w.x > 0.25), 'golem stone').toBe(true);
+  });
+
+  it('gear recipes follow the palette: forged tiers paint as metal, leather armour as leather', () => {
+    const metalW = (id: string) => materials(dressed({ body: id }).root).filter((m) => m.name.startsWith('ROLE_metal')).map((m) => recipe(m)!.uPaintW.value);
+    for (const w of metalW('steel_platebody')) expect(w.y, 'brushed').toBeGreaterThan(w.x);
+    for (const w of metalW('leather_body')) expect(w.x, 'mottled').toBeGreaterThan(w.y);
+  });
+
+  it('item icons paint softer than the game', () => {
+    const { holder } = iconSubject(makeItem('steel_fullhelm'));
+    let n = 0;
+    holder.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      const u = (o.material as THREE.Material).userData.charPaint;
+      if (!u) return;
+      expect(u.uCharGain.value).toBe(ICON_PAINT_GAIN);
+      n++;
+    });
+    expect(n).toBeGreaterThan(0);
+    expect(ICON_PAINT_GAIN).toBeLessThan(1);
   });
 
   it('the grade follows the model root, so attached gear shares the wearer\'s gradient', () => {
