@@ -60,6 +60,54 @@ def c(name):
     return PAL[name] if isinstance(name, str) else name
 
 
+# ─── Role materials (recoloured at runtime, see docs/ART_CONTRACT.md) ─────────
+# Neutral placeholder colours; the game replaces them per skin tone / cloth dye / gear tier.
+ROLE_COLORS = {
+    'skin': 0xE0AC84, 'hair': 0x5A3A22, 'cloth': 0x3A6EA5, 'cloth2': 0x4B4B58, 'leather': 0x6A4428,
+    'metal': 0xA9B3BD, 'trim': 0xD4A84A, 'dark': 0x3A3A44, 'glow': 0xFFB040,
+}
+
+
+def role(name):
+    """Material named exactly ROLE_<name>; `glow` is emissive."""
+    if name not in ROLE_COLORS:
+        raise ValueError(f'unknown role {name}')
+    key = f'ROLE_{name}'
+    m = bpy.data.materials.get(key)
+    if m:
+        return m
+    m = bpy.data.materials.new(key)
+    m.use_nodes = True
+    bsdf = m.node_tree.nodes.get('Principled BSDF')
+    bsdf.inputs['Base Color'].default_value = hex_rgba(ROLE_COLORS[name])
+    bsdf.inputs['Roughness'].default_value = 0.75
+    bsdf.inputs['Metallic'].default_value = 0.0
+    if name == 'glow':
+        bsdf.inputs['Emission Color'].default_value = hex_rgba(ROLE_COLORS[name])
+        bsdf.inputs['Emission Strength'].default_value = 3.0
+    return m
+
+
+class _Roles:
+    """`R.metal` == 'ROLE:metal' -- pass anywhere a colour is accepted."""
+    def __getattr__(self, n):
+        if n.startswith('__'):
+            raise AttributeError(n)
+        return 'ROLE:' + n
+
+
+R = _Roles()
+
+
+def resolve_mat(color, emissive=None, strength=2.0, double_sided=False):
+    """Colour spec -> material. Accepts a PAL key, a hex int, 'ROLE:<name>' or a bpy Material."""
+    if isinstance(color, bpy.types.Material):
+        return color
+    if isinstance(color, str) and color.startswith('ROLE:'):
+        return role(color[5:])
+    return mat(c(color), c(emissive) if emissive is not None else None, strength, double_sided)
+
+
 def fresh_scene(name):
     """Build each asset in its own scene so the user's own scenes are never touched."""
     old = bpy.data.scenes.get(name)
@@ -102,7 +150,7 @@ def _mesh_obj(bm, parent, pos, rot, color, emissive=None, strength=2.0, name=Non
     bm.free()
     for p in me.polygons:
         p.use_smooth = False
-    me.materials.append(mat(c(color), c(emissive) if emissive is not None else None, strength, double_sided))
+    me.materials.append(resolve_mat(color, emissive, strength, double_sided))
     obj = bpy.data.objects.new(name or f'p{_counter[0]}', me)
     return _link(obj, parent, pos, rot)
 
@@ -154,6 +202,43 @@ def membrane(parent, pts, color, y=0.0, thickness=0.03):
         bm.faces.new((top[i], bot[i], bot[j], top[j]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return _mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color, double_sided=True)
+
+
+def prism(parent, pts, depth, pos, color, rot=(0, 0, 0), emissive=None, strength=2.0, bevel=0.0):
+    """Outline of (x, y) points (counter-clockwise) extruded +-depth/2 along local Z. Good for blades/spikes/scales."""
+    bm = bmesh.new()
+    front = [bm.verts.new((x, y, depth / 2)) for x, y in pts]
+    back = [bm.verts.new((x, y, -depth / 2)) for x, y in pts]
+    bm.faces.new(front)
+    bm.faces.new(list(reversed(back)))
+    n = len(pts)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((front[i], back[i], back[j], front[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    if bevel > 0:
+        bmesh.ops.bevel(bm, geom=list(bm.edges), offset=bevel, segments=1, affect='EDGES', profile=0.5, clamp_overlap=True)
+    return _mesh_obj(bm, parent, pos, rot, color, emissive, strength)
+
+
+def ring(parent, r_out, r_in, h, pos, color, rot=(0, 0, 0), seg=8, emissive=None, strength=2.0):
+    """Flat band / collar around local Y (rims, cage hoops, bracelets)."""
+    bm = bmesh.new()
+    rings = []
+    for (r, y) in ((r_out, h / 2), (r_out, -h / 2), (r_in, -h / 2), (r_in, h / 2)):
+        rings.append([bm.verts.new((math.cos(a) * r, y, math.sin(a) * r)) for a in (i * 2 * math.pi / seg for i in range(seg))])
+    for k in range(4):
+        a, b = rings[k], rings[(k + 1) % 4]
+        for i in range(seg):
+            j = (i + 1) % seg
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _mesh_obj(bm, parent, pos, rot, color, emissive, strength)
+
+
+def tri_count(scene=None):
+    scene = scene or bpy.context.scene
+    return sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in scene.objects if o.type == 'MESH')
 
 
 def export(scene_name, file_name):
@@ -211,6 +296,40 @@ def preview(file_name, target=(0, 1, 0), dist=5.0, yaw=35, pitch=20, res=512):
     bpy.ops.render.render(write_still=True)
     # Preview helpers must not end up in the exported model.
     return path
+
+
+def preview_sheet(file_name, target=(0, 1, 0), dist=5.0, views=((0, 12), (40, 20), (180, 15), (30, 55)), res=384):
+    """Render several angles and paste them side by side into one PNG (front, 3/4, back, game-cam)."""
+    import numpy as np
+    tiles = []
+    for i, (yaw, pitch) in enumerate(views):
+        p = preview(f'_tile{i}.png', target=target, dist=dist, yaw=yaw, pitch=pitch, res=res)
+        img = bpy.data.images.load(p, check_existing=False)
+        px = np.array(img.pixels[:], dtype=np.float32).reshape(img.size[1], img.size[0], 4)
+        tiles.append(px)
+        bpy.data.images.remove(img)
+        os.remove(p)
+    sheet = np.concatenate(tiles, axis=1)
+    h, w = sheet.shape[:2]
+    out = bpy.data.images.new('db_sheet', w, h, alpha=True)
+    out.pixels = sheet.ravel()
+    path = os.path.join(PREVIEW_DIR, file_name)
+    out.filepath_raw = path
+    out.file_format = 'PNG'
+    out.save()
+    bpy.data.images.remove(out)
+    return path
+
+
+def preview_auto(file_name, views=((0, 12), (40, 20), (180, 15), (30, 55)), res=320):
+    """preview_sheet framed on the bounds of the current scene's meshes."""
+    bpy.context.view_layer.update()
+    pts = [o.matrix_world @ Vector(c) for o in bpy.context.scene.objects if o.type == 'MESH' for c in o.bound_box]
+    lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+    hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    mid = (lo + hi) / 2
+    ext = max(hi - lo)
+    return preview_sheet(file_name, target=(mid.x, mid.z, -mid.y), dist=ext * 2.3 + 0.4, views=views, res=res)
 
 
 def remove_preview_rig():
