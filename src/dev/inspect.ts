@@ -666,11 +666,12 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
   document.body.classList.add('inspect-clean');
   const st = new Studio(g);
   const times = [-1, 0.15, 0.3, 0.42, 0.5, 0.62, 0.8, 0.95];
-  const heroSets: [string, string, AttackKind][] = [
+  const heroSets: [string, string, AttackKind, string?][] = [
+    ['dragonguard slam', 'ember_longsword', 'slam', 'ember'], ['knight swing', 'iron_sword', 'swing', 'iron'],
     ['sword swing', 'steel_sword', 'swing'], ['longsword slam', 'steel_longsword', 'slam'],
     ['bow', 'worn_bow', 'bow'], ['staff cast', 'apprentice_staff', 'cast'], ['pickaxe', 'steel_pickaxe', 'swing'],
   ];
-  for (const [label, weapon, kind] of heroSets) {
+  for (const [label, weapon, kind, tier = 'steel'] of heroSets) {
     for (const side of ['left', 'front'] as const) {
       const cells: Parameters<Studio['sheet']>[0] = [];
       const objs: THREE.Object3D[] = [];
@@ -679,7 +680,7 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
         const holder = new THREE.Group();
         holder.add(m.root);
         const dresser = new HeroDresser(m);
-        dresser.dress(null, { weapon: makeItem(weapon), body: makeItem('steel_platebody'), helm: makeItem('steel_fullhelm') });
+        dresser.dress(null, { weapon: makeItem(weapon), body: makeItem(`${tier}_platebody`), helm: makeItem(`${tier}_fullhelm`), gloves: makeItem(`${tier}_gauntlets`), boots: makeItem(`${tier}_boots`) });
         const bow = new BowDraw(m.root);
         bow.attach();
         const rig = new Rig(m.root);

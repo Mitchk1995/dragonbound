@@ -71,9 +71,11 @@ const ANON_PART = /^p\d+$/;
  * meshes with children are left alone (and bows: their string is identified by shape).
  */
 export function mergeRigidParts(root: THREE.Object3D, model: string) {
+  // Gear parts are never looked up by name (bows are excluded by the caller), so every leaf merges.
+  const anon = (name: string) => model.startsWith('gear_') || ANON_PART.test(name);
   const parents = new Set<THREE.Object3D>();
   root.traverse((o) => {
-    if (o instanceof THREE.Mesh && !o.children.length && ANON_PART.test(o.name) && o.parent) parents.add(o.parent);
+    if (o instanceof THREE.Mesh && !o.children.length && anon(o.name) && o.parent) parents.add(o.parent);
   });
   const vcMats = new Map<string, THREE.MeshStandardMaterial>();
   const keyOf = (m: THREE.Material): string | THREE.Material => {
@@ -84,7 +86,7 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
   for (const parent of parents) {
     const groups = new Map<string | THREE.Material, THREE.Mesh[]>();
     for (const c of parent.children) {
-      if (!(c instanceof THREE.Mesh) || c.children.length || !ANON_PART.test(c.name) || Array.isArray(c.material)) continue;
+      if (!(c instanceof THREE.Mesh) || c.children.length || !anon(c.name) || Array.isArray(c.material)) continue;
       const k = keyOf(c.material);
       const list = groups.get(k) ?? [];
       list.push(c);
@@ -210,7 +212,8 @@ export function applyRoles(root: THREE.Object3D, colors: RoleColors, glow = fals
     m.color.setHex(c);
     if (role === 'glow' || (glow && role === 'trim')) {
       m.emissive.setHex(c);
-      m.emissiveIntensity = 1.6;
+      // Glow accents burn bright; glowing trim (larger surfaces) smoulders so it stays orange, not white.
+      m.emissiveIntensity = role === 'glow' ? 1.6 : 0.8;
       m.userData.baseEmissive = m.emissive.clone();
       m.userData.baseIntensity = m.emissiveIntensity;
     }
@@ -246,7 +249,13 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     src = ph;
   }
   const { root } = cloneWithMaterials(src, file);
-  applyRoles(root, paletteRoles(palette), !!palette.glow);
+  // A glowing palette lights the trim, unless the model has its own glow accents (eyes, gems):
+  // then only those glow, instead of flooding large trim surfaces.
+  let ownGlow = false;
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh && roleOf(o.material as THREE.Material) === 'glow') ownGlow = true;
+  });
+  applyRoles(root, paletteRoles(palette), !!palette.glow && !ownGlow);
   const sockets: THREE.Object3D[] = [];
   root.traverse((o) => {
     if (o.name.startsWith('sock_')) sockets.push(o);
@@ -296,7 +305,8 @@ export class HeroDresser {
     });
 
     const helm = equipment.helm ? gearLook(equipment.helm) : null;
-    const hide = helm ? HAIR_HIDDEN_BY[helm.model] : undefined;
+    // Tier design variants (helm_full_a/b/c) hide hair like their base model.
+    const hide = helm ? (HAIR_HIDDEN_BY[helm.model] ?? HAIR_HIDDEN_BY[helm.model.replace(/_[abc]$/, '')]) : undefined;
     if (a.hair > 0 && !hide) this.attachFile(`hair_${a.hair}`, { hair: HAIR_COLORS[a.hairColor] });
     if (a.beard > 0 && hide !== 'all') this.attachFile(`beard_${a.beard}`, { hair: HAIR_COLORS[a.hairColor] });
 
@@ -371,6 +381,7 @@ export const MODEL_FILES = [
   'hero', 'goblin', 'kobold', 'cultist', 'drakeling', 'cinderwing', 'whelp', 'golem', 'warden', 'quartermaster',
   'gear_sword', 'gear_longsword', 'gear_pickaxe', 'gear_bow', 'gear_staff', 'gear_helm_open', 'gear_helm_full',
   'gear_body_chain', 'gear_body_plate', 'gear_gloves', 'gear_boots',
+  ...['a', 'b', 'c'].flatMap((v) => [`gear_body_plate_${v}`, `gear_helm_full_${v}`, `gear_gloves_${v}`, `gear_boots_${v}`]),
   'gear_u_cinderfang', 'gear_u_emberstring', 'gear_u_kindled_ash', 'gear_u_ashen_crown', 'gear_u_scaleguard',
   'hair_1', 'hair_2', 'hair_3', 'hair_4', 'beard_1', 'beard_2', 'beard_3',
 ];
