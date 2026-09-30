@@ -363,7 +363,11 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
   // authored as metal (unique gear: _common.metallic in the Blender scripts).
   for (const m of mats) {
     const role = roleOf(m);
-    if (palette.metal && (role === 'metal' || role === 'trim' || role === 'dark')) applyFinish(m, role as Finish);
+    if (palette.metal && (role === 'metal' || role === 'trim' || role === 'dark')) {
+      applyFinish(m, role as Finish);
+      // Tier finish: iron is forged dull, steel polished (the dark underlayer keeps its own finish).
+      if (palette.rough !== undefined && role !== 'dark') m.roughness = palette.rough;
+    }
     else if (!role && m.metalness > 0.5) applyFinish(m, 'metal');
     const paint = gearPaint(model, role, palette);
     if (paint) setCharPaint(m, CHAR_PAINTS[paint]);

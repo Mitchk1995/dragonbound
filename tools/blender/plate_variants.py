@@ -52,7 +52,7 @@ PI = math.pi
 PIECES = ('body_plate', 'helm_full', 'gloves', 'boots')
 SHOULDER_FOLLOW = 0.75          # src/render/anim.ts
 # Tier palettes for the Blender renders (src/data/items.ts TIERS).
-STEEL = {'metal': 0x9AA4B0, 'trim': 0xD4DCE6, 'dark': 0x3E444C, 'leather': 0x3E444C, 'glow': 0xD4DCE6}
+STEEL = {'metal': 0x6F7E93, 'trim': 0xADB9C8, 'dark': 0x2C3440, 'leather': 0x2C3440, 'glow': 0xADB9C8}
 EMBER = {'metal': 0x3A3336, 'trim': 0xFF7A1A, 'dark': 0x5A1A16, 'leather': 0x5A1A16, 'glow': 0xFF7A1A}
 PALETTES = {'p': STEEL, 'e': EMBER}
 
@@ -504,7 +504,10 @@ def E_helm(S):
     """The plate great helm forged in obsidian: a crimson crest, a visor slit that burns, and two horns sweeping up
     and back from the sides of the top block (short enough to stay a helm, not a mask)."""
     h = S('sock_head')
-    great_helm(h, crest=R.dark, slit=R.glow, trim=EDGE_E(), studs=EDGE_E())
+    # The slit gap stays dark; only a thin ember line burns inside it (a narrow slit, not a lit band), so the
+    # set reads as armour first and the glow as eyes behind the visor.
+    great_helm(h, crest=R.dark, slit=SLIT_E, trim=EDGE_E(), studs=EDGE_E())
+    box(h, (0.3, 0.016, 0.012), (0, 0.089, 0.322), R.glow, bevel=0)                               # ember slit
     for s in (-1, 1):
         chain(h, [(s * 0.25, 0.2, 0.02), (s * 0.36, 0.28, -0.1), (s * 0.41, 0.38, -0.27), (s * 0.38, 0.5, -0.45)],
               ((0.11, 0.09), (0.09, 0.06), (0.06, 0.012)), HORN_E())

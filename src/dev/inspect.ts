@@ -570,7 +570,7 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   let i = 1;
   const next = (name: string) => shot(`ui-${String(i++).padStart(2, '0')}-${name}`);
   const closeWindows = () => {
-    for (const id of ['bank', 'shop', 'keep', 'craft']) ui.toggle(id, false);
+    for (const id of ['bank', 'shop', 'keep', 'craft', 'book']) ui.toggle(id, false);
   };
   // The always-visible side panel, one capture per tab (inventory is the default).
   ui.showTab('inventory');
@@ -583,6 +583,19 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   ui.panels.journalTab = 'diary';
   ui.refresh();
   await next('tab-journal-diary');
+  // The journal and collection log opened out into their full window (OSRS-style).
+  ui.panels.journalTab = 'quests';
+  ui.openBook('journal');
+  await next('book-journal');
+  ui.showTab('collection');
+  ui.openBook('collection');
+  await next('book-collection');
+  closeWindows();
+  // Arriving in a zone: the plaque flares, a ribbon names the kind of place.
+  ui.showTab('journal');
+  ui.zoneTitle(g.zone.def.name);
+  await frames(40);
+  await next('zone-arrival');
   ui.panels.journalTab = 'quests';
   ui.pressTab('journal'); // pressing the open tab folds the panel down to its tab row
   await next('side-collapsed');
@@ -679,6 +692,17 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
     ui.openBank(false);
     await next('720-bank');
     closeWindows();
+    ui.openShop();
+    await next('720-shop');
+    closeWindows();
+    const anvil = g.zone.interactables.find((it) => it.kind === 'anvil');
+    if (anvil) {
+      ui.openCraft('anvil', anvil);
+      await next('720-craft-anvil');
+      ui.closeCraftMenu();
+    }
+    ui.showTab('help');
+    await next('720-settings');
     ui.showTab('skills');
     await next('720-skills');
     ui.showTab('inventory');

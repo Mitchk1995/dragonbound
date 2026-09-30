@@ -20,6 +20,30 @@ import type { UI } from './ui';
 
 const SLOT_LABEL: Record<Slot, string> = { weapon: 'Weapon', helm: 'Helm', body: 'Body', gloves: 'Gloves', boots: 'Boots', amulet: 'Amulet', ring: 'Ring' };
 
+/**
+ * The paper doll's backdrop, in the doll's own pixel frame at 1600x900 (198x198; it scales down at 720p):
+ * a carved panel with chamfered corners, a figure whose neck, shoulders, arms and legs show in the
+ * gutters between the slots, and the connecting rails OSRS draws between equipment slots.
+ * Slot centres: columns x 33 / 99 / 165; helm y 33, body 99, boots 165; flanks y 66 (jewellery) and 132 (hands).
+ */
+const DOLL_FIG = `<svg class="doll-fig" viewBox="0 0 198 198" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M24 1 H174 L197 24 V174 L174 197 H24 L1 174 V24 Z" fill="rgba(8,6,4,0.42)" stroke="#5a4526" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+  <path d="M27 6 H171 L192 27 V171 L171 192 H27 L6 171 V27 Z" fill="none" stroke="rgba(216,178,90,0.16)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+  <g fill="rgba(206,176,116,0.24)" stroke="rgba(226,190,110,0.55)" stroke-width="1.2" stroke-linejoin="round">
+    <path d="M90 52 H108 V80 H90 Z" vector-effect="non-scaling-stroke"/>
+    <path d="M48 88 Q54 76 72 76 H126 Q144 76 150 88 L156 104 L136 110 L130 132 H68 L62 110 L42 104 Z" vector-effect="non-scaling-stroke"/>
+    <path d="M42 102 L62 110 L50 126 L30 116 Z M156 102 L136 110 L148 126 L168 116 Z" vector-effect="non-scaling-stroke"/>
+    <path d="M74 128 H96 L94 152 H76 Z M102 128 H124 L122 152 H104 Z" vector-effect="non-scaling-stroke"/>
+  </g>
+  <path d="M99 33 V165 M33 66 H165 M33 132 H165" fill="none" stroke="#6e5530" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  <g fill="#b08a44" stroke="#1a1208" stroke-width="1"><circle cx="99" cy="66" r="3"/><circle cx="99" cy="132" r="3"/></g>
+  <path d="M11 36 V24 L24 11 H36 M187 36 V24 L174 11 H162 M11 162 V174 L24 187 H36 M187 162 V174 L174 187 H162" fill="none" stroke="#8a6f36" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+  <g fill="#c8a560" stroke="#1a1208" stroke-width="0.8"><circle cx="22" cy="22" r="2.6"/><circle cx="176" cy="22" r="2.6"/><circle cx="22" cy="176" r="2.6"/><circle cx="176" cy="176" r="2.6"/></g>
+</svg>`;
+
+/** The OSRS "open in a window" button a compact side-panel tab carries. */
+const EXPAND = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 5V1.5H5M9 1.5h3.5V5M12.5 9v3.5H9M5 12.5H1.5V9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 /** Everything that opens in a framed stone panel. */
 export class Panels {
   bankMode: 'bank' | 'deposit' | null = null;
@@ -27,6 +51,8 @@ export class Panels {
   craft: { kind: 'furnace' | 'anvil'; station: Interactable } | null = null;
   keepFocus: string | null = null;
   journalTab: 'quests' | 'diary' = 'quests';
+  /** What the full-size book window shows (null while it's closed). */
+  bookView: 'journal' | 'collection' | null = null;
   bankSearch = '';
 
   constructor(private ui: UI, private g: Game) {}
@@ -123,7 +149,7 @@ export class Panels {
     const cell = (sl: Slot) => `<div class="eq eq-${sl}">${itemSlot(s.equipment[sl], `data-eq="${sl}"`, '', icon(`slot_${sl}`, 34))}</div>`;
     const st = g.stats;
     this.ui.body(el, `
-      <div class="doll">${SLOTS.map(cell).join('')}</div>
+      <div class="doll">${DOLL_FIG}${SLOTS.map(cell).join('')}</div>
       <div class="statgrid">
         <span>Damage</span><b>${Math.round(st.dmgMin)}–${Math.round(st.dmgMax)}</b>
         <span>Attack speed</span><b>${st.atkSpeed.toFixed(2)}/s</b>
@@ -348,10 +374,69 @@ export class Panels {
 
   // ─── Journal: quests & diary ─────────────────────────────────────────────
 
+  /** A side-panel header row: the view's own switcher (if any) and the button that opens the full window. */
+  private sideHead(view: 'journal' | 'collection', left: string) {
+    const open = this.bookView === view;
+    return `<div class="sidehead">${left}<button class="expand ${open ? 'on' : ''}" data-book="${view}">${EXPAND}</button></div>`;
+  }
+
+  private bindSideHead(el: HTMLElement, view: 'journal' | 'collection', label: string) {
+    const b = el.querySelector<HTMLElement>(`[data-book="${view}"]`);
+    if (!b) return;
+    b.addEventListener('click', () => this.ui.openBook(view));
+    b.addEventListener('mouseenter', () => this.ui.tooltip.text(`<div class="tt-name">${this.bookView === view ? 'Close' : 'Open'} ${label}</div><div class="tt-dim">The full-size window, beside the side panel.</div>`, b.getBoundingClientRect()));
+    b.addEventListener('mouseleave', () => this.ui.tooltip.hide());
+  }
+
+  private journalTabs() {
+    return `<div class="tabs"><button class="tab ${this.journalTab === 'quests' ? 'on' : ''}" data-jtab="quests">${icon('quest', 18)} Quests</button><button class="tab ${this.journalTab === 'diary' ? 'on' : ''}" data-jtab="diary">${icon('diary', 18)} Diary</button></div>`;
+  }
+
+  private bindJournalTabs(el: HTMLElement) {
+    el.querySelectorAll<HTMLElement>('[data-jtab]').forEach((t) => t.addEventListener('click', () => {
+      this.journalTab = t.dataset.jtab as 'quests' | 'diary';
+      this.journal();
+      this.book();
+    }));
+  }
+
+  /**
+   * The side panel's journal is an OSRS quest list: one line per quest coloured by status (the current
+   * step under one in progress), or the diary tiers with their progress. Details live in the full window.
+   */
   journal() {
     const g = this.g, s = g.save;
     const el = this.ui.panel('journal', 'Journal');
     if (!el) return;
+    let body = '';
+    if (this.journalTab === 'quests') {
+      body = Object.values(QUESTS).map((q) => {
+        const st = s.quests[q.id];
+        const cls = !st ? 'new' : st.done ? 'done' : 'active';
+        const step = st && !st.done ? `<span class="qstep">${esc(q.stages[st.stage]?.text ?? '')}</span>` : !st ? '<span class="qstep">Speak with the Warden.</span>' : '';
+        return `<button class="qrow ${cls}" data-quest="${q.id}"><b>${esc(q.name)}</b>${step}</button>`;
+      }).join('');
+      body += '<div class="qlegend"><span class="new">Not started</span><span class="active">In progress</span><span class="done">Complete</span></div>';
+    } else {
+      body = (['easy', 'medium', 'hard'] as DiaryTier[]).map((tier) => {
+        const tasks = DIARY_TASKS.filter((t) => t.tier === tier);
+        const done = tasks.filter((t) => s.diary[t.id]).length;
+        const claimed = s.diaryClaimed[tier];
+        const ready = done === tasks.length && !claimed;
+        return `<button class="drow ${claimed ? 'claimed' : ''} ${ready ? 'ready' : ''}" data-diary="${tier}"><span class="dname">${cap(tier)}</span><span class="dcount">${claimed ? 'Claimed' : ready ? 'Claim!' : `${done}/${tasks.length}`}</span><span class="dbar"><span style="width:${(100 * done) / tasks.length}%"></span></span></button>`;
+      }).join('');
+    }
+    this.ui.body(el, `${this.sideHead('journal', this.journalTabs())}<div class="sidelist">${body}</div>`);
+    this.bindJournalTabs(el);
+    this.bindSideHead(el, 'journal', 'the journal');
+    el.querySelectorAll<HTMLElement>('[data-quest], [data-diary]').forEach((r) => r.addEventListener('click', () => {
+      if (this.bookView !== 'journal') this.ui.openBook('journal');
+    }));
+  }
+
+  /** The full journal: every quest's log, requirements and rewards; the diary's tasks and claims. */
+  private journalFull(el: HTMLElement) {
+    const g = this.g, s = g.save;
     let body = '';
     if (this.journalTab === 'quests') {
       body = Object.values(QUESTS).map((q) => {
@@ -380,23 +465,34 @@ export class Panels {
         </div>`;
       }).join('');
     }
-    this.ui.body(el, `<div class="tabs"><button class="tab ${this.journalTab === 'quests' ? 'on' : ''}" data-tab="quests">${icon('quest', 18)} Quests</button><button class="tab ${this.journalTab === 'diary' ? 'on' : ''}" data-tab="diary">${icon('diary', 18)} Diary</button></div>${body}`);
-    el.querySelectorAll<HTMLElement>('[data-tab]').forEach((t) => t.addEventListener('click', () => {
-      this.journalTab = t.dataset.tab as 'quests' | 'diary';
-      this.journal();
-    }));
+    this.ui.body(el, `${this.journalTabs()}${body}`);
+    this.bindJournalTabs(el);
     el.querySelectorAll<HTMLElement>('[data-claim]').forEach((b) => b.addEventListener('click', () => {
       const lamp = el.querySelector<HTMLSelectElement>('.lampskill');
       g.story.claimDiary(b.dataset.claim as DiaryTier, (lamp?.value as SkillId) ?? undefined);
     }));
   }
 
+  /** The full-size window the journal and collection log open out into. */
+  book() {
+    const view = this.bookView;
+    if (!view) return;
+    const el = this.ui.panel('book', view === 'journal' ? 'Journal' : 'Collection Log');
+    if (!el) return;
+    if (view === 'journal') this.journalFull(el);
+    else this.collectionBody(el, true);
+  }
+
   // ─── Collection log ──────────────────────────────────────────────────────
 
   collection() {
-    const g = this.g, s = g.save;
     const el = this.ui.panel('collection', 'Collection Log');
     if (!el) return;
+    this.collectionBody(el, false);
+  }
+
+  private collectionBody(el: HTMLElement, full: boolean) {
+    const g = this.g, s = g.save;
     const table = DROP_TABLES.cinderwing;
     const entry = (id: string, name: string, rate: string, pic: string) => {
       const n = s.collection[id] ?? 0;
@@ -411,15 +507,19 @@ export class Panels {
       entry('rock_golem', PETS.rock_golem.name, '1/4000 ore', `<div class="slot r-unique">${icon('mining', 44)}</div>`),
     ];
     const bossGot = [...table.uniques!.map((u) => u.id), 'ember_whelp'].filter((id) => s.collection[id]).length;
+    const mineGot = ['uncut_sapphire', 'uncut_emerald', 'uncut_ruby', 'rock_golem'].filter((id) => s.collection[id]).length;
     const best = s.stats.bestBossTime;
-    this.ui.body(el, `
+    const tally = ['goblin', 'kobold', 'drakeling', 'cultist', 'cinder_priest'];
+    const html = `
       <div class="csec"><div class="ch">Cinderwing <span>${bossGot}/${table.uniques!.length + 1}</span></div>
       <div class="cstats">Kills <b>${fmt(s.kc.cinderwing ?? 0)}</b> · Personal best <b>${best === null ? '—' : `${Math.floor(best / 60)}:${String(Math.floor(best % 60)).padStart(2, '0')}`}</b></div>
       <div class="cgrid">${boss.join('')}</div></div>
-      <div class="csec"><div class="ch">Emberdeep</div><div class="cgrid">${mining.join('')}</div></div>
+      <div class="csec"><div class="ch">Emberdeep <span>${mineGot}/4</span></div><div class="cgrid">${mining.join('')}</div></div>
       ${s.pets.length ? `<div class="csec"><div class="ch">Pets</div><div class="petrow">Following: <select class="petsel"><option value="">None</option>${s.pets.map((p) => `<option value="${p}" ${s.activePet === p ? 'selected' : ''}>${esc(PETS[p].name)}</option>`).join('')}</select></div></div>` : ''}
-      <div class="csec"><div class="ch">Slayer tally</div><div class="cstats">${['goblin', 'kobold', 'drakeling', 'cultist', 'cinder_priest'].map((id) => `${esc(cap(id.replace('_', ' ')))} <b>${fmt(s.kc[id] ?? 0)}</b>`).join(' · ')}</div>
-      <div class="cstats dim">Deaths ${s.stats.deaths} · Played ${Math.floor(s.stats.playtime / 3600)}h ${Math.floor((s.stats.playtime % 3600) / 60)}m</div></div>`);
+      <div class="csec"><div class="ch">Slayer tally</div><div class="tally">${tally.map((id) => `<span>${esc(cap(id.replace('_', ' ')))}</span><b>${fmt(s.kc[id] ?? 0)}</b>`).join('')}</div>
+      <div class="cstats dim">Deaths ${s.stats.deaths} · Played ${Math.floor(s.stats.playtime / 3600)}h ${Math.floor((s.stats.playtime % 3600) / 60)}m</div></div>`;
+    this.ui.body(el, full ? html : `${this.sideHead('collection', '<div class="sidetitle">Collection log</div>')}${html}`);
+    if (!full) this.bindSideHead(el, 'collection', 'the collection log');
     el.querySelector<HTMLSelectElement>('.petsel')?.addEventListener('change', (e) => g.items.setPet((e.target as HTMLSelectElement).value || null));
   }
 
@@ -429,26 +529,22 @@ export class Panels {
     const g = this.g;
     const el = this.ui.panel('help', 'Controls & Settings');
     if (!el) return;
+    const keys: [string, string][] = [
+      ['Click', 'Move · use · attack'], ['Hold', 'Repeat move / attack'], ['Shift', 'Attack in place'],
+      ['Q W E', 'Skills (cost mana)'], ['1 · T', 'Potion · Veilstone'], ['I C K', 'Bag · Gear · Skills'],
+      ['J L', 'Journal · Collection'], ['Alt · Space', 'Loot labels · Stop'], ['Wheel', 'Zoom'], ['Esc', 'Close · Settings'],
+    ];
     this.ui.body(el, `
       <div class="sechead">Controls</div>
-      <table class="keys">
-        <tr><td>Left-click</td><td>Move, pick up, mine, use. Hold to keep walking.</td></tr>
-        <tr><td>Click enemy</td><td>Strike once; hold to keep attacking</td></tr>
-        <tr><td>Shift-click</td><td>Attack in place</td></tr>
-        <tr><td>Q W E</td><td>Skills (they follow your weapon and cost mana)</td></tr>
-        <tr><td>1 · T</td><td>Healing potion · Veilstone home</td></tr>
-        <tr><td>I C K</td><td>Inventory · Equipment · Skills</td></tr>
-        <tr><td>J L</td><td>Journal · Collection log</td></tr>
-        <tr><td>Esc</td><td>Close windows · this tab</td></tr>
-        <tr><td>Alt · Space</td><td>Loot labels · stop</td></tr>
-      </table>
+      <div class="keys">${keys.map(([k, v]) => `<kbd>${k}</kbd><span>${v}</span>`).join('')}</div>
       <div class="sechead">Settings</div>
-      <div class="setting"><label>Volume</label><input type="range" min="0" max="1" step="0.05" value="${g.save.settings.volume}" class="vol"></div>
+      <div class="setting"><label>Volume</label><input type="range" min="0" max="1" step="0.05" value="${g.save.settings.volume}" class="vol" style="--v:${g.save.settings.volume * 100}%"></div>
       <div class="setting"><label>Graphics</label><select class="gfx">${(['high', 'medium', 'low'] as const).map((q) => `<option value="${q}"${(g.save.settings.graphics ?? 'high') === q ? ' selected' : ''}>${q[0].toUpperCase() + q.slice(1)}</option>`).join('')}</select></div>
-      <div class="setting"><span class="dim">Progress saves automatically to your ${g.backend.describe()}.</span></div>
       <div class="btnrow"><button class="btn" data-act="title">Save &amp; quit to title</button></div>`);
     el.querySelector<HTMLInputElement>('.vol')!.addEventListener('input', (e) => {
-      const v = Number((e.target as HTMLInputElement).value);
+      const inp = e.target as HTMLInputElement;
+      const v = Number(inp.value);
+      inp.style.setProperty('--v', `${v * 100}%`);
       g.save.settings.volume = v;
       g.sfx.setVolume(v);
       g.dirty = true;
@@ -459,10 +555,13 @@ export class Panels {
       g.applyGraphics(q);
       g.dirty = true;
     });
-    el.querySelector('[data-act="title"]')!.addEventListener('click', async () => {
+    const quit = el.querySelector<HTMLElement>('[data-act="title"]')!;
+    quit.addEventListener('click', async () => {
       await g.persist();
       location.reload();
     });
+    quit.addEventListener('mouseenter', () => this.ui.tooltip.text(`<div class="tt-name">Save &amp; quit</div><div class="tt-dim">Progress also saves automatically to your ${esc(g.backend.describe())}.</div>`, quit.getBoundingClientRect()));
+    quit.addEventListener('mouseleave', () => this.ui.tooltip.hide());
   }
 
   // ─── Debug ───────────────────────────────────────────────────────────────

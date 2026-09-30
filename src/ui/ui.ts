@@ -17,13 +17,43 @@ import { BASIC_TILE, skillTileUrl } from './skillTiles';
 import { Tooltip } from './tooltip';
 
 /** Floating windows (stations and debug); everything else lives in the side panel's tabs. */
-type WindowId = 'bank' | 'shop' | 'craft' | 'keep' | 'debug';
+type WindowId = 'bank' | 'shop' | 'craft' | 'keep' | 'book' | 'debug';
 type PanelId = WindowId | SideTab;
 
 const STATION_PANELS: WindowId[] = ['bank', 'shop', 'craft', 'keep'];
 
 /** Anything under the cursor matching this is UI: the world ignores hover there. */
 const UI_SELECTOR = '.panel, .sidepanel, .console, .dlg, .objective, .slot';
+
+/** What kind of place a zone is, shown beside the zone plaque on arrival. */
+const ZONE_KIND: Record<string, string> = { hub: 'Sanctuary', gather: 'Gathering grounds', hunt: 'Hunting grounds', quest: 'Forgotten ruin', lair: "Dragon's lair" };
+
+/**
+ * The carved seat an orb rests in: an iron cradle with claws gripping the globe, and a stone end cap
+ * finishing the console's outer end (drawn for the left orb, mirrored for the right). Orb centre (80, 58), r 50.
+ */
+const ORB_SEAT = `<svg class="seat" viewBox="0 0 150 126" aria-hidden="true">
+  <defs>
+    <linearGradient id="seat-stone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a5b61"/><stop offset="0.5" stop-color="#36373c"/><stop offset="1" stop-color="#1c1d21"/></linearGradient>
+    <linearGradient id="seat-iron" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74767d"/><stop offset="1" stop-color="#2a2b30"/></linearGradient>
+    <mask id="seat-cut"><rect width="150" height="126" fill="#fff"/><circle cx="80" cy="58" r="57" fill="#000"/></mask>
+  </defs>
+  <g mask="url(#seat-cut)">
+    <path d="M2 123 V94 Q4 80 18 72 Q34 64 56 62 H74 V123 Z" fill="url(#seat-stone)" stroke="#0c0c0e" stroke-width="2"/>
+    <path d="M7 119 V95 Q9 84 21 77 Q35 70 56 68" fill="none" stroke="#b08e4e" stroke-width="1.4" opacity="0.85"/>
+    <path d="M13 108 H40 M13 114 H44" stroke="#0c0c0e" stroke-width="1.2" opacity="0.55"/>
+    <path d="M17 97 l6 -6.5 l6 6.5 l-6 6.5 Z" fill="#7a1a12" stroke="#d8b25a" stroke-width="1.3"/>
+    <path d="M20.5 95.5 l2.5 -2.7" stroke="#ffb49a" stroke-width="1" opacity="0.7"/>
+  </g>
+  <path d="M28.1 86 A59 59 0 0 0 131.9 86" fill="none" stroke="#0c0c0e" stroke-width="10" stroke-linecap="round"/>
+  <path d="M28.1 86 A59 59 0 0 0 131.9 86" fill="none" stroke="url(#seat-iron)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M25.3 86 A61.5 61.5 0 0 0 134.7 86" fill="none" stroke="#c8a560" stroke-width="1" opacity="0.7"/>
+  <path d="M22 89 Q15 67 25 45 Q28 60 35 72 Z" fill="url(#seat-iron)" stroke="#0c0c0e" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M138 89 Q145 67 135 45 Q132 60 125 72 Z" fill="url(#seat-iron)" stroke="#0c0c0e" stroke-width="1.8" stroke-linejoin="round"/>
+  <circle cx="80" cy="117" r="3.4" fill="#d8b25a" stroke="#0c0c0e" stroke-width="1.2"/>
+  <circle cx="46.2" cy="106.3" r="2.5" fill="#b08a44" stroke="#0c0c0e" stroke-width="1"/>
+  <circle cx="113.8" cy="106.3" r="2.5" fill="#b08a44" stroke="#0c0c0e" stroke-width="1"/>
+</svg>`;
 
 /** A tiny mouse with its left button lit: the key cap of the basic-attack slot. */
 const MOUSE_LMB = `<svg width="11" height="15" viewBox="0 0 11 15"><rect x="0.8" y="0.8" width="9.4" height="13.4" rx="4.7" fill="#1a120a" stroke="#f3d98a" stroke-width="1.3"/><path d="M1.4 6.2V5.5a4.1 4.1 0 0 1 4.1-4.1v4.8Z" fill="#f3d98a"/></svg>`;
@@ -87,7 +117,7 @@ export class UI {
     const tabs = SIDE_TABS.map((t) => `<button class="stab" data-tab="${t.id}">${icon(t.icon, 26)}</button>`).join('');
     this.hud.innerHTML = `
       <div class="vignette"></div>
-      <div class="topleft"><div class="zone plaque"></div><div class="weak"></div></div>
+      <div class="topleft"><div class="zoneline"><div class="zone plaque"><span class="zname"></span><i class="sheen"></i></div><div class="zkind"></div></div><div class="weak"></div></div>
       <div class="objective hidden"><div class="obj-title">Objective</div><div class="obj-text"></div></div>
       <div class="target"><div class="tname"></div><div class="tbar"><div></div></div></div>
       <div class="bossbar"><div class="bname"></div><div class="bbar"><div class="bfill"></div></div></div>
@@ -98,7 +128,7 @@ export class UI {
       <div class="death">Oh dear, you are dead!</div>
       <div class="castbar hidden"><div class="cb-fill"></div><span></span></div>
       <div class="console">
-        <div class="orb hp"><div class="fill"></div><div class="glass"></div><span></span></div>
+        <div class="orbseat l"><div class="orb hp"><div class="fill"></div><div class="glass"></div><span></span></div>${ORB_SEAT}</div>
         <div class="cbody">
           <div class="xpline"><div class="fill"></div><span></span></div>
           <div class="crow">
@@ -107,11 +137,10 @@ export class UI {
             <div class="skillrow"></div>
           </div>
         </div>
-        <div class="orb mana"><div class="fill"></div><div class="glass"></div><span></span></div>
+        <div class="orbseat r"><div class="orb mana"><div class="fill"></div><div class="glass"></div><span></span></div>${ORB_SEAT}</div>
       </div>
       <div class="sidepanel frame"><div class="stabs">${tabs}</div><div class="pbody sbody"></div></div>
-      <div class="fade"></div>
-      <div class="zonetitle"></div>`;
+      <div class="fade"></div>`;
 
     // Potion belt: healing potion (1) and the Veilstone (T).
     const belt = this.$('.belt');
@@ -250,7 +279,8 @@ export class UI {
     pot.querySelector('.count')!.textContent = `${s.potions}/${s.potionMax}`;
     pot.classList.toggle('spent', s.potions <= 0);
 
-    this.$('.zone').textContent = g.zone.def.name;
+    const zn = this.$('.zname');
+    if (zn.textContent !== g.zone.def.name) zn.textContent = g.zone.def.name;
     this.$('.weak').textContent = p.weakenedT > 0 ? `Weakened ${Math.ceil(p.weakenedT)}s` : p.warCryT > 0 ? `War Cry ${Math.ceil(p.warCryT)}s` : '';
     // Target plate for regular enemies; elites/boss use the big bar.
     const tgt = g.hovered ?? (p.cmd.kind === 'attack' ? p.cmd.target : null);
@@ -342,7 +372,8 @@ export class UI {
     this.xpAcc.clear();
     this.overUI = false;
     this.tooltip.hide();
-    for (const selector of ['.banner', '.zonetitle', '.xpdrops', '.hoverlabel']) {
+    this.hud.querySelector('.topleft')?.classList.remove('arrive');
+    for (const selector of ['.banner', '.xpdrops', '.hoverlabel']) {
       const node = this.$(selector);
       if (!node) continue; // The initial zone loads before the HUD is built.
       node.innerHTML = '';
@@ -392,7 +423,7 @@ export class UI {
     ({
       inventory: () => P.inventory(), equipment: () => P.equipment(), skills: () => P.skills(), journal: () => P.journal(),
       collection: () => P.collection(), help: () => P.help(), bank: () => P.bank(), shop: () => P.shop(),
-      craft: () => P.craftMenu(), keep: () => P.keep(), debug: () => P.debug(),
+      craft: () => P.craftMenu(), keep: () => P.keep(), book: () => P.book(), debug: () => P.debug(),
     })[id]();
   }
 
@@ -439,6 +470,10 @@ export class UI {
       if (id === 'bank') this.panels.bankMode = null;
       if (id === 'shop') this.panels.shopOpen = false;
       if (id === 'craft') this.panels.craft = null;
+      if (id === 'book') {
+        this.panels.bookView = null;
+        this.applySide();
+      }
       if ((id === 'bank' || id === 'shop') && this.side.tab === 'inventory') this.applySide();
       return;
     }
@@ -488,6 +523,19 @@ export class UI {
 
   closeCraftMenu() {
     this.toggle('craft', false);
+  }
+
+  /**
+   * The journal or collection log opened out into a full window (OSRS-style), beside the side panel's
+   * compact list. Opening the view that's already showing closes it.
+   */
+  openBook(view: 'journal' | 'collection') {
+    if (this.open.has('book') && this.panels.bookView === view) return this.toggle('book', false);
+    this.panels.bookView = view;
+    this.open.delete('book');
+    this.panelRoot.querySelector('#panel-book')?.remove();
+    this.toggle('book', true);
+    this.applySide();
   }
 
   openKeep(focus: string | null) {
@@ -594,12 +642,19 @@ export class UI {
     this.showBanner(`<div class="questdone frame"><div class="qd-title">Quest complete!</div><div class="qd-name">${esc(name)}</div><ul>${rewards.map((r) => `<li>${esc(r)}</li>`).join('')}</ul></div>`);
   }
 
+  /**
+   * Arrival: the zone plaque itself flares and a ribbon names the kind of place beside it. It lives in
+   * the HUD's top-left corner, so it never lands on the world's own labels (portal titles, loot, bars).
+   */
   zoneTitle(name: string) {
-    const z = this.$('.zonetitle');
-    z.innerHTML = `<span>${esc(name)}</span>`;
-    z.classList.remove('show');
-    void z.offsetWidth;
-    z.classList.add('show');
+    const tl = this.$('.topleft');
+    if (!tl) return;
+    this.$('.zname').textContent = name;
+    const def = this.g.zone.def;
+    this.$('.zkind').textContent = def.name === name ? (ZONE_KIND[def.kind] ?? '') : '';
+    tl.classList.remove('arrive');
+    void tl.offsetWidth;
+    tl.classList.add('arrive');
   }
 
   /** Fade to black, run `mid`, fade back in. */
