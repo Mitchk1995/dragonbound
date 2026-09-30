@@ -41,6 +41,8 @@ function shapeGeometry(shape: Shape): THREE.BufferGeometry {
  */
 export class Telegraph {
   readonly group = new THREE.Group();
+  /** Who is attacking (so a resetting boss can cancel its pending telegraphs). */
+  owner: object | null = null;
   private fill: THREE.Mesh;
   private base: THREE.Mesh;
   t = 0;

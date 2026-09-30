@@ -246,25 +246,24 @@ export function guessSurface(c: THREE.Color): SurfaceKind {
 }
 
 /**
- * Pick and apply a surface for a cloned model material: gear files are metal/leather by role,
- * characters by role or by the model's default, emissive bits stay plain.
+ * The surface a model material should get: gear by role (metal/leather), characters by role or
+ * the model's default, emissive bits none. Merged vertex-coloured materials carry their kind.
  */
-export function surfaceForModelMaterial(model: string, mat: THREE.Material) {
-  if (!(mat instanceof THREE.MeshStandardMaterial)) return;
-  if (mat.emissive.getHex() !== 0 && mat.emissiveIntensity > 0) return;
+export function pickSurface(model: string, mat: THREE.Material): SurfaceKind | null {
+  if (!(mat instanceof THREE.MeshStandardMaterial)) return null;
+  if (mat.userData.surfaceKind !== undefined) return mat.userData.surfaceKind;
+  if (mat.emissive.getHex() !== 0 && mat.emissiveIntensity > 0) return null;
   const role = /^ROLE_(\w+?)(\.\d{3})?$/.exec(mat.name)?.[1];
-  let kind: SurfaceKind | null;
-  if (role) {
-    kind = ROLE_SURFACE[role] ?? null;
-    if (role === 'dark' && model.startsWith('gear_')) kind = 'metal';
-  } else if (isSkinTone(mat.color)) {
-    kind = 'skin';
-  } else if (mat.color.getHSL({ h: 0, s: 0, l: 0 }).l > 0.8) {
-    kind = 'generic';
-  } else if (model.startsWith('gear_u_')) {
-    kind = mat.metalness > 0.5 || mat.color.getHSL({ h: 0, s: 0, l: 0 }).s < 0.2 ? 'metal' : 'leather';
-  } else {
-    kind = MODEL_SURFACE[model] ?? (model.startsWith('gear_') ? 'metal' : 'generic');
-  }
+  if (role) return role === 'dark' && model.startsWith('gear_') ? 'metal' : (ROLE_SURFACE[role] ?? null);
+  const l = mat.color.getHSL({ h: 0, s: 0, l: 0 });
+  if (isSkinTone(mat.color)) return 'skin';
+  if (l.l > 0.8) return 'generic';
+  if (model.startsWith('gear_u_')) return mat.metalness > 0.5 || l.s < 0.2 ? 'metal' : 'leather';
+  return MODEL_SURFACE[model] ?? (model.startsWith('gear_') ? 'metal' : 'generic');
+}
+
+/** Apply the picked surface to a cloned model material. */
+export function surfaceForModelMaterial(model: string, mat: THREE.Material) {
+  const kind = pickSurface(model, mat);
   if (kind) applySurface(mat, kind, 'object');
 }

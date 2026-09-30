@@ -61,7 +61,8 @@ export class Game {
   zoneOrNull: ZoneRuntime | null = null;
   pet: Pet | null = null;
 
-  mouse = { x: 0, y: 0, down: false, shift: false, holdT: 0, heldOnGround: false };
+  /** Screen position; NaN until the pointer is over the window (nothing is hovered before that). */
+  mouse = { x: NaN, y: NaN, down: false, shift: false, holdT: 0, heldOnGround: false };
   ground = new THREE.Vector3();
   hovered: Enemy | null = null;
   hoveredItem: GroundItem | null = null;
@@ -223,6 +224,8 @@ export class Game {
   private enterZone(id: string) {
     if (this.zoneOrNull) this.zoneOrNull.dispose();
     this.fx.clear();
+    this.particles.clear();
+    this.glow.clear();
     this.text.clear();
     const seed = id === 'keep' || id === 'foothills' || id === 'mine' || id === 'ruin' || id === 'lair' ? 1000 + id.length * 97 : Math.floor(Math.random() * 1e6);
     const z = new ZoneRuntime(this, id, seed);
@@ -557,6 +560,9 @@ export class Game {
       this.mouse.holdT = 0;
       this.onClick(e.shiftKey);
     });
+    document.addEventListener('mouseleave', () => {
+      this.mouse.x = this.mouse.y = NaN;
+    });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouse.down = false;
     });
@@ -605,6 +611,12 @@ export class Game {
   }
 
   private updateHover() {
+    if (!Number.isFinite(this.mouse.x)) {
+      this.hovered = null;
+      this.hoveredThing = null;
+      if (!this.text.labelHovered) this.hoveredItem = null;
+      return;
+    }
     const w = window.innerWidth, h = window.innerHeight;
     this.ndc.set((this.mouse.x / w) * 2 - 1, -(this.mouse.y / h) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, this.camera);

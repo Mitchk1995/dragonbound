@@ -32,7 +32,12 @@ export interface Hazard {
   tickT: number;
   dmg: number;
   source: Enemy;
+  /** Fractional particles owed to the emitter (emission is per second, not per frame). */
+  emit?: number;
 }
+
+/** Breath cone density in particles per second (≈10 per frame at 60 fps). */
+const BREATH_RATE = 600;
 
 /** Player attacks, abilities, projectiles, enemy damage, telegraphs and hazards. */
 export class Combat {
@@ -325,8 +330,10 @@ export class Combat {
     if (p.hp <= 0) g.onPlayerDied();
   }
 
-  telegraph(x: number, z: number, shape: Shape, dur: number, onResolve: (t: Telegraph) => void) {
+  /** `owner` lets a resetting boss cancel its pending attacks (see onBossDisengage). */
+  telegraph(x: number, z: number, shape: Shape, dur: number, onResolve: (t: Telegraph) => void, owner: Enemy | null = null) {
     const t = new Telegraph(x, z, shape, dur, onResolve);
+    t.owner = owner;
     this.z.telegraphs.push(t);
     this.z.group.add(t.group);
     return t;
@@ -354,7 +361,10 @@ export class Combat {
       h.tickT -= dt;
       if (h.shape.kind === 'cone') {
         const { r, angle, dir } = h.shape;
-        for (let i = 0; i < 10; i++) {
+        h.emit = (h.emit ?? 0) + dt * BREATH_RATE;
+        const count = Math.floor(h.emit);
+        h.emit -= count;
+        for (let i = 0; i < count; i++) {
           const a = dir + (Math.random() - 0.5) * angle * 0.9;
           const sp = 12 + Math.random() * 6;
           g.glow.spawn(h.x, 1.4, h.z, Math.cos(a) * sp, (Math.random() - 0.3) * 2, Math.sin(a) * sp, (r / sp) * (0.8 + Math.random() * 0.3), 0.3 + Math.random() * 0.3, [PAL.fire, PAL.ember, 0xff3a0a][i % 3], 0, 0.3);
@@ -453,7 +463,10 @@ export class Combat {
     g.ui.showBoss(e);
   }
 
-  onBossDisengage(_e: Enemy) {
+  onBossDisengage(e: Enemy) {
+    // A full reset: pending telegraphs never resolve and lingering breath/fire stops hurting.
+    for (const t of this.z.telegraphs) if (t.owner === e) t.done = true;
+    this.z.hazards = this.z.hazards.filter((h) => h.source !== e);
     this.g.ui.showBoss(null);
     if (!this.g.player.dead) this.g.announce('Cinderwing loses interest and returns to its roost.', 'info');
   }

@@ -116,7 +116,7 @@ function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
     case 'breath': {
       const ox = e.x + fwdX * e.radius, oz = e.z + fwdZ * e.radius;
       b.action = { kind, t: 0, dur: 2.8, step: 0, data: { dir, ox, oz } };
-      g.combat.telegraph(ox, oz, { kind: 'cone', r: 10, angle: 0.95, dir }, 1.0, () => {});
+      g.combat.telegraph(ox, oz, { kind: 'cone', r: 10, angle: 0.95, dir }, 1.0, () => {}, e);
       g.sfx.play('telegraph');
       break;
     }
@@ -126,7 +126,7 @@ function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
         g.shake(0.35, 0.3);
         g.fx.dustRing(t.x, t.z, e.radius + 3.2);
         if (Math.hypot(p.x - t.x, p.z - t.z) < e.radius + 3.2 + p.radius * 0.6) g.combat.damagePlayer(14, e, 14);
-      });
+      }, e);
       break;
     }
     case 'gust': {
@@ -135,7 +135,7 @@ function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
         g.sfx.play('roll', 1.5, 0.6);
         g.fx.gust(e.x, e.z, dir);
         if (t.shape.kind === 'cone' && g.combat.inShape(t, p)) g.combat.damagePlayer(6, e, 20);
-      });
+      }, e);
       break;
     }
     case 'flight': {
@@ -235,7 +235,7 @@ function runAction(e: Enemy, b: BossState, dt: number, g: Game): number {
           g.fx.dustRing(t.x, t.z, 4.5);
           g.sfx.play('slam');
           if (Math.hypot(p.x - t.x, p.z - t.z) < 4.5 + p.radius * 0.6) g.combat.damagePlayer(16, e, 16);
-        });
+        }, e);
       }
       break;
     }

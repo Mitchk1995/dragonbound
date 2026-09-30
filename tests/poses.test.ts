@@ -61,10 +61,10 @@ describe('pose audit: models loaded', () => {
       });
       return n;
     };
-    // Authored part counts are 77 / 97 / 29; merged they must drop well below that (≤60%), with rig parts intact.
-    expect(count('drakeling')).toBeLessThanOrEqual(46);
-    expect(count('cinderwing')).toBeLessThanOrEqual(58);
-    expect(count('goblin')).toBeLessThanOrEqual(17);
+    // Authored part counts are 77 / 97 / 29; merged they must drop to a few per rig part (measured 19 / 23 / 8), with rig parts intact.
+    expect(count('drakeling')).toBeLessThanOrEqual(20);
+    expect(count('cinderwing')).toBeLessThanOrEqual(25);
+    expect(count('goblin')).toBeLessThanOrEqual(9);
     for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
   });
 });

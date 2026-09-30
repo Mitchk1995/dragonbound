@@ -104,19 +104,42 @@ function ironFrame() {
   return c.toDataURL();
 }
 
-/** Small engraved brass plate for headers/buttons. */
+/**
+ * Brushed dark-brass nameplate, drawn once at full width and stretched to the element (never
+ * tiled, so no seams run through the text). The border and rivets come from CSS.
+ */
 function brassPlate() {
-  const [c, ctx] = canvas(32, 32);
-  const g = ctx.createLinearGradient(0, 0, 0, 32);
-  g.addColorStop(0, '#5a4424');
-  g.addColorStop(0.5, '#3a2c18');
-  g.addColorStop(1, '#241a0e');
+  const W = 512, H = 64;
+  const [c, ctx] = canvas(W, H);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#5e4726');
+  g.addColorStop(0.45, '#3c2d18');
+  g.addColorStop(1, '#221809');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 32, 32);
-  ctx.strokeStyle = '#c8a050';
-  ctx.strokeRect(0.5, 0.5, 31, 31);
-  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-  ctx.strokeRect(2.5, 2.5, 27, 27);
+  ctx.fillRect(0, 0, W, H);
+  // Horizontal brushing: thin translucent streaks of varying length and tone.
+  const rng = mulberry32(77);
+  for (let i = 0; i < 900; i++) {
+    const y = rng() * H, x = rng() * W, len = 20 + rng() * 140;
+    ctx.strokeStyle = rng() < 0.5 ? `rgba(255,220,150,${0.02 + rng() * 0.05})` : `rgba(0,0,0,${0.04 + rng() * 0.08})`;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + len, y + (rng() - 0.5) * 0.6);
+    ctx.stroke();
+  }
+  // Soft sheen across the top third and a worn darker rim toward the edges.
+  const sheen = ctx.createLinearGradient(0, 0, 0, H * 0.45);
+  sheen.addColorStop(0, 'rgba(255,225,160,0.18)');
+  sheen.addColorStop(1, 'rgba(255,225,160,0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, W, H * 0.45);
+  const rim = ctx.createLinearGradient(0, 0, W, 0);
+  rim.addColorStop(0, 'rgba(0,0,0,0.35)');
+  rim.addColorStop(0.12, 'rgba(0,0,0,0)');
+  rim.addColorStop(0.88, 'rgba(0,0,0,0)');
+  rim.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = rim;
+  ctx.fillRect(0, 0, W, H);
   return c.toDataURL();
 }
 

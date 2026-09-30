@@ -115,6 +115,12 @@ export class Particles {
     }
   }
 
+  /** Drop every live particle (zone change: effects never carry over). */
+  clear() {
+    this.n = 0;
+    this.mesh.count = 0;
+  }
+
   update(dt: number) {
     let i = 0;
     while (i < this.n) {
