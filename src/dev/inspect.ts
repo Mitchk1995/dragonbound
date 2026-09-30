@@ -34,7 +34,7 @@ interface ZoneReport {
 }
 interface LumStats { mean: number; p5: number; p95: number; clipped: number; crushed: number; cast: [number, number, number] }
 /** frameMs = max(cpu, gpu): the frame cost ignoring vsync. */
-interface PerfStats { cpuMs: number; gpuMs: number; gpuP95: number; frameMs: number }
+interface PerfStats { cpuMs: number; gpuMs: number; gpuP95: number; frameMs: number; gpuRaw?: number[]; cpuRaw?: number[] }
 
 export async function runInspect(g: Game, suites: string) {
   const api = window.electronAPI!.inspect!;
@@ -164,6 +164,9 @@ async function perf(g: Game, n = 60): Promise<PerfStats> {
   const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
   const cpu: number[] = [];
   const queries: WebGLQuery[] = [];
+  // Only our frames may touch the GPU while measuring (the frame loop would interleave its own).
+  const held = g.debug.hold;
+  g.debug.hold = () => true;
   for (let i = 0; i < n; i++) {
     const t0 = performance.now();
     const q = ext ? gl.createQuery() : null;
@@ -175,7 +178,7 @@ async function perf(g: Game, n = 60): Promise<PerfStats> {
       queries.push(q);
     }
     cpu.push(performance.now() - t0);
-    if (i % 4 === 3) await raf(); // let the GPU drain so queries don't pile up
+    await raf(); // one measured frame per display frame, like the game
   }
   const gpu: number[] = [];
   for (let tries = 0; tries < 60 && gpu.length < queries.length; tries++) {
@@ -189,9 +192,10 @@ async function perf(g: Game, n = 60): Promise<PerfStats> {
     }
   }
   queries.forEach((q) => gl.deleteQuery(q));
+  g.debug.hold = held;
   const med = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length / 2)] : NaN);
   const p95 = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length * 0.95)] : NaN);
-  return { cpuMs: +med(cpu).toFixed(2), gpuMs: +med(gpu).toFixed(2), gpuP95: +p95(gpu).toFixed(2), frameMs: +Math.max(med(cpu), med(gpu)).toFixed(2) };
+  return { cpuMs: +med(cpu).toFixed(2), gpuMs: +med(gpu).toFixed(2), gpuP95: +p95(gpu).toFixed(2), frameMs: +Math.max(med(cpu), med(gpu)).toFixed(2), gpuRaw: gpu.map((v) => +v.toFixed(1)), cpuRaw: cpu.map((v) => +v.toFixed(1)) } as PerfStats;
 }
 
 // ─── Zones ──────────────────────────────────────────────────────────────────
@@ -363,8 +367,8 @@ async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
  * turn (explicit suite: `npm run inspect -- perf`). Differences from the baseline are the cost.
  */
 async function perfSuite(g: Game) {
-  const out: Record<string, Record<string, number>> = {};
-  for (const [zone, x, z] of [['foothills', 96, 70], ['foothills', 85, 150], ['keep', 48, 50]] as [string, number, number][]) {
+  const out: Record<string, Record<string, string>> = {};
+  for (const [zone, x, z] of [['foothills', 70, 162], ['foothills', 106, 156], ['foothills', 48, 128]] as [string, number, number][]) {
     g.travel(zone, true);
     await frames(20);
     const p = g.player;
@@ -407,6 +411,16 @@ async function perfSuite(g: Game) {
         l.forEach((o) => (o.visible = false));
         return () => l.forEach((o) => (o.visible = true));
       }],
+      ['no props', () => {
+        const l = g.zone.view.props.map((p) => p.obj);
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no lights', () => {
+        const l = byName((o) => o instanceof THREE.PointLight);
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
       ['no MSAA', () => {
         const rt = game.composer.renderTarget1;
         const s = rt.samples;
@@ -418,13 +432,14 @@ async function perfSuite(g: Game) {
         };
       }],
     ];
-    const row: Record<string, number> = {};
+    const row: Record<string, string> = {};
     await perf(g, 20); // warm up programs
-    row.baseline = (await perf(g, 60)).gpuMs;
+    const fmt = (p: PerfStats) => `cpu ${p.cpuMs} gpu ${p.gpuMs}`;
+    row.baseline = fmt(await perf(g, 60));
     for (const [name, off] of toggles) {
       const undo = off();
       await perf(g, 10);
-      row[name] = (await perf(g, 60)).gpuMs;
+      row[name] = fmt(await perf(g, 60));
       undo();
     }
     out[`${zone}@${x},${z}`] = row;
