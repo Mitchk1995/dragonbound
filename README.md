@@ -12,7 +12,7 @@ Smelt and smith your way from bronze to Emberforged gear, restore the keep hall 
 
 ## Play
 
-No terminal needed: double-click **`Play Dragonbound.bat`** in the repo folder (installs on first run, then builds and opens the game with the latest code). For a standalone copy, `npm run dist` writes `release/Dragonbound <version>.exe`, a single portable file you can put anywhere.
+No terminal needed: double-click **`Play Dragonbound.bat`** in the repo folder. It updates to the latest merged version of `main`, installs anything new, then builds and opens the game. For a standalone copy, `npm run dist` writes `release/Dragonbound <version>.exe`, a single portable file you can put anywhere.
 
 ```bash
 npm run play      # build + open the desktop app (saves to %APPDATA%\Dragonbound\save.json)
