@@ -5,7 +5,7 @@ import type { ZoneTheme } from '../data/zones';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
 import { buildProp, OCCLUDING_PROPS, type Prop } from './props';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
-import { addPatch, applyGrade, applySurface, type Grade } from '../render/surface';
+import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
 import { rockBlock, taper } from '../render/blocks';
@@ -358,7 +358,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const camSide = nz < -0.5;
     const hn = strataNoise(x * 0.16, z * 0.16);
     const H = camSide ? 0.7 + hn * 0.7 : 1.3 + hn * 3.2 + rng() * 0.5;
-    if (!camSide && rng() < 0.1) {
+    if (!camSide && rng() < 0.06) {
       // A crevice: a dark cleft recessed between the rock masses (lower than its neighbours, so it
       // reads as a gap in the rock, not a post).
       p.set(x + 0.5 - nx * 0.55, -0.1, z + 0.5 - nz * 0.55);
@@ -390,7 +390,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const addDebris = (x: number, z: number) => {
     const wallFoot = nearRelief(x, z);
     // Pebbles between the walls only underground; outdoors (the caldera) rubble stays at the wall foot.
-    const n = wallFoot ? (rng() < (theme.wallRise ? 0.5 : 0.3) ? 2 + Math.floor(rng() * 3) : 0) : theme.wallRise && rng() < 0.04 ? 3 + Math.floor(rng() * 3) : 0;
+    const n = wallFoot ? (rng() < (theme.wallRise ? 0.18 : 0.3) ? 1 + Math.floor(rng() * 2) : 0) : theme.wallRise && rng() < 0.025 ? 2 + Math.floor(rng() * 2) : 0;
     const cx = x + 0.2 + rng() * 0.6, cz = z + 0.2 + rng() * 0.6;
     for (let k = 0; k < n; k++) {
       const sc = wallFoot ? 0.16 + rng() * 0.36 : 0.07 + rng() * 0.12;
@@ -498,6 +498,52 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       }
     }
   }
+  // Behind the foot of the cave walls the same slabs climb on: bigger blocks stacked on the rock
+  // mass in rings further back, each column topped at the rock's own height, so the wall reads as
+  // one body of layered stone from the floor up into the dark (the bare relief only shows in the
+  // seams between them).
+  const mass: THREE.Matrix4[] = [], massCols: THREE.Color[] = [];
+  if (theme.wallRise) {
+    const floorD = new Float32Array(w * h).fill(1e6);
+    for (let i = 0; i < w * h; i++) if (walkable(i % w, Math.floor(i / w))) floorD[i] = 0;
+    const relax = (k: number, j: number, c: number) => {
+      if (floorD[j] + c < floorD[k]) floorD[k] = floorD[j] + c;
+    };
+    for (let pass = 0; pass < 2; pass++) {
+      for (let z = 1; z < h - 1; z++) for (let x = 1; x < w - 1; x++) {
+        const k = z * w + x;
+        relax(k, k - 1, 1); relax(k, k - w, 1); relax(k, k - w - 1, 1.414); relax(k, k - w + 1, 1.414);
+      }
+      for (let z = h - 2; z > 0; z--) for (let x = w - 2; x > 0; x--) {
+        const k = z * w + x;
+        relax(k, k + 1, 1); relax(k, k + w, 1); relax(k, k + w + 1, 1.414); relax(k, k + w - 1, 1.414);
+      }
+    }
+    for (let z = 1; z < h - 1; z++) for (let x = 1; x < w - 1; x++) {
+      const i = z * w + x, d = floorD[i];
+      if (at(x, z) !== Cell.Wall || d < 1.9 || d > 7.5) continue;
+      // A column every couple of cells (a few left out): big blocks, not a pile of boards.
+      if (x % 2 !== 0 || z % 2 !== 0 || rng() < 0.2) continue;
+      let nx = floorD[i - 1] - floorD[i + 1], nz = floorD[i - w] - floorD[i + w];
+      const nl = Math.hypot(nx, nz) || 1;
+      nx /= nl;
+      nz /= nl;
+      // Camera-side walls take them too: the rock there is kept low, so their slabs stay low.
+      const top = heightAt(x + 0.5, z + 0.5);
+      if (top < 1.2) continue;
+      const face = Math.atan2(nx, nz), W = 2.3 + d * 0.18 + rng() * 0.6;
+      let y = Math.max(-0.2, top - 2.4 - rng() * 0.8), n = 0;
+      while (y < top + 0.1 && n++ < 3) {
+        const th = 0.95 + rng() * 0.5;
+        p.set(x + 0.5 + (rng() - 0.5) * 0.4, y, z + 0.5 + (rng() - 0.5) * 0.4);
+        q.setFromEuler(e.set((rng() - 0.5) * 0.04, face + (rng() - 0.5) * 0.2, (rng() - 0.5) * 0.04));
+        mass.push(m.compose(p, q, s.set(W * (0.95 + rng() * 0.2), th, W * 0.9)).clone());
+        const band = Math.floor((y + 0.2 + strataNoise(x * 0.05 + 3, z * 0.05) * 0.9) / 0.6);
+        massCols.push(strataPal[((band % 4) + 4) % 4].clone().offsetHSL(0, 0, (rng() - 0.5) * 0.04));
+        y += th * 0.88;
+      }
+    }
+  }
   for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) {
     if (!trees[k].m.length) continue;
     inst(trunkGeo, trees[k].m, null, k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark');
@@ -509,8 +555,14 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   inst(rockBlock(7, 1.25, 1.0, 1.1), half(rocks, 0), half(rockCols, 0), 0, true, 'rock');
   inst(rockBlock(8, 1.1, 1.05, 1.2), half(rocks, 1), half(rockCols, 1), 0, true, 'rock');
   inst(rockBlock(9, 1.1, 1.0, 1.0), rims, rimCols, 0, false, 'rock');
-  inst(rockBlock(31, 1, 1, 1), half(strata, 0), half(strataCols, 0), 0, true, 'rock');
-  inst(rockBlock(32, 1, 1, 1), half(strata, 1), half(strataCols, 1), 0, true, 'rock');
+  // Cave slabs fade into the dark with height exactly like the rock mass behind them.
+  const caveShade = (mat: THREE.MeshStandardMaterial) => {
+    if (theme.wallRise) applyHeightShade(mat, theme.topShade ?? 1, ...(theme.topRange ?? [2.5, 12]));
+  };
+  inst(rockBlock(31, 1, 1, 1), half(strata, 0), half(strataCols, 0), 0, true, 'rock', true, undefined, caveShade);
+  inst(rockBlock(32, 1, 1, 1), half(strata, 1), half(strataCols, 1), 0, true, 'rock', true, undefined, caveShade);
+  inst(rockBlock(34, 1, 1, 1), half(mass, 0), half(massCols, 0), 0, true, 'rock', false, undefined, caveShade);
+  inst(rockBlock(35, 1, 1, 1), half(mass, 1), half(massCols, 1), 0, true, 'rock', false, undefined, caveShade);
   inst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), crevices, null, 0x120e0b, true, undefined, false);
   inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false);
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
@@ -582,7 +634,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   const props: Prop[] = [];
   for (const pr of layout.props) {
-    const prop = pr.kind.startsWith('fit_') ? buildFitProp(pr.kind.slice(4), pr.len) : buildProp(pr.kind, pr.len);
+    const prop = pr.kind.startsWith('fit_') ? buildFitProp(pr.kind.slice(4), pr.len) : buildProp(pr.kind, pr.v === undefined ? pr.len : { len: pr.len, v: pr.v });
     prop.obj.position.set(pr.x, Math.max(0, heightAt(pr.x, pr.z)), pr.z);
     prop.obj.rotation.y = pr.rot ?? 0;
     if (pr.s) prop.obj.scale.setScalar(pr.s);
