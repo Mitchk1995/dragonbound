@@ -243,6 +243,9 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
 
       // Points of interest, seen through the real gameplay camera (enemies frozen).
       const pois: [string, number, number][] = [['entry', L.entry.x, L.entry.z]];
+      // The portal court as a whole (windows, glimpses and titles side by side).
+      const gates = L.stations.filter((s) => s.kind === 'portal');
+      if (gates.length > 1) pois.push(['portal-court', gates.reduce((a, s) => a + s.x, 0) / gates.length, Math.max(...gates.map((s) => s.z)) + 3]);
       for (const s of L.stations.slice(0, 8)) pois.push([`${s.kind}-${s.id}`, s.x, s.z + 2.2]);
       // Enterable buildings: stand the hero in the middle of each floor (the roof lifts off).
       for (const b of L.buildings ?? []) pois.push([`inside-${b.id}`, b.x + b.w / 2, b.z + b.d / 2 + 1], [`front-${b.id}`, b.x + b.w / 2, b.z + b.d + 5]);
