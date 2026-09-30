@@ -165,7 +165,8 @@ export function getBackend(): SaveBackend {
     try {
       const text = localStorage.getItem(key);
       if (!text) return null;
-      JSON.parse(text);
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
       return text;
     } catch {
       return null;
@@ -188,7 +189,9 @@ export async function loadSave(backend: SaveBackend): Promise<SaveData | null> {
   const text = await backend.read();
   if (!text) return null;
   try {
-    return migrate(JSON.parse(text));
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return migrate(parsed);
   } catch {
     return null;
   }

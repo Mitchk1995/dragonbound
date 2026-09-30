@@ -228,6 +228,7 @@ export class Game {
     this.particles.clear();
     this.glow.clear();
     this.text.clear();
+    this.ui.clearZoneState();
     const seed = id === 'keep' || id === 'foothills' || id === 'mine' || id === 'ruin' || id === 'lair' ? 1000 + id.length * 97 : Math.floor(Math.random() * 1e6);
     const z = new ZoneRuntime(this, id, seed);
     this.zoneOrNull = z;
