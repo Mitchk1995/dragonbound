@@ -31,7 +31,7 @@ export class Screens {
         <div class="logo-rule"><span></span>◆<span></span></div>
         <div class="logo-sub">Chapter I · The Hidden Keep</div>
       </div>
-      <div class="menu frame">
+      <div class="menu">
         ${ch ? `<button class="mbtn primary" data-m="continue">Continue<small>${esc(s.character!.name)} · total level ${total} · ${fmt(s.stats.playtime / 60)} min played</small></button>` : ''}
         <button class="mbtn ${ch ? '' : 'primary'}" data-m="new">New Game</button>
         <button class="mbtn" data-m="quit">Quit</button>

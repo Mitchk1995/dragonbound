@@ -101,8 +101,8 @@ const list: BaseItem[] = [];
 
 /**
  * Plate-set design per tier (tools/blender/plate_variants.py): bronze, iron and steel share one plate
- * design ("p") and differ only by palette; Emberforged ("e") is the same plate in obsidian with a restrained
- * dragon identity (horned great helm with a burning visor, a dragon heart, a few scales and claws).
+ * design ("p") and differ only by palette; Emberforged ("e") is the same plate in obsidian, a restrained black
+ * knight (horned great helm with a thin ember line in the visor, crimson crest and tabard).
  * Gauntlets and boots follow the tier's set so full sets match.
  */
 export const PLATE_STYLE: Record<TierId, 'p' | 'e'> = { bronze: 'p', iron: 'p', steel: 'p', ember: 'e' };

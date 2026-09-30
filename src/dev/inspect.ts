@@ -579,6 +579,11 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
     ui.showTab(tab);
     await next(`tab-${tab}`);
   }
+  // Hovering a skill tile: XP, XP to the next level and the progress bar.
+  ui.showTab('skills');
+  document.querySelector('.stile[data-skill="smithing"]')?.dispatchEvent(new MouseEvent('mouseenter'));
+  await next('skill-hover');
+  ui.hideTooltip();
   ui.showTab('journal');
   ui.panels.journalTab = 'diary';
   ui.refresh();

@@ -2,7 +2,9 @@
  * Global XP pacing. Chapter 1 aims for OSRS-length progression on Diablo-speed combat:
  * combat XP comes from each enemy's fixed `xp` value (shared by the fraction of its health
  * you dealt), so area damage and overkill can't inflate it, and XP/hour is bounded by how
- * fast an instance can be cleared.
+ * fast an instance can be cleared. The Diablo 2 pacing pass slowed clears by about a sixth, so
+ * regular enemies' XP went up 20% to keep XP/hour where it was (tests/balance.test.ts simulates
+ * both); Cinderwing stayed put so one kill is still less than a level at 30.
  */
 export const XP_TUNING = {
   /** Hitpoints XP as a fraction of the combat XP earned. */
@@ -23,9 +25,16 @@ export const MANA_TUNING = {
   /** Max mana = base + perLevel x (highest of Melee, Ranged, Magic). */
   base: 30,
   perLevel: 2,
-  /** Mana per second = regenBase + regenFrac x max mana. */
-  regenBase: 1.5,
-  regenFrac: 0.02,
+  /**
+   * Mana per second = regenBase + regenFrac x max mana: 2.7/s at level 5, 3.1 at 20, 3.6 at 40.
+   * Using every skill on cooldown costs about 4 mana/s early and 5-6 once the E skills unlock, so
+   * regen covers roughly half to two thirds of that: a full pool lasts 20-40 s of all-out casting
+   * (longer than any regular pack fight) and a long fight (a mini-boss, Cinderwing) makes you pick
+   * your casts. Regen grows slowly with the pool so high levels still can't cast everything forever.
+   * Checked by tests/balance.test.ts.
+   */
+  regenBase: 2.2,
+  regenFrac: 0.013,
   /** Extra regen (fraction of max per second) once you haven't been hit for a few seconds. */
   outOfCombatFrac: 0.04,
   /** Seconds without taking damage before the out-of-combat regen kicks in (same as life). */

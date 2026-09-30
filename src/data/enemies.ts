@@ -36,24 +36,24 @@ export interface EnemyDef {
 
 export const ENEMIES: Record<string, EnemyDef> = {
   goblin: {
-    id: 'goblin', name: 'Goblin Grunt', level: 2, hp: 14, xp: 12, dmg: [2, 4], atkRange: 1.2, ...PACE.goblin,
+    id: 'goblin', name: 'Goblin Grunt', level: 2, hp: 14, xp: 14, dmg: [2, 4], atkRange: 1.2, ...PACE.goblin,
     armor: 0, radius: 0.45, aggro: 9, behavior: 'chaser', drop: 'common', model: 'goblin', scale: 1,
   },
   kobold: {
-    id: 'kobold', name: 'Kobold Slinger', level: 3, hp: 11, xp: 10, dmg: [2, 4], atkRange: 8, ...PACE.kobold,
+    id: 'kobold', name: 'Kobold Slinger', level: 3, hp: 11, xp: 12, dmg: [2, 4], atkRange: 8, ...PACE.kobold,
     armor: 0, radius: 0.4, aggro: 11, behavior: 'kiter', drop: 'common', model: 'kobold', scale: 1, projSpeed: 11,
   },
   drakeling: {
-    id: 'drakeling', name: 'Drakeling', level: 6, hp: 26, xp: 24, dmg: [4, 7], atkRange: 5, ...PACE.drakeling,
+    id: 'drakeling', name: 'Drakeling', level: 6, hp: 26, xp: 29, dmg: [4, 7], atkRange: 5, ...PACE.drakeling,
     armor: 3, radius: 0.55, aggro: 10, behavior: 'lunger', drop: 'elite', model: 'drakeling', scale: 1,
   },
   cultist: {
-    id: 'cultist', name: 'Ember Cultist', level: 8, hp: 22, xp: 28, dmg: [6, 10], atkRange: 9, ...PACE.cultist,
+    id: 'cultist', name: 'Ember Cultist', level: 8, hp: 22, xp: 34, dmg: [6, 10], atkRange: 9, ...PACE.cultist,
     armor: 1, radius: 0.45, aggro: 12, behavior: 'caster', drop: 'elite', model: 'cultist', scale: 1,
     aoeRadius: 1.8,
   },
   cinder_priest: {
-    id: 'cinder_priest', name: 'Cinder Priest', level: 14, hp: 260, xp: 320, dmg: [8, 12], atkRange: 10, ...PACE.cinder_priest,
+    id: 'cinder_priest', name: 'Cinder Priest', level: 14, hp: 260, xp: 385, dmg: [8, 12], atkRange: 10, ...PACE.cinder_priest,
     armor: 4, radius: 0.6, aggro: 12, behavior: 'caster', drop: 'priest', model: 'cultist', scale: 1.45,
     aoeRadius: 2.0, multiCast: 4, elite: true,
   },

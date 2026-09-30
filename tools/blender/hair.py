@@ -2,8 +2,10 @@
 
 Each file is one `sock_head` empty whose children are ROLE_hair meshes, authored relative to the
 head centre (the base head is a 0.46 cube centred on sock_head; face at +Z, ears at +-0.245 X).
-Every hairstyle is one rounded shell over the scalp (hair_shell) with chunky locks rooted in it (strand),
-so it reads as a single mass of hair from the gameplay camera above.
+Every hairstyle is ONE sculpted mesh (Mass): a grid of flow lines over the scalp running from the hairline to a
+pole (the crown whorl, or the nape where the hair is gathered). A style is made only by moving that grid's points
+(volume, lock ridges, tips along the edge, spikes, a tail that carries on from the pole), never by stacking extra
+pieces on a base cap, so it reads as one cohesive mass of hair from the gameplay camera above.
 """
 import math
 import os
@@ -25,10 +27,6 @@ PI = math.pi
 H = R.hair
 BAND = 0x5A3A22   # leather hair tie (authored colour)
 BEAD = 0xD9A640   # braid beads (authored colour)
-
-# Lock cross-sections (side, up) in half-width units: a flat hexagon with ridged edges, or a diamond for spikes.
-SECTION = {6: ((-1, 0), (-0.5, -1), (0.5, -1), (1, 0), (0.5, 1), (-0.5, 1)), 4: ((-1, 0), (0, -1), (1, 0), (0, 1))}
-
 
 # The head the hair sits on (sock_head space): a 0.46 cube with 0.06 chamfers, centred on the socket.
 HEAD_HALF, HEAD_BEVEL = 0.23, 0.06
@@ -104,157 +102,204 @@ def head_points(n=16):
     return pts
 
 
-def coverage(sc, line, margin=0.012):
-    """Worst gauge of the head surface above the hairline (bald-spot check): every point there has to sit inside
-    the shell (gauge < 1, with room for the flat facets), or skin shows through the hair."""
-    lo = hairline(line)
-    worst = 0.0
-    for p in head_points():
-        if p.y < lo(math.degrees(math.atan2(p.x, p.z - sc.c.z))) + margin:
-            continue
-        worst = max(worst, sc.gauge(p - sc.c))
-    return worst
+class Mass:
+    """One cohesive mass of hair over the scalp `sc`, down to the (bearing, y) hairline `line`, laid out as a grid of
+    flow lines that all run from the hairline to one `pole` on the scalp (the crown whorl, or the nape where the hair
+    is gathered): column i is a flow line at angle psi round the pole, row j a ring at fraction j/nv of the way from
+    the hairline (row 0) to the pole. The style shapes it only by moving those grid points (volume, lock ridges, tips
+    along the edge, spikes), so it stays a single sculpted piece with no add-ons. `ref` picks where psi = 0 points."""
+
+    def __init__(self, sc, line, pole, ref=(0, 0, 1)):
+        self.sc, self.lo = sc, hairline(line)
+        a = (Vector(pole) - sc.c).normalized()
+        r = Vector(ref)
+        self.a = a
+        self.e1 = (r - a * r.dot(a)).normalized()
+        self.e2 = a.cross(self.e1)
+        self._edge = {}
+
+    def point(self, psi, th):
+        d = self.a * math.cos(th) + (self.e1 * math.cos(psi) + self.e2 * math.sin(psi)) * math.sin(th)
+        return self.sc.on(self.sc.c + d)
+
+    def bare(self, q):
+        return q.y < self.lo(math.degrees(math.atan2(q.x, q.z - self.sc.c.z)))
+
+    def edge(self, psi):
+        """Angle from the pole at which the flow line at psi reaches the hairline."""
+        k = round(psi, 6)
+        if k not in self._edge:
+            th = 0.02
+            while th < PI and not self.bare(self.point(psi, th)):
+                th += 0.02
+            lo, hi = th - 0.02, th
+            for _ in range(24):
+                mid = (lo + hi) / 2
+                lo, hi = (lo, mid) if self.bare(self.point(psi, mid)) else (mid, hi)
+            self._edge[k] = lo
+        return self._edge[k]
+
+    def grid(self, nu, nv, shape, v_end=1.0):
+        """fn(u, v) for surf(): shape(i, j, psi, s, q, n) -> offset vector for grid point (i, j), where s runs from 1
+        on the hairline to 0 at the pole, q is the scalp point and n its normal. Rows stop `v_end` of the way to the
+        pole (below 1 they end on a ring round it, for a tail to continue from)."""
+        def fn(u, v):
+            i, j = round(u * nu), round(v * nv)
+            psi = 2 * PI * u
+            s = 1 - v * v_end
+            th = self.edge(psi) * s
+            q = self.point(psi, th)
+            n = self.sc.normal(q)
+            return tuple(q + shape(i, j, psi, s, q, n))
+        return fn
 
 
-def hair_shell(h, sc, line, nu=28, nv=8, thick=0.045, jag=0.035):
-    """One continuous cap of hair: the scalp `sc` from the crown down to `line`, a (bearing, y) hairline that sits
-    high at the forehead, comes down at the temples and in a sideburn, clears the ear and runs low at the nape.
-    `jag` notches the lower edge into points all the way round, so it ends in hair tips rather than a helmet rim.
-    Raises if the head cube would show through anywhere above the hairline."""
-    lo = hairline(line)
-    worst = coverage(sc, line)
-    if worst > 0.955:
-        raise ValueError(f'hair shell leaves the head showing (gauge {worst:.3f})')
-
-    def fn(u, v):
-        t = 2 * PI * u
-        x = u * nu / 2
-        tooth = jag * (1 - abs(2 * (x - math.floor(x)) - 1))
-        p0 = sc.elevation(lo(sc.bearing(t)) - tooth)
-        return tuple(sc.at(t, p0 + (PI / 2 - p0) * v))
-    return surf(h, fn, nu, nv, thick, H, closed_u=True, inside=tuple(sc.c), bevel=0.012, inner=False, walls=(0,))
+def build_mass(h, m, nu, nv, shape, thick=0.05):
+    """The mass as one shell (its rim is the hairline); raises if the head would show through above the hairline."""
+    fn = m.grid(nu, nv, shape)
+    check_cover(m, fn, nu, nv)
+    return surf(h, fn, nu, nv, thick, H, closed_u=True, inside=tuple(m.sc.c), inner=False, walls=(0,))
 
 
-def lock(h, spine, w, d, n, sides=6, color=H):
-    """Chunky lock along `spine` (root first): w wide and d thick at the root, thickness facing `n`, tapering
-    to a point at the last spine point. A spine point may carry a 4th value, the width scale there."""
-    pts = [Vector(p[:3]) for p in spine]
-    k = len(pts)
-    side = (pts[-1] - pts[0]).cross(Vector(n))
-    side = side.normalized() if side.length > 1e-6 else Vector((1, 0, 0))
+def check_cover(m, fn, nu, nv, skip_pole=0.0):
+    """Head points above the hairline must lie inside the shaped mass (a ray from the scalp centre through each
+    meets the mass beyond the head surface): no bald patches. Points within `skip_pole` radians of the pole are left
+    to whatever grows out of it (a tail)."""
+    from mathutils.bvhtree import BVHTree
+    pts = [[Vector(fn(i / nu, j / nv)) for i in range(nu)] for j in range(nv + 1)]
     bm = bmesh.new()
-    rings = []
-    for i, p in enumerate(pts[:-1]):
-        tan = (pts[i + 1] - pts[max(i - 1, 0)]).normalized()
-        up = tan.cross(side).normalized()
-        sd = up.cross(tan)
-        f = spine[i][3] if len(spine[i]) > 3 else 1 - (i / (k - 1)) ** 1.6
-        rings.append([bm.verts.new(p + sd * (sx * w / 2 * f) + up * (sy * d / 2 * f)) for sx, sy in SECTION[sides]])
-    tip = bm.verts.new(pts[-1])
-    bm.faces.new(rings[0])
-    for a, b in zip(rings, rings[1:]):
-        for j in range(sides):
-            bm.faces.new((a[j], a[(j + 1) % sides], b[(j + 1) % sides], b[j]))
-    for j in range(sides):
-        bm.faces.new((rings[-1][j], rings[-1][(j + 1) % sides], tip))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return _mesh_obj(bm, h, (0, 0, 0), (0, 0, 0), color)
+    vs = [[bm.verts.new(p) for p in row] for row in pts]
+    for j in range(nv):
+        for i in range(nu):
+            f = [vs[j][i], vs[j][(i + 1) % nu], vs[j + 1][(i + 1) % nu], vs[j + 1][i]]
+            if len({id(x) for x in f}) == 4:
+                bm.faces.new(f)
+    tree = BVHTree.FromBMesh(bm)
+    bm.free()
+    bad = []
+    for p in head_points(10):
+        if p.y < m.lo(math.degrees(math.atan2(p.x, p.z - m.sc.c.z))) + 0.03:
+            continue
+        d = p - m.sc.c
+        if d.angle(m.a) < skip_pole:
+            continue
+        hit = tree.ray_cast(m.sc.c, d.normalized(), 2.0)
+        if hit[0] is None or (hit[0] - m.sc.c).length < d.length + 0.004:
+            bad.append(tuple(round(x, 2) for x in p))
+    if bad:
+        raise ValueError(f'hair mass leaves {len(bad)} head points showing, e.g. {bad[:4]}')
 
 
-def strand(h, sc, guides, w, d, sides=6):
-    """Lock laid over the scalp: guides are (x, y, z, lift[, width scale]); each is projected onto `sc` and raised
-    `lift` off it. Give the first (the root) a negative lift so it grows out of the shell."""
-    spine = [tuple(sc.on(g[:3], g[3])) + tuple(g[4:]) for g in guides]
-    return lock(h, spine, w, d, sc.normal(sc.on(guides[0][:3])), sides)
-
-
-def spike(h, sc, root, out, back, length, w, sides=4):
-    """Big spike growing out of the shell at `root`: points along the scalp normal tipped `out` more up (+) and
-    `back` more rearward (+), with a buried base as wide as the spike so neighbours merge into one mass."""
-    base = sc.on(root, 0.02)
-    n = sc.normal(base)
-    dirn = (n + Vector((0, out, -back))).normalized()
-    spine = [(*sc.on(root, -0.05), 1.0), (*base, 1.0), (*(base + dirn * length * 0.45 + n * 0.02), 0.62), tuple(base + dirn * length)]
-    return lock(h, spine, w, w * 0.7, n, sides)
+def ridge(i, s, amp, fade=0.35):
+    """Lock ridges: every other flow line stands proud of its neighbours, fading out toward the pole."""
+    return amp * min(1.0, s / fade) if i % 2 == 0 else 0.0
 
 
 # Shared hairline (bearing from the forehead in degrees, y): high over the forehead, down at the temples into a
 # sideburn in front of the ear, up and over the ear, down behind it and low at the nape.
 LINE = [(0, 0.155), (28, 0.145), (45, 0.1), (68, -0.03), (80, 0.065), (102, 0.065), (114, -0.03), (145, -0.1), (180, -0.13)]
+# Swept or tied back: the temples are pulled up with the rest (no sideburn in front of the ear).
+LINE_SWEPT = [(0, 0.16), (28, 0.15), (45, 0.11), (68, 0.06), (80, 0.06), (102, 0.06), (114, -0.03), (145, -0.1), (180, -0.13)]
+DOWN = Vector((0, -1, 0))
 
 
-def side_locks(h, sc, s, n=3, y0=0.3, length=0.2, w=0.13, d=0.05, rake=0.08):
-    """Locks lying over the side of the head from the crown edge down toward the ear, raked back: hair texture on
-    what would otherwise be a smooth wall of shell."""
-    for k in range(n):
-        z = 0.14 - k * 0.14
-        strand(h, sc, [(s * 0.16, y0, z, -0.02), (s * 0.27, y0 - length * 0.45, z - rake * 0.5, 0.02),
-                       (s * 0.27, y0 - length, z - rake, 0.012)], w, d)
+def facing(q, want):
+    """1 where the scalp point q faces the horizontal bearing `want` (degrees from the forehead), easing to 0 at 60
+    degrees away."""
+    b = math.degrees(math.atan2(q.x, q.z))
+    d = abs((b - want + 180) % 360 - 180)
+    return max(0.0, 1 - d / 60) ** 1.5
 
 
-def hair_1(h):  # short crop: tight cap, short textured crown, fringe brushed to one side, locks over the temples
+def hair_1(h):
+    """Short crop: a close cap whose flow lines radiate from a whorl at the back of the crown, the ridged locks
+    ending in short points all round and a slightly longer fringe brushed over the forehead."""
     sc = Scalp(top=0.305)
-    hair_shell(h, sc, LINE, jag=0.03)
-    for x in (-0.12, -0.01, 0.1):                                                       # fringe, brushed to one side
-        strand(h, sc, [(x * 0.8, 0.3, 0.1, -0.03), (x, 0.25, 0.24, 0.022), (x + 0.06, 0.18, 0.3, 0.02)], 0.14, 0.055)
-    for a in range(6):                                                                  # crown whorl
-        t = a * PI / 3 + 0.3
-        dx, dz = math.sin(t), math.cos(t)
-        strand(h, sc, [(0, 0.35, -0.05, -0.015), (dx * 0.1, 0.33, -0.05 + dz * 0.1, 0.02), (dx * 0.22, 0.28, -0.05 + dz * 0.22, 0.008)], 0.13, 0.05)
-    for s in (-1, 1):
-        side_locks(h, sc, s, n=3, length=0.2)
-    for t in (-2.3, -2.75, PI, 2.75, 2.3):                                              # nape
-        dx, dz = math.sin(t), math.cos(t)
-        strand(h, sc, [(dx * 0.25, 0.18, dz * 0.25, -0.02), (dx * 0.27, 0.02, dz * 0.27, 0.02), (dx * 0.25, -0.13, dz * 0.25, 0.01)], 0.14, 0.05)
+    m = Mass(sc, LINE, (0, 0.33, -0.1))
+
+    def shape(i, j, psi, s, q, n):
+        o = n * (0.006 + ridge(i, s, 0.016))
+        if j == 0 and i % 2 == 0:                                   # lock tips along the hairline
+            front = facing(q, 0)
+            o += DOWN * (0.03 + 0.012 * front) + n * 0.012 + Vector((0.025 * front, 0, 0))
+        return o
+    build_mass(h, m, 24, 6, shape)
 
 
-def hair_2(h):  # swept back: a tall front rising off the brow, every lock raking back to the nape
-    sc = Scalp(top=0.34, dz=-0.01)
-    hair_shell(h, sc, LINE, jag=0.03)
-    for x in (-0.16, -0.08, 0, 0.08, 0.16):
-        strand(h, sc, [(x * 0.9, 0.2, 0.24, -0.03), (x, 0.3, 0.22, 0.07), (x * 1.05, 0.4, 0.02, 0.05),
-                       (x * 1.15, 0.28, -0.2, 0.035), (x * 1.2, 0.08, -0.3, 0.03)], 0.14, 0.08)
-    for s in (-1, 1):
-        strand(h, sc, [(s * 0.24, 0.16, 0.14, -0.02), (s * 0.27, 0.16, 0.0, 0.035), (s * 0.26, 0.1, -0.2, 0.025),
-                       (s * 0.2, 0.02, -0.3, 0.01)], 0.13, 0.07)
-        strand(h, sc, [(s * 0.2, 0.24, 0.12, -0.02), (s * 0.27, 0.1, 0.1, 0.025), (s * 0.27, 0.0, -0.06, 0.015),
-                       (s * 0.25, -0.06, -0.2, 0.008)], 0.12, 0.06)                     # over the temple, back past the ear
-    for x in (-0.12, 0, 0.12):                                                          # ducktail flicks at the nape
-        strand(h, sc, [(x, 0.1, -0.25, -0.02), (x * 1.1, -0.05, -0.28, 0.03), (x * 1.3, -0.14, -0.3, 0.07)], 0.12, 0.06)
+def hair_2(h):
+    """Swept back: every flow line runs from the brow over the crown to the nape, with volume rising off the
+    forehead, ridged like combed locks, ending in a short ducktail at the nape."""
+    sc = Scalp(top=0.33, dz=-0.012)
+    m = Mass(sc, LINE_SWEPT, (0, -0.06, -0.3), ref=(0, 1, 0))
+
+    def shape(i, j, psi, s, q, n):
+        front = facing(q, 0) * max(0.0, (q.y - 0.05) / 0.25)
+        o = n * (0.008 + ridge(i, s, 0.018) + 0.05 * front * s)
+        if j == 0 and i % 2 == 0:
+            back = facing(q, 180)
+            o += DOWN * 0.045 * back + n * (0.01 + 0.03 * back)
+        return o
+    build_mass(h, m, 32, 7, shape)
 
 
-def hair_3(h):  # long, parted and tied back: locks sweep from the part to a tail, side locks frame the face
-    sc = Scalp(top=0.32)
-    hair_shell(h, sc, LINE, jag=0.03)
-    for s in (-1, 1):
-        for z in (0.2, 0.06, -0.08):                                                    # from the part to the tie
-            strand(h, sc, [(s * 0.03, 0.33, z, -0.03), (s * 0.14, 0.3, z - 0.03, 0.015), (s * 0.24, 0.15, z - 0.12, 0.015),
-                           (s * 0.12, 0.1, -0.28, 0.01)], 0.17, 0.05)
-        strand(h, sc, [(s * 0.2, 0.22, 0.2, -0.02), (s * 0.27, 0.1, 0.16, 0.03), (s * 0.28, -0.08, 0.15, 0.03),
-                       (s * 0.27, -0.24, 0.14, 0.02)], 0.12, 0.07)                      # side lock framing the face
-    box(h, (0.17, 0.15, 0.12), (0, 0.11, -0.29), H, bevel=0.04)                        # knot
-    box(h, (0.19, 0.05, 0.14), (0, 0.03, -0.31), BAND, bevel=0.012)                     # tie
-    lock(h, [(0, 0.06, -0.31), (0, -0.08, -0.34, 0.95), (0, -0.26, -0.35, 0.8), (0, -0.4, -0.34, 0.55), (0, -0.54, -0.31)],
-         0.17, 0.12, (0, 0, -1))                                                        # tail
-    box(h, (0.12, 0.04, 0.1), (0, -0.37, -0.343), BAND, bevel=0.01)
+def hair_3(h):
+    """Long and tied back: parted in the middle, every flow line runs back to a tie at the back of the head and
+    carries on, unbroken, into a thick tail hanging down the back (one piece: the tail is the same surface as the
+    cap)."""
+    sc = Scalp(top=0.315)
+    pole = Vector((0, 0.05, -0.33))
+    m = Mass(sc, LINE_SWEPT, pole, ref=(0, 1, 0))
+    nu, nv_cap, v_end = 28, 6, 0.8
+    # Tail rings after the cap: (centre, radius), ending in the tip.
+    tail = [((0, 0.05, -0.37), 0.075), ((0, 0.0, -0.42), 0.1), ((0, -0.13, -0.44), 0.1), ((0, -0.28, -0.42), 0.08),
+            ((0, -0.42, -0.39), 0.05), ((0, -0.53, -0.36), 0.0)]
+    nv = nv_cap + len(tail)
+
+    def cap_shape(i, j, psi, s, q, n):
+        rim = -0.012 if j == 0 else 0.0                                              # a tapered hairline, not a brim
+        k = min(i % nu, nu - i % nu)                                                 # columns from the centre line
+        part = facing(q, 0) * min(1.0, s / 0.5) * (-0.03 if k == 0 else 0.018 if k == 1 else 0.0)  # centre parting
+        return n * (0.01 + rim + part + ridge(i, s, 0.022, 0.2) + 0.03 * max(0, 0.45 - s))
+    cap = m.grid(nu, nv_cap, cap_shape, v_end)
+    check_cover(m, cap, nu, nv_cap, skip_pole=0.5)
+    a = m.a
+
+    def fn(u, v):
+        j = round(v * nv)
+        if j <= nv_cap:
+            return cap(u, j / nv_cap)
+        k = j - nv_cap - 1
+        c, r = Vector(tail[k][0]), tail[k][1]
+        prev = Vector(tail[k - 1][0]) if k else pole
+        rot = a.rotation_difference((c - prev).normalized())
+        e1, e2 = rot @ m.e1, rot @ m.e2
+        psi = 2 * PI * u
+        rr = r * (1.08 if round(u * nu) % 2 == 0 else 0.92)
+        return tuple(c + (e1 * math.cos(psi) + e2 * math.sin(psi)) * rr)
+    surf(h, fn, nu, nv, 0.05, H, closed_u=True, inside=tuple(sc.c), inner=False, walls=(0,))
+    cyl(h, 0.088, 0.088, 0.05, (0, 0.05, -0.37), BAND, rot=(PI / 2, 0, 0), seg=10)       # the tie
 
 
-def hair_4(h):  # wild: one mass of big chunky spikes growing out of the shell and sweeping back
-    sc = Scalp(top=0.33, dz=-0.01)
-    hair_shell(h, sc, LINE, jag=0.035)
-    for x, y, z, out, back, ln, w in ((0, 0.3, 0.18, 0.5, -0.3, 0.24, 0.2),              # over the brow
-                                      (0, 0.35, 0.0, 0.2, 0.9, 0.27, 0.22),              # crown
-                                      (0, 0.28, -0.2, 0.0, 0.6, 0.28, 0.2),
-                                      (0, 0.05, -0.3, -0.5, 0.2, 0.24, 0.2)):             # nape
-        spike(h, sc, (x, y, z), out, back, ln, w)
-    for s in (-1, 1):
-        for x, y, z, out, back, ln, w in ((0.15, 0.27, 0.17, 0.5, -0.2, 0.22, 0.18),
-                                          (0.13, 0.35, 0.02, 0.3, 0.8, 0.26, 0.2),
-                                          (0.24, 0.22, 0.06, 0.2, 0.5, 0.24, 0.18),
-                                          (0.2, 0.26, -0.15, 0.1, 0.7, 0.26, 0.2),
-                                          (0.25, 0.08, -0.12, -0.3, 0.6, 0.18, 0.17),
-                                          (0.15, 0.02, -0.28, -0.4, 0.4, 0.22, 0.18)):
-            spike(h, sc, (s * x, y, z), out, back, ln, w)
+def hair_4(h):
+    """Wild mane: one faceted mass whose flow lines radiate from the crown; eight of its grid points are pulled out
+    into big spikes sweeping up and back (two rings of four, staggered), and the hairline breaks into long points."""
+    sc = Scalp(top=0.32, dz=-0.01)
+    m = Mass(sc, LINE, (0, 0.33, -0.04))
+    nu, nv = 16, 5
+    spikes = {}                                  # (column, row) -> length: spikes pulled out of the grid itself
+    for i in range(0, nu, 4):
+        spikes[(i, 2)] = 0.15 if i == 0 else 0.24
+        spikes[(i + 2, 3)] = 0.22
+
+    def shape(i, j, psi, s, q, n):
+        o = n * 0.012
+        ln = spikes.get((i % nu, j))
+        if ln:
+            o += (n + Vector((0, 0.6, -0.9))).normalized() * ln
+        if j == 0 and i % 2 == 0:
+            o += DOWN * (0.075 - 0.035 * facing(q, 0)) + n * 0.03
+        return o
+    build_mass(h, m, nu, nv, shape)
 
 
 def beard_1(h):  # stubble
@@ -272,25 +317,24 @@ def moustache(h, w=0.3, droop=0.1):
         box(h, (0.07, droop + 0.05, 0.06), (s * (w / 2 - 0.01), -0.13 - droop / 2, 0.27), H, rot=(0, 0, s * 0.2), bevel=0.018)
 
 
-def beard_2(h):  # full beard
+def beard_2(h):  # full beard: one broad block over the jaw narrowing to a clean, square-cut chin
     box(h, (0.46, 0.25, 0.14), (0, -0.21, 0.225), H, bevel=0.04)
-    box(h, (0.36, 0.13, 0.13), (0, -0.37, 0.25), H, taper=(1.25, 1.05), bevel=0.035)
-    box(h, (0.2, 0.1, 0.1), (0, -0.46, 0.27), H, taper=(1.6, 1.2), bevel=0.03)
+    beam(h, (0, -0.31, 0.235), (0, -0.46, 0.25), 0.4, H, w1=0.24, d=0.13, d1=0.1, bevel=0.03)
     for s in (-1, 1):
         box(h, (0.05, 0.22, 0.17), (s * 0.24, -0.08, 0.14), H, bevel=0.015)        # sideburns
     moustache(h)
     box(h, (0.11, 0.035, 0.02), (0, -0.17, 0.296), 0x5A2E24, bevel=0)              # mouth gap
 
 
-def beard_3(h):  # braided beard
+def beard_3(h):  # braided beard: a trimmed beard with a neat braid hanging from each corner of the jaw
     box(h, (0.44, 0.22, 0.13), (0, -0.2, 0.225), H, bevel=0.035)
     for s in (-1, 1):
         box(h, (0.05, 0.2, 0.16), (s * 0.238, -0.08, 0.14), H, bevel=0.015)
-        x = s * 0.09
-        for i in range(3):
-            box(h, (0.085, 0.09, 0.08), (x, -0.335 - i * 0.085, 0.27 + i * 0.008), H, rot=(0, 0.6 * s, 0.15 * s * (1 if i % 2 else -1)), bevel=0.02)
-        box(h, (0.08, 0.04, 0.08), (x, -0.585, 0.3), BEAD, bevel=0.01)
-        cone(h, 0.045, 0.1, (x, -0.65, 0.3), H, rot=(PI, 0, 0), seg=4)
+        x = s * 0.165
+        for i in range(3):                                                          # three even plaits
+            box(h, (0.08 - i * 0.008, 0.085, 0.08 - i * 0.008), (x, -0.335 - i * 0.075, 0.25), H, rot=(0, PI / 4, 0), bevel=0.02)
+        box(h, (0.075, 0.04, 0.075), (x, -0.53, 0.25), BEAD, rot=(0, PI / 4, 0), bevel=0.01)
+        beam(h, (x, -0.55, 0.25), (x, -0.62, 0.25), 0.05, H, w1=0.012)
     moustache(h, w=0.28, droop=0.06)
     box(h, (0.1, 0.03, 0.02), (0, -0.17, 0.29), 0x5A2E24, bevel=0)
 
