@@ -116,6 +116,44 @@ export function installPoseCheck(g: Game) {
     g.player.obj.visible = true;
   };
 
+  /**
+   * Pauldron coverage across poses. For each side: `cap` is the cosine between the arm's
+   * direction and the direction from the shoulder joint to the pauldron's centre. A capped
+   * shoulder has cap well below 0 (pauldron on the far side of the joint from the arm).
+   * `dist` is how far the pauldron centre sits from the joint.
+   */
+  w.__shoulderReport = (body = 'steel_platebody') => {
+    const p = g.player;
+    const poses: [string, string | null, AttackKind, number][] = [
+      ['idle', 'iron_longsword', 'swing', -1],
+      ['windup', 'iron_longsword', 'swing', 0.3],
+      ['overhead', 'iron_longsword', 'slam', 0.45],
+      ['bow draw', 'worn_bow', 'bow', 0.45],
+      ['cast', 'apprentice_staff', 'cast', 0.5],
+    ];
+    const out: Record<string, unknown>[] = [];
+    for (const [name, weapon, kind, t] of poses) {
+      pose(weapon, kind, t, { body });
+      p.obj.updateMatrixWorld(true);
+      const row: Record<string, unknown> = { pose: name };
+      for (const side of ['L', 'R']) {
+        const arm = p.model.root.getObjectByName(`arm${side}`)!;
+        const joint = arm.getWorldPosition(new THREE.Vector3());
+        const armDir = new THREE.Vector3(0, -1, 0).applyQuaternion(arm.getWorldQuaternion(new THREE.Quaternion()));
+        const pauldron = p.dresser.socket(`sock_shoulder${side}`)!.children.find((c) => c.name === `gear:sock_shoulder${side}`);
+        if (!pauldron) {
+          row[side] = 'no pauldron';
+          continue;
+        }
+        const c = new THREE.Box3().setFromObject(pauldron).getCenter(new THREE.Vector3());
+        const toP = c.clone().sub(joint);
+        row[side] = { cap: +toP.clone().normalize().dot(armDir).toFixed(2), dist: +toP.length().toFixed(2) };
+      }
+      out.push(row);
+    }
+    return out;
+  };
+
   /** The live bow socket offset used by the rig (for tuning; same module instance as the game). */
   w.__BOW_SOCKET = BOW_SOCKET;
 

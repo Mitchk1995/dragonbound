@@ -24,6 +24,12 @@ export const newAnimState = (): AnimState => ({ speed: 0, attack: -1, attackKind
 
 const ease = (t: number) => t * t * (3 - 2 * t);
 
+const QA = new THREE.Quaternion(), QB = new THREE.Quaternion(), QC = new THREE.Quaternion(), QD = new THREE.Quaternion();
+const V1 = new THREE.Vector3();
+
+/** How much of the upper arm's rotation the pauldron follows (see Rig.followShoulders). */
+export const SHOULDER_FOLLOW = 0.75;
+
 /** Extra hand-socket rotation during the bow shot so the bow stands upright with the string facing the archer. */
 // Found by searching quarter turns with __bowReport: upright through the draw, arrow at the target,
 // nock on the draw hand, string behind the grip both drawn and at rest (brace toward the archer).
@@ -143,7 +149,32 @@ export class Rig {
     this.rot('tail1', 0, Math.sin(t * 3) * 0.3);
     this.rot('tail2', 0, Math.sin(t * 3 - 0.8) * 0.4);
 
-    if (s.attack < 0) return;
+    if (s.attack >= 0) this.attackPose(s);
+    this.followShoulders();
+  }
+
+  /**
+   * Pauldrons live on the torso's shoulder sockets but must ride the upper arm: rotate each
+   * shoulder socket by most of its arm's rotation (plate articulates, it doesn't fully follow).
+   */
+  private followShoulders() {
+    for (const side of ['L', 'R']) {
+      const arm = this.parts.get(`arm${side}`);
+      const sock = this.parts.get(`sock_shoulder${side}`);
+      if (!arm || !sock || arm.parent !== sock.parent) continue;
+      // The arm's rotation away from rest, partially applied (slerp from identity).
+      const armBaseQ = QA.setFromEuler(this.baseRot.get(arm)!);
+      const delta = QB.copy(armBaseQ).invert().multiply(arm.quaternion);
+      const partial = QC.identity().slerp(delta, SHOULDER_FOLLOW);
+      const turn = QD.copy(armBaseQ).multiply(partial).multiply(QA.copy(armBaseQ).invert());
+      // Orbit the pauldron around the shoulder joint (the arm's pivot) and turn it with the arm.
+      const armPos = this.basePos.get(arm)!, sockPos = this.basePos.get(sock)!;
+      sock.position.copy(V1.copy(sockPos).sub(armPos).applyQuaternion(turn).add(armPos));
+      sock.quaternion.copy(turn).multiply(QB.setFromEuler(this.baseRot.get(sock)!));
+    }
+  }
+
+  private attackPose(s: AnimState) {
     const a = s.attack;
     switch (s.attackKind) {
       case 'swing': {
