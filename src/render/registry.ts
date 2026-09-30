@@ -68,7 +68,7 @@ const ANON_PART = /^p\d+$/;
  *   arm is one mesh, not one per colour);
  * - recolourable ROLE_ materials and glowing (emissive) materials keep their own material.
  * A creature drops from ~30-100 draw calls to a handful, and shadows with it. Named meshes,
- * meshes with children and gear (whose parts are identified by shape) are left alone.
+ * meshes with children are left alone (and bows: their string is identified by shape).
  */
 export function mergeRigidParts(root: THREE.Object3D, model: string) {
   const parents = new Set<THREE.Object3D>();
@@ -138,7 +138,8 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
 export function registerModelScene(name: string, scene: THREE.Group) {
   cleanNames(scene);
   normalizeAuthoredFrame(scene);
-  if (!name.startsWith('gear_')) mergeRigidParts(scene, name);
+  // Bows stay unmerged: BowDraw finds the static string by its shape.
+  if (name !== 'gear_bow' && name !== 'gear_u_emberstring') mergeRigidParts(scene, name);
   const box = new THREE.Box3().setFromObject(scene);
   loaded.set(name, { scene, height: box.max.y - box.min.y });
 }

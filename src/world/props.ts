@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL } from '../render/kit';
 import { hasModel, makeModel } from '../render/registry';
 import { applySurface, guessSurface } from '../render/surface';
@@ -417,6 +418,43 @@ const BUILDERS: Record<string, Builder> = {
   },
 };
 
+/**
+ * Merge a kit-built prop's static meshes: within each parent group, unnamed non-glowing meshes
+ * sharing a material become one mesh. A palisade drops from ~60 draw calls to 2, a tent camp
+ * from dozens to a handful. Groups toggled by setState and emissive parts animated by tick
+ * (flames, seals) stay separate, so behaviour is unchanged.
+ */
+function mergeStatic(root: THREE.Object3D) {
+  const parents = new Set<THREE.Object3D>();
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.parent && !o.children.length) parents.add(o.parent);
+  });
+  for (const parent of parents) {
+    const groups = new Map<THREE.Material, THREE.Mesh[]>();
+    for (const c of parent.children) {
+      if (!(c instanceof THREE.Mesh) || c.children.length || c.name || Array.isArray(c.material)) continue;
+      const m = c.material;
+      if (!(m instanceof THREE.MeshStandardMaterial) || (m.emissive.getHex() !== 0 && m.emissiveIntensity > 0)) continue;
+      const list = groups.get(m) ?? [];
+      list.push(c);
+      groups.set(m, list);
+    }
+    for (const [mat, meshes] of groups) {
+      if (meshes.length < 2) continue;
+      const merged = mergeGeometries(meshes.map((m) => {
+        m.updateMatrix();
+        let geo = m.geometry.clone().applyMatrix4(m.matrix);
+        for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+        if (geo.index) geo = geo.toNonIndexed();
+        return geo;
+      }));
+      if (!merged) continue;
+      for (const m of meshes) m.removeFromParent();
+      parent.add(new THREE.Mesh(merged, mat));
+    }
+  }
+}
+
 /** Build a prop by kind. GLB `prop_<kind>` overrides the placeholder when present. */
 export function buildProp(kind: string, arg?: any): Prop {
   if (hasModel(`prop_${kind}`)) {
@@ -431,6 +469,7 @@ export function buildProp(kind: string, arg?: any): Prop {
   if (kind === 'arch') res = arch(k, g, arg ?? null);
   else if (kind.startsWith('rock_')) res = oreRock(k, g, arg ?? 0x888888);
   else res = BUILDERS[kind]?.(k, g, arg);
+  mergeStatic(g);
   // Static props line their detail up in world space.
   for (const m of k.mats) if (m.emissive.getHex() === 0 || m.emissiveIntensity === 0) applySurface(m, guessSurface(m.color), 'world');
   g.traverse((o) => {

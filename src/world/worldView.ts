@@ -110,7 +110,7 @@ function voidSky(group: THREE.Group, rng: () => number) {
 }
 
 /** World instancing tile size in cells (see inst()). */
-const CHUNK = 16;
+const CHUNK = 24;
 
 // ─── Builder ────────────────────────────────────────────────────────────────
 
@@ -140,7 +140,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const e = new THREE.Euler();
-  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind) => {
+  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind, shadow = true) => {
     if (!mats.length) return;
     const mat = new THREE.MeshStandardMaterial({ color: cols ? 0xffffff : color, flatShading: true, roughness: 0.9 });
     if (surface) applySurface(mat, surface, 'world');
@@ -163,7 +163,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         if (cols) mesh.setColorAt(i, cols[id]);
       });
       mesh.computeBoundingSphere();
-      mesh.castShadow = true;
+      mesh.castShadow = shadow;
       mesh.receiveShadow = true;
       group.add(mesh);
     }
@@ -332,12 +332,12 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   ])!;
   inst(masonry, walls, wallCols, 0, true, 'stone');
   inst(new THREE.IcosahedronGeometry(0.7, 0).translate(0, 0.45, 0), bushes, bushCols, 0, false, 'leaves');
-  inst(new THREE.ConeGeometry(0.035, 0.7, 3).translate(0, 0.35, 0), reeds, null, 0x6a7a3a, false);
+  inst(new THREE.ConeGeometry(0.035, 0.7, 3).translate(0, 0.35, 0), reeds, null, 0x6a7a3a, false, undefined, false);
   const flowerGeo = mergeGeometries([
     new THREE.CylinderGeometry(0.012, 0.012, 0.25, 3).translate(0, 0.125, 0).toNonIndexed(),
     new THREE.OctahedronGeometry(0.06, 0).translate(0, 0.27, 0),
   ])!;
-  inst(flowerGeo, flowers, flowerCols, 0, false);
+  inst(flowerGeo, flowers, flowerCols, 0, false, undefined, false);
   if (under.length) {
     inst(new THREE.ConeGeometry(0.7, 1, 6).rotateX(Math.PI), under, null, 0x4a3e38, false, 'stone');
     // A solid core under the whole island so it reads as one mass.
@@ -361,7 +361,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const sc = 0.7 + rng() * 0.8;
     tufts.push(m.compose(p, q, s.set(sc, sc, sc)).clone());
   }
-  inst(tuftGeo, tufts, null, theme.trees === 'grove' ? 0x7aa84a : 0x6f8a3c, false);
+  inst(tuftGeo, tufts, null, theme.trees === 'grove' ? 0x7aa84a : 0x6f8a3c, false, undefined, false);
 
   if (theme.ambient === 'void') {
     const skyGroup = new THREE.Group();
