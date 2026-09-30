@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL } from '../render/kit';
 import { hasModel, makeModel } from '../render/registry';
-import { applySurface, guessSurface } from '../render/surface';
+import { applyFinish } from '../render/env';
+import { applySurface, propSurface } from '../render/surface';
 
 export interface Prop {
   obj: THREE.Group;
@@ -14,6 +15,7 @@ export interface Prop {
 }
 
 const STONE = 0x8a8478, STONE_D = 0x5e5850, ROOF = 0x4a3a5a, IRON = 0x4a4a52;
+const METALS = new Set([IRON, PAL.gold]);
 
 function flame(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, s = 1) {
   const a = k.cone(g, 0.3 * s, 0.7 * s, [x, y + 0.35 * s, z], PAL.fire, undefined, 5, PAL.fire);
@@ -481,8 +483,15 @@ export function buildProp(kind: string, arg?: any): Prop {
   else if (kind.startsWith('rock_')) res = oreRock(k, g, arg ?? 0x888888);
   else res = BUILDERS[kind]?.(k, g, arg);
   mergeStatic(g);
-  // Static props line their detail up in world space.
-  for (const m of k.mats) if (m.emissive.getHex() === 0 || m.emissiveIntensity === 0) applySurface(m, guessSurface(m.color), 'world');
+  for (const m of k.mats) {
+    // Iron and gold fittings shine; grey masonry gets a gentle stone detail (lined up in world
+    // space); everything else stays clean flat colour.
+    if (METALS.has(m.color.getHex())) applyFinish(m, 'metal');
+    else if (m.emissive.getHex() === 0 || m.emissiveIntensity === 0) {
+      const surface = propSurface(m.color);
+      if (surface) applySurface(m, surface, 'world');
+    }
+  }
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.castShadow = true;

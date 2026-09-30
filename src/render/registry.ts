@@ -6,8 +6,9 @@ import { BASES, UNIQUES, type Palette } from '../data/items';
 import type { Appearance } from '../save/save';
 import type { Item, Slot } from '../types';
 import type { Model } from './kit';
+import { applyFinish, type Finish } from './env';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
-import { pickSurface, surfaceForModelMaterial } from './surface';
+import { applyGrade, MODEL_GRADE, trackGradeRoot } from './surface';
 
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
@@ -64,7 +65,7 @@ const ANON_PART = /^p\d+$/;
 /**
  * Merge a model's anonymous rigid leaf meshes under each rig node into as few meshes as possible,
  * in the node's space so they still move with it:
- * - fixed-colour materials are baked into vertex colours and grouped by surface kind (a goblin's
+ * - fixed-colour materials are baked into vertex colours and grouped by finish (a goblin's
  *   arm is one mesh, not one per colour);
  * - recolourable ROLE_ materials and glowing (emissive) materials keep their own material.
  * A creature drops from ~30-100 draw calls to a handful, and shadows with it. Named meshes,
@@ -80,7 +81,7 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
   const vcMats = new Map<string, THREE.MeshStandardMaterial>();
   const keyOf = (m: THREE.Material): string | THREE.Material => {
     if (!(m instanceof THREE.MeshStandardMaterial) || roleOf(m) || (m.emissive.getHex() !== 0 && m.emissiveIntensity > 0) || m.transparent || m.map) return m;
-    return `vc|${pickSurface(model, m)}|${m.roughness.toFixed(2)}|${m.metalness.toFixed(2)}|${m.side}`;
+    return `vc|${m.roughness.toFixed(2)}|${m.metalness.toFixed(2)}|${m.side}`;
   };
   let before = 0, after = 0;
   for (const parent of parents) {
@@ -121,7 +122,6 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
           vc.color.set(0xffffff);
           vc.vertexColors = true;
           vc.name = `VC_${key}`;
-          vc.userData.surfaceKind = pickSurface(model, mat);
           vcMats.set(key, vc);
         }
         mat = vc;
@@ -164,8 +164,18 @@ export async function preloadModels(names: string[]) {
 
 export const hasModel = (name: string) => loaded.has(name);
 
+/**
+ * Models are clean flat colour: no surface texture, just the soft vertical grade (shade toward
+ * the feet of whatever model the mesh ends up part of) for depth.
+ */
+function gradeMeshes(root: THREE.Object3D) {
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh) trackGradeRoot(o);
+  });
+}
+
 /** Clone with per-instance materials so hit flashes and recolours stay local. */
-function cloneWithMaterials(src: THREE.Object3D, file: string) {
+function cloneWithMaterials(src: THREE.Object3D) {
   const root = src.clone(true);
   const cloned = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   root.traverse((o) => {
@@ -177,19 +187,28 @@ function cloneWithMaterials(src: THREE.Object3D, file: string) {
       m = orig.clone();
       m.userData.baseEmissive = m.emissive.clone();
       m.userData.baseIntensity = m.emissiveIntensity;
-      surfaceForModelMaterial(file, m);
+      applyGrade(m, MODEL_GRADE, 'root');
       cloned.set(orig, m);
     }
     o.material = m;
   });
+  gradeMeshes(root);
   return { root, mats: [...cloned.values()] };
 }
 
 export function makeModel(name: string): Model {
   const src = loaded.get(name);
-  if (!src) return MODEL_BUILDERS[name]();
-  const { root, mats } = cloneWithMaterials(src.scene, name);
-  return { root: root as THREE.Group, mats, height: src.height };
+  let model: Model;
+  if (src) {
+    const { root, mats } = cloneWithMaterials(src.scene);
+    model = { root: root as THREE.Group, mats, height: src.height };
+  } else {
+    model = MODEL_BUILDERS[name]();
+    for (const m of model.mats) applyGrade(m, MODEL_GRADE, 'root');
+    gradeMeshes(model.root);
+  }
+  model.root.userData.gradeHeight = model.height;
+  return model;
 }
 
 // ─── Role recolouring ───────────────────────────────────────────────────────
@@ -248,7 +267,7 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     if (!ph) return parts;
     src = ph;
   }
-  const { root } = cloneWithMaterials(src, file);
+  const { root, mats } = cloneWithMaterials(src);
   // A glowing palette lights the trim, unless the model has its own glow accents (eyes, gems):
   // then only those glow, instead of flooding large trim surfaces.
   let ownGlow = false;
@@ -256,6 +275,13 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     if (o instanceof THREE.Mesh && roleOf(o.material as THREE.Material) === 'glow') ownGlow = true;
   });
   applyRoles(root, paletteRoles(palette), !!palette.glow && !ownGlow);
+  // Forged palettes shine: their role parts reflect the studio environment.
+  if (palette.metal) {
+    for (const m of mats) {
+      const role = roleOf(m);
+      if (role === 'metal' || role === 'trim' || role === 'dark') applyFinish(m, role as Finish);
+    }
+  }
   const sockets: THREE.Object3D[] = [];
   root.traverse((o) => {
     if (o.name.startsWith('sock_')) sockets.push(o);
@@ -336,7 +362,7 @@ export class HeroDresser {
   private attachFile(file: string, colors: RoleColors) {
     const src = loaded.get(file)?.scene ?? PLACEHOLDER_GEAR[file]?.();
     if (!src) return;
-    const { root } = cloneWithMaterials(src, file);
+    const { root } = cloneWithMaterials(src);
     applyRoles(root, colors);
     const parts = new Map<string, THREE.Object3D>();
     root.traverse((o) => {

@@ -8,6 +8,8 @@ type Shader = THREE.WebGLProgramParametersWithUniforms;
 export interface ShaderPatch {
   /** Identifies the generated program: patches with equal keys must produce equal GLSL. */
   key: string;
+  /** Patches in the same slot replace each other (defaults to the key). */
+  slot?: string;
   apply(shader: Shader): void;
 }
 
@@ -16,7 +18,7 @@ const patches = new WeakMap<THREE.Material, ShaderPatch[]>();
 /**
  * Add a shader patch to a material. Several patches (surface detail, see-through occlusion…)
  * stack: they all run in one onBeforeCompile and share one program cache key. Adding a patch
- * with a key the material already has replaces it (e.g. new uniforms for the same program).
+ * in a slot the material already has replaces it (e.g. new uniforms for the same program).
  * Material.clone() does not carry patches over; patch the clone.
  */
 export function addPatch(mat: THREE.Material, patch: ShaderPatch) {
@@ -29,7 +31,8 @@ export function addPatch(mat: THREE.Material, patch: ShaderPatch) {
     };
     mat.customProgramCacheKey = () => l.map((p) => p.key).join('|');
   }
-  const i = list.findIndex((p) => p.key === patch.key);
+  const slot = patch.slot ?? patch.key;
+  const i = list.findIndex((p) => (p.slot ?? p.key) === slot);
   if (i >= 0) list[i] = patch;
   else list.push(patch);
   mat.needsUpdate = true;
@@ -40,7 +43,7 @@ export const patchKeys = (mat: THREE.Material) => (patches.get(mat) ?? []).map((
 // ─── Surface detail: triplanar albedo + bump ────────────────────────────────
 
 /**
- * Object space follows the mesh (characters, gear: the pattern moves with the limb);
+ * Object space follows the mesh (the pattern moves with it);
  * world space lines up across instances and props (walls, rocks, trees).
  */
 export type SurfaceSpace = 'object' | 'world';
@@ -95,10 +98,10 @@ function commonInject(shader: Shader, space: SurfaceSpace, fragDecl: string) {
 }
 
 /**
- * Albedo, roughness and bump from `float surfSample(out vec3 grad)`: a height in 0..1 and its
- * gradient along the projection axes, evaluated after the colour chunks.
+ * Albedo, roughness and (when `bump`) bump from `float surfSample(out vec3 grad)`: a height in
+ * 0..1 and its gradient along the projection axes, evaluated after the colour chunks.
  */
-function heightInject(shader: Shader) {
+function heightInject(shader: Shader, bump = true) {
   shader.fragmentShader = shader.fragmentShader
     .replace(
       '#include <color_fragment>',
@@ -111,27 +114,41 @@ function heightInject(shader: Shader) {
       '#include <roughnessmap_fragment>',
       `#include <roughnessmap_fragment>
       roughnessFactor = clamp(roughnessFactor + (0.5 - surfH) * 0.3 * uSurfAlbedo, 0.05, 1.0);`,
-    )
-    .replace(
+    );
+  if (bump) {
+    shader.fragmentShader = shader.fragmentShader.replace(
       '#include <normal_fragment_maps>',
       `#include <normal_fragment_maps>
       normal = surfBump(normal, surfGrad, uSurfBump * 0.12 / uSurfScale);`,
     );
+  }
 }
 
-/** Apply a procedural surface to a MeshStandardMaterial (other material types are left alone). */
+/**
+ * Apply a procedural surface to a MeshStandardMaterial (other material types are left alone).
+ * A kind with no bump samples albedo only; one with neither leaves the material untouched.
+ */
 export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: SurfaceSpace = 'object', scaleMul = 1) {
   if (!(mat instanceof THREE.MeshStandardMaterial)) return;
   const p = SURFACES[kind];
+  if (p.albedo === 0 && p.bump === 0) return;
+  const bump = p.bump > 0;
   const uniforms = {
     uSurfTex: { value: surfaceTexture(kind) },
     uSurfScale: { value: p.scale * scaleMul },
     uSurfAlbedo: { value: p.albedo },
     uSurfBump: { value: p.bump },
   };
-  mat.userData.surface = kind;
+  // Flat: one fetch per plane. Bumped: two more per plane for the gradient.
+  const plane = bump
+    ? `vec3 surfPlane(vec2 uv) {
+        float h = texture2D(uSurfTex, uv).r;
+        return vec3(h, texture2D(uSurfTex, uv + vec2(SURF_E, 0.0)).r - h, texture2D(uSurfTex, uv + vec2(0.0, SURF_E)).r - h);
+      }`
+    : 'vec3 surfPlane(vec2 uv) { return vec3(texture2D(uSurfTex, uv).r, 0.0, 0.0); }';
   addPatch(mat, {
-    key: `surface:${space}`,
+    key: `surface:${space}${bump ? '' : ':flat'}`,
+    slot: 'surface',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
       commonInject(
@@ -141,10 +158,7 @@ export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: Surf
         uniform float uSurfScale;
         uniform float uSurfAlbedo;
         uniform float uSurfBump;
-        vec3 surfPlane(vec2 uv) {
-          float h = texture2D(uSurfTex, uv).r;
-          return vec3(h, texture2D(uSurfTex, uv + vec2(SURF_E, 0.0)).r - h, texture2D(uSurfTex, uv + vec2(0.0, SURF_E)).r - h);
-        }
+        ${plane}
         float surfSample(out vec3 grad) {
           vec3 w = pow(abs(normalize(vSurfNrm)), vec3(4.0));
           w /= (w.x + w.y + w.z);
@@ -154,9 +168,86 @@ export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: Surf
           return px.x * w.x + py.x * w.y + pz.x * w.z;
         }`,
       );
-      heightInject(shader);
+      heightInject(shader, bump);
     },
   });
+}
+
+// ─── Grade: soft vertical shading (cheap ambient occlusion) ─────────────────
+
+/**
+ * Darkens toward the base of an object, so flat-coloured models keep their depth. `low` is the
+ * brightness at `from`, rising smoothly to full at `to`.
+ * - 'root': heights are fractions of the model's height above its root (feet 0, top 1), measured
+ *   in the root's frame, so limbs and attached gear share one gradient. Call trackGradeRoot on
+ *   each mesh so the root's current transform reaches the shader.
+ * - 'local': heights are in the geometry's own units (instanced trees and bushes).
+ */
+export interface Grade {
+  low: number;
+  from: number;
+  to: number;
+}
+
+/** Characters and gear: legs and boots sit in a little shade, chest and head in full light. */
+export const MODEL_GRADE: Grade = { low: 0.7, from: 0, to: 0.62 };
+
+type GradeSpace = 'root' | 'local';
+
+export function applyGrade(mat: THREE.Material, grade: Grade, space: GradeSpace) {
+  if (!(mat instanceof THREE.MeshStandardMaterial)) return;
+  const uniforms = {
+    uGradeLow: { value: grade.low },
+    uGradeFrom: { value: grade.from },
+    uGradeTo: { value: grade.to },
+    // Root space: world position → height fraction (row of the root's inverse world matrix / height).
+    // (0,0,0,1) until a root is found: a fraction of 1, i.e. no shading.
+    uGradeRow: { value: new THREE.Vector4(0, 0, 0, 1) },
+  };
+  mat.userData.gradeRow = uniforms.uGradeRow.value;
+  addPatch(mat, {
+    key: `grade:${space}`,
+    slot: 'grade',
+    apply(shader) {
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform vec4 uGradeRow;\nvarying float vGrade;')
+        .replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>\n${space === 'root' ? 'vGrade = dot(uGradeRow, modelMatrix * vec4(transformed, 1.0));' : 'vGrade = transformed.y;'}`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uGradeLow;\nuniform float uGradeFrom;\nuniform float uGradeTo;\nvarying float vGrade;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(uGradeLow, 1.0, smoothstep(uGradeFrom, uGradeTo, vGrade));');
+    },
+  });
+}
+
+const gradeInv = new THREE.Matrix4();
+
+/**
+ * Write the row that maps a world position to a height fraction of `root` (0 at its origin,
+ * 1 at `height` up its local Y axis) into `out`.
+ */
+export function gradeRow(root: THREE.Object3D, height: number, out: THREE.Vector4) {
+  const e = gradeInv.copy(root.matrixWorld).invert().elements;
+  return out.set(e[1], e[5], e[9], e[13]).divideScalar(height);
+}
+
+/**
+ * Keep a root-graded mesh's gradient attached to the model it is part of: the nearest ancestor
+ * tagged with `userData.gradeHeight` (model roots; gear finds the hero it is worn by). Meshes
+ * with no such ancestor (a lone weapon in an icon) stay unshaded.
+ */
+export function trackGradeRoot(mesh: THREE.Mesh) {
+  mesh.onBeforeRender = (_r, _s, _c, _g, material) => {
+    const row = material.userData.gradeRow as THREE.Vector4 | undefined;
+    if (!row) return;
+    let root: THREE.Object3D | null = mesh.parent;
+    while (root && root.userData.gradeHeight === undefined) root = root.parent;
+    if (root) gradeRow(root, root.userData.gradeHeight, row);
+    else row.set(0, 0, 0, 1);
+  };
 }
 
 /**
@@ -170,9 +261,11 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
     uTopShade: { value: topShade },
     uCliff: { value: new THREE.Color(cliff ?? 0x6a5e52) },
     uGroundTex: { value: groundTexture() },
+    // Calm: broad tonal variation and a hint of relief. The height (surfH) still drives the
+    // cliff tint and the lava crevice glow below.
     uSurfScale: { value: 0.25 },
-    uSurfAlbedo: { value: 0.42 },
-    uSurfBump: { value: 1.1 },
+    uSurfAlbedo: { value: 0.28 },
+    uSurfBump: { value: 0.2 },
   };
   addPatch(mat, {
     key: `ground${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}${cliff !== null ? ':cliff' : ''}`,
@@ -248,54 +341,14 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
   });
 }
 
-// ─── Picking a surface ──────────────────────────────────────────────────────
-
-const ROLE_SURFACE: Record<string, SurfaceKind | null> = {
-  skin: 'skin', hair: 'hair', cloth: 'cloth', cloth2: 'cloth', leather: 'leather',
-  metal: 'metal', trim: 'metal', dark: 'leather', glow: null,
-};
-
-/** The fallback surface for a model's unnamed (non-role) materials. */
-const MODEL_SURFACE: Record<string, SurfaceKind> = {
-  cinderwing: 'scales', drakeling: 'scales', whelp: 'scales', kobold: 'scales',
-  goblin: 'leather', golem: 'stone', cultist: 'cloth', warden: 'cloth', quartermaster: 'cloth', hero: 'cloth',
-};
-
-function isSkinTone(c: THREE.Color) {
-  const hsl = c.getHSL({ h: 0, s: 0, l: 0 });
-  return hsl.h > 0.04 && hsl.h < 0.1 && hsl.s > 0.4 && hsl.l > 0.65 && hsl.l < 0.85;
-}
-
-/** Surface for a colour with no other information: grey → stone, brown → wood, dark bluish grey → metal, saturated → cloth. */
-export function guessSurface(c: THREE.Color): SurfaceKind {
-  const hsl = c.getHSL({ h: 0, s: 0, l: 0 });
-  if (hsl.l > 0.85) return 'generic';
-  if (hsl.s < 0.12) return hsl.h > 0.55 && hsl.h < 0.75 && hsl.l < 0.35 ? 'metal' : 'stone';
-  if (hsl.h > 0.03 && hsl.h < 0.14 && hsl.l < 0.45) return 'wood';
-  // Strongly coloured props are banners, awnings and tents.
-  if (hsl.s > 0.35) return 'cloth';
-  return 'generic';
-}
+// ─── Props ──────────────────────────────────────────────────────────────────
 
 /**
- * The surface a model material should get: gear by role (metal/leather), characters by role or
- * the model's default, emissive bits none. Merged vertex-coloured materials carry their kind.
+ * The detail a code-built prop part gets from its colour: low-saturation grey (masonry, rock) is
+ * stone; everything else (wood, cloth, metal, bone) stays clean flat colour.
  */
-export function pickSurface(model: string, mat: THREE.Material): SurfaceKind | null {
-  if (!(mat instanceof THREE.MeshStandardMaterial)) return null;
-  if (mat.userData.surfaceKind !== undefined) return mat.userData.surfaceKind;
-  if (mat.emissive.getHex() !== 0 && mat.emissiveIntensity > 0) return null;
-  const role = /^ROLE_(\w+?)(\.\d{3})?$/.exec(mat.name)?.[1];
-  if (role) return role === 'dark' && model.startsWith('gear_') ? 'metal' : (ROLE_SURFACE[role] ?? null);
-  const l = mat.color.getHSL({ h: 0, s: 0, l: 0 });
-  if (isSkinTone(mat.color)) return 'skin';
-  if (l.l > 0.8) return 'generic';
-  if (model.startsWith('gear_u_')) return mat.metalness > 0.5 || l.s < 0.2 ? 'metal' : 'leather';
-  return MODEL_SURFACE[model] ?? (model.startsWith('gear_') ? 'metal' : 'generic');
-}
-
-/** Apply the picked surface to a cloned model material. */
-export function surfaceForModelMaterial(model: string, mat: THREE.Material) {
-  const kind = pickSurface(model, mat);
-  if (kind) applySurface(mat, kind, 'object');
+export function propSurface(c: THREE.Color): SurfaceKind | null {
+  // Judge the colour as authored (sRGB): in linear space warm greys look saturated and brown.
+  const hsl = c.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
+  return hsl.s < 0.12 && hsl.l > 0.2 && hsl.l < 0.8 ? 'stone' : null;
 }

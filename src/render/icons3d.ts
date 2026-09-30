@@ -9,10 +9,19 @@ import { buildMaterialModel } from './models';
  * always matches what the hero wears. Rendered once per look on a small offscreen renderer
  * and cached as data URLs.
  */
-const SIZE = 128;
+/** Pixels per side: sharp in a 52px slot on a 2× display. */
+const SIZE = 160;
+/** Share of the icon the item's silhouette spans along its longer side. */
+const FILL = 0.94;
+/** Gap between the two pieces of a pair (gloves, boots), as a share of the wider piece. */
+const PAIR_GAP = 0.1;
+/** Armour and trinkets are turned three-quarters and tipped toward the viewer. */
+const YAW = -0.45, PITCH = 0.22;
+
 let renderer: THREE.WebGLRenderer | null = null;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 50);
+// Orthographic: the silhouette fills the frame exactly, with no perspective shrink at the edges.
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
 const cache = new Map<string, string>();
 
 function init() {
@@ -38,10 +47,14 @@ function lookKey(item: Item) {
   return `${item.base}|${item.unique ?? ''}|${gl?.model ?? ''}`;
 }
 
-/** Arrange the object so its longest axis runs diagonally, then fit the camera to it. */
-function sizeOf(o: THREE.Object3D) {
-  o.updateMatrixWorld(true);
-  return new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+/** Tight bounds of the given objects' vertices, in world space. */
+function silhouetteBox(objs: THREE.Object3D[]) {
+  const box = new THREE.Box3();
+  for (const o of objs) {
+    o.updateWorldMatrix(true, true);
+    box.expandByObject(o, true);
+  }
+  return box;
 }
 
 /** Wrap `inner` in a group rotated by `euler`; returns the wrapper. */
@@ -52,68 +65,73 @@ function turn(inner: THREE.Object3D, x: number, y: number, z: number) {
   return g;
 }
 
-function frame(obj: THREE.Object3D, diagonal: boolean) {
-  let holder: THREE.Object3D = new THREE.Group();
-  holder.add(obj);
-  if (diagonal) {
-    // Longest axis → vertical; thinnest horizontal axis → toward the camera (so bows aren't edge-on);
-    // then tilt 45° for the classic diagonal weapon icon.
-    let s = sizeOf(holder);
-    if (s.z > s.y && s.z >= s.x) holder = turn(holder, Math.PI / 2, 0, 0);
-    else if (s.x > s.y) holder = turn(holder, 0, 0, Math.PI / 2);
-    s = sizeOf(holder);
-    if (s.x < s.z) holder = turn(holder, 0, Math.PI / 2, 0);
-    holder = turn(holder, 0, 0, -Math.PI / 4);
-  } else {
-    holder.rotation.y = -0.45;
-    holder.rotation.x = 0.18;
-  }
-  holder.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(holder);
-  const center = b.getCenter(new THREE.Vector3());
-  const radius = b.getBoundingSphere(new THREE.Sphere()).radius;
-  holder.position.sub(center);
-  const dist = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.94;
-  camera.position.set(0, 0, dist);
-  camera.lookAt(0, 0, 0);
+/** Longest axis diagonal, thinnest axis toward the camera (so bows aren't edge-on): the classic weapon icon. */
+function diagonal(obj: THREE.Object3D) {
+  let holder = turn(obj, 0, 0, 0);
+  let s = silhouetteBox([holder]).getSize(new THREE.Vector3());
+  if (s.z > s.y && s.z >= s.x) holder = turn(holder, Math.PI / 2, 0, 0);
+  else if (s.x > s.y) holder = turn(holder, 0, 0, Math.PI / 2);
+  s = silhouetteBox([holder]).getSize(new THREE.Vector3());
+  if (s.x < s.z) holder = turn(holder, 0, Math.PI / 2, 0);
+  return turn(holder, 0, 0, -Math.PI / 4);
+}
+
+/** Two matching pieces side by side, right-hand piece on the left (as when facing the wearer). */
+function pair(pieces: THREE.Object3D[]) {
+  const holder = new THREE.Group();
+  const ordered = [...pieces].sort((a, b) => Number(b.name.endsWith('R')) - Number(a.name.endsWith('R')));
+  const turned = ordered.map((p) => turn(p, PITCH, YAW, 0));
+  const boxes = turned.map((t) => silhouetteBox([t]));
+  const gap = PAIR_GAP * Math.max(...boxes.map((b) => b.max.x - b.min.x));
+  let x = 0;
+  turned.forEach((t, i) => {
+    t.position.set(x - boxes[i].min.x, -boxes[i].min.y, 0);
+    x += boxes[i].max.x - boxes[i].min.x + gap;
+    holder.add(t);
+  });
   return holder;
 }
 
-function buildIconObject(item: Item): { obj: THREE.Object3D; diagonal: boolean } {
+/**
+ * An item's icon subject arranged for the camera (looking down -Z) and centred on its silhouette,
+ * plus the half-size of the square view that frames it at FILL.
+ */
+export function iconSubject(item: Item): { holder: THREE.Object3D; half: number; depth: number } {
   const base = BASES[item.base];
   const gl = gearLook(item);
-  if (base?.kind === 'material' || base?.kind === 'quest' || (base?.slot === 'amulet' || base?.slot === 'ring')) {
+  let holder: THREE.Object3D;
+  let subjects: THREE.Object3D[] | null = null;
+  if (base?.kind === 'material' || base?.kind === 'quest' || base?.slot === 'amulet' || base?.slot === 'ring') {
     const kind = base.slot === 'amulet' || base.slot === 'ring' ? base.slot : base.model ?? 'ore';
-    const color = base.color ?? base.palette?.main ?? 0x888888;
-    const g = buildMaterialModel(kind, color);
+    const g = buildMaterialModel(kind, base.color ?? base.palette?.main ?? 0x888888);
     g.rotation.x = 0.5;
-    return { obj: g, diagonal: false };
+    holder = turn(g, PITCH, YAW, 0);
+  } else if (!gl) {
+    holder = turn(buildMaterialModel('gem', 0x888888), PITCH, YAW, 0);
+  } else {
+    const parts = buildGear(gl.model, gl.palette);
+    const names = [...parts.keys()];
+    if (parts.has('sock_handR')) holder = diagonal(parts.get('sock_handR')!);
+    else if (parts.size === 1) holder = turn(parts.values().next().value!, PITCH, YAW, 0);
+    else if (names.every((n) => /^sock_(hand|glove|foot)/.test(n))) holder = pair([...parts.values()]);
+    else {
+      // Body armour: lay the pieces out on an invisible mannequin so they sit where they are worn.
+      const man = makeModel('hero');
+      delete man.root.userData.gradeHeight;
+      const sockets = new Map<string, THREE.Object3D>();
+      man.root.traverse((o) => {
+        if (o.name.startsWith('sock_')) sockets.set(o.name, o);
+        if (o instanceof THREE.Mesh) o.visible = false;
+      });
+      for (const [name, part] of parts) sockets.get(name)?.add(part);
+      holder = turn(man.root, PITCH, YAW, 0);
+      subjects = [...parts.values()];
+    }
   }
-  if (!gl) return { obj: buildMaterialModel('gem', 0x888888), diagonal: false };
-  const parts = buildGear(gl.model, gl.palette);
-  if (parts.has('sock_handR')) return { obj: parts.get('sock_handR')!, diagonal: true };
-  // Armour: lay the pieces out on an invisible mannequin so they sit where they would be worn.
-  const man = makeModel('hero');
-  const sockets = new Map<string, THREE.Object3D>();
-  man.root.traverse((o) => {
-    if (o.name.startsWith('sock_')) sockets.set(o.name, o);
-    if (o instanceof THREE.Mesh) o.visible = false;
-  });
-  for (const [name, part] of parts) sockets.get(name)?.add(part);
-  man.root.updateMatrixWorld(true);
-  // Keep only the gear meshes in the bounds calculation.
-  const gearOnly = new THREE.Group();
-  gearOnly.add(man.root);
-  const box = new THREE.Box3();
-  for (const part of parts.values()) box.expandByObject(part);
-  const c = box.getCenter(new THREE.Vector3());
-  man.root.position.sub(c);
-  const wrap = new THREE.Group();
-  wrap.add(gearOnly);
-  // Frame manually using the gear-only bounds.
-  const sphere = box.getBoundingSphere(new THREE.Sphere());
-  wrap.userData.radius = sphere.radius;
-  return { obj: wrap, diagonal: false };
+  const box = silhouetteBox(subjects ?? [holder]);
+  holder.position.sub(box.getCenter(new THREE.Vector3()));
+  const size = box.getSize(new THREE.Vector3());
+  return { holder, half: Math.max(size.x, size.y) / 2 / FILL, depth: size.z };
 }
 
 export function itemIconUrl(item: Item): string {
@@ -121,18 +139,12 @@ export function itemIconUrl(item: Item): string {
   const hit = cache.get(key);
   if (hit) return hit;
   const r = init();
-  const { obj, diagonal } = buildIconObject(item);
-  let holder: THREE.Object3D;
-  if (obj.userData.radius) {
-    holder = new THREE.Group();
-    holder.add(obj);
-    obj.rotation.y = -0.45;
-    const radius = obj.userData.radius as number;
-    camera.position.set(0, radius * 0.35, radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.98);
-    camera.lookAt(0, 0, 0);
-  } else {
-    holder = frame(obj, diagonal);
-  }
+  const { holder, half, depth } = iconSubject(item);
+  camera.left = camera.bottom = -half;
+  camera.right = camera.top = half;
+  camera.position.set(0, 0, depth / 2 + 5);
+  camera.far = depth + 10;
+  camera.updateProjectionMatrix();
   scene.add(holder);
   r.setClearColor(0x000000, 0);
   r.render(scene, camera);

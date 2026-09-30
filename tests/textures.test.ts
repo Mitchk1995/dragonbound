@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { applyGround, applySurface, patchKeys } from '../src/render/surface';
+import { applyGrade, applyGround, applySurface, gradeRow, MODEL_GRADE, patchKeys, propSurface } from '../src/render/surface';
 import { groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
 import { makeOccludable } from '../src/world/worldView';
 
@@ -75,12 +75,64 @@ describe('shader patches compose', () => {
     expect(s.uniforms.uOccOn).toBeDefined();
   });
 
-  it('re-applying a surface replaces it instead of stacking', () => {
+  it('re-applying a surface replaces it instead of stacking (bumped or flat)', () => {
     const mat = new THREE.MeshStandardMaterial();
-    applySurface(mat, 'metal');
+    applySurface(mat, 'stone');
     applySurface(mat, 'cloth');
-    expect(patchKeys(mat)).toEqual(['surface:object']);
+    expect(patchKeys(mat)).toEqual(['surface:object:flat']);
     expect(compile(mat).uniforms.uSurfTex.value).toBe(surfaceTexture('cloth'));
+  });
+
+  it('a surface with no bump samples albedo only and leaves the normal alone', () => {
+    const mat = new THREE.MeshStandardMaterial();
+    applySurface(mat, 'bark', 'world');
+    const s = compile(mat);
+    expect(s.fragmentShader).toContain('surfSample(surfGrad)');
+    expect(s.fragmentShader).not.toContain('surfBump(normal');
+    // One texture fetch per projection plane instead of three.
+    expect(s.fragmentShader).not.toContain('uv + vec2(SURF_E');
+  });
+
+  it('only rock is bumped; every other kind is quiet', () => {
+    for (const [kind, p] of Object.entries(SURFACES)) {
+      if (kind !== 'stone') expect(p.bump, kind).toBe(0);
+      expect(p.albedo, kind).toBeLessThanOrEqual(0.15);
+    }
+    expect(SURFACES.stone.bump).toBeLessThanOrEqual(0.25);
+  });
+
+  it('grade: darkens toward the base, in root or local space', () => {
+    const mat = new THREE.MeshStandardMaterial();
+    makeOccludable(mat);
+    applyGrade(mat, MODEL_GRADE, 'root');
+    applyGrade(mat, { low: 0.7, from: 0, to: 1 }, 'local');
+    expect(patchKeys(mat)).toEqual(['occlude', 'grade:local']);
+    const s = compile(mat);
+    expect(s.vertexShader).toContain('vGrade = transformed.y');
+    expect(s.fragmentShader).toContain('smoothstep(uGradeFrom, uGradeTo, vGrade)');
+  });
+
+  it('grade row: world position → height fraction of the model root, whatever its transform', () => {
+    const root = new THREE.Group();
+    root.position.set(3, 2, -1);
+    root.rotation.y = 1.1;
+    root.scale.setScalar(2);
+    const parent = new THREE.Group();
+    parent.position.y = 0.5;
+    parent.add(root);
+    parent.updateMatrixWorld(true);
+    const row = gradeRow(root, 1.5, new THREE.Vector4());
+    const frac = (local: THREE.Vector3) => row.dot(new THREE.Vector4(...local.applyMatrix4(root.matrixWorld).toArray(), 1));
+    expect(frac(new THREE.Vector3(0.4, 0, 0.3))).toBeCloseTo(0);
+    expect(frac(new THREE.Vector3(-0.2, 1.5, 0.1))).toBeCloseTo(1);
+    expect(frac(new THREE.Vector3(0, 0.75, 0))).toBeCloseTo(0.5);
+  });
+
+  it('props: only low-saturation grey gets stone detail', () => {
+    expect(propSurface(new THREE.Color(0x8a8478))).toBe('stone');
+    expect(propSurface(new THREE.Color(0x6b4426))).toBeNull(); // wood
+    expect(propSurface(new THREE.Color(0xc0392b))).toBeNull(); // banner cloth
+    expect(propSurface(new THREE.Color(0xeee4cc))).toBeNull(); // bone
   });
 
   it('ground patch reads the splat attribute', () => {
