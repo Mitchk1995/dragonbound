@@ -9,7 +9,8 @@ const os = require('os');
 const INSPECT = process.env.DRAGONBOUND_INSPECT || '';
 const inspectDir = path.join(__dirname, '..', 'inspect');
 if (INSPECT) {
-  const tmp = path.join(os.tmpdir(), 'dragonbound-inspect');
+  // One temp profile per run so parallel inspect runs (separate checkouts) never wipe each other.
+  const tmp = path.join(os.tmpdir(), `dragonbound-inspect-${process.pid}`);
   fs.rmSync(tmp, { recursive: true, force: true });
   app.setPath('userData', tmp);
   fs.mkdirSync(inspectDir, { recursive: true });

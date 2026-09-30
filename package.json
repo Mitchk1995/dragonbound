@@ -20,6 +20,7 @@
   "build": {
     "appId": "com.dragonbound.game",
     "productName": "Dragonbound",
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release"
     },
