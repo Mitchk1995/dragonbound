@@ -10,12 +10,13 @@ import { DROP_TABLES } from '../data/dropTables';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { generateItem, generateUnique, makeItem } from '../loot/itemGen';
-import { FUTURE_SKILLS, SKILL_INFO, levelProgress, xpForLevel } from '../progression/skills';
+import { FUTURE_SKILLS, MAX_LEVEL, SKILL_INFO, xpForLevel } from '../progression/skills';
 import { itemIconUrl } from '../render/icons3d';
 import { SKILLS, SLOTS, type Item, type SkillId, type Slot, type Stance } from '../types';
 import { cap, esc, fmt, itemSlot } from './dom';
 import { DRAG_THRESHOLD, swapSlots } from './hudLayout';
 import { icon } from './icons';
+import { skillTileInfo } from './skillGrid';
 import type { UI } from './ui';
 
 const SLOT_LABEL: Record<Slot, string> = { weapon: 'Weapon', helm: 'Helm', body: 'Body', gloves: 'Gloves', boots: 'Boots', amulet: 'Amulet', ring: 'Ring' };
@@ -195,22 +196,23 @@ export class Panels {
     const el = this.ui.panel('skills', 'Skills');
     if (!el) return;
     const total = SKILLS.reduce((t, k) => t + g.levels[k], 0) + FUTURE_SKILLS.length;
+    // OSRS skill grid: square tiles (inventory-slot sized), the skill's icon over its level out of 99.
     const tiles = SKILLS.map((k) => {
-      const p = levelProgress(s.skills[k]);
-      const info = SKILL_INFO[k];
-      return `<div class="stile" style="--c:${info.color}" data-skill="${k}">
-        <div class="si">${icon(info.icon, 28)}</div><b>${p.level}</b>
-        <div class="sbar"><div style="width:${p.level >= 99 ? 100 : p.frac * 100}%"></div></div>
+      const t = skillTileInfo(s.skills[k]);
+      return `<div class="stile" data-skill="${k}" aria-label="${SKILL_INFO[k].name} ${t.label}">
+        <div class="si">${icon(SKILL_INFO[k].icon, 26)}</div><div class="slv"><b>${t.level}</b><i>/${MAX_LEVEL}</i></div>
       </div>`;
     }).join('');
-    const locked = FUTURE_SKILLS.map((f, i) => `<div class="stile locked" data-future="${i}"><div class="si">${icon(f.icon, 28)}</div><b>1</b></div>`).join('');
+    const locked = FUTURE_SKILLS.map((f, i) => `<div class="stile locked" data-future="${i}" aria-label="${esc(f.name)}, locked">
+        <div class="si">${icon(f.icon, 26)}</div><div class="slv"><i>Ch. ${f.chapter}</i></div>
+      </div>`).join('');
+    const totalTile = `<div class="stile stotal"><span>Total</span><b>${total}</b></div>`;
     const stances: [Stance, string, string][] = [['aggressive', 'Aggressive', 'All combat XP to your weapon style'], ['shared', 'Shared', 'Split between style and Defence'], ['defensive', 'Defensive', 'All combat XP to Defence']];
     this.ui.body(el, `
       <div class="sechead">Combat stance</div>
       <div class="stances">${stances.map(([id, name]) => `<button class="stance ${s.stance === id ? 'on' : ''}" data-stance="${id}">${icon(id, 20)}<span>${name}</span></button>`).join('')}</div>
       <div class="sechead">Skills</div>
-      <div class="skillgrid">${tiles}${locked}</div>
-      <div class="total">Total level <b>${total}</b></div>`);
+      <div class="skillgrid">${tiles}${locked}${totalTile}</div>`);
     el.querySelectorAll<HTMLElement>('[data-stance]').forEach((b) => {
       const st = stances.find(([id]) => id === b.dataset.stance)!;
       b.addEventListener('click', () => {
@@ -224,11 +226,16 @@ export class Panels {
     el.querySelectorAll<HTMLElement>('[data-skill]').forEach((row) => {
       const k = row.dataset.skill as SkillId;
       row.addEventListener('mouseenter', () => {
-        const p = levelProgress(s.skills[k]);
-        const ms = this.milestones(k).filter((m) => m.level > p.level).slice(0, 6);
-        this.ui.tooltip.text(`<div class="tt-name" style="color:${SKILL_INFO[k].color}">${SKILL_INFO[k].name} ${p.level}</div>
-          <div>${fmt(s.skills[k])} XP${p.level < 99 ? ` · ${fmt(p.remaining)} to level ${p.level + 1}` : ''}</div>
-          <div class="tt-dim">Level 99 at ${fmt(xpForLevel(99))} XP</div>
+        const t = skillTileInfo(s.skills[k]);
+        const ms = this.milestones(k).filter((m) => m.level > t.level).slice(0, 4);
+        const next = t.nextAt === null
+          ? '<div class="tt-dim">Mastered.</div>'
+          : `<div class="tt-row"><span>Next level at</span><b>${fmt(t.nextAt)}</b></div>
+             <div class="tt-row"><span>Remaining</span><b>${fmt(t.remaining)}</b></div>
+             <div class="tt-prog" style="--c:${SKILL_INFO[k].color}"><div style="width:${t.frac * 100}%"></div><span>${t.pct}% to level ${t.level + 1}</span></div>`;
+        this.ui.tooltip.text(`<div class="tt-name">${SKILL_INFO[k].name} <span class="tt-lv">${t.label}</span></div>
+          <div class="tt-row"><span>XP</span><b>${fmt(t.xp)}</b></div>
+          ${next}
           ${ms.length ? `<div class="tt-cmp">${ms.map((m) => `<div><b>${m.level}</b> · ${esc(m.text)}</div>`).join('')}</div>` : ''}`, row.getBoundingClientRect());
       });
       row.addEventListener('mouseleave', () => this.ui.tooltip.hide());

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BASES } from '../data/items';
 import type { Item } from '../types';
 import { buildGear, gearLook, makeModel } from './registry';
-import { buildMaterialModel } from './models';
+import { buildMaterialModel } from './materialModels';
 import { setPaintGain } from './surface';
 
 /** Painted albedo contrast in icons, relative to the game. */
@@ -107,7 +107,7 @@ export function iconSubject(item: Item): { holder: THREE.Object3D; half: number;
   let subjects: THREE.Object3D[] | null = null;
   if (base?.kind === 'material' || base?.kind === 'quest' || base?.slot === 'amulet' || base?.slot === 'ring') {
     const kind = base.slot === 'amulet' || base.slot === 'ring' ? base.slot : base.model ?? 'ore';
-    const g = buildMaterialModel(kind, base.color ?? base.palette?.main ?? 0x888888);
+    const g = buildMaterialModel(kind, base.color ?? base.palette?.main ?? 0x888888, base.id);
     g.rotation.x = 0.5;
     holder = turn(g, PITCH, YAW, 0);
   } else if (!gl) {

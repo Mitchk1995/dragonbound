@@ -27,9 +27,9 @@ const list: AbilityDef[] = [
   { id: 'evasive_roll', name: 'Evasive Roll', style: 'ranged', key: 'W', cooldown: 5, mana: 6, unlock: 1, mult: 0, icon: '↻', desc: 'Roll toward the cursor, briefly untouchable. Your next shot is a guaranteed critical hit.' },
   { id: 'arrow_rain', name: 'Rain of Arrows', style: 'ranged', key: 'E', cooldown: 10, mana: 16, unlock: 15, mult: 0.55, icon: '☔', desc: 'Arrows pour down on the target area for 2.5 seconds.' },
 
-  { id: 'fireball', name: 'Fireball', style: 'magic', key: 'Q', cooldown: 2.5, mana: 9, unlock: 1, mult: 2.0, icon: '🔥', desc: 'Hurl a fireball that explodes on impact.' },
-  { id: 'frost_nova', name: 'Frost Nova', style: 'magic', key: 'W', cooldown: 8, mana: 14, unlock: 1, mult: 1.2, icon: '❄', desc: 'Blast of frost around you that slows enemies by 50%.' },
-  { id: 'chain_lightning', name: 'Chain Lightning', style: 'magic', key: 'E', cooldown: 6, mana: 14, unlock: 15, mult: 1.5, icon: 'ϟ', desc: 'Lightning that arcs between up to 5 enemies.' },
+  { id: 'fireball', name: 'Fireball', style: 'magic', key: 'Q', cooldown: 2.5, mana: 6, unlock: 1, mult: 2.0, icon: '🔥', desc: 'Hurl a fireball that explodes on impact.' },
+  { id: 'frost_nova', name: 'Frost Nova', style: 'magic', key: 'W', cooldown: 8, mana: 12, unlock: 1, mult: 1.2, icon: '❄', desc: 'Blast of frost around you that slows enemies by 50%.' },
+  { id: 'chain_lightning', name: 'Chain Lightning', style: 'magic', key: 'E', cooldown: 6, mana: 12, unlock: 15, mult: 1.5, icon: 'ϟ', desc: 'Lightning that arcs between up to 5 enemies.' },
 ];
 
 /** A skill's element: tints its painted HUD tile. */
