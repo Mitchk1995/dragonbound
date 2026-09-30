@@ -145,6 +145,7 @@ declare global {
         write(name: string, text: string): Promise<boolean>;
         log(text: string): Promise<boolean>;
         done(code?: number): Promise<boolean>;
+        resize?(w: number, h: number): Promise<boolean>;
       };
     };
   }

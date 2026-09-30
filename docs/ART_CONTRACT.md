@@ -52,15 +52,15 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 
 | Model id | Sockets | Notes |
 |---|---|---|
-| `sword` | `sock_handR` | ~1.1 long, blade along +Y |
-| `longsword` | `sock_handR` | ~1.5 long, wider guard |
+| `sword` | `sock_handR` | ~1.45 long, blade along +Y: a proper crossguard and a long blade with a bright `ROLE_trim` edge and fuller round a `ROLE_metal` spine (`gear.py` `blade`, `crossguard`) |
+| `longsword` | `sock_handR` | ~1.85 long, wider guard, same blade build |
 | `pickaxe` | `sock_handR` | head at +Y end |
 | `bow` | `sock_handR` | vertical bow in hand (counter-rotate −90° X inside the socket) |
 | `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
-| `helm_full` | `sock_head` | cube-over-cube full helm with visor slit and a low `ROLE_cloth` crest; hides hair and beard |
+| `helm_full` | `sock_head` | cube-over-cube great helm (`gear.py` `great_helm`) with visor slit and a low `ROLE_cloth` crest; every heavy tier wears it (Emberforged adds a crimson crest, horns and a glowing slit); hides hair and beard |
 | `body_chain` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | box mail shirt with a skirt block, fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
-| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | stacked-slab cuirass with a crested breastplate, trim bands, rivet rows, a dark mail skirt and a `ROLE_cloth` tabard (dyed like the wearer's tunic), block pauldron caps, lames + rerebrace + couter down the upper arm (same as plate set `p`) |
+| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | deliberately clean: stacked-slab cuirass with a raised breastplate, one line under the chest block, plain tassets and one accent (a plain `ROLE_cloth` tabard dyed like the wearer's tunic); block pauldron caps, plain lames + rerebrace + couter down the upper arm (same as plate set `p`). No straps, rivet rows or trim bands |
 | `body_leather` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
 | `gloves` | `sock_handL`, `sock_gloveR` | gauntlet cuffs, slightly bigger than bare hands |
 | `boots` | `sock_footL`, `sock_footR` | covers shoe, cuff at shin |
@@ -77,7 +77,10 @@ Tier plate (full helm, platebody, gauntlets, boots) comes from `tools/blender/pl
 palette only) and `e` for Emberforged. `export_variant('<set>')` writes them straight into `public/models`.
 
 ### Hair & beards: `hair_<1..4>.glb`, `beard_<1..3>.glb`
-One `sock_head` empty; meshes use `ROLE_hair`.
+One `sock_head` empty; meshes use `ROLE_hair`. Every hairstyle is one continuous shell over the whole scalp with locks on
+top (`hair.py` `hair_shell`). The head is a cube, so the shell is a rounded box that wraps its corners; `hair_shell`
+refuses to build a shell that would let the head show through above the hairline (bald patches), and
+`tests/character-art.test.ts` checks the exported hair from outside.
 
 ### Enemies/NPCs/props
 Rig names per `src/render/anim.ts` (humanoid: body/head/armL/armR/legL/legR/weapon; quadruped: legFL/legFR/legBL/legBR,

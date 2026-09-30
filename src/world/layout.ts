@@ -1,5 +1,6 @@
 import { mulberry32, type Rng } from '../core/rng';
 import type { Vec2 } from '../types';
+import type { BuildingSpec } from './building';
 
 /** Walkability/visual class of a grid cell. Everything except Ground blocks movement. */
 export enum Cell {
@@ -81,6 +82,8 @@ export interface ZoneLayout {
    * source (a point, or a segment to x2/z2) and fading out over `r`; `k` is the strength (0..1).
    */
   burns?: Burn[];
+  /** Enterable buildings (walls in the grid are Blocked; see building.ts). */
+  buildings?: BuildingSpec[];
 }
 
 export interface Burn {

@@ -192,6 +192,9 @@ export class Game {
     this.player.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
     this.player.facing = this.player.targetFacing = 0;
     this.player.obj.visible = true;
+    // Back to the zone's own fog (the title orbit pushes it out).
+    const fog = this.scene.fog as THREE.Fog;
+    [fog.near, fog.far] = this.zone.def.theme.fog;
     this.ui.showCreate();
   }
 
@@ -412,6 +415,7 @@ export class Game {
     this.updateRecall(raw);
 
     this.player.update(dt, this);
+    this.combat.updateMana(dt);
     if (this.player.dead) {
       this.deathT += raw;
       if (this.deathT > 3 && !this.traveling) this.respawn();
@@ -533,17 +537,23 @@ export class Game {
     const L = this.zone.layout;
     const cx = L.w / 2, cz = L.h / 2;
     const t = this.time * 0.05;
-    this.camera.position.set(cx + Math.cos(t) * 52, 26, cz + Math.sin(t) * 52);
-    this.camera.lookAt(cx, 2, cz);
+    // A slow, high orbit that frames the whole island (about 130 cells across): the inner keep,
+    // the districts and the rim all in view, with the fog pushed back so the far side stays clear.
+    const R = L.w * 0.62;
+    this.camera.position.set(cx + Math.cos(t) * R, L.w * 0.3, cz + Math.sin(t) * R);
+    this.camera.lookAt(cx, 0, cz);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.near = R * 0.9;
+    fog.far = R * 2.6;
     OCCLUDE.uOccOn.value = 0;
     this.sun.position.set(cx + 20, 40, cz + 10);
     this.fill.position.set(cx - 24, 20, cz - 8);
     this.sun.target.position.set(cx, 0, cz);
     const d = this.titleDragon;
     if (d) {
-      const a = this.time * 0.22;
-      const r = 42;
-      d.obj.position.set(cx + Math.cos(a) * r, 8 + Math.sin(a * 2) * 3, cz + Math.sin(a) * r);
+      const a = this.time * 0.16;
+      const r = L.w * 0.44;
+      d.obj.position.set(cx + Math.cos(a) * r, 14 + Math.sin(a * 2) * 4, cz + Math.sin(a) * r);
       // Orbiting counter-clockwise: velocity is (-sin a, cos a), so heading = atan2(-sin a, cos a) = -a.
       d.obj.rotation.y = -a;
       d.rig.update(dt, d.anim);

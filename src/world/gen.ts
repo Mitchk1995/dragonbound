@@ -1,4 +1,5 @@
 import type { Vec2 } from '../types';
+import { cellRole, fitBlocks, type BuildingSpec } from './building';
 import { blockDisc, Cell, emptyLayout, Fluid, Ground, makeNoise, mulberry32, type PropSpawn, type ZoneLayout } from './layout';
 
 /**
@@ -281,6 +282,29 @@ export class Gen {
     this.reserve(x, z, block + 2.5);
     this.l.stations.push({ kind, id, x, z, rot });
     blockDisc(this.l, x, z, block);
+  }
+
+  /**
+   * Stamp an enterable building: its wall ring blocks, doorways and the floor are walkable paved
+   * cells, and a band around it stays clear of scenery (`apron` cells). Later stations and props
+   * placed inside block their own cells as usual.
+   */
+  building(b: BuildingSpec, apron = 2) {
+    for (let z = b.z - apron; z < b.z + b.d + apron; z++) for (let x = b.x - apron; x < b.x + b.w + apron; x++) {
+      if (!this.inside(x, z)) continue;
+      const i = this.idx(x, z), role = cellRole(b, x, z);
+      if (role === 'out') {
+        if (this.reserved[i] !== 1) this.reserved[i] = 3;
+        if (this.l.cells[i] === Cell.Tree || this.l.cells[i] === Cell.Rock) this.l.cells[i] = Cell.Ground;
+        continue;
+      }
+      this.reserved[i] = 1;
+      this.l.fluid[i] = Fluid.None;
+      this.l.ground[i] = Ground.Stone;
+      this.l.cells[i] = role === 'wall' || (role === 'floor' && fitBlocks(b, x, z)) ? Cell.Blocked : Cell.Ground;
+    }
+    (this.l.buildings ??= []).push(b);
+    return b;
   }
 
   pack(x: number, z: number, comp: string[], clear = 7, ground?: Ground) {

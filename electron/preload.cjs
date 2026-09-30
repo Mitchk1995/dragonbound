@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     write: (name, text) => ipcRenderer.invoke('inspect:write', name, text),
     log: (text) => ipcRenderer.invoke('inspect:log', text),
     done: (code) => ipcRenderer.invoke('inspect:done', code),
+    resize: (w, h) => ipcRenderer.invoke('inspect:resize', w, h),
   },
 });

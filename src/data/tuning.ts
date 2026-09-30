@@ -15,6 +15,26 @@ export const XP_TUNING = {
 };
 
 /**
+ * Mana: one pool shared by every weapon style (the hero swaps weapons freely). Skills spend it,
+ * it refills over time and the healing potion tops it up too. The pool grows with the best
+ * combat-style level, so a new character can chain a few skills and a veteran a few more.
+ */
+export const MANA_TUNING = {
+  /** Max mana = base + perLevel x (highest of Melee, Ranged, Magic). */
+  base: 30,
+  perLevel: 2,
+  /** Mana per second = regenBase + regenFrac x max mana. */
+  regenBase: 1.5,
+  regenFrac: 0.02,
+  /** Extra regen (fraction of max per second) once you haven't been hit for a few seconds. */
+  outOfCombatFrac: 0.04,
+  /** Seconds without taking damage before the out-of-combat regen kicks in (same as life). */
+  outOfCombatAfter: 4,
+  /** Fraction of max mana a healing potion restores, over the same 1.5 s as its life. */
+  potionFrac: 0.35,
+};
+
+/**
  * Combat pacing, Diablo 2 style: deliberate swings with a wind-up, an impact and a
  * follow-through; the base kit attacks about once a second and speed comes from gear.
  * Enemies are clearly slower than the hero, telegraph their attacks, and flinch from big hits.

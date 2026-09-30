@@ -9,8 +9,12 @@ import type { Telegraph } from '../fx/telegraph';
 import type { Game } from '../game';
 import type { Hazard } from '../systems/combat';
 import type { ZoneLayout } from './layout';
+import type { BuildingProp } from './buildingModel';
 import { NavGrid } from './navgrid';
 import { buildWorldView, type WorldView } from './worldView';
+
+/** How fast a roof lifts off / settles back (fraction per second). */
+const CUT_SPEED = 4;
 
 /**
  * One live instance of a zone. Every portal trip builds a fresh instance and disposes the
@@ -31,6 +35,7 @@ export class ZoneRuntime {
   packs: PackState[] = [];
   arena: { x: number; z: number; r: number } | null = null;
   readonly enteredAt: number;
+  private cut = new Map<BuildingProp, number>();
 
   constructor(private g: Game, id: string, seed: number) {
     this.def = ZONES[id];
@@ -86,6 +91,7 @@ export class ZoneRuntime {
   /** Re-sync station visuals with save state (lit arches, restored halls, taken fragments, open gate). */
   refreshStations() {
     const s = this.g.save;
+    for (const b of this.view.buildings) if (b.spec.restore) b.setState?.(s.keep[b.spec.restore] ? 'restored' : 'ruined');
     for (const it of [...this.interactables]) {
       if (it.kind === 'portal') {
         const lit = this.g.story.portalState(it.id).open;
@@ -113,6 +119,17 @@ export class ZoneRuntime {
     const p = this.g.player;
     for (const it of this.interactables) it.update(dt, it.kind === 'npc' && p.distTo(it) < 6 ? p.x : undefined, p.z);
     for (const f of this.view.followers) f.position.set(p.x, 0, p.z);
+    // Roofs lift off the building the hero is standing in (instantly while time is frozen).
+    const play = this.g.mode === 'play';
+    for (const b of this.view.buildings) {
+      const want = play && b.contains(p.x, p.z) ? 1 : 0;
+      const cur = this.cut.get(b) ?? 0;
+      const next = dt > 0 ? cur + Math.sign(want - cur) * Math.min(Math.abs(want - cur), dt * CUT_SPEED) : want;
+      this.cut.set(b, next);
+      b.setCut(next);
+      b.tick?.(this.g.time);
+    }
+    for (const pr of this.view.props) pr.tick?.(this.g.time);
     this.view.tick(this.g.time);
   }
 

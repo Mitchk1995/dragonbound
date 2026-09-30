@@ -23,13 +23,13 @@ export interface Prop {
  */
 
 // Masonry: close shades of one stone so walls read as blocks, never as stripes.
-const STONE = 0x8a8478, STONE_L = 0x969086, STONE_D = 0x6e685f, STONE_DD = 0x57524b;
-const BRICK = 0x9a5a42, BRICK_L = 0xa8664a, BRICK_D = 0x7e4836;
-const WOOD = PAL.wood, WOOD_D = 0x4a3020, WOOD_L = 0x8a6440;
-const SLATE = 0x4e5564, PLASTER = 0xd6cab0, DARK = 0x1c1612;
-const IRON = 0x4a4a52, IRON_L = 0x6e7280;
+export const STONE = 0x8a8478, STONE_L = 0x969086, STONE_D = 0x6e685f, STONE_DD = 0x57524b;
+export const BRICK = 0x9a5a42, BRICK_L = 0xa8664a, BRICK_D = 0x7e4836;
+export const WOOD = PAL.wood, WOOD_D = 0x4a3020, WOOD_L = 0x8a6440;
+export const SLATE = 0x4e5564, PLASTER = 0xd6cab0, DARK = 0x1c1612;
+export const IRON = 0x4a4a52, IRON_L = 0x6e7280;
 const BONE = 0xcbbd9c, BONE_D = 0xa8997a;
-const COAL = 0x161517, OBSIDIAN = 0x1a1418;
+export const COAL = 0x161517, OBSIDIAN = 0x1a1418;
 /** Basalt (lair): cooled black rock with slightly lighter weathered tops. */
 const BASALT = 0x2e2626, BASALT_L = 0x453a36, BASALT_D = 0x201a1a;
 /** Standing water on a cave floor: dark and glossy (reflects like coal and obsidian). */
@@ -37,15 +37,19 @@ const PUDDLE = 0x1a3238;
 const METALS = new Set([IRON, IRON_L, PAL.gold]);
 const GLOSSY = new Set([COAL, OBSIDIAN]);
 /** Cut blocks built as geometry (walls of the tower, forge bricks): painted as chiselled rock, no mortar. */
-const BLOCKS = [0x8b8579, 0x979187, 0x6f6960];
+export const BLOCKS = [0x8b8579, 0x979187, 0x6f6960];
+
+/** Plot markers and restored buildings: each profession's colour. */
+export const PLOT_MARK: Record<string, number> = { vault_expanded: PAL.gold, alchemy_lab: 0x5ad07a, rune_altar: 0x6aa8ff, hatchery: 0xffa050 };
 
 /** Painted albedo per prop colour (explicit where known; judged by hue otherwise). */
 const PAINT_OF = new Map<number, PaintKind>();
 const paintAs = (kind: PaintKind, cols: number[]) => cols.forEach((c) => PAINT_OF.set(c, kind));
-paintAs('masonry', [STONE, STONE_L, STONE_D, STONE_DD, 0x7a7870, 0x6a6860, 0x6e6a66]);
+paintAs('masonry', [STONE, STONE_L, STONE_D, STONE_DD, 0x7e776c, 0x7a7870, 0x6a6860, 0x6e6a66]);
 paintAs('rock', [...BLOCKS, BASALT, BASALT_L, BASALT_D, 0x3a2e24, 0x241e1a, 0x1a1311, 0x0f0b0a, 0x2a1d17, BRICK, BRICK_L, BRICK_D, 0x4a4240, 0x3e3634, 0x554c48, 0x3a3230, 0x3a3232, 0x2a2424, 0x6a6258, 0x6e6a66, 0x3c3834, 0x2e2624, 0x7a7068, 0x6a6058, 0x4a4440, 0x6a5a40, 0x5a4a34, 0x2e2828, 0x241e1e, 0x1e1818]);
-paintAs('wood', [WOOD, WOOD_D, WOOD_L, 0x5a3a22, 0x3a2618, 0x5a3a20, 0x4a2e18, 0x8a6a44, 0x5a4a3a, 0x3a2a1e, 0xa08058]);
-paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438]);
+paintAs('wood', [WOOD, WOOD_D, WOOD_L, 0x7a5636, 0x94704a, 0x5a3a22, 0x3a2618, 0x5a3a20, 0x4a2e18, 0x8a6a44, 0x5a4a3a, 0x3a2a1e, 0xa08058]);
+paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438, 0x3e6a6a, 0x7a4a34]);
+paintAs('soft', [0x4b3122]);
 paintAs('bone', [BONE, BONE_D, PAL.bone]);
 paintAs('plaster', [PLASTER, 0xe8dcc0, 0xc8b070]);
 paintAs('hide', [0x8a6a48, 0x6e5238, 0x7a5a3a, 0x5a4230, 0x8a4a34, 0x6a3a2a, 0x8a2424, 0x8a2a1e, 0x7a2020, 0x6a2020, 0xa03030, PAL.leather]);
@@ -65,12 +69,12 @@ type Obj = THREE.Object3D;
 const q = (v: number) => Math.round(v * 20) / 20;
 
 /** Chamfered box. */
-function cb(k: ModelKit, p: Obj, size: V3, pos: V3, color: number, rot?: V3, c = 0.05, em = 0, int = 1) {
+export function cb(k: ModelKit, p: Obj, size: V3, pos: V3, color: number, rot?: V3, c = 0.05, em = 0, int = 1) {
   return k.mesh(p, chamferBox(size[0], size[1], size[2], c), color, pos, rot, em, int);
 }
 
 /** A faceted rock chunk (base at y = pos.y). */
-function chunk(k: ModelKit, p: Obj, seed: number, size: V3, pos: V3, color: number, rotY = 0, em = 0, int = 1) {
+export function chunk(k: ModelKit, p: Obj, seed: number, size: V3, pos: V3, color: number, rotY = 0, em = 0, int = 1) {
   return k.mesh(p, rockBlock(seed, size[0], size[1], size[2]), color, pos, [0, rotY, 0], em, int);
 }
 
@@ -182,7 +186,7 @@ function decal(m: THREE.Mesh) {
   return m;
 }
 
-interface WallSpec {
+export interface WallSpec {
   /** Centre of the wall's base line and its direction (rotation about Y; 0 = along +X). */
   x: number;
   z: number;
@@ -202,7 +206,7 @@ interface WallSpec {
 }
 
 /** A wall of staggered, slightly uneven blocks in running bond. */
-function masonry(k: ModelKit, p: Obj, s: WallSpec) {
+export function masonry(k: ModelKit, p: Obj, s: WallSpec) {
   const shades = s.shades ?? BLOCKS, unit = s.unit ?? 1;
   const cos = Math.cos(s.rot), sin = Math.sin(s.rot);
   for (let r = 0; r < s.rows; r++) {
@@ -225,7 +229,7 @@ function masonry(k: ModelKit, p: Obj, s: WallSpec) {
   }
 }
 
-function flame(k: ModelKit, g: Obj, x: number, y: number, z: number, s = 1) {
+export function flame(k: ModelKit, g: Obj, x: number, y: number, z: number, s = 1) {
   // Flames are effects: soft faceted tongues are fine here.
   const a = k.cone(g, 0.3 * s, 0.7 * s, [x, y + 0.35 * s, z], PAL.fire, undefined, 5, PAL.fire);
   const b = k.cone(g, 0.18 * s, 0.5 * s, [x, y + 0.35 * s, z], PAL.ember, undefined, 5, PAL.ember);
@@ -237,7 +241,7 @@ function flame(k: ModelKit, g: Obj, x: number, y: number, z: number, s = 1) {
   };
 }
 
-function light(g: Obj, color: number, intensity: number, dist: number, y: number) {
+export function light(g: Obj, color: number, intensity: number, dist: number, y: number) {
   const l = new THREE.PointLight(color, intensity, dist, 1.6);
   l.position.set(0, y, 0);
   g.add(l);
@@ -638,54 +642,160 @@ const BUILDERS: Record<string, Builder> = {
     dais(k, g, 5.6, 0x6ab0ff, 9);
     return { obj: g, light: light(g, 0x6ab0ff, 2.2, 6, 0.8) };
   },
-  keep_hall: (k, g) => {
-    // The ruined great hall: a masonry block between two square towers, a slate roof whose left
-    // half has fallen in (bare rafters), a great door, glowing windows and banners.
-    cb(k, g, [12.8, 0.5, 7.8], [0, 0.25, 0], STONE_DD, undefined, 0.08);
-    cb(k, g, [12, 5, 7], [0, 2.75, 0], STONE, undefined, 0.08);
-    for (const y of [1.5, 3.6]) cb(k, g, [12.1, 0.16, 7.1], [0, y, 0], STONE_D, undefined, 0.03);
-    // Buttresses on the facade.
-    for (const x of [-4.4, -2.2, 2.2, 4.4]) k.mesh(g, taper(0.7, 0.9, 0.5, 0.4, 4.6, 0, -0.2), STONE_D, [x, 2.8, 3.8]);
-    // Great door.
-    cb(k, g, [3.4, 3.8, 0.3], [0, 2.3, 3.5], STONE_D, undefined, 0.06);
-    k.box(g, [2.6, 3.2, 0.2], [0, 2.1, 3.6], DARK);
-    for (const x of [-0.64, 0.64]) cb(k, g, [1.22, 3.0, 0.12], [x, 2.0, 3.68], WOOD_D, undefined, 0.02);
-    for (const y of [1.0, 2.2, 3.2]) k.box(g, [2.5, 0.1, 0.04], [0, y, 3.75], IRON);
-    cb(k, g, [3.8, 0.5, 0.5], [0, 4.2, 3.6], STONE_L, undefined, 0.06);
-    // Windows.
-    for (const x of [-3.3, 3.3]) {
-      k.box(g, [0.5, 1.3, 0.1], [x, 3.0, 3.52], 0xffc870, undefined, 0xffa040, 1.4);
-      cb(k, g, [0.8, 0.2, 0.3], [x, 3.75, 3.55], STONE_D, undefined, 0.04);
+  bank: (k, g) => {
+    // The bank counter: a panelled stone counter with a dark oak top and an iron teller grille with
+    // three windows, a ledger, coin stacks and a set of scales. Customers stand on the +Z side.
+    const W = 6;
+    cb(k, g, [W + 0.2, 0.2, 1.2], [0, 0.1, 0], STONE_D, undefined, 0.04);
+    cb(k, g, [W, 0.92, 1.0], [0, 0.66, 0], STONE, undefined, 0.04);
+    for (let i = 0; i < 4; i++) cb(k, g, [1.18, 0.56, 0.06], [-2.1 + i * 1.4, 0.64, 0.51], STONE_L, undefined, 0.03);
+    cb(k, g, [W + 0.3, 0.12, 1.24], [0, 1.18, 0], WOOD_D, undefined, 0.03);
+    // Grille: stout posts, a top rail and bars, open over the three teller windows.
+    for (const x of [-3, -1, 1, 3]) cb(k, g, [0.2, 1.5, 0.2], [x, 1.99, -0.3], WOOD_D, undefined, 0.03);
+    cb(k, g, [W + 0.2, 0.2, 0.26], [0, 2.8, -0.3], WOOD_D, undefined, 0.03);
+    for (let x = -2.8; x <= 2.81; x += 0.25) {
+      const inWindow = [-2, 0, 2].some((c) => Math.abs(x - c) < 0.45);
+      if (Math.abs(Math.abs(x) - 1) < 0.12 || Math.abs(Math.abs(x) - 3) < 0.12) continue;
+      k.box(g, [0.05, inWindow ? 0.62 : 1.5, 0.05], [x, inWindow ? 2.39 : 1.99, -0.3], IRON);
     }
-    // Crenellated parapet front and back.
-    for (let x = -5.4; x <= 5.4; x += 1.2) for (const z of [3.3, -3.3]) cb(k, g, [0.66, 0.6, 0.45], [x, 5.55, z], hash01(x, z) > 0.6 ? STONE_L : STONE, undefined, 0.05);
-    // Roof: intact slate gable on the right, fallen in on the left with bare rafters.
-    k.mesh(g, wedge(6.4, 2.2, 6.2, 0.1), SLATE, [2.1, 6.35, 0]);
-    cb(k, g, [6.5, 0.18, 0.3], [2.1, 7.45, 0], 0x3e4450, undefined, 0.04);
-    for (const x of [-4.4, -3.2, -2.0, -0.9]) for (const e of [-1, 1]) k.box(g, [0.18, 0.18, 3.5], [x, 6.3, e * 1.55], WOOD_D, [e * -0.62, 0, 0]);
-    k.box(g, [4.6, 0.2, 0.22], [-2.6, 7.3, 0], WOOD_D, [0, 0, 0.12]);
-    k.mesh(g, wedge(2.4, 1.4, 3.2), SLATE, [-3.6, 5.6, -1.0], [0.3, 0.2, 0.5]);
-    // Towers: square, banded, crenellated, with lit windows.
-    for (const sx of [-1, 1]) {
-      const x = sx * 6.6;
-      cb(k, g, [3.6, 0.6, 3.6], [x, 0.3, 0], STONE_DD, undefined, 0.08);
-      cb(k, g, [3.2, 9, 3.2], [x, 4.8, 0], STONE, undefined, 0.08);
-      for (const y of [3.2, 6.4]) cb(k, g, [3.3, 0.16, 3.3], [x, y, 0], STONE_D, undefined, 0.03);
-      cb(k, g, [3.7, 0.4, 3.7], [x, 9.4, 0], STONE_D, undefined, 0.06);
-      for (const [mx, mz] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) {
-        cb(k, g, [0.7, 0.65, 0.7], [x + mx * 1.5, 9.92, mz * 1.5], STONE_L, undefined, 0.05);
-      }
-      k.box(g, [2.6, 0.1, 2.6], [x, 9.65, 0], 0x4a4540);
-      k.box(g, [0.4, 1.0, 0.1], [x, 6.0, 1.62], 0xffc870, undefined, 0xffa040, 1.5);
-      k.box(g, [0.4, 1.0, 0.1], [x, 4.0, 1.62], 0xffc870, undefined, 0xffa040, 1.2);
-      cb(k, g, [0.12, 2.2, 0.12], [x, 11.2, 0], WOOD_D, undefined, 0.02);
-      cb(k, g, [0.9, 0.55, 0.04], [x + 0.46, 11.9, 0], 0x7a2020, undefined, 0.01);
+    for (const c of [-2, 0, 2]) cb(k, g, [0.95, 0.08, 0.4], [c, 1.28, -0.2], WOOD_L, undefined, 0.02);
+    // Ledger (open), coin stacks and scales on the counter.
+    for (const e of [-1, 1]) k.box(g, [0.3, 0.05, 0.4], [-0.6 + e * 0.16, 1.27, 0.2], 0xe8dcc0, [0, 0, e * 0.06]);
+    k.box(g, [0.02, 0.06, 0.4], [-0.6, 1.27, 0.2], 0x6a2020);
+    for (const [x, n] of [[0.5, 3], [0.8, 2], [2.3, 4], [-2.4, 2]] as [number, number][]) {
+      for (let i = 0; i < n; i++) k.mesh(g, octagon(0.11, 0.05), PAL.gold, [x, 1.27 + i * 0.05, 0.25], [0, 0, Math.PI / 2], 0x5a3a00, 0.3);
     }
-    // Rubble from the collapse.
-    for (const [x, z, s] of [[3.8, 4.4, 0.9], [5, 3.9, 0.7], [-2.2, 4.3, 0.6], [-5.2, 4.0, 0.8], [-4.4, 4.7, 0.5]]) chunk(k, g, Math.floor(x * 10 + z), [s * 1.4, s, s * 1.2], [x, 0, z], BLOCKS[Math.floor(Math.abs(x)) % 3], x);
+    cb(k, g, [0.08, 0.5, 0.08], [1.5, 1.49, 0.1], PAL.gold, undefined, 0.02);
+    k.box(g, [0.7, 0.04, 0.04], [1.5, 1.72, 0.1], PAL.gold);
+    for (const e of [-1, 1]) k.mesh(g, taper(0.22, 0.22, 0.12, 0.12, 0.06), PAL.gold, [1.5 + e * 0.32, 1.45, 0.1]);
+  },
+  shop: (k, g) => {
+    // The Quartermaster's counter: a panelled oak counter with the day's wares laid out on it.
+    const W = 5;
+    cb(k, g, [W, 1.0, 1.0], [0, 0.5, 0], WOOD, undefined, 0.04);
+    for (let i = 0; i < 4; i++) cb(k, g, [1.0, 0.6, 0.06], [-1.8 + i * 1.2, 0.5, 0.51], WOOD_L, undefined, 0.02);
+    cb(k, g, [W + 0.2, 0.12, 1.16], [0, 1.06, 0], WOOD_D, undefined, 0.03);
+    // Potions, a folded cloak, a sword on a cloth, a coin purse and a hand bell.
+    for (const [x, c] of [[-2.0, 0xd03a3a], [-1.75, 0xd03a3a], [-1.5, 0x3a6ad0]] as [number, number][]) {
+      k.box(g, [0.16, 0.26, 0.16], [x, 1.25, 0.1], c, undefined, c, 0.5);
+      k.box(g, [0.07, 0.08, 0.07], [x, 1.42, 0.1], 0xe8dcc0);
+    }
+    cb(k, g, [0.7, 0.14, 0.5], [-0.6, 1.19, 0.05], 0x3a5a8a, undefined, 0.04);
+    k.box(g, [1.3, 0.02, 0.4], [0.7, 1.13, 0.1], 0x7a2020);
+    cb(k, g, [1.1, 0.04, 0.1], [0.7, 1.17, 0.1], IRON_L, undefined, 0.01);
+    cb(k, g, [0.08, 0.06, 0.36], [0.1, 1.17, 0.1], PAL.gold, undefined, 0.01);
+    cb(k, g, [0.3, 0.26, 0.3], [1.8, 1.25, 0.05], PAL.leather, undefined, 0.08);
+    k.mesh(g, taper(0.2, 0.2, 0.08, 0.08, 0.18), PAL.gold, [2.25, 1.21, 0.25]);
+  },
+  ruin: (k, g, id) => {
+    // A plot marker by the building's door: a cornerstone and a post with a hanging sign in the
+    // building's colour. Restored, a lantern is lit on the post.
+    const mark = PLOT_MARK[id as string] ?? 0xffc870;
+    cb(k, g, [0.9, 0.5, 0.9], [0, 0.25, 0], STONE_D, undefined, 0.06);
+    cb(k, g, [0.2, 2.5, 0.2], [0, 1.5, 0], WOOD_D, undefined, 0.03);
+    cb(k, g, [1.0, 0.12, 0.12], [0.42, 2.6, 0], WOOD_D, undefined, 0.02);
+    for (const x of [0.2, 0.7]) k.box(g, [0.03, 0.34, 0.03], [x, 2.4, 0], IRON);
+    cb(k, g, [0.95, 0.66, 0.08], [0.45, 1.95, 0], 0x3a2a1e, undefined, 0.02);
+    k.mesh(g, octagon(0.22, 0.06), mark, [0.45, 1.95, 0.06], [0, Math.PI / 2, 0], mark, 0.7);
+    const lamp = new THREE.Group();
+    g.add(lamp);
+    cb(k, lamp, [0.28, 0.36, 0.28], [-0.05, 2.25, 0.2], IRON, undefined, 0.03);
+    k.box(lamp, [0.2, 0.26, 0.2], [-0.05, 2.25, 0.2], 0xffd080, undefined, 0xffb040, 2);
+    return { obj: g, setState: (s) => (lamp.visible = s === 'restored') };
+  },
+  curtain: (k, g, arg) => {
+    // A curtain wall along X: battered plinth, a string course, arrow slits outside (+Z), a
+    // walkway and merlons on both faces.
+    const L = arg ?? 10, T = 1.8, H = 4.2;
+    cb(k, g, [L, 0.5, T + 0.36], [0, 0.25, 0], STONE_DD, undefined, 0.06);
+    cb(k, g, [L, H - 0.5, T], [0, 0.5 + (H - 0.5) / 2, 0], STONE, undefined, 0.04);
+    cb(k, g, [L, 0.2, T + 0.14], [0, 2.1, 0], STONE_D, undefined, 0.03);
+    cb(k, g, [L, 0.3, T + 0.34], [0, H, 0], STONE_D, undefined, 0.05);
+    k.box(g, [L, 0.06, T - 0.6], [0, H + 0.18, 0], 0x5e5850);
+    for (let u = -L / 2 + 0.55; u < L / 2 - 0.3; u += 1.25) for (const e of [-1, 1]) cb(k, g, [0.72, 0.7, 0.42], [u, H + 0.5, e * (T / 2 - 0.02)], hash01(u, e) > 0.7 ? STONE_L : STONE, undefined, 0.05);
+    for (let u = -L / 2 + 1.8; u < L / 2 - 1; u += 3.6) k.box(g, [0.16, 0.95, 0.1], [u, 3.0, T / 2 + 0.01], DARK);
+  },
+  wall_tower: (k, g) => {
+    // A square wall tower: battered body, banded courses, corbelled parapet with merlons around a
+    // slate spire, lit slits and a pennant.
+    const S = 5.4, H = 7.4;
+    cb(k, g, [S + 0.9, 0.6, S + 0.9], [0, 0.3, 0], STONE_DD, undefined, 0.08);
+    k.mesh(g, taper(S + 0.4, S + 0.4, S, S, H - 0.6), STONE, [0, 0.6 + (H - 0.6) / 2, 0]);
+    for (const y of [2.6, 5.0]) cb(k, g, [S + 0.14, 0.18, S + 0.14], [0, y, 0], STONE_D, undefined, 0.03);
+    cb(k, g, [S + 0.7, 0.45, S + 0.7], [0, H + 0.2, 0], STONE_D, undefined, 0.06);
+    for (let i = 0; i < 4; i++) for (let j = -2; j <= 2; j++) {
+      if (Math.abs(j) === 2 && i % 2) continue;
+      const a = (i * Math.PI) / 2, r = S / 2 + 0.12, t = j * 1.3;
+      cb(k, g, [0.72, 0.72, 0.5], [Math.sin(a) * r + Math.cos(a) * t, H + 0.78, Math.cos(a) * r - Math.sin(a) * t], STONE_L, [0, a, 0], 0.05);
+    }
+    k.mesh(g, taper(S - 1.0, S - 1.0, 0.001, 0.001, 3.6), SLATE, [0, H + 0.42 + 1.8, 0]);
+    cb(k, g, [0.1, 1.6, 0.1], [0, H + 4.6, 0], IRON, undefined, 0.02);
+    cb(k, g, [0.9, 0.5, 0.04], [0.47, H + 5.1, 0], 0x7a2020, undefined, 0.01);
+    for (const y of [3.6, 6.0]) k.box(g, [0.26, 0.9, 0.1], [0, y, S / 2 + 0.02], 0xffc870, undefined, 0xffa040, 1.3);
+  },
+  gatehouse: (k, g, arg) => {
+    // The inner keep's gatehouse: two square towers and a vaulted passage (arg = passage width)
+    // under a raised portcullis, with banners toward the courtyard approach (+Z).
+    const P = arg ?? 4, TW = 3.4, D = 4.0, H = 6.8;
     for (const sx of [-1, 1]) {
-      cb(k, g, [2.0, 1.5, 0.08], [sx * 3.2, 2.5, 3.8], 0x6a2020, undefined, 0.01);
-      k.box(g, [0.5, 0.5, 0.04], [sx * 3.2, 2.6, 3.85], 0xd8b060, [0, 0, Math.PI / 4]);
+      const x = sx * (P / 2 + TW / 2);
+      cb(k, g, [TW + 0.5, 0.5, D + 0.5], [x, 0.25, 0], STONE_DD, undefined, 0.06);
+      cb(k, g, [TW, H - 0.5, D], [x, 0.5 + (H - 0.5) / 2, 0], STONE, undefined, 0.05);
+      for (const y of [2.4, 4.6]) cb(k, g, [TW + 0.12, 0.18, D + 0.12], [x, y, 0], STONE_D, undefined, 0.03);
+      cb(k, g, [TW + 0.4, 0.4, D + 0.4], [x, H, 0], STONE_D, undefined, 0.05);
+      for (const [mx, mz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 1], [0, -1]]) cb(k, g, [0.72, 0.72, 0.5], [x + mx * (TW / 2 - 0.2), H + 0.55, mz * (D / 2 - 0.1)], STONE_L, undefined, 0.05);
+      k.box(g, [0.26, 0.9, 0.1], [x, 4.4, D / 2 + 0.02], 0xffc870, undefined, 0xffa040, 1.3);
+      // Banner on the approach face.
+      cb(k, g, [1.3, 2.2, 0.06], [x, 2.9, D / 2 + 0.06], 0x7a2020, undefined, 0.01);
+      k.box(g, [0.5, 0.5, 0.04], [x, 3.1, D / 2 + 0.1], 0xd8b060, [0, 0, Math.PI / 4]);
+      cb(k, g, [1.5, 0.12, 0.12], [x, 4.05, D / 2 + 0.1], WOOD_D, undefined, 0.02);
+    }
+    // Vault over the passage: voussoir band and keystone on both faces, walkway merlons above.
+    cb(k, g, [P + 0.2, H - 4.2, D - 0.2], [0, 4.2 + (H - 4.2) / 2, 0], STONE, undefined, 0.04);
+    for (const e of [-1, 1]) {
+      cb(k, g, [P + 0.5, 0.5, 0.3], [0, 4.35, e * (D / 2 - 0.05)], STONE_L, undefined, 0.04);
+      k.mesh(g, taper(0.5, 0.34, 0.8, 0.34, 0.8), STONE_L, [0, 4.55, e * (D / 2)]);
+      for (let u = -P / 2 + 0.4; u < P / 2; u += 1.3) cb(k, g, [0.72, 0.7, 0.45], [u, H + 0.35, e * (D / 2 - 0.25)], STONE_L, undefined, 0.05);
+    }
+    // Portcullis teeth showing under the arch.
+    for (let x = -P / 2 + 0.3; x < P / 2; x += 0.5) {
+      k.box(g, [0.1, 0.7, 0.1], [x, 3.85, 0.9], IRON);
+      k.mesh(g, taper(0.1, 0.1, 0.01, 0.01, 0.2), IRON, [x, 3.4, 0.9], [Math.PI, 0, 0]);
+    }
+    k.box(g, [P, 0.12, 0.12], [0, 3.9, 0.9], IRON);
+    k.box(g, [P - 0.1, 0.04, D], [0, 0.02, 0], STONE_D);
+  },
+  stall: (k, g, v) => {
+    // A market stall: counter, four posts and a striped awning (colours vary).
+    const [a, b] = [[0xe8dcc0, 0xa03030], [0xe8dcc0, 0x3a6a9a], [0xe8dcc0, 0x4a7a3a]][(v ?? 0) % 3];
+    cb(k, g, [3.0, 0.9, 1.1], [0, 0.45, 0.35], PAL.wood, undefined, 0.04);
+    cb(k, g, [3.1, 0.1, 1.2], [0, 0.93, 0.35], WOOD_L, undefined, 0.02);
+    for (const [x, z] of [[-1.4, -0.6], [1.4, -0.6], [-1.4, 0.95], [1.4, 0.95]]) cb(k, g, [0.14, 2.5, 0.14], [x, 1.25, z], WOOD_D, undefined, 0.02);
+    for (let i = 0; i < 6; i++) k.box(g, [0.5, 0.08, 2.1], [-1.25 + i * 0.5, 2.55, 0.2], i % 2 ? a : b, [0.16, 0, 0]);
+    for (let i = 0; i < 5; i++) chunk(k, g, 200 + i + (v ?? 0) * 7, [0.28, 0.22, 0.26], [-1.0 + i * 0.5, 0.98, 0.3], [0xc8a040, 0x8a4a2a, 0x6a8a3a, 0xa03030][i % 4], i);
+    cb(k, g, [0.6, 0.6, 0.6], [-1.1, 0.3, -1.0], WOOD_L, [0, 0.3, 0], 0.04);
+  },
+  lamp_post: (k, g) => {
+    // A lit lamp post without its own light (the keep has only a few real lights).
+    cb(k, g, [0.44, 0.3, 0.44], [0, 0.15, 0], STONE_D, undefined, 0.05);
+    cb(k, g, [0.14, 2.4, 0.14], [0, 1.4, 0], IRON, undefined, 0.02);
+    cb(k, g, [0.4, 0.44, 0.4], [0, 2.7, 0], IRON, undefined, 0.04);
+    k.box(g, [0.3, 0.32, 0.3], [0, 2.7, 0], 0xffd080, undefined, 0xffb040, 2.5);
+    k.mesh(g, taper(0.5, 0.5, 0.12, 0.12, 0.2), IRON, [0, 3.02, 0]);
+  },
+  barrels: (k, g) => {
+    for (const [x, z, s] of [[0, 0, 1], [0.72, 0.2, 0.9], [0.3, 0.72, 0.85]] as [number, number, number][]) {
+      cb(k, g, [q(0.66 * s), q(0.9 * s), q(0.66 * s)], [x, 0.45 * s, z], WOOD, undefined, 0.19 * s);
+      for (const y of [0.18, 0.72]) cb(k, g, [q(0.69 * s), 0.06, q(0.69 * s)], [x, y * s, z], IRON, undefined, 0.19 * s);
+    }
+  },
+  herb_bed: (k, g) => {
+    // A raised planting bed of herbs and flowers.
+    cb(k, g, [3.0, 0.4, 1.3], [0, 0.2, 0], WOOD_D, undefined, 0.04);
+    k.box(g, [2.8, 0.06, 1.1], [0, 0.4, 0], 0x3a2a1e);
+    for (let i = 0; i < 9; i++) {
+      const x = -1.2 + (i % 5) * 0.6 + (Math.floor(i / 5) ? 0.3 : 0), z = Math.floor(i / 5) ? 0.25 : -0.25;
+      cb(k, g, [0.4, 0.3 + (i % 3) * 0.08, 0.4], [x, 0.55, z], i % 4 === 3 ? 0x8a5aa0 : i % 2 ? 0x5a8a3a : 0x4a7a34, [0, i, 0], 0.12);
     }
   },
   lamp: (k, g) => {
@@ -695,62 +805,6 @@ const BUILDERS: Record<string, Builder> = {
     k.box(g, [0.3, 0.32, 0.3], [0, 2.7, 0], 0xffd080, undefined, 0xffb040, 2.5);
     k.mesh(g, taper(0.5, 0.5, 0.12, 0.12, 0.2), IRON, [0, 3.02, 0]);
     return { obj: g, light: light(g, 0xffb060, 6, 9, 2.7) };
-  },
-  bank: (k, g) => {
-    // A squat stone strongroom that reads from above: thick rusticated walls between heavy corner
-    // buttresses, a crenellated flat roof with a stepped vault crown carrying a big gold coin, and
-    // on the front (+Z, toward the camera) steps up to an iron-banded double door under a coin
-    // pediment, flanked by barred slits and wall lanterns.
-    const W = 4.6, D = 3.0, base = 0.34, wallH = 2.8, front = D / 2;
-    cb(k, g, [W + 0.9, base, D + 0.9], [0, base / 2, 0], STONE_D, undefined, 0.06);
-    cb(k, g, [2.9, 0.18, 0.7], [0, 0.09, front + 0.8], STONE_D, undefined, 0.04);
-    cb(k, g, [W, wallH, D], [0, base + wallH / 2, 0], STONE, undefined, 0.05);
-    // Rusticated courses proud of the core, front and sides.
-    const shades = [STONE_L, STONE, 0x7a7870];
-    masonry(k, g, { x: 0, z: front, rot: 0, len: W - 0.3, y0: base, rows: 5, rowH: 0.52, thick: 0.16, seed: 41, shades, unit: 1.05, hole: { u: 0, w: 2.3, h: base + 2.7 } });
-    for (const sx of [-1, 1]) masonry(k, g, { x: sx * (W / 2), z: 0, rot: Math.PI / 2, len: D - 0.4, y0: base, rows: 5, rowH: 0.52, thick: 0.16, seed: 42 + sx, shades, unit: 1.05 });
-    // Corner buttresses, battered toward the top.
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      k.mesh(g, taper(0.95, 0.95, 0.72, 0.72, 3.2), STONE_DD, [sx * (W / 2), base + 1.6, sz * (D / 2)]);
-      cb(k, g, [0.86, 0.3, 0.86], [sx * (W / 2), base + 3.3, sz * (D / 2)], STONE_D, undefined, 0.05);
-    }
-    // Cornice, roof deck, parapet with merlons.
-    const top = base + wallH;
-    cb(k, g, [W + 0.4, 0.3, D + 0.4], [0, top + 0.15, 0], STONE_D, undefined, 0.05);
-    k.box(g, [W - 0.3, 0.1, D - 0.3], [0, top + 0.32, 0], 0x4e4a44);
-    for (const sz of [-1, 1]) cb(k, g, [W + 0.2, 0.34, 0.34], [0, top + 0.47, sz * (D / 2 + 0.03)], STONE, undefined, 0.04);
-    for (const sx of [-1, 1]) cb(k, g, [0.34, 0.34, D + 0.2], [sx * (W / 2 + 0.03), top + 0.47, 0], STONE, undefined, 0.04);
-    for (const u of [-1.6, -0.95, 0.95, 1.6]) for (const sz of [-1, 1]) cb(k, g, [0.42, 0.34, 0.42], [u, top + 0.81, sz * (D / 2 + 0.03)], STONE_L, undefined, 0.04);
-    // The vault crown: two stepped blocks and a big gold coin lying on top, seen from the camera.
-    cb(k, g, [2.4, 0.4, 1.8], [0, top + 0.55, -0.15], STONE, undefined, 0.05);
-    cb(k, g, [1.8, 0.3, 1.3], [0, top + 0.9, -0.15], STONE_L, undefined, 0.05);
-    k.mesh(g, octagon(0.56, 0.14), PAL.gold, [0, top + 1.1, -0.15], [0, 0, Math.PI / 2], 0x5a3a00, 0.35);
-    k.mesh(g, octagon(0.36, 0.18), 0xc8962a, [0, top + 1.11, -0.15], [0, 0, Math.PI / 2], 0x4a2a00, 0.35);
-    // Pediment over the door with a coin emblem facing the camera.
-    cb(k, g, [1.9, 0.9, 0.46], [0, top + 0.72, front + 0.02], STONE_L, undefined, 0.05);
-    k.mesh(g, wedge(1.9, 0.4, 0.46), STONE_L, [0, top + 1.37, front + 0.02]);
-    k.mesh(g, octagon(0.34, 0.12), PAL.gold, [0, top + 0.72, front + 0.27], [0, Math.PI / 2, 0], 0x5a3a00, 0.35);
-    k.mesh(g, octagon(0.2, 0.16), 0xc8962a, [0, top + 0.72, front + 0.28], [0, Math.PI / 2, 0], 0x4a2a00, 0.35);
-    // Door: deep stone frame, iron-banded planks, studs and ring pulls.
-    k.box(g, [1.56, 2.1, 0.3], [0, base + 1.05, front + 0.02], DARK);
-    for (const x of [-0.37, 0.37]) cb(k, g, [0.72, 2.02, 0.1], [x, base + 1.01, front + 0.14], WOOD_D, undefined, 0.02);
-    for (const y of [0.35, 1.0, 1.65]) {
-      k.box(g, [1.52, 0.12, 0.05], [0, base + y, front + 0.21], IRON);
-      for (const x of [-0.62, -0.2, 0.2, 0.62]) k.box(g, [0.07, 0.07, 0.04], [x, base + y, front + 0.25], IRON_L);
-    }
-    for (const x of [-0.14, 0.14]) k.mesh(g, octagon(0.08, 0.04), IRON_L, [x, base + 1.3, front + 0.25], [0, Math.PI / 2, 0]);
-    for (const x of [-1.0, 1.0]) cb(k, g, [0.4, 2.5, 0.5], [x, base + 1.25, front + 0.1], STONE_D, undefined, 0.05);
-    cb(k, g, [2.4, 0.46, 0.55], [0, base + 2.5, front + 0.12], STONE_D, undefined, 0.05);
-    k.mesh(g, taper(0.44, 0.5, 0.3, 0.5, 0.5), STONE_L, [0, base + 2.5, front + 0.18]);
-    // Barred slit windows and wall lanterns either side of the door.
-    for (const sx of [-1, 1]) {
-      const x = sx * 1.7;
-      k.box(g, [0.34, 1.0, 0.1], [x, base + 1.6, front + 0.1], DARK);
-      for (const b of [-0.08, 0.08]) k.box(g, [0.05, 1.02, 0.05], [x + b, base + 1.6, front + 0.17], IRON);
-      k.box(g, [0.06, 0.06, 0.34], [sx * 1.3, base + 2.3, front + 0.34], IRON);
-      cb(k, g, [0.26, 0.34, 0.26], [sx * 1.3, base + 2.13, front + 0.5], IRON, undefined, 0.03);
-      k.box(g, [0.18, 0.24, 0.18], [sx * 1.3, base + 2.13, front + 0.5], 0xffd080, undefined, 0xffb040, 2.2);
-    }
   },
   furnace: (k, g) => {
     // A square brick forge: stone plinth, running-bond brick body with a glowing arched mouth, a
@@ -798,99 +852,12 @@ const BUILDERS: Record<string, Builder> = {
     for (const z of [-0.35, 0.45]) k.box(g, [0.74, 0.06, 0.06], [1.35, 0.4, z], IRON);
     k.box(g, [0.56, 0.04, 0.96], [1.35, 0.49, 0.05], 0x24505c);
   },
-  shop: (k, g) => {
-    cb(k, g, [3.2, 1, 1.2], [0, 0.5, 0.4], PAL.wood, undefined, 0.04);
-    cb(k, g, [3.3, 0.1, 1.3], [0, 1.03, 0.4], WOOD_L, undefined, 0.02);
-    for (const [x, z] of [[-1.5, -0.6], [1.5, -0.6], [-1.5, 1], [1.5, 1]]) cb(k, g, [0.14, 2.6, 0.14], [x, 1.3, z], WOOD_D, undefined, 0.02);
-    // Striped awning.
-    for (let i = 0; i < 6; i++) k.box(g, [0.6, 0.1, 2.2], [-1.5 + (i + 0.5) * 0.6, 2.65, 0.2], i % 2 ? 0xe8dcc0 : 0xa03030, [0.18, 0, 0]);
-    cb(k, g, [0.5, 0.35, 0.35], [-0.8, 1.2, 0.4], 0x6a4a2a, undefined, 0.03);
-    cb(k, g, [0.3, 0.3, 0.3], [0.5, 1.2, 0.5], 0x3a6aa0, undefined, 0.03);
-    cb(k, g, [0.2, 0.2, 0.2], [1, 1.18, 0.3], 0xff5a7a, [0.6, 0.6, 0], 0.03, 0xff3a5a, 0.5);
-    cb(k, g, [0.6, 0.6, 0.6], [-1.2, 0.3, -1.0], WOOD_L, [0, 0.3, 0], 0.04);
-  },
   board: (k, g) => {
     for (const sx of [-1, 1]) cb(k, g, [0.14, 2.3, 0.14], [sx * 0.85, 1.15, 0], PAL.wood, undefined, 0.02);
     cb(k, g, [1.9, 1.2, 0.1], [0, 1.4, 0], PAL.wood, undefined, 0.02);
     k.box(g, [0.5, 0.6, 0.02], [-0.4, 1.45, 0.06], 0xe8dcc0, [0, 0, 0.05]);
     k.box(g, [0.5, 0.5, 0.02], [0.35, 1.35, 0.06], 0xe8dcc0, [0, 0, -0.08]);
     k.mesh(g, wedge(2.3, 0.4, 0.6), SLATE, [0, 2.25, 0]);
-  },
-  ruin: (k, g, id) => {
-    // A restoration site: broken courses and fallen timber, restored into a timber-framed house
-    // on a stone base whose roof colour and hanging sign say what it is.
-    const ruined = new THREE.Group();
-    const built = new THREE.Group();
-    g.add(ruined, built);
-    const seed = typeof id === 'string' ? id.length * 13 : 3;
-    masonry(k, ruined, { x: 0, z: -1.8, rot: 0, len: 4.2, y0: 0, rows: 5, rowH: 0.5, thick: 0.5, seed, top: (u) => 2.5 - Math.max(0, u) * 0.9 });
-    masonry(k, ruined, { x: -1.85, z: 0, rot: Math.PI / 2, len: 3.1, y0: 0, rows: 3, rowH: 0.5, thick: 0.5, seed: seed + 1, top: (u) => 1.5 - Math.max(0, -u) * 0.8 });
-    masonry(k, ruined, { x: 1.85, z: 0.2, rot: Math.PI / 2, len: 2.6, y0: 0, rows: 2, rowH: 0.5, thick: 0.5, seed: seed + 2 });
-    for (let i = 0; i < 6; i++) chunk(k, ruined, seed + 10 + i, [0.6, 0.45, 0.5], [(i - 2.5) * 0.7, 0, 1.0 + (i % 2) * 0.6], BLOCKS[i % 3], i);
-    cb(k, ruined, [0.2, 0.2, 3.2], [0.4, 0.5, 0.2], WOOD_D, [0.3, 0.6, 0.2], 0.03);
-    const sign: Record<string, [number, number]> = {
-      vault_expanded: [SLATE, PAL.gold], alchemy_lab: [0x4a6a48, 0x5ad07a], rune_altar: [0x4a4a78, 0x6aa8ff], hatchery: [0x9a5438, 0xffa050],
-    };
-    const [roof, mark] = sign[id as string] ?? [SLATE, 0xffc870];
-    // Restored: a timber-framed hall whose gable end faces the camera (+Z), so from above it shows
-    // a wall, a door, a glowing emblem window in the gable and a hanging sign, not just a roof.
-    const F = 1.6, eave = 3.0;
-    cb(k, built, [4.8, 0.3, 3.7], [0, 0.15, 0], STONE_D, undefined, 0.06);
-    cb(k, built, [4.4, 1.1, 3.3], [0, 0.85, 0], STONE, undefined, 0.05);
-    cb(k, built, [4.28, 1.5, 3.18], [0, 2.15, 0], PLASTER, undefined, 0.03);
-    for (const y of [1.42, 2.92]) cb(k, built, [4.4, 0.16, 3.3], [0, y, 0], WOOD_D, undefined, 0.02);
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(k, built, [0.2, 1.5, 0.2], [sx * 2.12, 2.15, sz * 1.57], WOOD_D, undefined, 0.02);
-    for (const sx of [-1, 1]) {
-      cb(k, built, [0.14, 1.55, 0.1], [sx * 1.45, 2.15, F + 0.02], WOOD_D, [0, 0, sx * 0.6], 0.02);
-      k.box(built, [0.5, 0.55, 0.06], [sx * 1.3, 2.2, F + 0.01], 0xffc870, undefined, 0xffa040, 1.3);
-    }
-    // Roof: two slabs meeting at a ridge that runs back from the camera, gable walls front and back.
-    const rise = 1.6, half = 2.5, ang = Math.atan2(rise, half);
-    for (const sx of [-1, 1]) cb(k, built, [Math.hypot(rise, half) + 0.3, 0.18, 3.9], [sx * half / 2, eave + rise / 2 + 0.05, 0], roof, [0, 0, -sx * ang], 0.04);
-    cb(k, built, [0.26, 0.24, 4.05], [0, eave + rise + 0.1, 0], 0x3a3230, undefined, 0.04);
-    for (const sz of [-1, 1]) k.mesh(built, wedge(0.12, rise, 4.28), PLASTER, [0, eave + rise / 2, sz * (F - 0.04)], [0, Math.PI / 2, 0]);
-    // Gable timbers and a round emblem window glowing in the building's colour.
-    cb(k, built, [4.3, 0.16, 0.1], [0, eave + 0.02, F + 0.03], WOOD_D, undefined, 0.02);
-    k.mesh(built, octagon(0.5, 0.08), WOOD_D, [0, eave + 0.62, F + 0.04], [0, Math.PI / 2, 0]);
-    k.mesh(built, octagon(0.38, 0.1), mark, [0, eave + 0.62, F + 0.06], [0, Math.PI / 2, 0], mark, 0.9);
-    for (const sx of [-1, 1]) cb(k, built, [0.12, 1.0, 0.08], [sx * 0.95, eave + 0.45, F + 0.04], WOOD_D, [0, 0, sx * 0.9], 0.02);
-    // Door with a lamp over it.
-    k.box(built, [1.1, 1.75, 0.12], [0, 1.18, F + 0.02], DARK);
-    cb(k, built, [0.95, 1.62, 0.08], [0, 1.11, F + 0.08], WOOD, undefined, 0.02);
-    for (const y of [0.6, 1.5]) k.box(built, [0.97, 0.07, 0.04], [0, y, F + 0.13], IRON);
-    cb(k, built, [1.4, 0.2, 0.3], [0, 2.1, F + 0.1], WOOD_D, undefined, 0.02);
-    k.box(built, [0.2, 0.26, 0.2], [0, 2.38, F + 0.22], 0xffd080, undefined, 0xffb040, 2);
-    // Hanging sign on a bracket at the front corner, board facing the camera.
-    k.box(built, [0.07, 0.07, 0.9], [1.95, 2.75, F + 0.45], IRON);
-    cb(k, built, [0.9, 0.62, 0.07], [1.95, 2.33, F + 0.82], 0x3a2a1e, undefined, 0.02);
-    k.mesh(built, octagon(0.2, 0.06), mark, [1.95, 2.33, F + 0.87], [0, Math.PI / 2, 0], mark, 0.6);
-    // What the building is for, out front.
-    const d = new THREE.Group();
-    d.position.set(-1.6, 0, F + 0.75);
-    built.add(d);
-    switch (id) {
-      case 'alchemy_lab':
-        cb(k, d, [1.1, 0.5, 0.5], [0, 0.25, 0], WOOD, undefined, 0.03);
-        for (const [x, c] of [[-0.35, 0x5ad07a], [0, 0xd0a03a], [0.33, 0x7a6aff]] as [number, number][]) {
-          k.box(d, [0.16, 0.28, 0.16], [x, 0.64, 0], c, undefined, c, 0.9);
-          k.box(d, [0.07, 0.1, 0.07], [x, 0.83, 0], 0xe8dcc0);
-        }
-        break;
-      case 'rune_altar':
-        k.mesh(d, taper(0.7, 0.5, 0.45, 0.35, 1.3), 0x6e6a66, [0, 0.62, 0]);
-        k.box(d, [0.3, 0.3, 0.04], [0, 0.8, 0.27], 0x6aa8ff, [0, 0, Math.PI / 4], 0x3a6ad0, 1.6);
-        break;
-      case 'hatchery':
-        for (let i = 0; i < 7; i++) chunk(k, d, 170 + i, [0.34, 0.2, 0.28], [Math.cos(i * 0.9) * 0.42, -0.02, Math.sin(i * 0.9) * 0.42], 0x8a6a3a, i);
-        k.mesh(d, octagon(0.2, 0.3), 0xffa050, [0, 0.3, 0], [0, 0, Math.PI / 2], 0xff6a10, 0.8);
-        break;
-      case 'vault_expanded':
-        cb(k, d, [0.9, 0.55, 0.6], [0, 0.28, 0], WOOD_D, undefined, 0.03);
-        for (const x of [-0.3, 0.3]) k.box(d, [0.08, 0.59, 0.64], [x, 0.28, 0], IRON);
-        cb(k, d, [0.7, 0.12, 0.4], [0, 0.61, 0], PAL.gold, undefined, 0.04, 0x5a3a00, 0.35);
-        break;
-    }
-    return { obj: g, setState: (s) => { ruined.visible = s !== 'restored'; built.visible = s === 'restored'; } };
   },
   forgeheart: (k, g) => {
     // The Emberforge: a stepped basalt hearth with corner horns; cold, or roaring once restored.
@@ -1274,7 +1241,7 @@ const BUILDERS: Record<string, Builder> = {
  * blocks to a handful, a portal's rune inlays to one. Groups toggled by setState and named parts
  * animated by tick (flames, seals) stay separate, so behaviour is unchanged.
  */
-function mergeStatic(root: THREE.Object3D) {
+export function mergeStatic(root: THREE.Object3D) {
   const parents = new Set<THREE.Object3D>();
   root.traverse((o) => {
     if (o instanceof THREE.Mesh && o.parent && !o.children.length) parents.add(o.parent);
@@ -1306,25 +1273,13 @@ function mergeStatic(root: THREE.Object3D) {
   }
 }
 
-/** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
-export const PROP_KINDS = Object.keys(BUILDERS);
-
-/** Build a prop by kind. GLB `prop_<kind>` overrides the code-built prop when present. */
-export function buildProp(kind: string, arg?: any): Prop {
-  if (hasModel(`prop_${kind}`)) {
-    const m = makeModel(`prop_${kind}`);
-    const g = new THREE.Group();
-    g.add(m.root);
-    return { obj: g };
-  }
-  const k = new ModelKit();
-  const g = new THREE.Group();
-  let res: Prop | void;
-  if (kind === 'arch' || kind === 'portal') res = portal(k, g, arg ?? null);
-  else if (kind.startsWith('rock_')) res = oreRock(k, g, kind.slice(5));
-  else res = BUILDERS[kind]?.(k, g, arg);
+/**
+ * Finish a kit-built prop: merge static meshes, give materials their look (shiny metal, glossy
+ * coal, painted albedo) and set shadow flags.
+ */
+export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
   mergeStatic(g);
-  for (const m of k.mats) {
+  for (const m of kits.flatMap((k) => k.mats)) {
     // Iron and gold fittings shine; coal and obsidian are glossy; grey masonry gets a gentle
     // stone detail (lined up in world space); everything else stays clean flat colour.
     const hex = m.color.getHex();
@@ -1347,5 +1302,28 @@ export function buildProp(kind: string, arg?: any): Prop {
       o.receiveShadow = !fx;
     }
   });
+}
+
+/** Big walls that should dissolve around the hero when they stand between them and the camera. */
+export const OCCLUDING_PROPS = new Set(['curtain', 'wall_tower', 'gatehouse']);
+
+/** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
+export const PROP_KINDS = Object.keys(BUILDERS);
+
+/** Build a prop by kind. GLB `prop_<kind>` overrides the code-built prop when present. */
+export function buildProp(kind: string, arg?: any): Prop {
+  if (hasModel(`prop_${kind}`)) {
+    const m = makeModel(`prop_${kind}`);
+    const g = new THREE.Group();
+    g.add(m.root);
+    return { obj: g };
+  }
+  const k = new ModelKit();
+  const g = new THREE.Group();
+  let res: Prop | void;
+  if (kind === 'arch' || kind === 'portal') res = portal(k, g, arg ?? null);
+  else if (kind.startsWith('rock_')) res = oreRock(k, g, kind.slice(5));
+  else res = BUILDERS[kind]?.(k, g, arg);
+  finishProp(g, [k]);
   return res ?? { obj: g };
 }

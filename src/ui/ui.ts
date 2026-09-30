@@ -1,20 +1,32 @@
+import { canAfford } from '../combat/stats';
 import { abilityFor, type AbilityKey } from '../data/abilities';
+import { MANA_TUNING } from '../data/tuning';
 import type { Enemy } from '../entities/enemy';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { SKILL_INFO, levelProgress } from '../progression/skills';
 import type { Dialogue } from '../systems/story';
-import type { Item, SkillId } from '../types';
+import type { Item, SkillId, Style } from '../types';
 import { el, esc, fmt } from './dom';
+import { SIDE_TABS, TAB_KEYS, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, type SideState, type SideTab } from './hudLayout';
 import { icon } from './icons';
 import { installKit } from './kit';
 import { Panels } from './panels';
 import { Screens } from './screens';
+import { BASIC_TILE, skillTileUrl } from './skillTiles';
 import { Tooltip } from './tooltip';
 
-type PanelId = 'inventory' | 'skills' | 'bank' | 'shop' | 'craft' | 'keep' | 'journal' | 'collection' | 'help' | 'debug';
+/** Floating windows (stations and debug); everything else lives in the side panel's tabs. */
+type WindowId = 'bank' | 'shop' | 'craft' | 'keep' | 'debug';
+type PanelId = WindowId | SideTab;
 
-const STATION_PANELS: PanelId[] = ['bank', 'shop', 'craft', 'keep'];
+const STATION_PANELS: WindowId[] = ['bank', 'shop', 'craft', 'keep'];
+
+/** Anything under the cursor matching this is UI: the world ignores hover there. */
+const UI_SELECTOR = '.panel, .sidepanel, .console, .dlg, .objective, .slot';
+
+/** A tiny mouse with its left button lit: the key cap of the basic-attack slot. */
+const MOUSE_LMB = `<svg width="11" height="15" viewBox="0 0 11 15"><rect x="0.8" y="0.8" width="9.4" height="13.4" rx="4.7" fill="#1a120a" stroke="#f3d98a" stroke-width="1.3"/><path d="M1.4 6.2V5.5a4.1 4.1 0 0 1 4.1-4.1v4.8Z" fill="#f3d98a"/></svg>`;
 
 export class UI {
   overUI = false;
@@ -24,7 +36,10 @@ export class UI {
   private hud = document.getElementById('hud')!;
   private panelRoot = document.getElementById('panels')!;
   private dialogueRoot = document.getElementById('dialogue')!;
-  private open = new Set<PanelId>();
+  private open = new Set<WindowId>();
+  private side: SideState = { tab: 'inventory', collapsed: false };
+  private consoleSig = '';
+  private noManaAt = -1e9;
   private xpAcc = new Map<SkillId, { amount: number; t: number }>();
   private bossTarget: Enemy | null = null;
   private hurtAmt = 0;
@@ -43,7 +58,7 @@ export class UI {
     this.buildHud();
     for (const root of [this.hud, this.panelRoot, this.dialogueRoot]) {
       root.addEventListener('mouseover', (e) => {
-        this.overUI = !!(e.target as HTMLElement).closest('.panel, .bar, .topbtns, .slot, .dlg, .objective, .stancebar');
+        this.overUI = !!(e.target as HTMLElement).closest(UI_SELECTOR);
       });
       root.addEventListener('mouseleave', () => (this.overUI = false));
     }
@@ -69,14 +84,11 @@ export class UI {
   // ─── HUD ─────────────────────────────────────────────────────────────────
 
   private buildHud() {
-    const btn = (id: string, ic: string, key: string, title: string) => `<button data-p="${id}" title="${title} (${key})">${icon(ic, 30)}<span>${key}</span></button>`;
+    const tabs = SIDE_TABS.map((t) => `<button class="stab" data-tab="${t.id}">${icon(t.icon, 26)}</button>`).join('');
     this.hud.innerHTML = `
       <div class="vignette"></div>
-      <div class="topleft"><div class="zone plaque"></div><div class="goldline"></div><div class="weak"></div></div>
+      <div class="topleft"><div class="zone plaque"></div><div class="weak"></div></div>
       <div class="objective hidden"><div class="obj-title">Objective</div><div class="obj-text"></div></div>
-      <div class="topbtns">
-        ${btn('inventory', 'bag', 'I', 'Inventory')}${btn('skills', 'skills', 'K', 'Skills')}${btn('journal', 'quest', 'J', 'Journal')}${btn('collection', 'collection', 'L', 'Collection log')}${btn('help', 'settings', 'Esc', 'Controls & settings')}
-      </div>
       <div class="target"><div class="tname"></div><div class="tbar"><div></div></div></div>
       <div class="bossbar"><div class="bname"></div><div class="bbar"><div class="bfill"></div></div></div>
       <div class="hoverlabel"></div>
@@ -85,52 +97,106 @@ export class UI {
       <div class="chat"></div>
       <div class="death">Oh dear, you are dead!</div>
       <div class="castbar hidden"><div class="cb-fill"></div><span></span></div>
-      <div class="bar">
+      <div class="console">
         <div class="orb hp"><div class="fill"></div><div class="glass"></div><span></span></div>
-        <div class="barmid">
-          <div class="slots"></div>
+        <div class="cbody">
           <div class="xpline"><div class="fill"></div><span></span></div>
+          <div class="crow">
+            <div class="belt"></div>
+            <div class="cdiv"></div>
+            <div class="skillrow"></div>
+          </div>
         </div>
-        <div class="orb style"><div class="fill"></div><div class="glass"></div><span></span></div>
+        <div class="orb mana"><div class="fill"></div><div class="glass"></div><span></span></div>
       </div>
+      <div class="sidepanel frame"><div class="stabs">${tabs}</div><div class="pbody sbody"></div></div>
       <div class="fade"></div>
       <div class="zonetitle"></div>`;
-    const slots = this.$('.slots');
-    for (const k of ['Q', 'W', 'E', 'R'] as AbilityKey[]) {
-      const d = el('div', 'aslot');
+
+    // Potion belt: healing potion (1) and the Veilstone (T).
+    const belt = this.$('.belt');
+    const pot = el('div', 'bslot potion', `<div class="ic">${icon('potion', 34)}</div><div class="count"></div><div class="key">1</div>`);
+    pot.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      this.g.items.drinkPotion();
+    });
+    this.tipOn(pot, () => `<div class="tt-name">Healing Potion</div><div>Restores 45% life and ${Math.round(MANA_TUNING.potionFrac * 100)}% mana over 1.5s.</div><div class="tt-dim">Refills 1 charge every 6 kills, and fully in the keep.</div>`);
+    const rec = el('div', 'bslot recall', `<div class="ic">${icon('recall', 34)}</div><div class="key">T</div>`);
+    rec.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      this.g.recall();
+    });
+    this.tipOn(rec, () => `<div class="tt-name">Veilstone</div><div>Channel to return to Dragonspire Keep. Moving or taking damage interrupts it.</div><div class="tt-dim">Leaving a zone resets it: monsters return, loot on the ground is lost.</div>`);
+    belt.append(pot, rec);
+
+    this.tipOn(this.$('.orb.hp'), () => {
+      const st = this.g.stats;
+      return `<div class="tt-name" style="color:#ff7a6a">Life</div><div>${Math.ceil(Math.max(0, this.g.player.hp))} / ${st.maxHp}</div><div class="tt-dim">Regenerates ${st.regen.toFixed(1)}/s, much faster once you're out of combat.</div>`;
+    });
+    this.tipOn(this.$('.orb.mana'), () => {
+      const st = this.g.stats;
+      return `<div class="tt-name" style="color:#7aa8ff">Mana</div><div>${Math.floor(this.manaNow())} / ${st.maxMana}</div><div class="tt-dim">One pool for every weapon. Skills spend it; it refills ${st.manaRegen.toFixed(1)}/s, faster out of combat. Healing potions restore ${Math.round(MANA_TUNING.potionFrac * 100)}%. Grows with your best combat level.</div>`;
+    });
+    this.tipOn(this.$('.xpline'), () => {
+      const st = this.g.stats, k = st.style, p = levelProgress(this.g.save.skills[k]);
+      return `<div class="tt-name" style="color:${SKILL_INFO[k].color}">${SKILL_INFO[k].name} ${p.level}</div><div>${fmt(this.g.save.skills[k])} XP${p.level < 99 ? ` · ${fmt(p.remaining)} to level ${p.level + 1}` : ''}</div><div class="tt-dim">Your weapon decides which style you train.</div>`;
+    });
+
+    const sp = this.$('.sidepanel');
+    sp.addEventListener('mousedown', (e) => e.stopPropagation());
+    sp.querySelectorAll<HTMLElement>('.stab').forEach((b) => {
+      const def = SIDE_TABS.find((t) => t.id === b.dataset.tab)!;
+      b.addEventListener('mousedown', () => this.pressTab(def.id));
+      this.tipOn(b, () => `<div class="tt-name">${def.label}</div><div class="tt-dim">Hotkey: ${def.key}</div>`);
+    });
+    this.$('.console').addEventListener('mousedown', (e) => e.stopPropagation());
+    this.applySide();
+  }
+
+  private tipOn(node: HTMLElement, html: () => string) {
+    node.addEventListener('mouseenter', () => this.tooltip.text(html(), node.getBoundingClientRect()));
+    node.addEventListener('mouseleave', () => this.tooltip.hide());
+  }
+
+  /** Current mana, clamped (the pool starts "infinite" until stats exist). */
+  private manaNow() {
+    return Math.max(0, Math.min(this.g.combat.mana, this.g.stats.maxMana));
+  }
+
+  /** (Re)build the console's skill slots when the weapon style changes: LMB, then Q W E (and R once used). */
+  private buildSkillRow(style: Style) {
+    const row = this.$('.skillrow');
+    row.innerHTML = '';
+    const basic = BASIC_TILE[style];
+    const lmb = el('div', 'sk basic', `<img src="${skillTileUrl(basic.id)}" alt="" draggable="false"><div class="key mouse">${MOUSE_LMB}</div>`);
+    this.tipOn(lmb, () => {
+      const st = this.g.stats;
+      return `<div class="tt-name">${basic.name} <span class="tt-dim">(Left mouse)</span></div><div>Click an enemy to attack; hold to keep attacking. Shift-click attacks in place.</div><div class="tt-dim">${Math.round(st.dmgMin)}–${Math.round(st.dmgMax)} damage · ${st.atkSpeed.toFixed(2)} attacks/s · no mana</div>`;
+    });
+    row.appendChild(lmb);
+    for (const k of consoleKeys(style)) {
+      const d = el('div', 'sk');
       d.dataset.key = k;
-      d.innerHTML = `<div class="ic"></div><div class="cd"></div><div class="key">${k}</div><div class="lock">${icon('lock', 16)}</div>`;
+      d.innerHTML = `<img alt="" draggable="false"><div class="sweep"></div><div class="cdnum"></div><div class="key">${k}</div><div class="cost"></div><div class="lock">${icon('lock', 16)}</div>`;
       d.addEventListener('mouseenter', () => this.abilityTip(k, d));
       d.addEventListener('mouseleave', () => this.tooltip.hide());
       d.addEventListener('mousedown', (e) => {
         e.stopPropagation();
         this.g.combat.useAbility(k);
       });
-      slots.appendChild(d);
+      row.appendChild(d);
     }
-    const pot = el('div', 'aslot potion', `<div class="ic">${icon('potion', 40)}</div><div class="count"></div><div class="key">1</div>`);
-    pot.addEventListener('mousedown', (e) => {
-      e.stopPropagation();
-      this.g.items.drinkPotion();
-    });
-    pot.addEventListener('mouseenter', () => this.tooltip.text(`<div class="tt-name">Healing Potion</div><div>Restores 45% life over 1.5s.</div><div class="tt-dim">Refills 1 charge every 6 kills, and fully in the keep.</div>`, pot.getBoundingClientRect()));
-    pot.addEventListener('mouseleave', () => this.tooltip.hide());
-    slots.appendChild(pot);
-    const rec = el('div', 'aslot recall', `<div class="ic">${icon('recall', 40)}</div><div class="key">T</div>`);
-    rec.addEventListener('mousedown', (e) => {
-      e.stopPropagation();
-      this.g.recall();
-    });
-    rec.addEventListener('mouseenter', () => this.tooltip.text(`<div class="tt-name">Veilstone</div><div>Channel to return to Dragonspire Keep. Moving or taking damage interrupts it.</div><div class="tt-dim">Leaving a zone resets it: monsters return, loot on the ground is lost.</div>`, rec.getBoundingClientRect()));
-    rec.addEventListener('mouseleave', () => this.tooltip.hide());
-    slots.appendChild(rec);
+  }
 
-    this.hud.querySelectorAll<HTMLButtonElement>('.topbtns button').forEach((b) =>
-      b.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-        this.toggle(b.dataset.p as PanelId);
-      }),
-    );
+  /** A cast refused for lack of mana: the orb flashes, and a note appears (at most once a second). */
+  noMana() {
+    const orb = this.$('.orb.mana');
+    orb.classList.remove('flash');
+    void orb.offsetWidth;
+    orb.classList.add('flash');
+    const now = performance.now();
+    if (now - this.noManaAt > 1000) this.message('Not enough mana.', 'deny');
+    this.noManaAt = now;
   }
 
   update(dt: number) {
@@ -143,48 +209,49 @@ export class UI {
     hp.querySelector('span')!.textContent = `${Math.ceil(Math.max(0, p.hp))} / ${st.maxHp}`;
     hp.classList.toggle('low', hpFrac < 0.3);
 
+    const mana = this.manaNow();
+    const mo = this.$('.orb.mana');
+    (mo.querySelector('.fill') as HTMLElement).style.height = `${(mana / st.maxMana) * 100}%`;
+    mo.querySelector('span')!.textContent = `${Math.floor(mana)} / ${st.maxMana}`;
+
     const style = st.style;
     const prog = levelProgress(s.skills[style]);
-    const so = this.$('.orb.style');
-    (so.querySelector('.fill') as HTMLElement).style.height = `${prog.frac * 100}%`;
-    so.style.setProperty('--c', SKILL_INFO[style].color);
-    const soText = so.querySelector('span')!;
-    const want = `${style}|${g.levels[style]}`;
-    if (soText.dataset.k !== want) {
-      soText.dataset.k = want;
-      soText.innerHTML = `${icon(SKILL_INFO[style].icon, 30)}<b>${g.levels[style]}</b>`;
-    }
     const xl = this.$('.xpline');
     (xl.querySelector('.fill') as HTMLElement).style.width = `${prog.frac * 100}%`;
+    xl.style.setProperty('--c', SKILL_INFO[style].color);
     xl.querySelector('span')!.textContent = prog.level >= 99 ? `${SKILL_INFO[style].name} 99` : `${SKILL_INFO[style].name} ${prog.level} · ${fmt(prog.remaining)} XP to ${prog.level + 1}`;
 
-    this.hud.querySelectorAll<HTMLElement>('.aslot[data-key]').forEach((d) => {
+    const sig = `${style}|${consoleKeys(style).join('')}`;
+    if (sig !== this.consoleSig) {
+      this.consoleSig = sig;
+      this.buildSkillRow(style);
+    }
+    this.hud.querySelectorAll<HTMLElement>('.sk[data-key]').forEach((d) => {
       const def = abilityFor(style, d.dataset.key as AbilityKey);
-      const ic = d.querySelector('.ic') as HTMLElement;
-      const cd = d.querySelector('.cd') as HTMLElement;
+      const img = d.querySelector('img') as HTMLImageElement;
       if (!def) {
-        d.className = 'aslot empty';
-        ic.innerHTML = '';
-        cd.style.height = '0';
+        d.className = 'sk empty';
+        img.removeAttribute('src');
         return;
       }
-      d.className = `aslot ${st.styleLevel < def.unlock ? 'locked' : ''}`;
-      if (ic.dataset.id !== def.id) {
-        ic.dataset.id = def.id;
-        ic.innerHTML = icon(def.id, 44);
+      if (img.dataset.id !== def.id) {
+        img.dataset.id = def.id;
+        img.src = skillTileUrl(def.id);
+        d.querySelector('.cost')!.textContent = String(def.mana);
       }
+      const locked = st.styleLevel < def.unlock;
       const rem = p.cds[def.id] ?? 0;
-      cd.style.height = `${(rem / (def.cooldown * (1 - st.cdr))) * 100}%`;
-      cd.textContent = rem > 0 ? rem.toFixed(rem < 1 ? 1 : 0) : '';
+      const frac = cooldownFrac(rem, def.cooldown, st.cdr);
+      d.className = `sk${locked ? ' locked' : ''}${!locked && !canAfford(mana, def.mana) ? ' nomana' : ''}${frac > 0 ? ' cooling' : ''}`;
+      d.style.setProperty('--cd', frac.toFixed(3));
+      d.querySelector('.cdnum')!.textContent = rem > 0 ? rem.toFixed(rem < 1 ? 1 : 0) : '';
     });
-    const pot = this.hud.querySelector('.aslot.potion') as HTMLElement;
+    const pot = this.$('.bslot.potion');
     pot.querySelector('.count')!.textContent = `${s.potions}/${s.potionMax}`;
-    pot.classList.toggle('locked', s.potions <= 0);
+    pot.classList.toggle('spent', s.potions <= 0);
 
     this.$('.zone').textContent = g.zone.def.name;
-    this.$('.goldline').innerHTML = `${icon('gold', 18)} ${fmt(s.gold)}`;
     this.$('.weak').textContent = p.weakenedT > 0 ? `Weakened ${Math.ceil(p.weakenedT)}s` : p.warCryT > 0 ? `War Cry ${Math.ceil(p.warCryT)}s` : '';
-
     // Target plate for regular enemies; elites/boss use the big bar.
     const tgt = g.hovered ?? (p.cmd.kind === 'attack' ? p.cmd.target : null);
     const tEl = this.$('.target');
@@ -257,15 +324,6 @@ export class UI {
     return `<b>${th.verb}</b> ${esc(th.name)}${extra}`;
   }
 
-  refresh() {
-    if (this.g.mode !== 'play') return;
-    for (const id of this.open) this.render(id);
-    const obj = this.g.story.objective();
-    const o = this.$('.objective');
-    o.classList.toggle('hidden', !obj);
-    if (obj) o.querySelector('.obj-text')!.textContent = obj;
-  }
-
   hurtFlash(frac: number) {
     this.hurtAmt = Math.min(1, this.hurtAmt + 0.25 + frac * 2);
   }
@@ -292,10 +350,19 @@ export class UI {
     }
   }
 
-  // ─── Panels ──────────────────────────────────────────────────────────────
+  // ─── Side panel & windows ────────────────────────────────────────────────
 
-  /** Get (creating if needed) the element for an open panel; null if it's closed. */
+  /** The side panel's open tab (OSRS-style: always visible, inventory by default). */
+  get sideTab(): SideTab {
+    return this.side.tab;
+  }
+
+  /**
+   * Get the element a panel renders into, or null if it isn't showing: a side-panel tab renders into
+   * the side panel while it's the open tab; a window is created on first use.
+   */
   panel(id: PanelId, title: string): HTMLElement | null {
+    if (isSideTab(id)) return this.side.tab === id && !this.side.collapsed ? this.$('.sidepanel') : null;
     if (!this.open.has(id)) return null;
     let p = this.panelRoot.querySelector<HTMLElement>(`#panel-${id}`);
     if (!p) {
@@ -312,17 +379,56 @@ export class UI {
 
   body(p: HTMLElement, html: string) {
     const b = p.querySelector('.pbody')!;
-    const scroll = b.scrollTop;
+    // Keep the scroll position across refreshes, but start a newly opened tab at the top.
+    const view = p.classList.contains('sidepanel') ? this.side.tab : 'window';
+    const scroll = p.dataset.view === view ? b.scrollTop : 0;
     b.innerHTML = html;
     b.scrollTop = scroll;
+    p.dataset.view = view;
   }
 
   private render(id: PanelId) {
     const P = this.panels;
-    ({ inventory: () => P.inventory(), skills: () => P.skills(), bank: () => P.bank(), shop: () => P.shop(), craft: () => P.craftMenu(), keep: () => P.keep(), journal: () => P.journal(), collection: () => P.collection(), help: () => P.help(), debug: () => P.debug() })[id]();
+    ({
+      inventory: () => P.inventory(), equipment: () => P.equipment(), skills: () => P.skills(), journal: () => P.journal(),
+      collection: () => P.collection(), help: () => P.help(), bank: () => P.bank(), shop: () => P.shop(),
+      craft: () => P.craftMenu(), keep: () => P.keep(), debug: () => P.debug(),
+    })[id]();
   }
 
+  /** Sync the side panel's tab row and folded state, then draw the open tab. */
+  private applySide() {
+    const sp = this.$('.sidepanel');
+    if (!sp) return;
+    sp.classList.toggle('collapsed', this.side.collapsed);
+    sp.querySelectorAll<HTMLElement>('.stab').forEach((b) => b.classList.toggle('on', b.dataset.tab === this.side.tab));
+    this.tooltip.hide();
+    if (!this.side.collapsed && this.g.mode === 'play') this.render(this.side.tab);
+  }
+
+  private setSide(next: SideState) {
+    const changed = next.tab !== this.side.tab || next.collapsed !== this.side.collapsed;
+    this.side = next;
+    if (changed) this.g.sfx.play('ui');
+    this.applySide();
+  }
+
+  /** A tab clicked or its hotkey pressed: switch to it, or fold the panel if it's already open. */
+  pressTab(tab: SideTab) {
+    this.setSide(pressTab(this.side, tab));
+  }
+
+  /** Make sure a tab is showing (a bank or shop needs the inventory beside it). */
+  showTab(tab: SideTab) {
+    this.setSide(showTab(this.side, tab));
+  }
+
+  /** Open or close a window. Side-panel tabs are always "open": forcing one just shows it. */
   toggle(id: PanelId, force?: boolean) {
+    if (isSideTab(id)) {
+      if (force !== false) this.showTab(id);
+      return;
+    }
     const want = force ?? !this.open.has(id);
     if (!want) {
       if (!this.open.has(id)) return;
@@ -333,12 +439,22 @@ export class UI {
       if (id === 'bank') this.panels.bankMode = null;
       if (id === 'shop') this.panels.shopOpen = false;
       if (id === 'craft') this.panels.craft = null;
-      if ((id === 'bank' || id === 'shop') && this.open.has('inventory')) this.render('inventory');
+      if ((id === 'bank' || id === 'shop') && this.side.tab === 'inventory') this.applySide();
       return;
     }
     this.g.sfx.play('ui');
     this.open.add(id);
     this.render(id);
+  }
+
+  refresh() {
+    if (this.g.mode !== 'play') return;
+    if (!this.side.collapsed) this.render(this.side.tab);
+    for (const id of this.open) this.render(id);
+    const obj = this.g.story.objective();
+    const o = this.$('.objective');
+    o.classList.toggle('hidden', !obj);
+    if (obj) o.querySelector('.obj-text')!.textContent = obj;
   }
 
   private markStation() {
@@ -349,7 +465,7 @@ export class UI {
     this.panels.bankMode = depositOnly ? 'deposit' : 'bank';
     this.markStation();
     this.toggle('bank', true);
-    this.toggle('inventory', true);
+    this.showTab('inventory');
     this.render('inventory');
   }
 
@@ -358,7 +474,7 @@ export class UI {
     this.panels.shopOpen = true;
     this.markStation();
     this.toggle('shop', true);
-    this.toggle('inventory', true);
+    this.showTab('inventory');
     this.render('inventory');
   }
 
@@ -394,16 +510,14 @@ export class UI {
     }
     if (e.key === 'F1') return this.toggle('debug'), true;
     if (e.key === 'Escape') {
-      if (this.dialogue) return this.closeDialogue(), true;
-      if (this.open.size) {
-        for (const p of [...this.open]) this.toggle(p, false);
-        return true;
-      }
-      this.toggle('help', true);
+      const a = escapeAction(!!this.dialogue, this.open.size, this.side);
+      if (a === 'dialogue') this.closeDialogue();
+      else if (a === 'windows') for (const p of [...this.open]) this.toggle(p, false);
+      else this.setSide(a);
       return true;
     }
-    const map: Record<string, PanelId> = { i: 'inventory', b: 'inventory', k: 'skills', j: 'journal', l: 'collection', h: 'help' };
-    if (map[k]) return this.toggle(map[k]), true;
+    const tab = TAB_KEYS[k];
+    if (tab) return this.pressTab(tab), true;
     return false;
   }
 
@@ -507,7 +621,8 @@ export class UI {
       return;
     }
     const locked = this.g.stats.styleLevel < def.unlock;
-    this.tooltip.text(`<div class="tt-name">${esc(def.name)} <span class="tt-dim">(${key})</span></div><div>${esc(def.desc)}</div><div class="tt-dim">Cooldown ${def.cooldown}s${def.mult ? ` · ${Math.round(def.mult * 100)}% damage` : ''}</div>${locked ? `<div class="tt-bad">Unlocks at ${SKILL_INFO[def.style].name} ${def.unlock}</div>` : ''}`, d.getBoundingClientRect());
+    const short = !locked && !canAfford(this.manaNow(), def.mana);
+    this.tooltip.text(`<div class="tt-name">${esc(def.name)} <span class="tt-dim">(${key})</span></div><div>${esc(def.desc)}</div><div class="tt-mana${short ? ' tt-bad' : ''}">${def.mana} mana</div><div class="tt-dim">Cooldown ${def.cooldown}s${def.mult ? ` · ${Math.round(def.mult * 100)}% damage` : ''}</div>${locked ? `<div class="tt-bad">Unlocks at ${SKILL_INFO[def.style].name} ${def.unlock}</div>` : ''}${this.g.zone.def.kind === 'hub' ? '<div class="tt-dim">Skills rest inside the keep.</div>' : ''}`, d.getBoundingClientRect());
   }
 
   /** Tooltip for loot labels in the world. */
