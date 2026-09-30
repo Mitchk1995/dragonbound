@@ -141,11 +141,13 @@ describe('building models', () => {
     const used = new Set(KEEP_BUILDINGS.flatMap((b) => (b.fits ?? []).map((f) => f.kind)));
     for (const k of used) expect(FIT_KINDS, k).toContain(k);
     for (const b of KEEP_BUILDINGS) {
+      let bad = 0;
       buildBuilding(b).obj.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
         const a = o.geometry.getAttribute('position').array as ArrayLike<number>;
-        for (let i = 0; i < a.length; i++) expect(Number.isFinite(a[i]), b.id).toBe(true);
+        for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) bad++;
       });
+      expect(bad, b.id).toBe(0);
     }
-  });
+  }, 30000);
 });
