@@ -19,10 +19,10 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * instances (rocks, walls).
  */
 
-export type PaintKind = 'masonry' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft';
+export type PaintKind = 'masonry' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles';
 
 interface PaintParams {
-  atlas: 0 | 1;
+  atlas: 0 | 1 | 2;
   channel: 0 | 1 | 2 | 3;
   /** Pattern repeats per unit (one tile = 1 / scale units). */
   scale: number;
@@ -39,6 +39,9 @@ export const PAINTS: Record<PaintKind, PaintParams> = {
   hide: { atlas: 1, channel: 1, scale: 0.7, amount: 0.24 },
   plaster: { atlas: 1, channel: 2, scale: 0.5, amount: 0.2 },
   soft: { atlas: 1, channel: 3, scale: 0.6, amount: 0.18 },
+  bark: { atlas: 2, channel: 0, scale: 1.0, amount: 0.34 },
+  leaves: { atlas: 2, channel: 1, scale: 0.5, amount: 0.36 },
+  needles: { atlas: 2, channel: 2, scale: 0.6, amount: 0.3 },
 };
 
 const smooth = (a: number, b: number, x: number) => {
@@ -140,12 +143,42 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
     const blot = fbm(571, 3, 3);
     return (x, y) => posterize(0.25 + blot(x, y) * 0.5, 5);
   },
+  bark: () => {
+    // Vertical bark plates: dark grooves between lighter ridges, broken up along their length.
+    const strips = tileNoise(581, 6, 2), breaks = tileNoise(582, 12, 4), blot = fbm(583, 3, 2);
+    return (x, y) => {
+      const s = strips(x, y) * 0.75 + breaks(x, y) * 0.25;
+      const groove = smooth(0.42, 0.26, s), ridge = smooth(0.58, 0.74, s);
+      return 0.52 - groove * 0.3 + ridge * 0.14 + (blot(x, y) - 0.5) * 0.1;
+    };
+  },
+  leaves: () => {
+    // Clustered leaf blobs: each cluster lit in the middle, darker where clusters meet.
+    const cells = worley(591, 5), blot = fbm(592, 4, 2);
+    return (x, y) => {
+      const [f1, f2, id] = cells(x, y);
+      const dome = Math.max(0, 1 - (f1 / 34) ** 2);
+      const edge = smooth(0, 7, f2 - f1);
+      return posterize(0.2 + dome * 0.42 + (id - 0.5) * 0.14 + (blot(x, y) - 0.5) * 0.12, 5) * (0.84 + 0.16 * edge);
+    };
+  },
+  needles: () => {
+    // Pine: short soft needle tufts in rows, lighter tips.
+    const tufts = worley(601, 7), streak = tileNoise(602, 20, 5), blot = fbm(603, 3, 2);
+    return (x, y) => {
+      const [f1] = tufts(x, y);
+      const tuft = Math.max(0, 1 - f1 / 24);
+      return posterize(0.22 + tuft * 0.36 + (streak(x, y) - 0.5) * 0.14 + (blot(x, y) - 0.5) * 0.12, 5);
+    };
+  },
 };
 
-const atlases: (THREE.DataTexture | null)[] = [null, null];
+const atlases: (THREE.DataTexture | null)[] = [null, null, null];
 
-/** The painted atlas holding `kind` (built once, four patterns per texture). */
-export function paintAtlas(atlas: 0 | 1): THREE.DataTexture {
+export const isPaintKind = (k: string): k is PaintKind => k in PAINTS;
+
+/** A painted atlas (built once, up to four patterns per texture, one per channel). */
+export function paintAtlas(atlas: 0 | 1 | 2): THREE.DataTexture {
   const hit = atlases[atlas];
   if (hit) return hit;
   const kinds = (Object.keys(PAINTS) as PaintKind[]).filter((k) => PAINTS[k].atlas === atlas);
