@@ -1,14 +1,24 @@
 @echo off
-rem Double-click to play Dragonbound with the latest code in this folder.
+rem Double-click to play Dragonbound. Always updates to the latest merged version first.
 title Dragonbound
 cd /d "%~dp0"
 
-where npm >/dev/null 2>/dev/null || goto :nonode
+where npm >nul 2>nul || goto :nonode
 
-if not exist node_modules (
-  echo First launch: installing game files. This takes a minute or two...
-  call npm install || goto :fail
+rem Update to the newest version of main when this folder is a clean checkout of main.
+where git >nul 2>nul || goto :install
+set "BRANCH="
+for /f "delims=" %%b in ('git branch --show-current 2^>nul') do set "BRANCH=%%b"
+if /i not "%BRANCH%"=="main" (
+  echo This folder is on branch "%BRANCH%", not main, so it was not updated.
+  goto :install
 )
+echo Getting the latest version...
+git pull --ff-only --quiet origin main || echo Could not update, starting the version already on this PC.
+
+:install
+rem Picks up new or changed game files; a few seconds when nothing changed.
+call npm install --no-audit --no-fund --loglevel=error || goto :fail
 
 echo Building and starting Dragonbound...
 call npm run play || goto :fail
