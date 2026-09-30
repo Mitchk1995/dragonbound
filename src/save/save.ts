@@ -101,6 +101,7 @@ export function migrate(raw: any): SaveData {
     stats: { ...fresh.stats, ...(raw.stats ?? {}) },
     settings: { ...fresh.settings, ...(raw.settings ?? {}) },
   };
+  if (!['high', 'medium', 'low'].includes(data.settings.graphics as string)) data.settings.graphics = 'high';
   for (const key of ['collection', 'kc', 'counters', 'keep', 'quests', 'diary', 'diaryClaimed', 'portals'] as const) {
     (data as any)[key] = raw[key] && typeof raw[key] === 'object' ? raw[key] : {};
   }
