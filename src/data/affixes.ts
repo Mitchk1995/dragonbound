@@ -22,6 +22,7 @@ const list: AffixDef[] = [
   { id: 'dmgPct', text: '+{v}% damage', slots: [W, A, R, G], min: 5, max: 12, per: 0.6, weight: 10, prefix: 'Cruel' },
   { id: 'flatDmg', text: '+{v} damage', slots: [W, R, G], min: 1, max: 2, per: 0.2, weight: 8, prefix: 'Jagged' },
   { id: 'atkSpd', text: '+{v}% attack speed', slots: [W, G, R], min: 4, max: 9, per: 0.15, weight: 6, suffix: 'of Haste' },
+  { id: 'castSpd', text: '+{v}% cast speed', slots: [W, A, R], min: 5, max: 10, per: 0.15, weight: 5, suffix: 'of Incantation' },
   { id: 'critChance', text: '+{v}% critical strike chance', slots: [W, A, H, R], min: 2, max: 4, per: 0.1, weight: 6, prefix: 'Keen' },
   { id: 'critDmg', text: '+{v}% critical damage', slots: [W, A, G], min: 10, max: 20, per: 0.6, weight: 5, prefix: 'Vicious' },
   { id: 'life', text: '+{v} life', slots: [H, B, F, G, A, R], min: 5, max: 12, per: 1, weight: 12, suffix: 'of Vigor' },

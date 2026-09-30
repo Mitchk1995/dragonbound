@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+import { COMBAT_TUNING } from '../data/tuning';
 import { bowDrawAmount } from './bowDraw';
 
 export type AttackKind = 'swing' | 'bow' | 'cast' | 'bite' | 'slam' | 'throw';
@@ -32,6 +33,9 @@ export const HEAD_LEVEL = 0.35;
 export const HEAD_FLY_LEVEL = -0.1;
 export const NECK_FLY_EXTEND = 0.25;
 export const SWING_WRIST = 1.23;
+
+/** Where the blow lands in every attack animation (see COMBAT_TUNING.impact). */
+const IMPACT = COMBAT_TUNING.impact;
 
 /** How much of the upper arm's rotation the pauldron follows (see Rig.followShoulders). */
 export const SHOULDER_FOLLOW = 0.75;
@@ -183,28 +187,33 @@ export class Rig {
     }
   }
 
+  /**
+   * Attack poses over progress 0..1. Every kind is built around IMPACT (the frame the game
+   * resolves the hit): a long wind-up before it, a fast strike through it, a follow-through after.
+   */
   private attackPose(s: AnimState) {
     const a = s.attack;
     switch (s.attackKind) {
       case 'swing': {
-        // Wind up overhead, whip down through the target, recover.
+        // Wind up overhead, whip down through the target (mid-strike at the impact), recover.
+        const up = IMPACT - 0.1, down = IMPACT + 0.1;
         let x: number;
-        if (a < 0.4) x = -3.2 * ease(a / 0.4);
-        else if (a < 0.6) x = -3.2 + 2.85 * ease((a - 0.4) / 0.2);
+        if (a < up) x = -3.2 * ease(a / up);
+        else if (a < down) x = -3.2 + 2.85 * ease((a - up) / (down - up));
         // The strike ends with the arm still a little forward so long tools (pickaxe) clear the ground.
-        else x = -0.35 * (1 - ease((a - 0.6) / 0.4));
+        else x = -0.35 * (1 - ease((a - down) / (1 - down)));
         this.rot('armR', x, 0, 0.1);
-        // Wrist: cock the blade back over the head in the windup, keep it through the strike, relax after.
-        const wrist = a < 0.55 ? SWING_WRIST * ease(Math.min(1, a / 0.4)) : SWING_WRIST * (1 - ease((a - 0.55) / 0.45));
+        // Wrist: cock the blade back over the head in the windup, keep it through the impact, relax after.
+        const wrist = a < IMPACT ? SWING_WRIST * ease(Math.min(1, a / up)) : SWING_WRIST * (1 - ease((a - IMPACT) / (1 - IMPACT)));
         this.rot('sock_handR', wrist);
-        this.rot('body', a < 0.4 ? -0.1 : 0.15, a < 0.4 ? 0.3 * ease(a / 0.4) : -0.3 * (1 - a), 0);
+        this.rot('body', a < up ? -0.1 : 0.15, a < up ? 0.3 * ease(a / up) : -0.3 * (1 - a), 0);
         break;
       }
       case 'slam': {
-        const x = a < 0.5 ? -3.0 * ease(a / 0.5) : -3.0 + 2.8 * ease((a - 0.5) / 0.5);
+        const x = a < IMPACT ? -3.0 * ease(a / IMPACT) : -3.0 + 2.8 * ease((a - IMPACT) / (1 - IMPACT));
         this.rot('armR', x);
         this.rot('armL', x);
-        this.rot('body', a < 0.5 ? -0.2 : 0.25);
+        this.rot('body', a < IMPACT ? -0.2 : 0.25);
         break;
       }
       case 'bow': {
@@ -222,7 +231,7 @@ export class Rig {
         break;
       }
       case 'cast': {
-        const lift = a < 0.5 ? ease(a / 0.5) : 1 - ease((a - 0.5) / 0.5);
+        const lift = a < IMPACT ? ease(a / IMPACT) : 1 - ease((a - IMPACT) / (1 - IMPACT));
         const armX = -1.2 - 1.0 * lift;
         this.rot('armR', armX);
         // Keep the staff mostly upright, leaning slightly toward the target at the peak.
@@ -232,7 +241,7 @@ export class Rig {
         break;
       }
       case 'throw': {
-        const x = a < 0.5 ? -2.6 * ease(a / 0.5) : -2.6 + 2.0 * ease((a - 0.5) / 0.5);
+        const x = a < IMPACT ? -2.6 * ease(a / IMPACT) : -2.6 + 2.0 * ease((a - IMPACT) / (1 - IMPACT));
         this.rot('armR', x);
         break;
       }

@@ -320,18 +320,20 @@ async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
     return targets;
   };
   const cases: [string, string, (t: ReturnType<typeof setup>) => void, number[]][] = [
-    ['melee-basic', 'steel_sword', (t) => g.combat.startBasicAttack(t[0]), [0.2, 0.26, 0.34]],
-    ['melee-cleave', 'steel_sword', () => g.combat.useAbility('Q'), [0.15, 0.22, 0.3]],
-    ['melee-leap_slam', 'steel_longsword', () => g.combat.useAbility('W'), [0.25, 0.55]],
-    ['melee-war_cry', 'steel_sword', () => g.combat.useAbility('E'), [0.15, 0.5]],
-    ['ranged-basic', 'worn_bow', (t) => g.combat.startBasicAttack(t[0]), [0.3, 0.42]],
+    // Times bracket each attack's impact frame (COMBAT_TUNING: a steel sword lands at 0.40 s,
+    // a worn bow looses at 0.46 s, a staff bolt at 0.51 s; skills land at 55% of their cast).
+    ['melee-basic', 'steel_sword', (t) => g.combat.startBasicAttack(t[0]), [0.28, 0.42, 0.6]],
+    ['melee-cleave', 'steel_sword', () => g.combat.useAbility('Q'), [0.28, 0.4, 0.55]],
+    ['melee-leap_slam', 'steel_longsword', () => g.combat.useAbility('W'), [0.3, 0.65]],
+    ['melee-war_cry', 'steel_sword', () => g.combat.useAbility('E'), [0.3, 0.6]],
+    ['ranged-basic', 'worn_bow', (t) => g.combat.startBasicAttack(t[0]), [0.4, 0.52]],
     ['ranged-multishot', 'worn_bow', () => g.combat.useAbility('Q'), [0.3, 0.45]],
     ['ranged-roll', 'worn_bow', () => g.combat.useAbility('W'), [0.12]],
-    ['ranged-arrow_rain', 'worn_bow', () => g.combat.useAbility('E'), [0.6, 1.2]],
-    ['magic-basic', 'apprentice_staff', (t) => g.combat.startBasicAttack(t[0]), [0.3, 0.42]],
-    ['magic-fireball', 'apprentice_staff', () => g.combat.useAbility('Q'), [0.35, 0.6]],
-    ['magic-frost_nova', 'apprentice_staff', () => g.combat.useAbility('W'), [0.15, 0.35]],
-    ['magic-chain_lightning', 'apprentice_staff', () => g.combat.useAbility('E'), [0.16, 0.24]],
+    ['ranged-arrow_rain', 'worn_bow', () => g.combat.useAbility('E'), [0.8, 1.4]],
+    ['magic-basic', 'apprentice_staff', (t) => g.combat.startBasicAttack(t[0]), [0.45, 0.6]],
+    ['magic-fireball', 'apprentice_staff', () => g.combat.useAbility('Q'), [0.3, 0.6]],
+    ['magic-frost_nova', 'apprentice_staff', () => g.combat.useAbility('W'), [0.36, 0.5]],
+    ['magic-chain_lightning', 'apprentice_staff', () => g.combat.useAbility('E'), [0.36, 0.44]],
   ];
   let n = 1;
   for (const [name, weapon, trigger, times] of cases) {
@@ -395,7 +397,7 @@ async function bossSuite(g: Game, shot: (n: string) => Promise<void>) {
   step(0.5); // engage
   const b = boss.boss!;
   const cases: [ActionKind, number[]][] = [
-    ['bite', [0.3, 0.6]], ['breath', [0.6, 1.3, 2.0]], ['tail', [0.5, 0.95]], ['gust', [0.5, 0.85]], ['flight', [1.5, 4, 6.5, 8.6]],
+    ['bite', [0.4, 0.7]], ['breath', [0.8, 1.6, 2.3]], ['tail', [0.7, 1.35]], ['gust', [0.7, 1.2]], ['flight', [1.5, 4, 6.5, 8.8]],
   ];
   let n = 1;
   for (const [kind, times] of cases) {
@@ -739,7 +741,8 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
 async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
   document.body.classList.add('inspect-clean');
   const st = new Studio(g);
-  const times = [-1, 0.15, 0.3, 0.42, 0.5, 0.62, 0.8, 0.95];
+  // Rest, wind-up, peak, impact (0.55), follow-through.
+  const times = [-1, 0.15, 0.3, 0.44, 0.55, 0.66, 0.8, 0.95];
   const heroSets: [string, string, AttackKind, string?][] = [
     ['dragonguard slam', 'ember_longsword', 'slam', 'ember'], ['knight swing', 'iron_sword', 'swing', 'iron'],
     ['sword swing', 'steel_sword', 'swing'], ['longsword slam', 'steel_longsword', 'slam'],

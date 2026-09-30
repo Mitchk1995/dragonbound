@@ -1,4 +1,5 @@
 import { ENEMIES, type EnemyDef } from '../data/enemies';
+import { COMBAT_TUNING } from '../data/tuning';
 import { makeModel } from '../render/registry';
 import { randInt } from '../core/rng';
 import type { Game } from '../game';
@@ -15,6 +16,7 @@ export interface PackState {
 }
 
 const LEASH = 26;
+const PACE = COMBAT_TUNING.enemy;
 /** Idle enemies farther than this from the hero sleep (see update). */
 const DORMANT_DIST = 42;
 
@@ -36,6 +38,8 @@ export class Enemy extends Unit {
   /** Lunger state. */
   lunge: { dirX: number; dirZ: number; t: number; hit: boolean } | null = null;
   recoverT = 0;
+  /** Hit recovery: seconds left flinching (no moving, no attacking). */
+  staggerT = 0;
   boss: BossState | null = null;
 
   constructor(defId: string, x: number, z: number, public pack: PackState | null) {
@@ -47,6 +51,7 @@ export class Enemy extends Unit {
     this.facing = this.targetFacing = Math.random() * Math.PI * 2;
     this.atkCd = Math.random();
     this.turnSpeed = def.behavior === 'boss' ? 4 : 10;
+    this.kbDecay = COMBAT_TUNING.knockback.enemyDecay;
     if (def.behavior === 'boss') this.kbResist = 1;
     else if (def.elite) this.kbResist = 0.7;
     if (def.scale !== 1) {
@@ -67,6 +72,16 @@ export class Enemy extends Unit {
     for (const e of g.zone.enemies) {
       if (e !== this && !e.aggro && !e.dead && e.def.behavior !== 'boss' && e.distTo(this) < 8) e.setAggro(g);
     }
+  }
+
+  /** Flinch from a heavy hit: an attack in progress is lost, along with its warning on the ground. */
+  stagger(g: Game, secs: number) {
+    if (this.actT >= 0 || this.lunge) g.combat.cancelTelegraphs(this);
+    this.staggerT = Math.max(this.staggerT, secs);
+    this.actT = -1;
+    this.lunge = null;
+    this.anim.attack = -1;
+    this.anim.special = -1;
   }
 
   rollDamage() {
@@ -123,11 +138,17 @@ export class Enemy extends Unit {
       return 0;
     }
 
+    if (this.staggerT > 0) {
+      this.staggerT -= dt;
+      this.anim.hurt = 1;
+      return 0;
+    }
+
     // Mid-attack: advance the animation and resolve the hit frame.
     if (this.actT >= 0) {
       this.actT += dt / this.actDur;
       this.anim.attack = Math.min(1, this.actT);
-      if (!this.actDone && this.actT >= 0.5) {
+      if (!this.actDone && this.actT >= COMBAT_TUNING.impact) {
         this.actDone = true;
         this.onHitFrame(g);
       }
@@ -178,7 +199,7 @@ export class Enemy extends Unit {
     const reach = this.def.atkRange + this.radius + p.radius;
     if (dist > reach) return this.chase(dt, g, p.x, p.z, speed);
     this.faceTo(p.x, p.z);
-    if (this.atkCd <= 0) this.startAct(0.55, 'swing');
+    if (this.atkCd <= 0) this.startAct(PACE.swing, 'swing');
     return 0;
   }
 
@@ -191,7 +212,7 @@ export class Enemy extends Unit {
     }
     if (dist > this.def.atkRange) return this.chase(dt, g, p.x, p.z, speed);
     this.faceTo(p.x, p.z);
-    if (this.atkCd <= 0) this.startAct(0.7, 'throw');
+    if (this.atkCd <= 0) this.startAct(PACE.throw, 'throw');
     return 0;
   }
 
@@ -200,15 +221,15 @@ export class Enemy extends Unit {
     if (this.lunge) {
       const L = this.lunge;
       L.t += dt;
-      if (L.t < 0.55) {
+      if (L.t < PACE.lungeWindup) {
         // Wind-up: crouch and hold the locked direction.
-        this.anim.special = L.t / 0.55;
+        this.anim.special = L.t / PACE.lungeWindup;
         return 0;
       }
       this.anim.special = -1;
-      this.anim.attack = Math.min(1, (L.t - 0.55) / 0.35);
+      this.anim.attack = Math.min(1, (L.t - PACE.lungeWindup) / PACE.lungeDash);
       this.anim.attackKind = 'bite';
-      const step = 15 * dt;
+      const step = PACE.lungeSpeed * dt;
       const px = this.x, pz = this.z;
       this.pos.x += L.dirX * step;
       this.pos.z += L.dirZ * step;
@@ -217,10 +238,10 @@ export class Enemy extends Unit {
         L.hit = true;
         g.combat.damagePlayer(this.rollDamage(), this, 6);
       }
-      if (L.t >= 0.9) {
+      if (L.t >= PACE.lungeWindup + PACE.lungeDash) {
         this.lunge = null;
         this.anim.attack = -1;
-        this.recoverT = 0.7;
+        this.recoverT = PACE.lungeRecover;
       }
       return Math.hypot(this.x - px, this.z - pz);
     }
@@ -239,7 +260,7 @@ export class Enemy extends Unit {
     this.lunge = { dirX: dx / d, dirZ: dz / d, t: 0, hit: false };
     this.faceTo(p.x, p.z, true);
     this.atkCd = 1 / this.def.atkSpeed;
-    g.combat.telegraph(this.x, this.z, { kind: 'cone', r: 6, angle: 0.4, dir: Math.atan2(dz, dx) }, 0.55, () => {});
+    g.combat.telegraph(this.x, this.z, { kind: 'cone', r: 6, angle: 0.4, dir: Math.atan2(dz, dx) }, PACE.lungeWindup, () => {}, this);
     return 0;
   }
 
@@ -253,17 +274,18 @@ export class Enemy extends Unit {
     if (dist > this.def.atkRange) return this.chase(dt, g, p.x, p.z, speed);
     this.faceTo(p.x, p.z);
     if (this.atkCd <= 0) {
-      this.startAct(this.def.castTime ?? 1.2, 'cast');
+      const castTime = this.def.castTime!;
+      this.startAct(castTime, 'cast');
       const r = this.def.aoeRadius ?? 1.8;
       const dmg = this.rollDamage();
       // The first circle lands on the player; extra circles (mini-bosses) cut off escape routes.
       for (let k = 0; k < (this.def.multiCast ?? 1); k++) {
         const a = Math.random() * Math.PI * 2, off = k === 0 ? 0 : 2.5 + Math.random() * 2;
         const cx = p.x + Math.cos(a) * off, cz = p.z + Math.sin(a) * off;
-        g.combat.telegraph(cx, cz, { kind: 'circle', r }, (this.def.castTime ?? 1.2) + k * 0.15, (t) => {
+        g.combat.telegraph(cx, cz, { kind: 'circle', r }, castTime + k * 0.15, (t) => {
           g.fx.fireBurst(t.x, t.z, r);
           if (Math.hypot(p.x - t.x, p.z - t.z) <= r + p.radius * 0.6) g.combat.damagePlayer(dmg, this);
-        });
+        }, this);
       }
     }
     return 0;

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { castAbility } from '../abilities';
 import { newBossState } from '../ai/boss';
 import { mitigate, rollHit } from '../combat/damage';
+import { swingTiming } from '../combat/stats';
 import { abilityFor, type AbilityKey } from '../data/abilities';
 import { Enemy, type PackState } from '../entities/enemy';
 import { ATTACK_ANIM } from '../entities/player';
@@ -13,13 +14,15 @@ import { SKILL_INFO } from '../progression/skills';
 import type { AttackKind } from '../render/anim';
 import { PAL } from '../render/kit';
 import { Cell } from '../world/layout';
-import { XP_TUNING } from '../data/tuning';
+import { COMBAT_TUNING, XP_TUNING } from '../data/tuning';
 
 export interface HitOpts {
   kb?: number;
   fromX?: number;
   fromZ?: number;
   forceCrit?: boolean;
+  /** A damage-over-time tick (Rain of Arrows): no hitstop, no flinch. */
+  tick?: boolean;
 }
 
 export interface Hazard {
@@ -55,8 +58,10 @@ export class Combat {
 
   // ─── Player offence ──────────────────────────────────────────────────────
 
-  playerAction(dur: number, hitAt: number, kind: AttackKind, onHit: () => void) {
+  /** Start a committed attack/cast animation; `onHit` fires at the impact frame (COMBAT_TUNING.impact). */
+  playerAction(dur: number, kind: AttackKind, onHit: () => void) {
     const p = this.g.player;
+    const hitAt = COMBAT_TUNING.impact;
     p.action = { t: 0, dur, hitAt, done: false, kind, onHit };
     p.anim.attack = 0;
     p.anim.attackKind = kind;
@@ -64,17 +69,18 @@ export class Combat {
 
   startBasicAttack(target: Enemy | null) {
     const g = this.g, p = g.player, st = g.stats;
-    p.attackCd = 1 / st.atkSpeed;
-    const dur = Math.min(0.5, 0.8 / st.atkSpeed);
+    const timing = swingTiming(st.atkSpeed);
+    p.attackCd = timing.interval;
+    p.swings++;
     if (target) p.faceTo(target.x, target.z, true);
-    this.playerAction(dur, 0.5, ATTACK_ANIM[st.style], () => {
+    this.playerAction(timing.dur, ATTACK_ANIM[st.style], () => {
       const dirA = target && !target.dead ? Math.atan2(target.z - p.z, target.x - p.x) : p.dirAngle;
       if (st.style === 'melee') {
         g.sfx.play('swing', 0.8, 0.9 + Math.random() * 0.2);
         g.fx.arc(p.x, p.z, dirA, st.range + 0.6, Math.PI * 0.6, 0xffffff);
         const hits = this.enemiesInCone(p.x, p.z, dirA, st.range + 0.5, Math.PI * 0.6);
         if (target && !target.dead && !hits.includes(target) && p.distTo(target) <= st.range + target.radius + 0.8) hits.push(target);
-        for (const e of hits) this.hitEnemy(e, 1, { kb: 2.5, fromX: p.x, fromZ: p.z });
+        for (const e of hits) this.hitEnemy(e, 1, { kb: COMBAT_TUNING.knockback.melee, fromX: p.x, fromZ: p.z });
       } else {
         const tx = target && !target.dead ? target.x : p.x + Math.cos(dirA);
         const tz = target && !target.dead ? target.z : p.z + Math.sin(dirA);
@@ -91,21 +97,23 @@ export class Combat {
     });
   }
 
-  useAbility(key: AbilityKey) {
+  /** `quiet` (a held key repeating) skips the refusal sounds and messages. */
+  useAbility(key: AbilityKey, quiet = false) {
     const g = this.g, p = g.player;
     if (p.dead || p.dash || g.zone.def.kind === 'hub') return;
     const def = abilityFor(g.stats.style, key);
     if (!def) {
-      g.sfx.play('deny');
+      if (!quiet) g.sfx.play('deny');
       return;
     }
     if (g.stats.styleLevel < def.unlock) {
+      if (quiet) return;
       g.announce(`${def.name} unlocks at ${SKILL_INFO[def.style].name} level ${def.unlock}.`, 'deny');
       g.sfx.play('deny');
       return;
     }
     if ((p.cds[def.id] ?? 0) > 0) {
-      g.sfx.play('deny', 0.5);
+      if (!quiet) g.sfx.play('deny', 0.5);
       return;
     }
     if (p.action && !p.action.done) return;
@@ -154,7 +162,7 @@ export class Combat {
               pr.dead = true;
               break;
             }
-            this.hitEnemy(e, pr.o.dmg, { kb: pr.o.kind === 'arrow' ? 1.5 : 2, fromX: pr.x - pr.o.dirX, fromZ: pr.z - pr.o.dirZ, forceCrit: pr.o.crit });
+            this.hitEnemy(e, pr.o.dmg, { kb: pr.o.kind === 'arrow' ? COMBAT_TUNING.knockback.arrow : COMBAT_TUNING.knockback.bolt, fromX: pr.x - pr.o.dirX, fromZ: pr.z - pr.o.dirZ, forceCrit: pr.o.crit });
             if (pr.pierceLeft-- <= 0) {
               pr.dead = true;
               break;
@@ -191,12 +199,12 @@ export class Combat {
     this.g.sfx.play('explode', 0.7);
     this.g.shake(0.25, 0.25);
     this.g.fx.fireBurst(x, z, r);
-    for (const e of this.enemiesInRadius(x, z, r)) this.hitEnemy(e, mult, { kb: 6, fromX: x, fromZ: z });
+    for (const e of this.enemiesInRadius(x, z, r)) this.hitEnemy(e, mult, { kb: COMBAT_TUNING.knockback.explosion, fromX: x, fromZ: z });
   }
 
   hitEnemy(e: Enemy, mult: number, o: HitOpts) {
     if (e.dead || e.untargetable) return;
-    const g = this.g, st = g.stats;
+    const g = this.g, st = g.stats, T = COMBAT_TUNING;
     const hit = rollHit(Math.random, st.dmgMin, st.dmgMax, mult, st.critChance, st.critMult, o.forceCrit);
     if (g.debug.oneShot) hit.amount = e.hp + 999;
     const dealt = Math.min(e.hp, mitigate(hit.amount, e.def.armor));
@@ -207,13 +215,16 @@ export class Combat {
 
     e.flash(1);
     if (e.def.behavior !== 'boss') e.anim.hurt = 1;
-    if (o.kb && o.fromX !== undefined && o.fromZ !== undefined) e.knockback(o.fromX, o.fromZ, o.kb * (hit.crit ? 1.6 : 1));
+    if (o.kb && o.fromX !== undefined && o.fromZ !== undefined) e.knockback(o.fromX, o.fromZ, o.kb * (hit.crit ? T.knockback.critMult : 1));
+    // Hit recovery: a heavy blow (or a crit on a regular enemy) makes it flinch and lose its attack.
+    const heavy = dealt >= e.maxHp * T.stagger.frac || (hit.crit && !e.def.elite);
+    if (heavy && !o.tick && e.hp > 0 && e.def.behavior !== 'boss') e.stagger(g, T.stagger.secs);
+    if (!o.tick) g.hitstop(hit.crit ? T.hitstopCrit : T.hitstop);
     g.text.damage(hit.amount, e.x, e.model.height, e.z, hit.crit ? 'crit' : 'dmg');
     const blood = e.def.model === 'goblin' ? 0x5a8a2a : e.def.model === 'cultist' ? 0x5a1a2c : 0xb02a1a;
     g.particles.burst(new THREE.Vector3(e.x, e.model.height * 0.5, e.z), { count: hit.crit ? 10 : 5, color: [blood, 0x3a1a10], speed: 3.5, up: 3, life: 0.5, size: 0.12 });
     if (hit.crit) {
       g.sfx.play('crit', 0.9, 0.9 + Math.random() * 0.2);
-      g.hitstop(0.06);
       g.shake(0.18, 0.15);
       g.glow.burst(new THREE.Vector3(e.x, e.model.height * 0.6, e.z), { count: 8, color: [0xffffff, 0xffe070], speed: 7, up: 2, life: 0.25, gravity: 0, size: 0.1 });
     } else {
@@ -265,7 +276,7 @@ export class Combat {
       tickT -= 1 / 60;
       if (tickT <= 0) {
         tickT = 0.3;
-        for (const e of this.enemiesInRadius(x, z, r)) this.hitEnemy(e, mult, {});
+        for (const e of this.enemiesInRadius(x, z, r)) this.hitEnemy(e, mult, { tick: true });
         this.g.sfx.play('arrow', 0.5, 0.8 + Math.random() * 0.4);
       }
     });
@@ -342,6 +353,11 @@ export class Combat {
     return t;
   }
 
+  /** Drop an enemy's pending telegraphs (its attack was interrupted or it reset). */
+  cancelTelegraphs(owner: Enemy) {
+    for (const t of this.z.telegraphs) if (t.owner === owner) t.done = true;
+  }
+
   updateTelegraphs(dt: number) {
     for (const t of this.z.telegraphs) t.update(dt);
     this.z.telegraphs = this.z.telegraphs.filter((t) => {
@@ -396,7 +412,7 @@ export class Combat {
     );
     rock.add(halo);
     rock.position.set(x, 14, z);
-    const dur = 1.1;
+    const dur = COMBAT_TUNING.boss.meteor;
     this.telegraph(x, z, { kind: 'circle', r: 1.7 }, dur, () => {
       g.fx.fireBurst(x, z, 1.7);
       g.sfx.play('explode', 0.5, 1.2);
@@ -488,7 +504,7 @@ export class Combat {
 
   onBossDisengage(e: Enemy) {
     // A full reset: pending telegraphs never resolve and lingering breath/fire stops hurting.
-    for (const t of this.z.telegraphs) if (t.owner === e) t.done = true;
+    this.cancelTelegraphs(e);
     this.z.hazards = this.z.hazards.filter((h) => h.source !== e);
     this.g.ui.showBoss(null);
     if (!this.g.player.dead) this.g.announce('Cinderwing loses interest and returns to its roost.', 'info');

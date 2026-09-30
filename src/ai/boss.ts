@@ -1,5 +1,8 @@
+import { COMBAT_TUNING } from '../data/tuning';
 import type { Enemy } from '../entities/enemy';
 import type { Game } from '../game';
+
+const T = COMBAT_TUNING.boss;
 
 export type ActionKind = 'bite' | 'breath' | 'tail' | 'gust' | 'flight';
 
@@ -110,20 +113,20 @@ export function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
   const fwdX = Math.cos(dir), fwdZ = Math.sin(dir);
   switch (kind) {
     case 'bite': {
-      b.action = { kind, t: 0, dur: 0.9, step: 0, data: null };
+      b.action = { kind, t: 0, dur: T.bite, step: 0, data: null };
       e.anim.attackKind = 'bite';
       break;
     }
     case 'breath': {
       const ox = e.x + fwdX * e.radius, oz = e.z + fwdZ * e.radius;
-      b.action = { kind, t: 0, dur: 2.8, step: 0, data: { dir, ox, oz } };
-      g.combat.telegraph(ox, oz, { kind: 'cone', r: 10, angle: 0.95, dir }, 1.0, () => {}, e);
+      b.action = { kind, t: 0, dur: T.breathWindup + T.breathBurn + 0.2, step: 0, data: { dir, ox, oz } };
+      g.combat.telegraph(ox, oz, { kind: 'cone', r: 10, angle: 0.95, dir }, T.breathWindup, () => {}, e);
       g.sfx.play('telegraph');
       break;
     }
     case 'tail': {
-      b.action = { kind, t: 0, dur: 1.3, step: 0, data: null };
-      g.combat.telegraph(e.x, e.z, { kind: 'circle', r: e.radius + 3.2 }, 0.9, (t) => {
+      b.action = { kind, t: 0, dur: T.tail + 0.4, step: 0, data: null };
+      g.combat.telegraph(e.x, e.z, { kind: 'circle', r: e.radius + 3.2 }, T.tail, (t) => {
         g.shake(0.35, 0.3);
         g.fx.dustRing(t.x, t.z, e.radius + 3.2);
         if (Math.hypot(p.x - t.x, p.z - t.z) < e.radius + 3.2 + p.radius * 0.6) g.combat.damagePlayer(14, e, 14);
@@ -131,8 +134,8 @@ export function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
       break;
     }
     case 'gust': {
-      b.action = { kind, t: 0, dur: 1.2, step: 0, data: { dir } };
-      g.combat.telegraph(e.x, e.z, { kind: 'cone', r: 8.5, angle: 1.8, dir }, 0.8, (t) => {
+      b.action = { kind, t: 0, dur: T.gust + 0.4, step: 0, data: { dir } };
+      g.combat.telegraph(e.x, e.z, { kind: 'cone', r: 8.5, angle: 1.8, dir }, T.gust, (t) => {
         g.sfx.play('roll', 1.5, 0.6);
         g.fx.gust(e.x, e.z, dir);
         if (t.shape.kind === 'cone' && g.combat.inShape(t, p)) g.combat.damagePlayer(6, e, 20);
@@ -140,7 +143,7 @@ export function startAction(e: Enemy, b: BossState, kind: ActionKind, g: Game) {
       break;
     }
     case 'flight': {
-      b.action = { kind, t: 0, dur: 9.5, step: 0, data: { rained: 0, rainT: 0 } };
+      b.action = { kind, t: 0, dur: T.flight + T.land, step: 0, data: { rained: 0, rainT: 0 } };
       b.flightCd = 22;
       g.sfx.play('roar', 0.7, 1.1);
       break;
@@ -157,7 +160,7 @@ function runAction(e: Enemy, b: BossState, dt: number, g: Game): number {
   switch (a.kind) {
     case 'bite': {
       e.anim.attack = Math.min(1, a.t / a.dur);
-      if (a.step === 0 && a.t >= a.dur * 0.5) {
+      if (a.step === 0 && a.t >= a.dur * COMBAT_TUNING.impact) {
         a.step = 1;
         const dir = e.dirAngle;
         const reach = e.radius + 2.6;
@@ -171,12 +174,12 @@ function runAction(e: Enemy, b: BossState, dt: number, g: Game): number {
     }
     case 'breath': {
       const { dir, ox, oz } = a.data;
-      e.anim.special = Math.min(1, a.t / 1.0) * 0.6 + (a.t > 1 ? 0.4 : 0);
-      if (a.t >= 1.0) {
+      e.anim.special = Math.min(1, a.t / T.breathWindup) * 0.6 + (a.t > T.breathWindup ? 0.4 : 0);
+      if (a.t >= T.breathWindup) {
         if (a.step === 0) {
           a.step = 1;
           g.sfx.play('breath');
-          g.combat.hazard(ox, oz, { kind: 'cone', r: 10, angle: 0.95, dir }, 1.6, 0.25, 5, e);
+          g.combat.hazard(ox, oz, { kind: 'cone', r: 10, angle: 0.95, dir }, T.breathBurn, 0.25, 5, e);
         }
         e.anim.special = 0.7;
       }
@@ -186,18 +189,18 @@ function runAction(e: Enemy, b: BossState, dt: number, g: Game): number {
       e.anim.attackKind = 'slam';
       e.anim.attack = Math.min(1, a.t / a.dur);
       // Spin the body during the sweep for readability.
-      if (a.t > 0.8 && a.t < 1.2) e.targetFacing += dt * 14;
+      if (a.t > T.tail - 0.1 && a.t < T.tail + 0.3) e.targetFacing += dt * 14;
       break;
     }
     case 'gust': {
-      e.anim.special = Math.min(1, a.t / 0.8) * 0.5;
+      e.anim.special = Math.min(1, a.t / T.gust) * 0.5;
       break;
     }
     case 'flight': {
       const d = a.data;
       const up = Math.min(1, a.t / 1.2);
-      const landing = a.t > a.dur - 1.6;
-      e.anim.fly = landing ? Math.max(0, (a.dur - a.t) / 1.6) : up;
+      const landing = a.t > a.dur - T.land;
+      e.anim.fly = landing ? Math.max(0, (a.dur - a.t) / T.land) : up;
       e.untargetable = e.anim.fly > 0.3;
       if (!landing) {
         // Circle the player at a distance (never on top of them, so telegraphs stay visible) and rain fire.
@@ -231,7 +234,7 @@ function runAction(e: Enemy, b: BossState, dt: number, g: Game): number {
         e.pos.x = spot.x;
         e.pos.z = spot.z;
         const lx = e.x, lz = e.z;
-        g.combat.telegraph(lx, lz, { kind: 'circle', r: 4.5 }, 1.5, (t) => {
+        g.combat.telegraph(lx, lz, { kind: 'circle', r: 4.5 }, T.land, (t) => {
           g.shake(0.6, 0.5);
           g.fx.dustRing(t.x, t.z, 4.5);
           g.sfx.play('slam');

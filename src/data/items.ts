@@ -1,4 +1,7 @@
 import type { AffixRoll, SkillId, Slot, Style } from '../types';
+import { COMBAT_TUNING } from './tuning';
+
+const SPEED = COMBAT_TUNING.weaponSpeed;
 
 export type ItemKind = 'gear' | 'material' | 'tool' | 'quest';
 
@@ -20,7 +23,7 @@ export interface BaseItem {
   slot?: Slot;
   style?: Style;
   dmg?: [number, number];
-  /** Attacks per second. */
+  /** Base attacks per second (COMBAT_TUNING.weaponSpeed). */
   speed?: number;
   armor?: number;
   req?: { skill: SkillId; level: number };
@@ -77,8 +80,8 @@ export interface Piece {
 }
 
 export const PIECES: Piece[] = [
-  { key: 'sword', name: 'Sword', kind: 'gear', slot: 'weapon', model: 'sword', offset: 0, bars: 1, stats: (t) => ({ style: 'melee', dmg: [[3, 6], [5, 9], [7, 13], [10, 17]][t] as [number, number], speed: 1.5 }) },
-  { key: 'longsword', name: 'Longsword', kind: 'gear', slot: 'weapon', model: 'longsword', offset: 6, bars: 2, stats: (t) => ({ style: 'melee', dmg: [[5, 9], [7, 13], [10, 18], [14, 24]][t] as [number, number], speed: 1.2 }) },
+  { key: 'sword', name: 'Sword', kind: 'gear', slot: 'weapon', model: 'sword', offset: 0, bars: 1, stats: (t) => ({ style: 'melee', dmg: [[3, 6], [5, 9], [7, 13], [10, 17]][t] as [number, number], speed: SPEED.sword }) },
+  { key: 'longsword', name: 'Longsword', kind: 'gear', slot: 'weapon', model: 'longsword', offset: 6, bars: 2, stats: (t) => ({ style: 'melee', dmg: [[5, 9], [7, 13], [10, 18], [14, 24]][t] as [number, number], speed: SPEED.longsword }) },
   { key: 'medhelm', name: 'Med Helm', kind: 'gear', slot: 'helm', model: 'helm_open', offset: 2, bars: 1, stats: (t) => ({ armor: [2, 4, 6, 9][t] }) },
   { key: 'fullhelm', name: 'Full Helm', kind: 'gear', slot: 'helm', model: 'helm_full', offset: 7, bars: 2, stats: (t) => ({ armor: [3, 6, 9, 13][t] }) },
   { key: 'chainbody', name: 'Chainbody', kind: 'gear', slot: 'body', model: 'body_chain', offset: 9, bars: 3, stats: (t) => ({ armor: [4, 8, 12, 17][t] }) },
@@ -128,14 +131,14 @@ const LEATHER: Palette = { main: 0x8a5a34, trim: 0x5a3a22, dark: 0x3a2414 };
 
 list.push(
   // Ranged and magic weapons: drop-only until Fletching/Runecrafting arrive.
-  { id: 'worn_bow', name: 'Worn Shortbow', kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [2, 5], speed: 1.4, minIlvl: 1, value: 4, model: 'bow', palette: WOOD },
-  { id: 'hunter_bow', name: "Hunter's Bow", kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [4, 8], speed: 1.4, req: { skill: 'ranged', level: 10 }, minIlvl: 4, value: 20, model: 'bow', palette: { ...WOOD, main: 0x7a5030, trim: 0xe0d0a8 } },
-  { id: 'recurve_bow', name: 'Recurve Bow', kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [6, 11], speed: 1.35, req: { skill: 'ranged', level: 20 }, minIlvl: 9, value: 60, model: 'bow', palette: { main: 0x4a3020, trim: 0xe0b44a, dark: 0x2a1a10 } },
-  { id: 'drakebone_bow', name: 'Drakebone Bow', kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [8, 15], speed: 1.35, req: { skill: 'ranged', level: 30 }, minIlvl: 15, value: 150, model: 'bow', palette: { main: 0xe8dcc0, trim: 0xc0392b, dark: 0x6a5a48 } },
-  { id: 'apprentice_staff', name: 'Apprentice Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [3, 6], speed: 1.2, minIlvl: 1, value: 4, model: 'staff', palette: { main: 0x6b4426, trim: 0x6aa8ff, dark: 0x3a2414 } },
-  { id: 'oak_staff', name: 'Oak Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [5, 10], speed: 1.2, req: { skill: 'magic', level: 10 }, minIlvl: 4, value: 20, model: 'staff', palette: { main: 0x8a6a3a, trim: 0x7ae07a, dark: 0x4a3420 } },
-  { id: 'runed_staff', name: 'Runed Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [7, 14], speed: 1.15, req: { skill: 'magic', level: 20 }, minIlvl: 9, value: 60, model: 'staff', palette: { main: 0x3a3440, trim: 0xb07aff, dark: 0x1a1820 } },
-  { id: 'ember_staff', name: 'Emberwood Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [10, 18], speed: 1.15, req: { skill: 'magic', level: 30 }, minIlvl: 15, value: 150, model: 'staff', palette: { main: 0x2a1a14, trim: 0xff7a1a, dark: 0x140c0a, glow: true } },
+  { id: 'worn_bow', name: 'Worn Shortbow', kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [2, 5], speed: SPEED.shortbow, minIlvl: 1, value: 4, model: 'bow', palette: WOOD },
+  { id: 'hunter_bow', name: "Hunter's Bow", kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [4, 8], speed: SPEED.shortbow, req: { skill: 'ranged', level: 10 }, minIlvl: 4, value: 20, model: 'bow', palette: { ...WOOD, main: 0x7a5030, trim: 0xe0d0a8 } },
+  { id: 'recurve_bow', name: 'Recurve Bow', kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [6, 11], speed: SPEED.heavyBow, req: { skill: 'ranged', level: 20 }, minIlvl: 9, value: 60, model: 'bow', palette: { main: 0x4a3020, trim: 0xe0b44a, dark: 0x2a1a10 } },
+  { id: 'drakebone_bow', name: 'Drakebone Bow', kind: 'gear', slot: 'weapon', style: 'ranged', dmg: [8, 15], speed: SPEED.heavyBow, req: { skill: 'ranged', level: 30 }, minIlvl: 15, value: 150, model: 'bow', palette: { main: 0xe8dcc0, trim: 0xc0392b, dark: 0x6a5a48 } },
+  { id: 'apprentice_staff', name: 'Apprentice Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [3, 6], speed: SPEED.staff, minIlvl: 1, value: 4, model: 'staff', palette: { main: 0x6b4426, trim: 0x6aa8ff, dark: 0x3a2414 } },
+  { id: 'oak_staff', name: 'Oak Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [5, 10], speed: SPEED.staff, req: { skill: 'magic', level: 10 }, minIlvl: 4, value: 20, model: 'staff', palette: { main: 0x8a6a3a, trim: 0x7ae07a, dark: 0x4a3420 } },
+  { id: 'runed_staff', name: 'Runed Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [7, 14], speed: SPEED.heavyStaff, req: { skill: 'magic', level: 20 }, minIlvl: 9, value: 60, model: 'staff', palette: { main: 0x3a3440, trim: 0xb07aff, dark: 0x1a1820 } },
+  { id: 'ember_staff', name: 'Emberwood Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [10, 18], speed: SPEED.heavyStaff, req: { skill: 'magic', level: 30 }, minIlvl: 15, value: 150, model: 'staff', palette: { main: 0x2a1a14, trim: 0xff7a1a, dark: 0x140c0a, glow: true } },
   // Leather: drop-only light armour.
   { id: 'leather_cap', name: 'Leather Cap', kind: 'gear', slot: 'helm', armor: 2, minIlvl: 1, value: 3, model: 'helm_open', palette: LEATHER },
   { id: 'leather_body', name: 'Leather Body', kind: 'gear', slot: 'body', armor: 4, minIlvl: 1, value: 5, model: 'body_chain', palette: LEATHER },
@@ -184,7 +187,7 @@ export interface UniqueDef {
 export const UNIQUES: Record<string, UniqueDef> = {
   cinderfang: {
     id: 'cinderfang', name: 'Cinderfang', base: 'steel_longsword', model: 'u_cinderfang',
-    affixes: [{ id: 'dmgPct', value: 45 }, { id: 'critChance', value: 8 }, { id: 'lifeOnHit', value: 3 }],
+    affixes: [{ id: 'dmgPct', value: 45 }, { id: 'atkSpd', value: 15 }, { id: 'critChance', value: 8 }, { id: 'lifeOnHit', value: 3 }],
     req: { skill: 'melee', level: 22 },
     flavor: "Forged from a whelp's broken fang. Still warm.",
   },
@@ -196,7 +199,7 @@ export const UNIQUES: Record<string, UniqueDef> = {
   },
   kindled_ash: {
     id: 'kindled_ash', name: 'Staff of Kindled Ash', base: 'runed_staff', model: 'u_kindled_ash',
-    affixes: [{ id: 'dmgPct', value: 50 }, { id: 'cdr', value: 15 }, { id: 'magicLvl', value: 2 }],
+    affixes: [{ id: 'dmgPct', value: 50 }, { id: 'castSpd', value: 20 }, { id: 'cdr', value: 15 }, { id: 'magicLvl', value: 2 }],
     req: { skill: 'magic', level: 22 },
     flavor: "The ember at its tip was once a dragon's heart.",
   },

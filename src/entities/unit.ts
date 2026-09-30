@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, newAnimState, type AnimState } from '../render/anim';
 import { setFlash, type Model } from '../render/kit';
+import { COMBAT_TUNING } from '../data/tuning';
 import type { NavGrid } from '../world/navgrid';
 import type { Vec2 } from '../types';
 
@@ -20,6 +21,7 @@ export class Unit {
   kbx = 0;
   kbz = 0;
   kbResist = 0;
+  kbDecay = COMBAT_TUNING.knockback.decay;
   path: Vec2[] = [];
 
   constructor(public model: Model, public radius: number, public maxHp: number) {
@@ -119,7 +121,7 @@ export class Unit {
     if (this.kbx || this.kbz) {
       this.pos.x += this.kbx * dt;
       this.pos.z += this.kbz * dt;
-      const decay = Math.exp(-dt * 9);
+      const decay = Math.exp(-dt * this.kbDecay);
       this.kbx *= decay;
       this.kbz *= decay;
       if (Math.abs(this.kbx) + Math.abs(this.kbz) < 0.05) this.kbx = this.kbz = 0;
