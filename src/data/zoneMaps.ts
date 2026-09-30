@@ -1,6 +1,7 @@
 import type { Vec2 } from '../types';
 import { Gen, distToPoly } from '../world/gen';
-import { blockDisc, Cell, Fluid, Ground, type ZoneLayout } from '../world/layout';
+import type { BuildingSpec } from '../world/building';
+import { blockDisc, Cell, Fluid, Ground, type StationKind, type ZoneLayout } from '../world/layout';
 
 /**
  * Zone maps. Each is composed from big authored shapes (roads, rivers, lakes, clearings,
@@ -19,7 +20,7 @@ export const KEEP_ARCHES: { id: string; angle: number; dormant?: string }[] = [
 ];
 
 /** Open plaza spot in the keep used to stage the hero (character creation, pose tools). */
-export const KEEP_STAGE: Vec2 = { x: 45.5, z: 50.5 };
+export const KEEP_STAGE: Vec2 = { x: 68.5, z: 102.5 };
 
 /** Camera offsets from KEEP_STAGE used by character creation and the pose tools (x/z only). */
 export const STAGE_CAMERAS: Vec2[] = [{ x: -1.4, z: 5.2 }, { x: 0, z: 4.2 }, { x: 4.2, z: 0 }, { x: -4.2, z: 0 }];
@@ -38,79 +39,276 @@ function blockRect(G: Gen, cx: number, cz: number, hw: number, hd: number, rot: 
 
 // ─── Dragonspire Keep: a floating island in the Veil ────────────────────────
 
+/** Roof colours (painted as shingles). */
+const ROOF = { slate: 0x4e5564, darkSlate: 0x3e4450, terracotta: 0x9a5438, moss: 0x4a6a48, teal: 0x3e6a6a, violet: 0x4a4a78, rust: 0x7a4a34 };
+
+/**
+ * The keep's enterable buildings. Coordinates are grid cells (outer walls included); fittings are
+ * in cells from each building's corner. Stations inside them are placed by buildKeep.
+ */
+export const KEEP_BUILDINGS: BuildingSpec[] = [
+  {
+    // The great hall: the Warden's council hall, where the Restoration Board stands by the high table.
+    id: 'great_hall', style: 'hall', interior: 'hall', x: 60, z: 22, w: 30, d: 18, wallH: 6.2, roof: ROOF.slate,
+    doors: [{ side: 's', at: 13, w: 4 }],
+    windows: [{ side: 's', at: 4.5 }, { side: 's', at: 9 }, { side: 's', at: 21 }, { side: 's', at: 25.5 }, { side: 'n', at: 6 }, { side: 'n', at: 24 }, { side: 'e', at: 5 }, { side: 'e', at: 13 }],
+    fits: [
+      { kind: 'fireplace', x: 1.45, z: 9, rot: Math.PI / 2, block: [0.6, 2] },
+      { kind: 'high_table', x: 15, z: 3.2, block: [2.2, 1.2] },
+      { kind: 'banner', x: 10.5, z: 1.0 }, { kind: 'banner', x: 19.5, z: 1.0 },
+      { kind: 'rug', x: 15, z: 11, len: 11 },
+      { kind: 'table', x: 9.5, z: 10.5, len: 8, block: [1.3, 4.2] },
+      { kind: 'table', x: 20.5, z: 10.5, len: 8, block: [1.3, 4.2] },
+      ...[5.5, 24.5].flatMap((x) => [5.5, 9.5, 13.5].map((z) => ({ kind: 'pillar', x, z, block: [0.5, 0.5] as [number, number] }))),
+      { kind: 'brazier', x: 12.5, z: 15.5, block: [0.4, 0.4] }, { kind: 'brazier', x: 17.5, z: 15.5, block: [0.4, 0.4] },
+      { kind: 'weapon_rack', x: 28.4, z: 9, rot: -Math.PI / 2, block: [0.4, 1.1] },
+    ],
+  },
+  {
+    // The smelter: a timber-framed forge house on a stone base, the furnace against its back wall.
+    id: 'smelter', style: 'timber', interior: 'smelter', x: 20, z: 67, w: 17, d: 13, wallH: 3.9, roof: ROOF.terracotta,
+    doors: [{ side: 's', at: 7, w: 3 }, { side: 'e', at: 5, w: 3 }],
+    windows: [{ side: 's', at: 3 }, { side: 's', at: 13.5 }, { side: 'n', at: 3 }, { side: 'n', at: 14 }, { side: 'w', at: 6.5 }, { side: 'e', at: 10.5 }],
+    fits: [
+      { kind: 'furnace_spot', x: 8.5, z: 2.6, block: [1.9, 1.2] },
+      { kind: 'ore_bin', x: 3, z: 2.2, block: [0.9, 0.6] },
+      { kind: 'coal', x: 13.8, z: 2.2, block: [0.8, 0.6] },
+      { kind: 'tools', x: 11.8, z: 1.0 },
+      { kind: 'bars', x: 15.3, z: 10.5, rot: -Math.PI / 2, block: [0.6, 0.9] },
+      { kind: 'workbench', x: 2.2, z: 10, rot: Math.PI / 2, block: [0.6, 1.2] },
+      { kind: 'barrel', x: 2.0, z: 6, block: [0.5, 0.5] },
+    ],
+  },
+  {
+    // The bank: a stone counting hall. Tellers' counter across the room, the vault door behind.
+    id: 'bank', style: 'stone', interior: 'bank', x: 102, z: 69, w: 20, d: 15, wallH: 4.6, roof: ROOF.darkSlate,
+    doors: [{ side: 's', at: 8, w: 4 }, { side: 'e', at: 9, w: 3 }],
+    windows: [{ side: 's', at: 3.5 }, { side: 's', at: 16.5 }, { side: 'n', at: 4 }, { side: 'n', at: 16 }, { side: 'w', at: 7.5 }],
+    fits: [
+      { kind: 'vault_door', x: 10, z: 1.2, block: [1.6, 0.4] },
+      { kind: 'strongbox', x: 3, z: 2, block: [0.6, 0.5] }, { kind: 'strongbox', x: 17, z: 2, block: [0.6, 0.5] },
+      { kind: 'gold', x: 5.5, z: 2, block: [0.7, 0.5] }, { kind: 'gold', x: 14.5, z: 2.2, block: [0.7, 0.5] },
+      { kind: 'rug', x: 10, z: 10.5, len: 6 },
+      { kind: 'pillar', x: 5.5, z: 10.5, block: [0.5, 0.5] }, { kind: 'pillar', x: 14.5, z: 10.5, block: [0.5, 0.5] },
+    ],
+  },
+  {
+    // The side vault off the bank (Expand the Vault): collapsed until restored, then a strongroom.
+    id: 'vault', style: 'stone', interior: 'vault', x: 121, z: 72, w: 10, d: 11, wallH: 4.0, roof: ROOF.darkSlate, roofKind: 'flat',
+    shared: ['w'], restore: 'vault_expanded',
+    doors: [{ side: 'w', at: 6, w: 3 }],
+    windows: [{ side: 's', at: 5 }, { side: 'e', at: 4 }],
+    fits: [
+      { kind: 'strongbox', x: 3, z: 2, block: [0.6, 0.5] }, { kind: 'strongbox', x: 5.5, z: 2, block: [0.6, 0.5] },
+      { kind: 'gold', x: 8, z: 2.2, block: [0.7, 0.5] },
+      { kind: 'shelf', x: 8.35, z: 7, rot: -Math.PI / 2, block: [0.4, 1.3] },
+      { kind: 'strongbox', x: 4.5, z: 8.6, block: [0.6, 0.5] }, { kind: 'gold', x: 2.5, z: 8.6, block: [0.7, 0.5] },
+      { kind: 'gold', x: 5.5, z: 5.2, block: [0.7, 0.5] },
+    ],
+  },
+  {
+    // The Quartermaster's shop: a timber shopfront with the counter inside and stocked shelves.
+    id: 'shop', style: 'timber', interior: 'shop', x: 100, z: 104, w: 15, d: 11, wallH: 3.7, roof: ROOF.moss,
+    doors: [{ side: 's', at: 6, w: 3 }],
+    windows: [{ side: 's', at: 2.5 }, { side: 's', at: 12 }, { side: 'n', at: 3 }, { side: 'n', at: 12 }, { side: 'w', at: 5.5 }, { side: 'e', at: 5.5 }],
+    fits: [
+      { kind: 'shelf', x: 4, z: 1.5, block: [1.3, 0.4] }, { kind: 'shelf', x: 11, z: 1.5, block: [1.3, 0.4] },
+      { kind: 'barrel', x: 1.9, z: 8.6, block: [0.5, 0.5] }, { kind: 'crate', x: 13, z: 8.6, block: [0.5, 0.5] },
+      { kind: 'weapon_rack', x: 13.6, z: 4.6, rot: -Math.PI / 2, block: [0.4, 1.1] },
+      { kind: 'rug', x: 7.5, z: 7.6, len: 3.2 },
+    ],
+  },
+  {
+    // Chapter 2: the alchemy lab (herb garden and pond beside it).
+    id: 'alchemy_plot', style: 'timber', interior: 'alchemy', x: 32, z: 105, w: 13, d: 10, wallH: 3.6, roof: ROOF.teal, restore: 'alchemy_lab',
+    doors: [{ side: 's', at: 5, w: 3 }],
+    windows: [{ side: 's', at: 2.5 }, { side: 's', at: 10.5 }, { side: 'n', at: 6.5 }, { side: 'e', at: 5 }, { side: 'w', at: 5 }],
+    fits: [
+      { kind: 'cauldron', x: 6.5, z: 5, block: [0.8, 0.8] },
+      { kind: 'flasks', x: 3.5, z: 1.8, block: [1.2, 0.5] },
+      { kind: 'shelf', x: 9.5, z: 1.5, block: [1.3, 0.4] },
+      { kind: 'workbench', x: 11.2, z: 6, rot: -Math.PI / 2, block: [0.6, 1.2] },
+      { kind: 'barrel', x: 1.9, z: 7.4, block: [0.5, 0.5] }, { kind: 'crate', x: 2.0, z: 5.6, block: [0.5, 0.5] },
+      { kind: 'rug', x: 6.5, z: 6.8, len: 2.4 },
+    ],
+  },
+  {
+    // Chapter 3: the rune altar house, in the bailey's east corner.
+    id: 'rune_plot', style: 'stone', interior: 'rune', x: 88, z: 44, w: 11, d: 10, wallH: 4.0, roof: ROOF.violet, restore: 'rune_altar',
+    doors: [{ side: 'w', at: 4, w: 3 }],
+    windows: [{ side: 's', at: 3 }, { side: 's', at: 8 }, { side: 'n', at: 5.5 }, { side: 'e', at: 5 }],
+    fits: [
+      { kind: 'rune_altar', x: 5.5, z: 4.4, block: [1.3, 1.3] },
+      { kind: 'shelf', x: 2.6, z: 1.5, block: [1.3, 0.4] },
+      { kind: 'brazier', x: 9.1, z: 1.9, block: [0.4, 0.4] }, { kind: 'brazier', x: 9.1, z: 7.6, block: [0.4, 0.4] },
+      { kind: 'rug', x: 5.5, z: 7.6, len: 1.6 },
+    ],
+  },
+  {
+    // Chapter 4: the dragon hatchery, a timber roost barn in the bailey's west corner.
+    id: 'hatch_plot', style: 'timber', interior: 'hatchery', x: 50, z: 42, w: 14, d: 12, wallH: 4.2, roof: ROOF.rust, restore: 'hatchery',
+    doors: [{ side: 'e', at: 5, w: 3 }],
+    windows: [{ side: 's', at: 3.5 }, { side: 's', at: 10.5 }, { side: 'n', at: 4 }, { side: 'n', at: 10 }, { side: 'w', at: 6 }],
+    fits: [
+      { kind: 'nest', x: 4, z: 3.8, block: [1, 1] }, { kind: 'nest', x: 9, z: 6.5, block: [1, 1] }, { kind: 'nest', x: 4, z: 8.5, block: [1, 1] },
+      { kind: 'brazier', x: 11, z: 2.5, block: [0.4, 0.4] },
+      { kind: 'coal', x: 11.2, z: 9.6, block: [0.8, 0.6] }, { kind: 'crate', x: 1.9, z: 6.2, block: [0.5, 0.5] },
+    ],
+  },
+];
+
+const BUILDING = Object.fromEntries(KEEP_BUILDINGS.map((b) => [b.id, b]));
+/** World position of a point given in a building's own cells. */
+const inB = (id: string, x: number, z: number) => ({ x: BUILDING[id].x + x, z: BUILDING[id].z + z });
+
+/**
+ * The keep: a big floating island laid out in districts around the portal court where you arrive.
+ * North, through a gatehouse, the walled inner keep (bailey, great hall, rune and hatchery plots);
+ * west, the smithing quarter (smelter house and anvil yard); east, the bank and its side vault;
+ * south-east, the Quartermaster's shop and market stalls; south-west, the alchemy plot and garden.
+ */
 export function buildKeep(seed: number): ZoneLayout {
-  const w = 96, h = 96;
+  const w = 150, h = 150;
   const G = new Gen(w, h, seed, Cell.Void, Ground.Grass);
-  const C = { x: 48, z: 49 };
-  const plaza = { x: 48, z: 44, r: 11 };
-  // The island: a big noise-edged disc.
+  const C = { x: 75, z: 72 };
+  // Island: a rounded, noise-edged square (a superellipse), so the districts fill its corners.
+  const reach = (x: number, z: number) => (Math.abs(x - C.x) ** 2.6 + Math.abs(z - C.z) ** 2.6) ** (1 / 2.6);
   for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
     const a = Math.atan2(z + 0.5 - C.z, x + 0.5 - C.x);
-    const edge = 37 + (G.noise(Math.cos(a) * 3 + 10, Math.sin(a) * 3 + 10) - 0.5) * 9;
-    if (Math.hypot(x + 0.5 - C.x, z + 0.5 - C.z) < edge) G.l.cells[G.idx(x, z)] = Cell.Ground;
+    const edge = 66 + (G.noise(Math.cos(a) * 3 + 10, Math.sin(a) * 3 + 10) - 0.5) * 8;
+    if (reach(x + 0.5, z + 0.5) < edge) G.l.cells[G.idx(x, z)] = Cell.Ground;
   }
-  // Roads first (reserved), then the plaza.
-  const roads = [
-    G.road([{ x: 48, z: 80 }, { x: 47, z: 68 }, { x: 48, z: 55 }], 3.2, Ground.Stone, 0.2),
-    G.road([{ x: 48, z: 33 }, { x: 48, z: 22 }], 3.2, Ground.Stone, 0.2),
-    G.road([{ x: 58, z: 44 }, { x: 62, z: 44 }], 3, Ground.Stone, 0.2),
-    G.road([{ x: 38, z: 44 }, { x: 33, z: 44 }], 3, Ground.Stone, 0.2),
-    G.road([{ x: 55, z: 51 }, { x: 60, z: 57 }], 2.6, Ground.Stone, 0.2),
-    G.road([{ x: 58, z: 57 }, { x: 70, z: 54 }, { x: 76, z: 52 }], 2.4, Ground.Path, 0.4),
-    G.road([{ x: 40, z: 52 }, { x: 34, z: 62 }, { x: 34, z: 70 }], 2.4, Ground.Path, 0.4),
-    G.road([{ x: 40, z: 36 }, { x: 32, z: 26 }], 2.2, Ground.Path, 0.4),
-    G.road([{ x: 56, z: 36 }, { x: 66, z: 26 }], 2.2, Ground.Path, 0.4),
-  ];
-  void roads;
-  G.clearing(plaza.x, plaza.z, plaza.r, Ground.Stone, 0.4);
-  // Gardens: a pond with reeds east, an orchard south-west, a training yard east.
-  G.lake(74, 66, 5.5, Fluid.Water, 1.5);
-  G.clearing(76, 52, 5, Ground.Dirt, 1);
-  for (const [x, z] of [[74, 50], [77, 53], [79, 50]]) G.prop('dummy', x, z, Math.PI, 1, 0.5);
-  for (let x = 22; x <= 32; x += 3.4) for (let z = 60; z <= 76; z += 3.4) {
-    const i = G.idx(Math.floor(x), Math.floor(z));
-    if (G.l.cells[i] === Cell.Ground && !G.reserved[i]) G.l.cells[i] = Cell.Tree;
+  // Every district stands on solid ground, whatever the rim noise did.
+  for (const [x0, z0, x1, z1] of [[43, 12, 107, 64], [15, 62, 45, 102], [99, 65, 135, 88], [88, 100, 118, 122], [28, 101, 50, 122], [60, 80, 90, 112]]) {
+    for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) G.l.cells[G.idx(x, z)] = Cell.Ground;
   }
-  G.prop('well', 40, 62, 0, 1, 1.1);
-  G.prop('landing', 48, 81);
-  G.l.entry = { x: 48, z: 79 };
-  G.reserve(48, 81, 4);
-  G.prop('keep_hall', 48, 16, 0, 1);
-  G.reserve(48, 16, 8);
-  // The hall and its towers block movement.
-  for (let z = 8; z < 23; z++) for (let x = 34; x < 63; x++) if (Math.abs(x + 0.5 - 48) < 7.5 && z < 21) G.l.cells[G.idx(x, z)] = Cell.Blocked;
+
+  // ─── Roads and open spaces (reserved before anything is built) ─────────────
+  const court = { x: 75, z: 95 };
+  G.clearing(court.x, court.z, 14, Ground.Stone, 0.6);
+  G.road([{ x: 75, z: 84 }, { x: 75, z: 72 }, { x: 75, z: 62 }], 4.4, Ground.Stone, 0.2);
+  G.road([{ x: 62, z: 95 }, { x: 50, z: 93 }, { x: 41, z: 90 }, { x: 36, z: 89 }], 3.6, Ground.Stone, 0.2);
+  G.road([{ x: 38.5, z: 86 }, { x: 38.8, z: 80 }, { x: 38.5, z: 73.5 }], 2.8, Ground.Stone, 0.2);
+  G.road([{ x: 28.5, z: 80 }, { x: 28.5, z: 86 }], 3, Ground.Stone, 0.2);
+  G.road([{ x: 88, z: 95 }, { x: 100, z: 92 }, { x: 112, z: 88 }], 4, Ground.Stone, 0.2);
+  G.road([{ x: 98, z: 93 }, { x: 97.5, z: 104 }, { x: 99, z: 116 }, { x: 108, z: 117.5 }], 3.2, Ground.Stone, 0.2);
+  G.road([{ x: 67, z: 106 }, { x: 56, z: 112 }, { x: 46, z: 117 }, { x: 38.5, z: 117 }], 2.8, Ground.Path, 0.4);
+  // Inside the walls: gate to the hall door round a statue plaza, branching to the two plots.
+  G.road([{ x: 75, z: 58 }, { x: 75, z: 48 }, { x: 75, z: 40 }], 3.6, Ground.Stone, 0.2);
+  G.road([{ x: 65, z: 48 }, { x: 70, z: 49.5 }, { x: 80, z: 49.5 }, { x: 87, z: 49 }], 2.6, Ground.Path, 0.3);
+  G.clearing(75, 48.5, 3.6, Ground.Stone, 0.3);
+  // Anvil yard, bank and shop forecourts, market square, alchemy garden.
+  G.clearing(30.5, 90.5, 9, Ground.Stone, 0.8);
+  G.verge(30.5, 90.5, 14);
+  G.clearing(112, 88, 4, Ground.Stone, 0.6);
+  G.clearing(93, 110, 5, Ground.Stone, 0.8);
+  G.clearing(46, 110, 4.5, Ground.Dirt, 1);
+  // The bailey lawn stays open (trees only where planted below).
+  for (let z = 18; z < 58; z++) for (let x = 49; x < 101; x++) if (!G.reserved[G.idx(x, z)]) G.reserved[G.idx(x, z)] = 3;
+
+  // ─── Buildings ─────────────────────────────────────────────────────────────
+  for (const b of KEEP_BUILDINGS) G.building(b);
+  // Woods thin out around every building, so none is swallowed by the rim forest.
+  for (const b of KEEP_BUILDINGS) G.verge(b.x + b.w / 2, b.z + b.d / 2, Math.max(b.w, b.d) / 2 + 7);
+
+  // ─── Curtain wall, towers and gatehouse around the inner keep ──────────────
+  const wall = (x: number, z: number, len: number, rot: number) => {
+    G.prop('curtain', x, z, rot).len = len;
+    const along = Math.abs(Math.sin(rot)) < 0.5;
+    blockRect(G, x, z, along ? len / 2 : 1, along ? 1 : len / 2, 0);
+  };
+  wall(75, 17, 50, Math.PI);
+  wall(48, 38, 38, -Math.PI / 2);
+  wall(102, 38, 38, Math.PI / 2);
+  wall(61.3, 59, 20.6, 0);
+  wall(88.7, 59, 20.6, 0);
+  for (const [x, z] of [[48, 17], [102, 17], [48, 59], [102, 59]]) {
+    G.prop('wall_tower', x, z);
+    blockRect(G, x, z, 3, 3, 0);
+  }
+  G.prop('gatehouse', 75, 59).len = 4;
+  for (const sx of [-1, 1]) blockRect(G, 75 + sx * 3.7, 59, 1.7, 2, 0);
+
+  // ─── Portal court: arrival dais, the portal ring, the Warden ───────────────
+  G.prop('landing', 75, 101);
+  G.l.entry = { x: 75, z: 99.2 };
+  G.reserve(75, 101, 4);
+
+  // ─── Stations (bank, furnace and shop first: the inspect tool frames the first few) ──
+  const st = (kind: StationKind, id: string, p: Vec2, rot = 0, block = 0.1) => G.station(kind, id, p.x, p.z, rot, block);
+  st('bank', 'bank', inB('bank', 10, 6.5));
+  st('furnace', 'furnace', inB('smelter', 8.5, 2.6));
+  st('shop', 'shop', inB('shop', 7.5, 4.5));
+  st('restore', 'board', inB('great_hall', 11, 3.4), 0, 0.6);
+  st('anvil', 'anvil', { x: 27.5, z: 89.5 }, 0, 0.9);
+  st('restore', 'emberforge', { x: 33.5, z: 91 }, 0, 1.3);
+  st('npc', 'warden', { x: 81.5, z: 101 }, -Math.PI * 0.6, 0.5);
+  st('npc', 'quartermaster', inB('shop', 7.5, 2.9), 0, 0.4);
+  // The two counters block their row (customers stand in front).
+  blockRect(G, inB('bank', 10, 6.5).x, inB('bank', 10, 6.5).z, 3.1, 0.6, 0);
+  blockRect(G, inB('shop', 7.5, 4.5).x, inB('shop', 7.5, 4.5).z, 2.6, 0.6, 0);
   for (const a of KEEP_ARCHES) {
     const rad = (a.angle * Math.PI) / 180;
-    const x = plaza.x + Math.cos(rad) * 9.2, z = plaza.z + Math.sin(rad) * 9.2;
-    G.station('portal', a.id, x, z, Math.atan2(plaza.x - x, plaza.z - z), 1.4);
+    const x = court.x + Math.cos(rad) * 10.5, z = court.z + Math.sin(rad) * 10.5;
+    G.station('portal', a.id, x, z, Math.atan2(court.x - x, court.z - z), 1.4);
   }
-  // The bank vault faces the camera (door, coin pediment) with a paved forecourt before its steps.
-  G.clearing(65, 46.6, 2.6, Ground.Stone, 0.4);
-  G.station('bank', 'bank', 65, 42.5, 0, 2.2);
-  blockRect(G, 65, 42.5, 2.9, 2.0, 0);
-  G.station('furnace', 'furnace', 31.5, 40, Math.PI / 2, 1.5);
-  G.station('anvil', 'anvil', 33.5, 47.5, Math.PI / 2, 0.9);
-  G.station('restore', 'emberforge', 29.5, 47, Math.PI / 2, 1.3);
-  G.station('shop', 'shop', 62, 60, -Math.PI * 0.75, 1.8);
-  G.station('npc', 'quartermaster', 60.2, 58.4, -Math.PI * 0.75, 0.5);
-  G.station('npc', 'warden', 52, 56, Math.PI, 0.5);
-  G.station('restore', 'board', 39.5, 59, Math.PI * 0.8, 0.8);
-  // Restoration sites turn their gable fronts (door, emblem, sign) toward the camera.
-  for (const [id, x, z, rot, r] of [['vault_expanded', 70.5, 34.5, -0.55, 1.8], ['alchemy_lab', 30, 24, 0.6, 2.6], ['rune_altar', 67, 24, -0.6, 2.6], ['hatchery', 36, 73, 0.75, 2.4]] as [string, number, number, number, number][]) {
-    G.station('restore', id, x, z, rot, r);
-    blockRect(G, x, z, 2.35, 1.8, rot);
-  }
-  for (const [x, z] of [[40, 53], [56, 53], [40, 35], [56, 35], [44.5, 66], [51.5, 66], [44.5, 74], [51.5, 74]]) G.prop('lamp', x, z, 0, 1, 0.4);
-  G.prop('signpost', 51, 64, 0.4, 1, 0.3);
+  // Restoration markers stand by each plot's door (the side vault's is inside the bank).
+  st('restore', 'vault_expanded', inB('bank', 17.5, 12.3), -Math.PI / 2, 0.3);
+  st('restore', 'alchemy_lab', inB('alchemy_plot', 3.2, 11.3), 0, 0.3);
+  st('restore', 'rune_altar', inB('rune_plot', -1.6, 2.4), Math.PI / 2, 0.3);
+  st('restore', 'hatchery', inB('hatch_plot', 15.6, 3.6), -Math.PI / 2, 0.3);
+
+  // ─── Dressing ──────────────────────────────────────────────────────────────
+  // Real lights only at the court, the gate and the two busiest doors; lamp posts elsewhere.
+  for (const [x, z] of [[62.5, 95.5], [87.5, 95.5], [71, 64], [79, 64], [108, 86], [104.5, 118.5]]) G.prop('lamp', x, z, 0, 1, 0.4);
+  for (const [x, z] of [[70.5, 43], [79.5, 43], [45, 91.5], [96, 100], [58, 111], [39, 83], [30.8, 116], [115.5, 86]]) G.prop('lamp_post', x, z, 0, 1, 0.4);
+  // The yard: braziers either side of the Emberforge hearth, a rack and crates.
+  G.prop('brazier', 31, 94.5, 0, 1, 0.45);
+  G.prop('brazier', 36, 94.5, 0, 1, 0.45);
+  G.prop('weapon_rack', 23.5, 93.5, 0.3, 1, 1.1);
+  G.prop('crates', 22.5, 86.5, 0.4, 1, 0.9);
+  G.prop('barrels', 36.5, 84.8, 0, 1, 0.9);
+  // Bailey: statue plaza, a well, training dummies and a bench of barrels by the hall.
+  G.prop('statue', 75, 48.5, 0, 1, 1.3);
+  G.prop('well', 83.5, 53.5, 0, 1, 1.1);
+  for (const [x, z] of [[66.5, 54], [69, 55.5], [64, 55.5]]) G.prop('dummy', x, z, Math.PI, 1, 0.5);
+  G.prop('barrels', 91.5, 38.5, 0, 1, 0.9);
+  // Market stalls between the court road and the shop, crates and barrels by the shop.
+  G.prop('stall', 92, 106.5, Math.PI / 2, 1, 1.6).len = 0;
+  G.prop('stall', 92.5, 113.5, Math.PI / 2, 1, 1.6).len = 1;
+  G.prop('crates', 116.5, 116.5, 0.2, 1, 0.9);
+  G.prop('barrels', 101.5, 101.5, 0, 1, 0.9);
+  // Alchemy garden: herb beds and a pond.
+  G.prop('herb_bed', 48, 107, Math.PI / 2, 1, 1.2);
+  G.prop('herb_bed', 51.5, 107, Math.PI / 2, 1, 1.2);
+  G.lake(52, 119, 4.5, Fluid.Water, 1.2);
+  G.prop('signpost', 63, 100, 0.5, 1, 0.3);
+  G.prop('signpost', 88.5, 91.5, -0.4, 1, 0.3);
+  G.prop('crates', 22.5, 81.5, 0.3, 1, 0.9);
+
   // The hero is staged here for character creation and the pose tools; keep every camera spot
   // around it clear, or the near plane slices whatever prop sits there (the old "purple spike").
   for (const c of STAGE_CAMERAS) G.reserve(KEEP_STAGE.x + c.x, KEEP_STAGE.z + c.z, 2);
   G.reserve(KEEP_STAGE.x, KEEP_STAGE.z, 3);
-  // Woods and boulders thicken toward the rim; the middle stays open lawn.
+
+  // Trees: a garden in each back corner of the bailey, woods thickening toward the rim.
+  for (let z = 19; z < 57; z++) for (let x = 49; x < 101; x++) {
+    const i = G.idx(x, z);
+    if (G.l.cells[i] !== Cell.Ground || G.reserved[i] === 1) continue;
+    const garden = (x < 59 && z < 40) || (x > 91 && z < 43) || z < 21;
+    if (garden && G.rng() < 0.3 + (G.noise(x * 0.2, z * 0.2) - 0.5) * 0.4) G.l.cells[i] = G.rng() < 0.08 ? Cell.Rock : Cell.Tree;
+  }
+  // Small groves break up the lawns between the districts.
+  for (const [gx, gz, r] of [[57, 73, 3.2], [93, 69, 3.6], [42, 63, 3], [111, 59, 3.4], [86, 118, 3], [119, 96, 2.6], [62, 124, 2.8], [52, 83, 2.2]]) {
+    G.blob(gx, gz, r, 1, (i) => {
+      if (G.l.cells[i] === Cell.Ground && !G.reserved[i] && G.rng() < 0.6) G.l.cells[i] = G.rng() < 0.1 ? Cell.Rock : Cell.Tree;
+    });
+  }
   G.scatter((x, z) => {
-    const d = Math.hypot(x - C.x, z - C.z);
-    return Math.max(0, (d - 26) / 12) * 0.45 + (G.noise(x * 0.08, z * 0.08) > 0.62 ? 0.12 : 0);
-  }, 0.18);
+    if (x > 45 && x < 105 && z > 13 && z < 62) return 0;
+    const d = reach(x, z);
+    return Math.max(0, (d - 48) / 14) * 0.5 + (G.noise(x * 0.08, z * 0.08) > 0.64 ? 0.1 : 0);
+  }, 0.16);
   G.connect();
   return G.l;
 }

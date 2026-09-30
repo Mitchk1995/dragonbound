@@ -244,6 +244,8 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
       // Points of interest, seen through the real gameplay camera (enemies frozen).
       const pois: [string, number, number][] = [['entry', L.entry.x, L.entry.z]];
       for (const s of L.stations.slice(0, 8)) pois.push([`${s.kind}-${s.id}`, s.x, s.z + 2.2]);
+      // Enterable buildings: stand the hero in the middle of each floor (the roof lifts off).
+      for (const b of L.buildings ?? []) pois.push([`inside-${b.id}`, b.x + b.w / 2, b.z + b.d / 2 + 1], [`front-${b.id}`, b.x + b.w / 2, b.z + b.d + 5]);
       for (const n of L.nodes.filter((n, i, a) => a.findIndex((m) => m.ore === n.ore) === i)) pois.push([`ore-${n.ore}`, n.x, n.z + 1.6]);
       L.packs.slice(0, 10).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
       if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 6]);
