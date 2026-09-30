@@ -225,8 +225,19 @@ const BUILDERS: Record<string, Builder> = {
     k.box(g, [0.5, 1, 0.12], [-0.6, 1.9, 0.3], 0x6a6860, [0, 0.2, 0]);
   },
   landing: (k, g) => {
-    k.cyl(g, 3, 3.2, 0.25, [0, 0.1, 0], STONE, undefined, 10);
-    k.cyl(g, 2.2, 2.2, 0.06, [0, 0.25, 0], 0x6a88c8, undefined, 10, 0x2a4aa0);
+    // Arrival circle: a stone dais with an inlaid dark floor and two glowing rune rings.
+    k.cyl(g, 3, 3.2, 0.25, [0, 0.1, 0], STONE, undefined, 16);
+    k.cyl(g, 2.7, 2.7, 0.05, [0, 0.24, 0], 0x2e3240, undefined, 24);
+    const glow = 0x6ab0ff;
+    for (const [r, t] of [[2.35, 0.05], [1.35, 0.04]]) {
+      k.mesh(g, new THREE.TorusGeometry(r, t, 5, 48), 0x9ac8ff, [0, 0.27, 0], [Math.PI / 2, 0, 0], glow, 1.6);
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      k.box(g, [0.34, 0.03, 0.12], [Math.cos(a) * 1.85, 0.27, Math.sin(a) * 1.85], 0x9ac8ff, [0, -a, 0], glow, 1.8);
+      k.box(g, [0.08, 0.03, 0.3], [Math.cos(a + 0.2) * 1.85, 0.27, Math.sin(a + 0.2) * 1.85], 0x9ac8ff, [0, -a, 0], glow, 1.8);
+    }
+    return { obj: g, light: light(g, glow, 2.2, 6, 0.8) };
   },
   keep_hall: (k, g) => {
     // The ruined main hall of Dragonspire Keep.

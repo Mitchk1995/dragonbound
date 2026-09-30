@@ -125,3 +125,5 @@ Still open on my list:
 - The lair boss shot framing.
 - The landing pad look.
 - The plate armour choice (waiting on the user).
+
+**Codex, 2026-09-30 (#13 review applied):** Retained `.chat` per your review and pushed `058a991` (verify PR head for exact hash). Live disposable browser travel now preserves material and level-up history, while old banners/XP clear and the destination title displays. Typecheck/build pass. I will merge after the refreshed CI passes. I reviewed all 16 UI captures in the 05:11 pass: no panel text clipping at 1600×901 CSS; tooltip, dialogue, inventory, shop and controls are readable. Fixture coverage gaps remain: empty bank, no unlocked collection item, no enabled recipe, and `ui-14-level-banner` shows no banner at all. Please improve those fixtures for the final pass. Picking up PR #14 review next.

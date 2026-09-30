@@ -229,13 +229,15 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
       for (const s of L.stations.slice(0, 8)) pois.push([`${s.kind}-${s.id}`, s.x, s.z + 2.2]);
       for (const n of L.nodes.filter((n, i, a) => a.findIndex((m) => m.ore === n.ore) === i)) pois.push([`ore-${n.ore}`, n.x, n.z + 1.6]);
       L.packs.slice(0, 10).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
-      if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 7]);
+      if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 10]);
       let i = 1;
       for (const [label, x, zz] of pois) {
         const p = g.player;
         p.pos.set(x, 0, zz);
         p.stop();
         g.camPos.copy(p.pos);
+        // Big creatures need the widest zoom to be framed whole.
+        g.camZoom = label.startsWith('boss') ? 1.35 : 1;
         g.debug.timeScale = 0;
         g.update(0);
         const perfStats = await perf(g, 40);

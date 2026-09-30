@@ -184,7 +184,7 @@ svg { display: block; }
 .xpdrop { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; gap: 6px; font-family: var(--serif); font-weight: 600; font-size: 17px; color: #fff; text-shadow: 0 1px 0 #000, 0 0 3px #000; animation: xprise 1.6s linear forwards; }
 @keyframes xprise { from { transform: translateY(0); opacity: 1; } 80% { opacity: 1; } to { transform: translateY(-240px); opacity: 0; } }
 
-.banner { position: absolute; top: 12%; left: 50%; transform: translateX(-50%); text-align: center; opacity: 0; }
+.banner { position: absolute; top: 17%; left: 50%; transform: translateX(-50%); text-align: center; opacity: 0; }
 .banner.show { animation: banner 3.4s ease-out forwards; }
 @keyframes banner { 0% { opacity: 0; transform: translateX(-50%) scale(0.7); } 8% { opacity: 1; transform: translateX(-50%) scale(1.06); } 14% { transform: translateX(-50%) scale(1); } 82% { opacity: 1; } 100% { opacity: 0; } }
 .banner .lvl { font-family: var(--serif); font-size: 20px; color: var(--c); text-shadow: 0 0 20px var(--c), 0 2px 2px #000; display: flex; flex-direction: column; align-items: center; }
@@ -321,7 +321,8 @@ svg { display: block; }
 .recipes { display: flex; flex-direction: column; gap: 10px; max-height: 520px; }
 .rg-title { font-family: var(--serif); font-size: 14px; letter-spacing: 2px; color: var(--gold); margin-bottom: 4px; }
 .recipe { display: flex; align-items: center; gap: 10px; padding: 4px; margin-bottom: 4px; border-radius: 4px; background: rgba(0,0,0,0.22); }
-.recipe.blocked { opacity: 0.6; }
+.recipe.blocked { opacity: 0.88; }
+.recipe.blocked .rc-name { color: var(--dim); }
 .rc-main { flex: 1; min-width: 0; }
 .rc-name { font-weight: 700; }
 .rc-name .lv { font-weight: 400; font-size: 12px; color: var(--ok); margin-left: 6px; }
