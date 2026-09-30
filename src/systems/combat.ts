@@ -388,7 +388,7 @@ export class Combat {
       g.sfx.play('explode', 0.5, 1.2);
       g.shake(0.15, 0.15);
       if (Math.hypot(g.player.x - x, g.player.z - z) < 1.7 + g.player.radius * 0.6) this.damagePlayer(12, source);
-    });
+    }, source);
     g.fx.add(rock, dur, (f) => {
       rock.position.y = 0.3 + 14 * f;
       g.glow.spawn(rock.position.x, rock.position.y, rock.position.z, 0, 2, 0, 0.3, 0.3, PAL.ember, 0, 0);
