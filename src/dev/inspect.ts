@@ -99,7 +99,9 @@ export async function runInspect(g: Game, suites: string) {
   await frames(10);
 
   try {
-    if (want('zones')) report.zones = await zonesSuite(g, shot);
+    // `zones:keep+mine` captures only those zones.
+    const zoneArg = suites.split(',').find((s) => s.startsWith('zones:'));
+    if (want('zones') || zoneArg) report.zones = await zonesSuite(g, shot, zoneArg?.slice(6).split('+'));
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     if (want('effects')) await effectsSuite(g, shot);
     if (want('boss')) await bossSuite(g, shot);
@@ -202,9 +204,9 @@ async function perf(g: Game, n = 60): Promise<PerfStats> {
 
 // ─── Zones ──────────────────────────────────────────────────────────────────
 
-async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
+async function zonesSuite(g: Game, shot: (n: string) => Promise<void>, only?: string[]) {
   const out: ZoneReport[] = [];
-  const zones = Object.keys(ZONES);
+  const zones = Object.keys(ZONES).filter((id) => !only || only.includes(id));
   for (const id of zones) {
     for (const variant of id === 'keep' ? ['ruined', 'restored'] : ['']) {
       if (variant) for (const k of Object.keys(g.save.keep)) g.save.keep[k] = variant === 'restored';
@@ -248,7 +250,7 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
       if (gates.length > 1) pois.push(['portal-court', gates.reduce((a, s) => a + s.x, 0) / gates.length, Math.max(...gates.map((s) => s.z)) + 3]);
       for (const s of L.stations.slice(0, 8)) pois.push([`${s.kind}-${s.id}`, s.x, s.z + 2.2]);
       // Enterable buildings: stand the hero in the middle of each floor (the roof lifts off).
-      for (const b of L.buildings ?? []) pois.push([`inside-${b.id}`, b.x + b.w / 2, b.z + b.d / 2 + 1], [`front-${b.id}`, b.x + b.w / 2, b.z + b.d + 5]);
+      for (const b of L.buildings ?? []) pois.push([`inside-${b.id}`, b.x + b.w / 2, b.z + b.d / 2 + 1], [`front-${b.id}`, b.x + b.w / 2, b.z + b.d + (b.wallH > 7 ? 11 : 5)]);
       for (const n of L.nodes.filter((n, i, a) => a.findIndex((m) => m.ore === n.ore) === i)) pois.push([`ore-${n.ore}`, n.x, n.z + 1.6]);
       L.packs.slice(0, 10).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
       if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 6]);
@@ -259,7 +261,7 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
         p.stop();
         g.camPos.copy(p.pos);
         // Big creatures need the widest zoom to be framed whole.
-        g.camZoom = label.startsWith('boss') ? 1.35 : 1;
+        g.camZoom = label.startsWith('boss') || label === 'front-keep' ? 1.35 : 1;
         g.debug.timeScale = 0;
         g.update(0);
         const perfStats = await perf(g, 40);
