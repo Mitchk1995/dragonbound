@@ -360,10 +360,12 @@ export function buildFoothills(seed: number): ZoneLayout {
   G.prop('tower_ruin', 66, 92, 0.6, 1, 3.0);
   G.verge(66, 99, 6);
   G.prop('dragon_bones', 100, 70, 0.7, 1);
+  // An old stone circle: seven menhirs, their carved faces turned to the altar stone at its heart.
   for (let k = 0; k < 7; k++) {
     const a = (k / 7) * Math.PI * 2;
-    G.prop('standing_stone', 34 + Math.cos(a) * 4.5, 136 + Math.sin(a) * 4.5, -a, 1, 0.5);
+    G.prop('standing_stone', 34 + Math.cos(a) * 4.5, 136 + Math.sin(a) * 4.5, Math.atan2(-Math.cos(a), -Math.sin(a)), 1, 0.5).len = k;
   }
+  G.prop('standing_stone', 34, 136, 0.4, 1, 1.0).len = 99;
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * Math.PI * 2 + 0.3;
     G.prop('pillar', 42 + Math.cos(a) * 6, 56 + Math.sin(a) * 6, a, 1, 0.5);
@@ -506,28 +508,32 @@ export function buildLair(seed: number): ZoneLayout {
       G.l.elev[i] = 5 + G.noise(x * 0.15, z * 0.15) * 3;
     }
   }
-  // Scorched floor: a blackened blast ring around the dragon's roost and a burnt band at the foot
-  // of the caldera wall; the fighting floor between stays the ruddier arena rock.
+  // The fighting floor is one calm sheet of ruddy arena rock: soot gradients (burns) darken it
+  // around the roost and along the lava seams, and the caldera wall's foot sits in its own shade.
   const home = { x: A.x, z: A.z - 2 };
-  G.blob(A.x, A.z, A.r + 1, 1, (i, x, z) => {
-    if (G.l.cells[i] !== Cell.Ground) return;
-    const dh = Math.hypot(x + 0.5 - home.x, z + 0.5 - home.z), da = Math.hypot(x + 0.5 - A.x, z + 0.5 - A.z);
-    const n = G.noise(x * 0.3 + 11, z * 0.3);
-    if (dh < 2.4 + n * 1.2 || (dh > 5.2 + n && dh < 7.0 + n * 1.4 && n > 0.32) || da > A.r - 2.6 + n * 1.5) G.l.ground[i] = Ground.Scorch;
-  });
+  const burns: NonNullable<ZoneLayout['burns']> = (G.l.burns = []);
+  burns.push({ x: home.x, z: home.z, r: 7.5, k: 0.8 });
   // A lava pool seeps out of the north-west wall; fissures run from it across the floor's edge.
   G.lake(39, 21, 3.6, Fluid.Lava, 1.2, true);
-  const seam = (x: number, z: number, dx: number, dz: number, v: number) => G.prop('lava_seam', x, z, Math.atan2(dx, dz), 1).len = v;
+  const seam = (x: number, z: number, dx: number, dz: number, v: number) => {
+    G.prop('lava_seam', x, z, Math.atan2(dx, dz), 1).len = v;
+    // Soot fans out along the fissure, strongest round its wide, hot source.
+    const l = 7.5 / Math.hypot(dx, dz);
+    burns.push({ x, z, x2: x + dx * l, z2: z + dz * l, r: 3.0, k: 0.6 }, { x, z, r: 4.0, k: 0.75 });
+  };
   seam(41.2, 24.8, -0.15, 1, 0);
   seam(42.6, 22.6, 1, 0.3, 1);
   seam(55, 25.2, 0.3, 1, 2);
   seam(36.5, 44.5, 1, -0.55, 3);
   // The hoard: a raised basalt ledge against the north-east wall, heaped with gold.
   G.prop('hoard_ledge', 58, 21.2, -0.25, 1, 3.4);
-  // Plates of cooled lava crust in the fighting ring (dark, so telegraphs read against them).
-  for (const [x, z, v] of [[42.4, 29.6, 0], [57.8, 32.6, 1], [46.8, 41.8, 2], [54.6, 44.2, 3], [39.2, 36.4, 4]]) G.prop('crust', x, z, Math.atan2(-(z - A.z), x - A.x), 1).len = v;
-  // Scorch marks where it has breathed fire; the biggest on the roost itself.
-  for (const [x, z, s, v] of [[home.x, home.z, 2.4, 0], [44.5, 38, 1.2, 1], [56.5, 39.5, 1.5, 2], [52.5, 24.8, 1.0, 3], [41, 31.5, 0.9, 4]]) G.prop('scorch', x, z, x, s).len = v;
+  // A few plates of cooled lava crust set into the fighting floor (flat, so telegraphs read on them).
+  for (const [x, z, v, sc] of [[43.2, 30.2, 0, 1], [56.4, 41.4, 1, 1.15], [44.6, 43.2, 2, 0.9]]) G.prop('crust', x, z, Math.atan2(-(z - A.z), x - A.x), sc).len = v;
+  // Scorch marks where it has breathed fire: a charred core in a wide, soft burn.
+  for (const [x, z, s, v] of [[home.x, home.z, 2.0, 0], [49.5, 39.5, 1.1, 1], [56.5, 34.5, 1.2, 2], [42.5, 36.5, 0.9, 3]]) {
+    G.prop('scorch', x, z, x, s).len = v;
+    burns.push({ x, z, r: 2.6 * s, k: 0.7 });
+  }
   // Blocky basalt columns frame the entrance and stand along the wall; ember crystals glow at the rim.
   for (const [x, z, v] of [[34.2, 28.5, 0], [45.5, 16.8, 1], [43.6, 48.6, 2], [56.8, 48.6, 3], [66.4, 42.5, 4]]) G.prop('basalt_columns', x, z, v * 1.3, 1, 1.3).len = v;
   for (const [x, z, v] of [[35.2, 39.8, 0], [61.2, 45.6, 1], [48.6, 16.2, 1]]) G.prop('ember_crystals', x, z, v * 2 + x, 1, 1.0).len = v;
@@ -538,7 +544,8 @@ export function buildLair(seed: number): ZoneLayout {
   G.prop('dragon_bones', 64.2, 31, 0.08, 0.72);
   for (let t = -8; t <= 6; t += 1.5) blockDisc(G.l, 64.2 + t * 0.08, 31 + t, 0.7);
   for (const [x, z, v] of [[52.8, 23.8, 1], [46.2, 21.2, 2], [38.6, 44.2, 3], [40.6, 46.2, 0], [60.4, 41.2, 2], [47.2, 19.2, 0], [62.2, 25.2, 1]]) G.prop('bones', x, z, x * 1.7, 1.2).len = v;
-  for (const [x, z, v] of [[39.6, 27.6, 10], [60.2, 36.8, 11], [47.2, 46.8, 12], [37.8, 36.6, 13]]) G.prop('rubble', x, z, x, 1).len = v;
+  // Rock fallen from the caldera wall lies at its foot, not out on the fighting floor.
+  for (const [x, z, v] of [[37.2, 25.4, 10], [61.4, 45.2, 12]]) G.prop('rubble', x, z, x, 1).len = v;
   G.pack(26, 104, ['drakeling', 'drakeling'], 6);
   G.pack(88, 79, ['drakeling', 'drakeling', 'drakeling'], 6);
   G.pack(44, 64, ['drakeling', 'kobold', 'kobold'], 6);

@@ -25,6 +25,12 @@ const SPLAT: Record<number, number> = {
   [Ground.Arena]: 2, [Ground.Stone]: 2, [Ground.Cave]: 3, [Ground.Scorch]: 3,
 };
 
+function distToSeg(px: number, pz: number, ax: number, az: number, bx: number, bz: number) {
+  const dx = bx - ax, dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz || 1)));
+  return Math.hypot(px - ax - dx * t, pz - az - dz * t);
+}
+
 /** Smooth 2D value noise in 0..1 (bilinear-smoothstep over a hashed lattice). */
 export function smoothNoise(seed: number) {
   const hash = (x: number, z: number) => {
@@ -173,6 +179,37 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       if (fullRelief(k)) continue;
       const f = 0.68 + 0.32 * sstep(0, 3.5, near[k]);
       for (let j = 0; j < 3; j++) col[k * 3 + j] *= f;
+    }
+  }
+  // Scorched floor: soot gradients around burn sources and along lava shores, darkening and greying
+  // the rock with a faint warm cast right at the heat (soft, so it reads as a burn, not a blotch).
+  if (layout.burns?.length || theme.lava) {
+    // Lava shores: vertices on a corner of a lava cell.
+    const lavaV = new Uint8Array(nV);
+    if (theme.lava) for (let i = 0; i < w * h; i++) if (layout.fluid[i] === Fluid.Lava) {
+      const x0 = i % w, z0 = (i - x0) / w;
+      for (const [xx, zz] of [[x0, z0], [x0 + 1, z0], [x0 + 1, z0 + 1], [x0, z0 + 1]]) lavaV[vi(xx, zz)] = 1;
+    }
+    const lavaD = theme.lava ? distField((k) => lavaV[k] === 1) : null;
+    const lavaShore = (k: number) => (lavaD ? 1 - sstep(0, 3.2, lavaD[k]) : 0);
+    for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+      const k = vi(x, z);
+      if (fullRelief(k) || (count[k] && fluidN[k] === count[k])) continue;
+      let burn = 0, heat = 0;
+      for (const b of layout.burns ?? []) {
+        const d = b.x2 === undefined ? Math.hypot(x - b.x, z - b.z) : distToSeg(x, z, b.x, b.z, b.x2, b.z2 ?? b.z);
+        const t = 1 - sstep(0, b.r, d);
+        burn = Math.max(burn, Math.pow(t, 1.5) * b.k);
+        heat = Math.max(heat, (1 - sstep(0, b.r * 0.35, d)) * b.k);
+      }
+      burn = Math.max(burn, lavaShore(k) * 0.5);
+      heat = Math.max(heat, lavaShore(k) * 0.6);
+      if (!burn) continue;
+      const r = col[k * 3], g = col[k * 3 + 1], b = col[k * 3 + 2];
+      const grey = (r * 0.3 + g * 0.5 + b * 0.2) * 0.42;
+      col[k * 3] = r + (grey * (1 + heat * 0.5) - r) * burn;
+      col[k * 3 + 1] = g + (grey * 0.9 - g) * burn;
+      col[k * 3 + 2] = b + (grey * 0.85 - b) * burn;
     }
   }
   const hgt = new Float32Array(nV);
