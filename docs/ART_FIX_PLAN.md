@@ -51,16 +51,16 @@ The owner rated 32 models and map areas and left notes. Average score 2.1 / 5. F
 - A pipeline for Blender-made props (GLB) with ruined/restored states and attached flames and lights.
 - Water and lava shaders: reflections, ripples, crusted lava in craters. Cave walls that rise into darkness.
 - Portal platform plus a flowing portal effect.
-- Re-author the mine (organic caverns, ore veins, distinct ore rocks), Foothills (organic edges, new name, goblin camp kit, shrine, new tower), lair (bigger arena, bone piles, no glowing sticks), and Sunken Ruin (asymmetric drowned city).
+- Re-author the mine (organic caverns, ore veins, distinct ore rocks), Foothills (organic edges, renamed Wyrmwood Foothills, goblin camp kit, shrine, new tower), lair (bigger arena, bone piles, no glowing sticks), and Sunken Ruin (asymmetric drowned city).
 
 ### Phase 4: the keep
 - About a 150×150 island with districts: great hall, smithing quarter, bank and vault, market, portal court, and profession lots.
 - Every building is a Blender model with ruined and restored states.
 
 ### Phase 5: HUD
-- A D2-style bottom console: orbs, potion belt, LMB/Q/W/E/RMB skill slots and a mini-menu. No top-right strip.
+- A D2-style bottom console: health and mana orbs (mana is new: skills cost mana), potion belt, LMB/Q/W/E/RMB skill slots and a mini-menu. No top-right strip.
 - Skill icons redrawn as painted, element-tinted tiles that match the world.
 
-## Open questions for the owner
-- A new name for the Ashen Foothills (the zone id stays `foothills`, so saves are safe).
-- Whether the right orb becomes a resource (mana/fury) in the HUD redesign.
+## Decisions
+- The Ashen Foothills becomes **Wyrmwood Foothills** (display name only; the zone id stays `foothills`, so saves are safe).
+- The right HUD orb is **mana**, one pool shared by every weapon style, because the player swaps weapons freely. Skills spend mana. A class-specific resource only makes sense if specialised classes arrive later.
