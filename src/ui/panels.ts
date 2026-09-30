@@ -45,6 +45,7 @@ export class Panels {
           <div class="statgrid">
             <span>Damage</span><b>${Math.round(st.dmgMin)}–${Math.round(st.dmgMax)}</b>
             <span>Attack speed</span><b>${st.atkSpeed.toFixed(2)}/s</b>
+            ${st.castSpeed > 1 ? `<span>Cast speed</span><b>+${Math.round((st.castSpeed - 1) * 100)}%</b>` : ''}
             <span>Critical</span><b>${Math.round(st.critChance * 100)}% ×${st.critMult.toFixed(2)}</b>
             <span>Life</span><b>${st.maxHp}</b>
             <span>Armour</span><b>${st.armor} <i>(−${Math.round((st.armor / (st.armor + 50)) * 100)}%)</i></b>
@@ -360,8 +361,9 @@ export class Panels {
     if (!el) return;
     this.ui.body(el, `
       <table class="keys">
-        <tr><td>Left-click</td><td>Move (hold to keep walking) · attack · pick up · mine · use</td></tr>
-        <tr><td>Shift + click</td><td>Attack in place toward the cursor</td></tr>
+        <tr><td>Left-click</td><td>Move (hold to keep walking) · pick up · mine · use</td></tr>
+        <tr><td>Click an enemy</td><td>Walk up and strike once · hold to keep attacking</td></tr>
+        <tr><td>Shift + click</td><td>Attack in place toward the cursor (hold to keep attacking)</td></tr>
         <tr><td>Q W E R</td><td>Abilities (they change with your weapon)</td></tr>
         <tr><td>1 · T</td><td>Healing potion · Veilstone recall home</td></tr>
         <tr><td>I · K · J · L</td><td>Inventory · Skills · Journal · Collection log</td></tr>

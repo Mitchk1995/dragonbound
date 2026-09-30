@@ -1,4 +1,5 @@
 import { BASES } from '../data/items';
+import { COMBAT_TUNING } from '../data/tuning';
 import type { AttackKind } from '../render/anim';
 import { BowDraw } from '../render/bowDraw';
 import { HeroDresser, makeModel } from '../render/registry';
@@ -12,7 +13,8 @@ import { Unit } from './unit';
 export type Command =
   | { kind: 'none' }
   | { kind: 'move'; x: number; z: number }
-  | { kind: 'attack'; target: Enemy }
+  /** `hold`: keep swinging (mouse held); otherwise walk into range, swing once and stop. */
+  | { kind: 'attack'; target: Enemy; hold: boolean }
   | { kind: 'pickup'; item: GroundItem }
   | { kind: 'interact'; target: Interactable };
 
@@ -45,6 +47,8 @@ export class Player extends Unit {
   action: Action | null = null;
   dash: Dash | null = null;
   attackCd = 0;
+  /** Basic attacks started, ever (lets a click tell whether its swing has begun). */
+  swings = 0;
   cds: Record<string, number> = {};
   invulnT = 0;
   nextShotCrit = false;
@@ -64,7 +68,7 @@ export class Player extends Unit {
 
   constructor() {
     super(makeModel('hero'), 0.45, 100);
-    this.turnSpeed = 18;
+    this.turnSpeed = COMBAT_TUNING.hero.turnSpeed;
     this.dresser = new HeroDresser(this.model);
     this.bow = new BowDraw(this.model.root);
   }
@@ -114,9 +118,12 @@ export class Player extends Unit {
     this.repathT = 0.12;
   }
 
-  attack(target: Enemy) {
-    if (this.cmd.kind === 'attack' && this.cmd.target === target) return;
-    this.setCmd({ kind: 'attack', target });
+  attack(target: Enemy, hold = false) {
+    if (this.cmd.kind === 'attack' && this.cmd.target === target) {
+      this.cmd.hold = hold;
+      return;
+    }
+    this.setCmd({ kind: 'attack', target, hold });
   }
 
   pickup(item: GroundItem) {
@@ -133,9 +140,12 @@ export class Player extends Unit {
     this.path = [];
   }
 
-  /** True while an attack/cast animation roots the player before its hit frame. */
+  /**
+   * True while a leap/roll or an attack/cast animation commits the player. Swings are committed
+   * start to finish (Diablo 2 style): orders given meanwhile wait and run as soon as it ends.
+   */
   get rooted() {
-    return !!this.dash || (!!this.action && !this.action.done);
+    return !!this.dash || !!this.action;
   }
 
   update(dt: number, g: Game) {
@@ -256,7 +266,10 @@ export class Player extends Unit {
         if (dist <= reach) {
           this.path = [];
           this.faceTo(t.x, t.z);
-          if (this.attackCd <= 0 && !this.action) g.combat.startBasicAttack(t);
+          if (this.attackCd <= 0 && !this.action) {
+            g.combat.startBasicAttack(t);
+            if (!cmd.hold) this.stop();
+          }
           return 0;
         }
         return this.approach(dt, g, t.x, t.z, speed);

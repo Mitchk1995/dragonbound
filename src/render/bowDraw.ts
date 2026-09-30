@@ -1,16 +1,20 @@
 import * as THREE from 'three';
+import { COMBAT_TUNING } from '../data/tuning';
 import type { AnimState } from './anim';
 
 const REST = new THREE.Vector3();
 
-/** Draw amount for the bow attack; must match the 'bow' case in anim.ts (full draw at 0.5, snap on release). */
+/** The arrow looses at the attack's impact frame (COMBAT_TUNING.impact). */
+const RELEASE = COMBAT_TUNING.impact;
+
+/** Draw amount for the bow attack; must match the 'bow' case in anim.ts (full draw at release, then snap). */
 export function bowDrawAmount(a: number) {
   if (a < 0) return 0;
-  if (a < 0.5) {
-    const t = Math.max(0, (a - 0.12) / 0.38);
+  if (a < RELEASE) {
+    const t = Math.max(0, (a - 0.12) / (RELEASE - 0.12));
     return t * t * (3 - 2 * t);
   }
-  return Math.max(0, 1 - (a - 0.5) / 0.06);
+  return Math.max(0, 1 - (a - RELEASE) / 0.06);
 }
 
 /**
@@ -120,7 +124,7 @@ export class BowDraw {
     this.span(this.strings[1], this.bottom, nock);
     if (this.arrow) {
       // Visible from the moment the draw hand holds the nock until release.
-      this.arrow.visible = drawing && anim.attack < 0.5 && pull > 0.1;
+      this.arrow.visible = drawing && anim.attack < RELEASE && pull > 0.1;
       if (this.arrow.visible) {
         // Arrow lies from the nock through the grip and a little beyond.
         const dir = REST.copy(this.grip).sub(nock);

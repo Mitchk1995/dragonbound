@@ -3,8 +3,10 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { holdTarget, pressTarget, type HoldMode } from './combat/holdInput';
 import type { PlayerStats } from './combat/stats';
 import type { AbilityKey } from './data/abilities';
+import { COMBAT_TUNING } from './data/tuning';
 import { KEEP_STAGE, ZONES } from './data/zones';
 import type { Enemy } from './entities/enemy';
 import type { GroundItem } from './entities/groundItem';
@@ -61,13 +63,20 @@ export class Game {
   zoneOrNull: ZoneRuntime | null = null;
   pet: Pet | null = null;
 
-  /** Screen position; NaN until the pointer is over the window (nothing is hovered before that). */
-  mouse = { x: NaN, y: NaN, down: false, shift: false, holdT: 0, heldOnGround: false };
+  /**
+   * Screen position; NaN until the pointer is over the window (nothing is hovered before that).
+   * `mode` is what holding the left button does (set by the press, see combat/holdInput.ts);
+   * `swingsAtPress` tells a quick click whether its swing has started.
+   */
+  mouse = { x: NaN, y: NaN, down: false, holdT: 0, mode: 'none' as HoldMode, swingsAtPress: 0 };
   ground = new THREE.Vector3();
   hovered: Enemy | null = null;
   hoveredItem: GroundItem | null = null;
   hoveredThing: Interactable | null = null;
   altHeld = false;
+  shiftHeld = false;
+  /** Game time each skill key last fired (a held key's auto-repeat is throttled to keyRepeat). */
+  private keyRepeatAt: Partial<Record<AbilityKey, number>> = {};
   camZoom = 1;
   camPos = new THREE.Vector3();
   shakeMag = 0;
@@ -576,15 +585,15 @@ export class Game {
       this.sfx.unlock();
       if (e.button !== 0 || this.mode !== 'play') return;
       this.mouse.down = true;
-      this.mouse.shift = e.shiftKey;
       this.mouse.holdT = 0;
+      this.shiftHeld = e.shiftKey;
       this.onClick(e.shiftKey);
     });
     document.addEventListener('mouseleave', () => {
       this.mouse.x = this.mouse.y = NaN;
     });
     window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.mouse.down = false;
+      if (e.button === 0 && this.mouse.down) this.onRelease();
     });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
     c.addEventListener('wheel', (e) => {
@@ -597,6 +606,7 @@ export class Game {
         e.preventDefault();
         return;
       }
+      if (e.key === 'Shift') this.shiftHeld = true;
       const t = e.target as HTMLElement;
       if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement) {
         if (e.key === 'Escape') t.blur();
@@ -606,13 +616,23 @@ export class Game {
         this.ui.handleKey(e);
         return;
       }
-      if (e.repeat && !['q', 'w', 'e', 'r'].includes(e.key.toLowerCase())) return;
+      const k = e.key.toUpperCase();
+      const skillKey = k === 'Q' || k === 'W' || k === 'E' || k === 'R' ? (k as AbilityKey) : null;
+      if (e.repeat) {
+        // A held skill key recasts, but no faster than keyRepeat and without refusal noise.
+        if (!skillKey || this.time - (this.keyRepeatAt[skillKey] ?? -1e9) < COMBAT_TUNING.input.keyRepeat) return;
+        this.keyRepeatAt[skillKey] = this.time;
+        this.combat.useAbility(skillKey, true);
+        return;
+      }
       if (this.ui.handleKey(e)) {
         e.preventDefault();
         return;
       }
-      const k = e.key.toUpperCase();
-      if (k === 'Q' || k === 'W' || k === 'E' || k === 'R') this.combat.useAbility(k as AbilityKey);
+      if (skillKey) {
+        this.keyRepeatAt[skillKey] = this.time;
+        this.combat.useAbility(skillKey);
+      }
       else if (k === '1') this.items.drinkPotion();
       else if (k === 'T') this.recall();
       else if (k === ' ') {
@@ -622,10 +642,12 @@ export class Game {
     });
     window.addEventListener('keyup', (e) => {
       if (e.key === 'Alt') this.altHeld = false;
+      if (e.key === 'Shift') this.shiftHeld = false;
     });
     window.addEventListener('blur', () => {
       this.altHeld = false;
-      this.mouse.down = false;
+      this.shiftHeld = false;
+      if (this.mouse.down) this.onRelease();
     });
     window.addEventListener('beforeunload', () => this.persist());
   }
@@ -692,15 +714,20 @@ export class Game {
 
   private onClick(shift: boolean) {
     const p = this.player;
+    const m = this.mouse;
+    m.mode = 'none';
     if (p.dead || this.traveling) return;
-    this.mouse.heldOnGround = false;
     if (this.recallT >= 0) this.recallT = -1;
+    m.swingsAtPress = p.swings;
     if (shift && this.zone.def.kind !== 'hub') {
+      // Attack in place; letting go of Shift mid-hold keeps attacking (never walks).
+      m.mode = 'attack';
       this.forceAttack();
       return;
     }
     if (this.hovered) {
-      p.attack(this.hovered);
+      m.mode = 'attack';
+      p.attack(this.hovered, true);
       return;
     }
     if (this.hoveredItem) {
@@ -711,25 +738,48 @@ export class Game {
       p.interact(this.hoveredThing);
       return;
     }
-    this.mouse.heldOnGround = true;
+    const near = pressTarget(this.zone.enemies, this.ground);
+    if (near) {
+      m.mode = 'attack';
+      p.attack(near, true);
+      return;
+    }
+    m.mode = 'move';
     p.moveTo(this, this.ground.x, this.ground.z);
     this.fx.moveMarker(this.ground.x, this.ground.z);
   }
 
+  /** Letting go: a click on an enemy that hasn't swung yet still walks up and swings once. */
+  private onRelease() {
+    const p = this.player, m = this.mouse;
+    m.down = false;
+    if (m.mode === 'attack' && p.cmd.kind === 'attack') {
+      if (p.swings > m.swingsAtPress) p.stop();
+      else p.cmd.hold = false;
+    }
+    m.mode = 'none';
+  }
+
   private updateHeldMouse(dt: number) {
-    if (!this.mouse.down || this.player.dead) return;
-    this.mouse.holdT += dt;
-    if (this.mouse.shift) {
-      if (!this.player.action && this.player.attackCd <= 0 && this.zone.def.kind !== 'hub') this.forceAttack();
+    const p = this.player, m = this.mouse;
+    if (!m.down || p.dead) return;
+    m.holdT += dt;
+    if (this.shiftHeld && m.mode !== 'none' && this.zone.def.kind !== 'hub') {
+      m.mode = 'attack';
+      if (!p.action && p.attackCd <= 0) this.forceAttack();
       return;
     }
-    if (!this.mouse.heldOnGround) {
-      if (this.player.cmd.kind === 'none' && this.hovered) this.player.attack(this.hovered);
+    if (m.mode === 'attack') {
+      // Keep swinging; when the target dies pick up the next one near the cursor, or stand ready.
+      const cur = p.cmd.kind === 'attack' ? p.cmd.target : null;
+      const next = holdTarget(this.zone.enemies, cur, this.hovered, this.ground, p, this.stats.range);
+      if (next) p.attack(next, true);
+      else if (!p.action) p.faceTo(this.ground.x, this.ground.z);
       return;
     }
-    if (this.mouse.holdT > 0.12) {
-      this.mouse.holdT = 0.02;
-      this.player.moveTo(this, this.ground.x, this.ground.z);
+    if (m.mode === 'move' && m.holdT > COMBAT_TUNING.input.walkRepeat) {
+      m.holdT = 0;
+      p.moveTo(this, this.ground.x, this.ground.z);
     }
   }
 

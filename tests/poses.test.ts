@@ -15,6 +15,10 @@ import { bowFacts, partCenter, partForward, shoulderCap, weaponFacts } from '../
 import { makeItem } from '../src/loot/itemGen';
 import { BASES as BASES_FOR_TEST } from '../src/data/items';
 import type { Slot } from '../src/types';
+import { COMBAT_TUNING } from '../src/data/tuning';
+
+/** The frame every attack lands on; swing keyframes are timed around it (anim.ts). */
+const IMPACT = COMBAT_TUNING.impact;
 
 beforeAll(async () => {
   const loader = new GLTFLoader();
@@ -101,20 +105,20 @@ describe('pose audit: one-handed melee weapons', () => {
         }
       });
       it('windup: raised above and behind the head', () => {
-        h.pose('swing', 0.38);
+        h.pose('swing', IMPACT - 0.11);
         const w = weaponFacts(h.root)!;
         expect(w.dir.y, 'blade points up').toBeGreaterThan(0.3);
         expect(w.tip.y, 'tip above head height').toBeGreaterThan(2.3);
         expect(w.dir.z, 'blade leans back').toBeLessThan(0.2);
       });
-      it('strike: blade sweeps forward with the edge leading', () => {
-        h.pose('swing', 0.5);
+      it('impact: blade sweeps forward with the edge leading', () => {
+        h.pose('swing', IMPACT);
         const w = weaponFacts(h.root)!;
         expect(w.dir.z, 'blade forward').toBeGreaterThan(0.5);
         expect(Math.abs(w.width.x), 'edge leads in the swing plane').toBeLessThan(0.45);
       });
       it('follow-through: blade forward and down', () => {
-        h.pose('swing', 0.62);
+        h.pose('swing', IMPACT + 0.12);
         const w = weaponFacts(h.root)!;
         expect(w.dir.y).toBeLessThan(0.1);
         expect(w.dir.z).toBeGreaterThan(0.4);
@@ -162,7 +166,7 @@ describe('pose audit: staff', () => {
     expect(w.dir.y).toBeGreaterThan(0.85);
   });
   it('cast: staff raised, head leaning toward the target', () => {
-    h.pose('cast', 0.5);
+    h.pose('cast', IMPACT);
     const w = weaponFacts(h.root)!;
     expect(w.dir.y).toBeGreaterThan(0.6);
     expect(w.dir.z).toBeGreaterThan(0.15);
@@ -174,7 +178,7 @@ describe('pose audit: bow', () => {
     it(`${weapon}: upright, string toward the archer, arrow at the target, nock on the draw hand`, () => {
       const h = hero({ weapon });
       const hand = h.dresser.socket('sock_handL')!;
-      h.pose('bow', 0.45);
+      h.pose('bow', IMPACT - 0.03);
       const full = bowFacts(h.root, hand)!;
       expect(full.upright).toBe(true);
       expect(full.stringBehindGrip).toBeLessThan(-0.3);
@@ -195,7 +199,7 @@ describe('pose audit: bow', () => {
 for (const [body, style, cap] of [['bronze_platebody', 'Knight', -0.25], ['steel_platebody', 'Warlord', -0.35], ['ember_platebody', 'Dragonguard', -0.35]] as const) {
   describe(`pose audit: ${style} plate pauldrons cap the shoulder in every pose`, () => {
     const h = lazyHero({ weapon: 'iron_longsword', body });
-    const poses: [AttackKind, number][] = [['swing', -1], ['swing', 0.38], ['swing', 0.5], ['slam', 0.45], ['cast', 0.5]];
+    const poses: [AttackKind, number][] = [['swing', -1], ['swing', IMPACT - 0.11], ['swing', IMPACT], ['slam', IMPACT - 0.1], ['cast', IMPACT]];
     for (const [kind, t] of poses) {
       it(`${kind} t=${t}`, () => {
         h.pose(kind, t);
