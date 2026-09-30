@@ -339,10 +339,11 @@ def whelp():
         box(body, (0.09, 0.1, 0.12), (0, 0.33 - i * 0.02, 0.06 - i * 0.18), dark, bevel=0.02)
 
     def neck(n, i):
-        box(n, (0.38, 0.38, 0.3), (0, 0, 0.05), main, bevel=0.06)
+        box(n, (0.44, 0.42, 0.36), (0, -0.01, 0.05), main, bevel=0.07)
     last = segments(body, 'neck', 2, (0, 0.2, 0.3), (0.1, 0.1), (-0.35, -0.35), neck)
 
-    head = pivot(last, 'head', (0, 0.04, 0.1), (0.4, 0, 0))
+    # Head sits down on the short neck (no gap under the chin in profile).
+    head = pivot(last, 'head', (0, -0.03, 0.0), (0.4, 0, 0))
     box(head, (0.72, 0.64, 0.66), (0, 0.2, 0.08), main, bevel=0.1)       # big cube head
     box(head, (0.44, 0.26, 0.24), (0, 0.06, 0.4), main, bevel=0.06)      # short square snout
     for s in (-1, 1):

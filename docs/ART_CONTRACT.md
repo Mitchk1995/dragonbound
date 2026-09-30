@@ -10,13 +10,14 @@ Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 
 Style: chunky stylized fantasy low-poly (Warcraft 3 / Torchlight). Flat shading, bold silhouettes, oversized
 hands/weapons/pauldrons, 1–2 accent colours. Keep each model under ~3k triangles.
-Characters and gear are modular and blocky: build them from chamfered boxes (`box(... bevel=)`), stacked slabs,
-wedges and tapered blocks (`beam`), cut gems (`facet_gem`) — a helm is a cube over the head cube, plate is stacked
-chamfered slabs, pauldrons are blocks stepping down the shoulder. Use blocks wherever scripted geometry shines
-(armour, helms, weapons, NPC/enemy bodies and clothing, belts, trims), and one or two angled facets where that reads
-better than a pure box; keep organic shapes only where they are made of many simple facets so small imperfections
-disappear (hair and beards, flames and glows, trees). Avoid smooth lofted domes, superellipse shells and fine curved
-detail on characters: they look wrong when slightly off.
+Mostly blocky and modular, not dogmatically: use organic shapes where they look better (e.g. bat wings, hair,
+trees, flames). Blocks are the default where scripted geometry shines (armour, helms, weapons, NPC/enemy bodies,
+belts, trims): chamfered boxes (`box(... bevel=)`), stacked slabs, wedges and tapered blocks (`beam`), cut gems
+(`facet_gem`) — a helm is a cube over the head cube, plate is stacked chamfered slabs, a pauldron is a block cap over
+the shoulder corner with lames stepping down the arm. Use angled panels or organic shapes wherever they read better
+than a box (hoods and cloth drapes, wing membranes, tapering horns and claws, hair and beards, flames). Pick the
+shape that looks best, not the most boxy one, and don't square off things that already look good. Avoid smooth
+lofted domes, superellipse shells and fine curved detail on characters: they look wrong when slightly off.
 
 ## Names are the interface
 Blender forces unique object names per file, so exports may carry `.001` suffixes; the game strips `.NNN`.
@@ -58,11 +59,17 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
 | `helm_full` | `sock_head` | cube-over-cube full helm with visor slit; hides hair and beard |
-| `body_chain` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | box mail shirt with a skirt block and small block shoulders; square studs, no bands |
-| `body_plate` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | stacked-slab cuirass + stepped block pauldrons (same as plate set `p`) |
+| `body_chain` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | box mail shirt with a skirt block, fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
+| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | stacked-slab cuirass, block pauldron caps, lames + rerebrace + couter down the upper arm (same as plate set `p`) |
 | `gloves` | `sock_handL`, `sock_gloveR` | gauntlet cuffs, slightly bigger than bare hands |
 | `boots` | `sock_footL`, `sock_footR` | covers shoe, cuff at shin |
 | `u_<unique id>` | as its base | hand-built unique look (own colours allowed; metal parts use `_common.metallic()` so they get the forged-metal finish) |
+
+Body armour covers the upper arm too. Only the pauldron's top block sits on `sock_shoulderX` (it follows the arm by
+75%, `anim.ts` SHOULDER_FOLLOW, so it articulates over the joint); the pauldron's side block, the lames, the
+rerebrace or mail sleeve and the couter hang on the palm sockets `sock_handL` / `sock_gloveR` (0.63 below the arm
+pivot), so they ride the upper arm exactly and never fan away from it (`gear.py` `block_pauldron`, `arm_box`).
+Keep shoulder caps only a little wider than the arm.
 
 Tier plate (full helm, platebody, gauntlets, boots) comes from `tools/blender/plate_variants.py` as
 `gear_<model>_<set>.glb`, one set per design (`items.ts` `PLATE_STYLE`): `p` for bronze / iron / steel (one design,
