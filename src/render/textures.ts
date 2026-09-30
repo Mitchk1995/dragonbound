@@ -3,8 +3,9 @@ import { mulberry32 } from '../core/rng';
 
 /**
  * Procedural surface textures. The Blender models have no UVs, so detail is projected
- * triplanar (object space for characters/gear, world space for the environment) and used
- * both to modulate albedo and as a bump map. Everything is generated at startup: no files.
+ * triplanar and used to modulate albedo and, for rock, as a gentle bump map. Everything is
+ * generated at startup: no files. Detail is opt-in per call site (stone props, rocks, walls,
+ * tree trunks): characters, gear, foliage and most props stay clean flat colour.
  */
 
 export type SurfaceKind =
@@ -16,22 +17,26 @@ interface SurfaceParams {
   scale: number;
   /** How strongly the texture darkens/lightens the base colour (0..1). */
   albedo: number;
-  /** Bump strength. */
+  /** Bump strength. 0 skips the bump entirely (albedo only, one texture fetch per plane). */
   bump: number;
 }
 
+/**
+ * Kept quiet on purpose: at game zoom any fine pattern reads as felt or wood grain, so only
+ * rock gets a (gentle) bump and every albedo swing stays small.
+ */
 export const SURFACES: Record<SurfaceKind, SurfaceParams> = {
-  metal: { scale: 1.1, albedo: 0.2, bump: 0.3 },
-  cloth: { scale: 4.5, albedo: 0.32, bump: 0.7 },
-  leather: { scale: 5, albedo: 0.24, bump: 0.45 },
-  wood: { scale: 1.5, albedo: 0.42, bump: 0.9 },
-  stone: { scale: 0.9, albedo: 0.45, bump: 1.2 },
-  skin: { scale: 3, albedo: 0.1, bump: 0.2 },
-  hair: { scale: 4, albedo: 0.4, bump: 0.8 },
-  scales: { scale: 0.4, albedo: 0.34, bump: 1.0 },
-  bark: { scale: 1.8, albedo: 0.5, bump: 1.3 },
-  leaves: { scale: 1.2, albedo: 0.45, bump: 1.1 },
-  generic: { scale: 1.8, albedo: 0.18, bump: 0.5 },
+  metal: { scale: 1.1, albedo: 0.1, bump: 0 },
+  cloth: { scale: 4.5, albedo: 0.1, bump: 0 },
+  leather: { scale: 5, albedo: 0.1, bump: 0 },
+  wood: { scale: 1.5, albedo: 0.12, bump: 0 },
+  stone: { scale: 0.9, albedo: 0.12, bump: 0.2 },
+  skin: { scale: 3, albedo: 0.05, bump: 0 },
+  hair: { scale: 4, albedo: 0.1, bump: 0 },
+  scales: { scale: 0.4, albedo: 0.1, bump: 0 },
+  bark: { scale: 1.8, albedo: 0.12, bump: 0 },
+  leaves: { scale: 1.2, albedo: 0.1, bump: 0 },
+  generic: { scale: 1.8, albedo: 0.1, bump: 0 },
 };
 
 const SIZE = 256;
@@ -106,23 +111,13 @@ function rock(seed: number): Gen {
 
 const GENERATORS: Record<SurfaceKind, () => Gen> = {
   metal: () => {
-    // Hammered plate: broad shallow dents plus fine brushing and a few scratches.
-    const dents = worley(11, 5), brush = tileNoise(12, 64, 3), soft = fbm(13, 3);
-    const scratches = Array.from({ length: 8 }, (_, i) => {
-      const r = mulberry32(100 + i);
-      return { x: r() * SIZE, y: r() * SIZE, a: r() * Math.PI, len: 20 + r() * 50 };
-    });
+    // Hammered plate: broad shallow dents only. No brushing or scratches: directional streaks read
+    // as wood grain and scratch lines as gashes (metal shine comes from the environment map).
+    const dents = worley(11, 5), soft = fbm(13, 3);
     return (x, y) => {
       const [f1] = dents(x, y);
       const dent = Math.min(1, f1 / 28);
-      let v = 0.4 + dent * dent * 0.3 + (soft(x, y) - 0.5) * 0.2 + (brush(x, y) - 0.5) * 0.08;
-      for (const s of scratches) {
-        const dx = x - s.x, dy = y - s.y;
-        const along = dx * Math.cos(s.a) + dy * Math.sin(s.a);
-        const across = -dx * Math.sin(s.a) + dy * Math.cos(s.a);
-        if (Math.abs(along) < s.len && Math.abs(across) < 0.8) v -= 0.15;
-      }
-      return v;
+      return 0.4 + dent * dent * 0.3 + (soft(x, y) - 0.5) * 0.2;
     };
   },
   cloth: () => {
@@ -226,7 +221,8 @@ export function groundTexture(): THREE.Texture {
   const hit = cache.get('ground');
   if (hit) return hit;
   const dirtN = fbm(201, 6), pebbles = worley(202, 20);
-  const grassN = fbm(203, 32, 2), grassSpeck = tileNoise(207, 128), grassClump = fbm(204, 6);
+  // Grass keeps only broad tonal patches: fine specks alias into fuzz at game zoom.
+  const grassN = fbm(203, 8, 2), grassClump = fbm(204, 6);
   const flag = worley(205, 5), flagN = fbm(206, 8);
   const cave = rock(208);
   const data = new Uint8Array(SIZE * SIZE * 4);
@@ -234,7 +230,7 @@ export function groundTexture(): THREE.Texture {
     for (let x = 0; x < SIZE; x++) {
       const [p1] = pebbles(x, y);
       const dirt = 0.35 + dirtN(x, y) * 0.45 + (p1 < 2.6 ? 0.12 : 0);
-      const grass = 0.3 + grassN(x, y) * 0.35 + grassSpeck(x, y) * 0.15 + (grassClump(x, y) - 0.5) * 0.3;
+      const grass = 0.35 + grassN(x, y) * 0.4 + (grassClump(x, y) - 0.5) * 0.3;
       const [f1, f2, id] = flag(x, y);
       const grout = Math.min(1, (f2 - f1) / 5);
       const stone = (0.4 + id * 0.25 + flagN(x, y) * 0.25) * (0.5 + 0.5 * Math.sqrt(grout));

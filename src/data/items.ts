@@ -9,6 +9,8 @@ export interface Palette {
   dark: number;
   /** Trim glows (emberforged). */
   glow?: boolean;
+  /** Forged metal: the role parts get a metallic finish that reflects light (smithed tiers). */
+  metal?: boolean;
 }
 
 export interface BaseItem {
@@ -111,7 +113,7 @@ TIER_ORDER.forEach((tierId, t) => {
       kind: p.kind,
       slot: p.slot,
       model: STYLED.has(p.model) ? `${p.model}_${PLATE_STYLE[tierId]}` : p.model,
-      palette: tier.palette,
+      palette: { ...tier.palette, metal: true },
       tier: tierId,
       minIlvl: p.kind === 'gear' ? tier.minIlvl + Math.floor(p.offset / 4) : undefined,
       req: p.kind === 'gear' ? { skill: isWeapon ? 'melee' : 'defence', level: tier.req } : { skill: 'mining', level: tier.req },

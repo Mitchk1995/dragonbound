@@ -4,7 +4,7 @@ import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { Cell, Ground, type ZoneLayout } from './layout';
 import { buildProp, type Prop } from './props';
-import { addPatch, applySurface } from '../render/surface';
+import { addPatch, applyGrade, applySurface, type Grade } from '../render/surface';
 import { buildTerrain, isRelief, smoothNoise } from './terrain';
 
 type TreeKind = ZoneTheme['trees'];
@@ -140,10 +140,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const e = new THREE.Euler();
-  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind, shadow = true) => {
+  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind, shadow = true, grade?: Grade) => {
     if (!mats.length) return;
     const mat = new THREE.MeshStandardMaterial({ color: cols ? 0xffffff : color, flatShading: true, roughness: 0.9 });
     if (surface) applySurface(mat, surface, 'world');
+    if (grade) applyGrade(mat, grade, 'local');
     if (occlude) makeOccludable(mat);
     // Bucket instances into CHUNK×CHUNK-cell tiles so off-screen tiles are frustum-culled
     // (one map-wide InstancedMesh is always drawn in full, shadows included).
@@ -170,6 +171,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   };
 
   // ─── Scenery: trees, boulders, walls, undergrowth ─────────────────────────
+  // Foliage is flat-shaded facets and per-instance colour, no texture; undersides sit in shade.
+  const CANOPY_GRADE: Grade = { low: 0.72, from: 1.0, to: 2.6 };
+  const BUSH_GRADE: Grade = { low: 0.7, from: 0, to: 0.9 };
   const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1.2, 5).translate(0, 0.6, 0);
   const canopy: Record<TreeKind, THREE.BufferGeometry> = {
     pine: mergeGeometries([
@@ -320,7 +324,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) {
     if (!trees[k].m.length) continue;
     inst(trunkGeo, trees[k].m, null, k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark');
-    inst(canopy[k], trees[k].m, trees[k].c, 0, true, k === 'ash' ? 'bark' : 'leaves');
+    inst(canopy[k], trees[k].m, trees[k].c, 0, true, undefined, true, CANOPY_GRADE);
   }
   inst(new THREE.DodecahedronGeometry(0.62, 0), rocks, rockCols, 0, true, 'stone');
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
@@ -331,7 +335,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     new THREE.BoxGeometry(0.4, 0.2, 0.44).translate(0.26, 0.4, -0.22),
   ])!;
   inst(masonry, walls, wallCols, 0, true, 'stone');
-  inst(new THREE.IcosahedronGeometry(0.7, 0).translate(0, 0.45, 0), bushes, bushCols, 0, false, 'leaves');
+  inst(new THREE.IcosahedronGeometry(0.7, 0).translate(0, 0.45, 0), bushes, bushCols, 0, false, undefined, true, BUSH_GRADE);
   inst(new THREE.ConeGeometry(0.035, 0.7, 3).translate(0, 0.35, 0), reeds, null, 0x6a7a3a, false, undefined, false);
   const flowerGeo = mergeGeometries([
     new THREE.CylinderGeometry(0.012, 0.012, 0.25, 3).translate(0, 0.125, 0).toNonIndexed(),
