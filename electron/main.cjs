@@ -29,6 +29,11 @@ if (INSPECT) {
     console.log('[inspect]', text);
     return true;
   });
+  // Lets the UI suite check smaller windows (e.g. 1280×720) in the same run.
+  ipcMain.handle('inspect:resize', (e, w, h) => {
+    BrowserWindow.fromWebContents(e.sender)?.setContentSize(w, h);
+    return true;
+  });
   ipcMain.handle('inspect:done', (_e, code) => {
     setTimeout(() => app.exit(code || 0), 50);
     return true;

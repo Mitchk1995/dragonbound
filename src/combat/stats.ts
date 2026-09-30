@@ -1,5 +1,5 @@
 import { BASES } from '../data/items';
-import { COMBAT_TUNING } from '../data/tuning';
+import { COMBAT_TUNING, MANA_TUNING } from '../data/tuning';
 import type { Item, SkillId, Slot, Style } from '../types';
 
 export interface PlayerStats {
@@ -13,6 +13,10 @@ export interface PlayerStats {
   critChance: number;
   critMult: number;
   maxHp: number;
+  /** One mana pool shared by every weapon style. */
+  maxMana: number;
+  /** Mana per second while fighting (out of combat adds MANA_TUNING.outOfCombatFrac). */
+  manaRegen: number;
   armor: number;
   regen: number;
   lifeOnHit: number;
@@ -44,6 +48,22 @@ export function sumAffixes(equipment: Partial<Record<Slot, Item | null>>): Recor
 
 export function maxHpFor(hitpointsLevel: number, bonusLife = 0) {
   return 40 + hitpointsLevel * 6 + bonusLife;
+}
+
+/** Max mana: grows with the best combat-style level, so it doesn't reset when you swap weapons. */
+export function maxManaFor(levels: Pick<Record<SkillId, number>, 'melee' | 'ranged' | 'magic'>) {
+  const M = MANA_TUNING;
+  return M.base + M.perLevel * Math.max(levels.melee, levels.ranged, levels.magic);
+}
+
+/** Mana per second at a given pool size (a bigger pool refills proportionally faster). */
+export function manaRegenFor(maxMana: number) {
+  return MANA_TUNING.regenBase + MANA_TUNING.regenFrac * maxMana;
+}
+
+/** Can a skill costing `cost` be cast from `mana`? (Float drift never blocks a cast.) */
+export function canAfford(mana: number, cost: number) {
+  return mana + 1e-6 >= cost;
 }
 
 export function computeStats(
@@ -82,6 +102,8 @@ export function computeStats(
     critChance: Math.min(0.75, 0.05 + get('critChance') / 100),
     critMult: 1.5 + get('critDmg') / 100,
     maxHp: maxHpFor(levels.hitpoints, get('life')),
+    maxMana: maxManaFor(levels),
+    manaRegen: manaRegenFor(maxManaFor(levels)),
     armor,
     regen: 0.5 + get('regen'),
     lifeOnHit: get('lifeOnHit'),

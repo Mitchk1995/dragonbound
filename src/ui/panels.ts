@@ -11,8 +11,10 @@ import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { generateItem, generateUnique, makeItem } from '../loot/itemGen';
 import { FUTURE_SKILLS, SKILL_INFO, levelProgress, xpForLevel } from '../progression/skills';
-import { SKILLS, SLOTS, type SkillId, type Slot, type Stance } from '../types';
+import { itemIconUrl } from '../render/icons3d';
+import { SKILLS, SLOTS, type Item, type SkillId, type Slot, type Stance } from '../types';
 import { cap, esc, fmt, itemSlot } from './dom';
+import { DRAG_THRESHOLD, swapSlots } from './hudLayout';
 import { icon } from './icons';
 import type { UI } from './ui';
 
@@ -29,59 +31,122 @@ export class Panels {
 
   constructor(private ui: UI, private g: Game) {}
 
-  // ─── Inventory & equipment ───────────────────────────────────────────────
+  // ─── Inventory (always-visible side panel tab) ──────────────────────────
 
   inventory() {
     const g = this.g, s = g.save;
     const el = this.ui.panel('inventory', 'Inventory');
     if (!el) return;
-    const equip = SLOTS.map((sl) => `<div class="eq eq-${sl}"><label>${SLOT_LABEL[sl]}</label>${itemSlot(s.equipment[sl], `data-eq="${sl}"`, '', icon(`slot_${sl}`, 40))}</div>`).join('');
     const inv = s.inventory.map((it, i) => itemSlot(it, `data-inv="${i}"`, it && BASES[it.base]?.kind === 'gear' && g.items.canEquip(it) ? 'unusable' : '')).join('');
-    const st = g.stats;
-    const mode = this.bankMode ? 'Click: deposit · Shift-click: deposit all of that item' : this.shopOpen ? 'Click: sell to the Quartermaster' : 'Click: equip · Right-click: drop';
+    const mode = this.bankMode === 'bank' || this.bankMode === 'deposit' ? '<span class="modechip">Click to deposit</span>' : this.shopOpen ? '<span class="modechip">Click to sell</span>' : '';
     this.ui.body(el, `
-      <div class="invwrap">
-        <div class="equip">${equip}
-          <div class="statgrid">
-            <span>Damage</span><b>${Math.round(st.dmgMin)}–${Math.round(st.dmgMax)}</b>
-            <span>Attack speed</span><b>${st.atkSpeed.toFixed(2)}/s</b>
-            ${st.castSpeed > 1 ? `<span>Cast speed</span><b>+${Math.round((st.castSpeed - 1) * 100)}%</b>` : ''}
-            <span>Critical</span><b>${Math.round(st.critChance * 100)}% ×${st.critMult.toFixed(2)}</b>
-            <span>Life</span><b>${st.maxHp}</b>
-            <span>Armour</span><b>${st.armor} <i>(−${Math.round((st.armor / (st.armor + 50)) * 100)}%)</i></b>
-            ${st.lifeOnHit ? `<span>Life on hit</span><b>${st.lifeOnHit}</b>` : ''}
-            ${st.xpMult > 1 ? `<span>XP bonus</span><b>+${Math.round((st.xpMult - 1) * 100)}%</b>` : ''}
-            ${st.cdr ? `<span>Cooldowns</span><b>−${Math.round(st.cdr * 100)}%</b>` : ''}
-          </div>
-        </div>
-        <div>
-          <div class="invgrid">${inv}</div>
-          <div class="invfoot"><span class="goldline">${icon('gold', 18)} ${fmt(s.gold)}</span><button class="btn" data-act="sort">Sort</button></div>
-          <div class="hint">${mode}</div>
-        </div>
-      </div>`);
+      <div class="invgrid ${mode ? 'moded' : ''}">${inv}</div>
+      <div class="invfoot">${mode || `<span class="goldline">${icon('gold', 18)} ${fmt(s.gold)}</span>`}<button class="btn sm" data-act="sort">Sort</button></div>`);
     el.querySelector('[data-act="sort"]')!.addEventListener('click', () => g.items.sort());
     el.querySelectorAll<HTMLElement>('[data-inv]').forEach((c) => {
       const i = Number(c.dataset.inv);
-      c.addEventListener('mouseenter', () => s.inventory[i] && this.ui.tooltip.item(s.inventory[i]!, c.getBoundingClientRect(), true));
+      c.addEventListener('mouseenter', () => {
+        const it = s.inventory[i];
+        if (it && !this.dragging) this.ui.tooltip.item(it, c.getBoundingClientRect(), true, this.invHint(it));
+      });
       c.addEventListener('mouseleave', () => this.ui.tooltip.hide());
       c.addEventListener('contextmenu', (e) => e.preventDefault());
       c.addEventListener('mousedown', (e) => {
         if (!s.inventory[i]) return;
         this.ui.tooltip.hide();
-        if (this.bankMode) g.items.deposit(i, e.shiftKey);
-        else if (this.shopOpen) g.items.sell(i);
-        else if (e.button === 2) g.items.dropFromInventory(i);
-        else if (BASES[s.inventory[i]!.base]?.kind === 'gear') g.items.equip(i);
+        if (e.button === 2) {
+          if (!this.bankMode && !this.shopOpen) g.items.dropFromInventory(i);
+          return;
+        }
+        if (e.button === 0) this.press(i, e);
       });
     });
+  }
+
+  private dragging = false;
+
+  private invHint(it: Item) {
+    if (this.bankMode) return 'Click: deposit · Shift-click: deposit all of it';
+    if (this.shopOpen) return 'Click: sell to the Quartermaster';
+    return `${BASES[it.base]?.kind === 'gear' ? 'Click: equip · ' : ''}Right-click: drop · Drag: move`;
+  }
+
+  /**
+   * A left press on an inventory item: released in place it's a click (equip / deposit / sell);
+   * moved past DRAG_THRESHOLD it becomes an OSRS-style drag that swaps two slots on release.
+   */
+  private press(i: number, e: MouseEvent) {
+    const g = this.g, s = g.save;
+    const x0 = e.clientX, y0 = e.clientY, shift = e.shiftKey;
+    let ghost: HTMLElement | null = null;
+    const move = (ev: MouseEvent) => {
+      if (!ghost && Math.hypot(ev.clientX - x0, ev.clientY - y0) >= DRAG_THRESHOLD) {
+        const it = s.inventory[i];
+        if (!it) return;
+        this.dragging = true;
+        ghost = document.createElement('div');
+        ghost.className = 'dragghost';
+        ghost.innerHTML = `<img src="${itemIconUrl(it)}" alt="">`;
+        document.body.appendChild(ghost);
+        document.querySelector(`[data-inv="${i}"]`)?.classList.add('dragfrom');
+        this.ui.tooltip.hide();
+      }
+      if (ghost) ghost.style.transform = `translate(${ev.clientX}px, ${ev.clientY}px)`;
+    };
+    const up = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      if (ghost) {
+        ghost.remove();
+        this.dragging = false;
+        const to = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-inv]');
+        if (to && swapSlots(s.inventory, i, Number(to.dataset.inv))) g.dirty = true;
+        this.ui.refresh();
+        return;
+      }
+      const it = s.inventory[i];
+      if (!it) return;
+      if (this.bankMode) g.items.deposit(i, shift);
+      else if (this.shopOpen) g.items.sell(i);
+      else if (BASES[it.base]?.kind === 'gear') g.items.equip(i);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }
+
+  // ─── Equipment ───────────────────────────────────────────────────────────
+
+  equipment() {
+    const g = this.g, s = g.save;
+    const el = this.ui.panel('equipment', 'Equipment');
+    if (!el) return;
+    const cell = (sl: Slot) => `<div class="eq eq-${sl}">${itemSlot(s.equipment[sl], `data-eq="${sl}"`, '', icon(`slot_${sl}`, 34))}</div>`;
+    const st = g.stats;
+    this.ui.body(el, `
+      <div class="doll">${SLOTS.map(cell).join('')}</div>
+      <div class="statgrid">
+        <span>Damage</span><b>${Math.round(st.dmgMin)}–${Math.round(st.dmgMax)}</b>
+        <span>Attack speed</span><b>${st.atkSpeed.toFixed(2)}/s</b>
+        ${st.castSpeed > 1 ? `<span>Cast speed</span><b>+${Math.round((st.castSpeed - 1) * 100)}%</b>` : ''}
+        <span>Critical</span><b>${Math.round(st.critChance * 100)}% ×${st.critMult.toFixed(2)}</b>
+        <span>Life</span><b>${st.maxHp}</b>
+        <span>Mana</span><b>${st.maxMana} <i>(+${st.manaRegen.toFixed(1)}/s)</i></b>
+        <span>Armour</span><b>${st.armor} <i>(−${Math.round((st.armor / (st.armor + 50)) * 100)}%)</i></b>
+        ${st.lifeOnHit ? `<span>Life on hit</span><b>${st.lifeOnHit}</b>` : ''}
+        ${st.xpMult > 1 ? `<span>XP bonus</span><b>+${Math.round((st.xpMult - 1) * 100)}%</b>` : ''}
+        ${st.cdr ? `<span>Cooldowns</span><b>−${Math.round(st.cdr * 100)}%</b>` : ''}
+      </div>`);
     el.querySelectorAll<HTMLElement>('[data-eq]').forEach((c) => {
       const sl = c.dataset.eq as Slot;
-      c.addEventListener('mouseenter', () => s.equipment[sl] && this.ui.tooltip.item(s.equipment[sl]!, c.getBoundingClientRect(), false));
+      c.addEventListener('mouseenter', () => {
+        const it = s.equipment[sl];
+        if (it) this.ui.tooltip.item(it, c.getBoundingClientRect(), false, 'Click: take off');
+        else this.ui.tooltip.text(`<div class="tt-name">${SLOT_LABEL[sl]}</div><div class="tt-dim">Empty. Click gear in your inventory to wear it.</div>`, c.getBoundingClientRect());
+      });
       c.addEventListener('mouseleave', () => this.ui.tooltip.hide());
       c.addEventListener('mousedown', () => {
         this.ui.tooltip.hide();
-        g.items.unequip(sl);
+        if (s.equipment[sl]) g.items.unequip(sl);
       });
     });
   }
@@ -104,42 +169,47 @@ export class Panels {
     const el = this.ui.panel('skills', 'Skills');
     if (!el) return;
     const total = SKILLS.reduce((t, k) => t + g.levels[k], 0) + FUTURE_SKILLS.length;
-    const rows = SKILLS.map((k) => {
+    const tiles = SKILLS.map((k) => {
       const p = levelProgress(s.skills[k]);
       const info = SKILL_INFO[k];
-      const next = this.milestones(k).filter((m) => m.level > p.level).slice(0, 2);
-      return `<div class="skill" style="--c:${info.color}" data-skill="${k}">
-        <div class="sicon">${icon(info.icon, 40)}</div>
-        <div class="smain">
-          <div class="sname"><span>${info.name}</span><b>${p.level}<small>/99</small></b></div>
-          <div class="sbar"><div style="width:${p.frac * 100}%"></div></div>
-          ${next.length ? `<div class="snext">${next.map((m) => `<em>${m.level}</em> ${esc(m.text)}`).join('<br>')}</div>` : ''}
-        </div>
+      return `<div class="stile" style="--c:${info.color}" data-skill="${k}">
+        <div class="si">${icon(info.icon, 28)}</div><b>${p.level}</b>
+        <div class="sbar"><div style="width:${p.level >= 99 ? 100 : p.frac * 100}%"></div></div>
       </div>`;
     }).join('');
-    const locked = FUTURE_SKILLS.map((f) => `<div class="skill locked"><div class="sicon">${icon(f.icon, 40)}</div><div class="smain"><div class="sname"><span>${f.name}</span><b>1<small>/99</small></b></div><div class="snext">Chapter ${f.chapter}</div></div></div>`).join('');
+    const locked = FUTURE_SKILLS.map((f, i) => `<div class="stile locked" data-future="${i}"><div class="si">${icon(f.icon, 28)}</div><b>1</b></div>`).join('');
     const stances: [Stance, string, string][] = [['aggressive', 'Aggressive', 'All combat XP to your weapon style'], ['shared', 'Shared', 'Split between style and Defence'], ['defensive', 'Defensive', 'All combat XP to Defence']];
     this.ui.body(el, `
-      <div class="stances">${stances.map(([id, name, desc]) => `<button class="stance ${s.stance === id ? 'on' : ''}" data-stance="${id}" title="${desc}">${icon(id, 22)}<span>${name}</span></button>`).join('')}</div>
-      <div class="skills">${rows}${locked}</div>
-      <div class="total">Total level <b>${total}</b> · Total XP ${fmt(SKILLS.reduce((t, k) => t + s.skills[k], 0))}</div>`);
-    el.querySelectorAll<HTMLElement>('[data-stance]').forEach((b) =>
+      <div class="sechead">Combat stance</div>
+      <div class="stances">${stances.map(([id, name]) => `<button class="stance ${s.stance === id ? 'on' : ''}" data-stance="${id}">${icon(id, 20)}<span>${name}</span></button>`).join('')}</div>
+      <div class="sechead">Skills</div>
+      <div class="skillgrid">${tiles}${locked}</div>
+      <div class="total">Total level <b>${total}</b></div>`);
+    el.querySelectorAll<HTMLElement>('[data-stance]').forEach((b) => {
+      const st = stances.find(([id]) => id === b.dataset.stance)!;
       b.addEventListener('click', () => {
-        s.stance = b.dataset.stance as Stance;
+        s.stance = st[0];
         g.dirty = true;
         this.skills();
-      }),
-    );
+      });
+      b.addEventListener('mouseenter', () => this.ui.tooltip.text(`<div class="tt-name">${st[1]}</div><div>${st[2]}.</div>`, b.getBoundingClientRect()));
+      b.addEventListener('mouseleave', () => this.ui.tooltip.hide());
+    });
     el.querySelectorAll<HTMLElement>('[data-skill]').forEach((row) => {
       const k = row.dataset.skill as SkillId;
       row.addEventListener('mouseenter', () => {
         const p = levelProgress(s.skills[k]);
         const ms = this.milestones(k).filter((m) => m.level > p.level).slice(0, 6);
-        this.ui.tooltip.text(`<div class="tt-name" style="color:${SKILL_INFO[k].color}">${SKILL_INFO[k].name}</div>
+        this.ui.tooltip.text(`<div class="tt-name" style="color:${SKILL_INFO[k].color}">${SKILL_INFO[k].name} ${p.level}</div>
           <div>${fmt(s.skills[k])} XP${p.level < 99 ? ` · ${fmt(p.remaining)} to level ${p.level + 1}` : ''}</div>
           <div class="tt-dim">Level 99 at ${fmt(xpForLevel(99))} XP</div>
           ${ms.length ? `<div class="tt-cmp">${ms.map((m) => `<div><b>${m.level}</b> · ${esc(m.text)}</div>`).join('')}</div>` : ''}`, row.getBoundingClientRect());
       });
+      row.addEventListener('mouseleave', () => this.ui.tooltip.hide());
+    });
+    el.querySelectorAll<HTMLElement>('[data-future]').forEach((row) => {
+      const f = FUTURE_SKILLS[Number(row.dataset.future)];
+      row.addEventListener('mouseenter', () => this.ui.tooltip.text(`<div class="tt-name">${esc(f.name)}</div><div class="tt-dim">Arrives in Chapter ${f.chapter}.</div>`, row.getBoundingClientRect()));
       row.addEventListener('mouseleave', () => this.ui.tooltip.hide());
     });
   }
@@ -310,7 +380,7 @@ export class Panels {
         </div>`;
       }).join('');
     }
-    this.ui.body(el, `<div class="tabs"><button class="tab ${this.journalTab === 'quests' ? 'on' : ''}" data-tab="quests">${icon('quest', 18)} Quests</button><button class="tab ${this.journalTab === 'diary' ? 'on' : ''}" data-tab="diary">${icon('diary', 18)} Achievement Diary</button></div>${body}`);
+    this.ui.body(el, `<div class="tabs"><button class="tab ${this.journalTab === 'quests' ? 'on' : ''}" data-tab="quests">${icon('quest', 18)} Quests</button><button class="tab ${this.journalTab === 'diary' ? 'on' : ''}" data-tab="diary">${icon('diary', 18)} Diary</button></div>${body}`);
     el.querySelectorAll<HTMLElement>('[data-tab]').forEach((t) => t.addEventListener('click', () => {
       this.journalTab = t.dataset.tab as 'quests' | 'diary';
       this.journal();
@@ -360,20 +430,23 @@ export class Panels {
     const el = this.ui.panel('help', 'Controls & Settings');
     if (!el) return;
     this.ui.body(el, `
+      <div class="sechead">Controls</div>
       <table class="keys">
-        <tr><td>Left-click</td><td>Move (hold to keep walking) · pick up · mine · use</td></tr>
-        <tr><td>Click an enemy</td><td>Walk up and strike once · hold to keep attacking</td></tr>
-        <tr><td>Shift + click</td><td>Attack in place toward the cursor (hold to keep attacking)</td></tr>
-        <tr><td>Q W E R</td><td>Abilities (they change with your weapon)</td></tr>
-        <tr><td>1 · T</td><td>Healing potion · Veilstone recall home</td></tr>
-        <tr><td>I · K · J · L</td><td>Inventory · Skills · Journal · Collection log</td></tr>
-        <tr><td>Alt (hold)</td><td>Show all loot labels</td></tr>
-        <tr><td>Space · Esc</td><td>Stop · close windows</td></tr>
+        <tr><td>Left-click</td><td>Move, pick up, mine, use. Hold to keep walking.</td></tr>
+        <tr><td>Click enemy</td><td>Strike once; hold to keep attacking</td></tr>
+        <tr><td>Shift-click</td><td>Attack in place</td></tr>
+        <tr><td>Q W E</td><td>Skills (they follow your weapon and cost mana)</td></tr>
+        <tr><td>1 · T</td><td>Healing potion · Veilstone home</td></tr>
+        <tr><td>I C K</td><td>Inventory · Equipment · Skills</td></tr>
+        <tr><td>J L</td><td>Journal · Collection log</td></tr>
+        <tr><td>Esc</td><td>Close windows · this tab</td></tr>
+        <tr><td>Alt · Space</td><td>Loot labels · stop</td></tr>
       </table>
+      <div class="sechead">Settings</div>
       <div class="setting"><label>Volume</label><input type="range" min="0" max="1" step="0.05" value="${g.save.settings.volume}" class="vol"></div>
       <div class="setting"><label>Graphics</label><select class="gfx">${(['high', 'medium', 'low'] as const).map((q) => `<option value="${q}"${(g.save.settings.graphics ?? 'high') === q ? ' selected' : ''}>${q[0].toUpperCase() + q.slice(1)}</option>`).join('')}</select></div>
       <div class="setting"><span class="dim">Progress saves automatically to your ${g.backend.describe()}.</span></div>
-      <div class="btnrow"><button class="btn" data-act="title">Save & return to title</button></div>`);
+      <div class="btnrow"><button class="btn" data-act="title">Save &amp; quit to title</button></div>`);
     el.querySelector<HTMLInputElement>('.vol')!.addEventListener('input', (e) => {
       const v = Number((e.target as HTMLInputElement).value);
       g.save.settings.volume = v;

@@ -229,7 +229,8 @@ def drakeling():
     prism(last, [(0, 0.2), (-0.14, 0), (0, -0.12), (0.14, 0)], 0.04, (0, 0, -0.56), dark, rot=(-PI / 2, 0, 0))  # tail spade
 
     for side, s in (('L', 1), ('R', -1)):
-        bat_wing(body, side, (s * 0.3, 0.3, 0.3), 0.95, bone, skin, horn_col, skin_glow=0x5A1008)
+        # Wings about as wide as the body is long, so it reads as a flier from the gameplay camera.
+        bat_wing(body, side, (s * 0.3, 0.32, 0.3), 1.6, bone, skin, horn_col, skin_glow=0x5A1008, thick=0.85)
     finish('DB_drakeling', 'drakeling.glb')
 
 
@@ -371,7 +372,7 @@ def whelp():
     finish('DB_whelp', 'whelp.glb')
 
 
-drakeling()
-cinderwing()
-whelp()
+for _build in (drakeling, cinderwing, whelp):   # DB_ONLY = ['drakeling'] exports only those
+    if _build.__name__ in (globals().get('DB_ONLY') or ('drakeling', 'cinderwing', 'whelp')):
+        _build()
 result = {'ok': True}
