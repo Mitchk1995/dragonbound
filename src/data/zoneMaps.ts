@@ -56,40 +56,77 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
       { kind: 'fireplace', x: 1.45, z: 9, rot: Math.PI / 2, block: [0.6, 2] },
       { kind: 'high_table', x: 15, z: 3.2, block: [2.2, 1.2] },
       { kind: 'banner', x: 10.5, z: 1.0 }, { kind: 'banner', x: 19.5, z: 1.0 },
+      { kind: 'banner', x: 3.0, z: 1.0 }, { kind: 'banner', x: 27.0, z: 1.0 },
+      // Suits of plate either side of the dais, candle stands at the head of each table.
+      { kind: 'armor_stand', x: 8.0, z: 2.0, block: [0.45, 0.45] }, { kind: 'armor_stand', x: 22.0, z: 2.0, block: [0.45, 0.45] },
+      { kind: 'candelabra', x: 9.5, z: 5.5, block: [0.3, 0.3] }, { kind: 'candelabra', x: 20.5, z: 5.5, block: [0.3, 0.3] },
       { kind: 'rug', x: 15, z: 11, len: 11 },
       { kind: 'table', x: 9.5, z: 10.5, len: 8, block: [1.3, 4.2] },
       { kind: 'table', x: 20.5, z: 10.5, len: 8, block: [1.3, 4.2] },
       ...[5.5, 24.5].flatMap((x) => [5.5, 9.5, 13.5].map((z) => ({ kind: 'pillar', x, z, block: [0.5, 0.5] as [number, number] }))),
       { kind: 'brazier', x: 12.5, z: 15.5, block: [0.4, 0.4] }, { kind: 'brazier', x: 17.5, z: 15.5, block: [0.4, 0.4] },
+      // Fireside: a bench to warm by and the log store.
+      { kind: 'bench', x: 3.7, z: 9, rot: Math.PI / 2, block: [0.3, 1.1] },
+      { kind: 'woodpile', x: 1.8, z: 13.6, rot: Math.PI / 2, block: [0.5, 0.75] },
+      // East wall: the weapon rack, a sideboard of flagons, ale barrels in the corner.
       { kind: 'weapon_rack', x: 28.4, z: 9, rot: -Math.PI / 2, block: [0.4, 1.1] },
+      { kind: 'sideboard', x: 27.9, z: 3.4, rot: -Math.PI / 2, block: [0.45, 1.1] },
+      { kind: 'barrel', x: 27.9, z: 15.6, block: [0.5, 0.5] }, { kind: 'barrel', x: 27.0, z: 16.1, block: [0.5, 0.5] },
     ],
   },
   {
-    // The smelter: a timber-framed forge house on a stone base, the furnace against its back wall.
+    // The smelter: a timber-framed forge house on a stone base, the furnace against its back wall,
+    // ore coming in on the west side, finished bars stacked on the east, a working corner by the door.
     id: 'smelter', style: 'timber', interior: 'smelter', x: 20, z: 67, w: 17, d: 13, wallH: 3.9, roof: ROOF.terracotta,
     doors: [{ side: 's', at: 7, w: 3 }, { side: 'e', at: 5, w: 3 }],
     windows: [{ side: 's', at: 3 }, { side: 's', at: 13.5 }, { side: 'n', at: 3 }, { side: 'n', at: 14 }, { side: 'w', at: 6.5 }, { side: 'e', at: 10.5 }],
     fits: [
       { kind: 'furnace_spot', x: 8.5, z: 2.6, block: [1.9, 1.2] },
-      { kind: 'ore_bin', x: 3, z: 2.2, block: [0.9, 0.6] },
-      { kind: 'coal', x: 13.8, z: 2.2, block: [0.8, 0.6] },
+      { kind: 'crucibles', x: 5.2, z: 2.3, block: [0.65, 0.4] },
+      { kind: 'bellows', x: 11.7, z: 2.8, rot: -Math.PI / 2, block: [0.8, 0.5] },
       { kind: 'tools', x: 11.8, z: 1.0 },
-      { kind: 'bars', x: 15.3, z: 10.5, rot: -Math.PI / 2, block: [0.6, 0.9] },
+      // Ore in: the bin, a loaded cart, the tool rack.
+      { kind: 'ore_bin', x: 3, z: 2.2, block: [0.9, 0.6] },
+      // A cart track runs in from the east door (ore from the mine road) to the ore corner.
+      { kind: 'rails', x: 9.9, z: 6.3, rot: Math.PI / 2, len: 12.2 },
+      { kind: 'ore_cart', x: 4.6, z: 6.3, rot: Math.PI / 2, block: [1.0, 0.6] },
+      { kind: 'tool_rack', x: 1.4, z: 4.4, rot: Math.PI / 2, block: [0.35, 0.95] },
+      { kind: 'barrel', x: 1.9, z: 6.9, block: [0.5, 0.5] }, { kind: 'barrel', x: 1.9, z: 7.8, block: [0.5, 0.5] },
+      // Fuel: coal heap and sacks by the east door.
+      { kind: 'coal', x: 13.8, z: 2.2, block: [0.8, 0.6] },
+      { kind: 'sacks', x: 15.0, z: 3.9, block: [0.45, 0.45] },
+      // The working corner: bench, grindstone, a small anvil and the quench trough.
       { kind: 'workbench', x: 2.2, z: 10, rot: Math.PI / 2, block: [0.6, 1.2] },
-      { kind: 'barrel', x: 2.0, z: 6, block: [0.5, 0.5] },
+      { kind: 'grindstone', x: 4.1, z: 10.6, block: [0.45, 0.5] },
+      { kind: 'anvil_small', x: 5.4, z: 8.4, rot: 0.3, block: [0.45, 0.45] },
+      { kind: 'trough', x: 5.6, z: 11.1, block: [0.9, 0.35] },
+      // Bars out: rack, stacked pallet, crate and barrel.
+      { kind: 'bars', x: 15.3, z: 10.5, rot: -Math.PI / 2, block: [0.6, 0.9] },
+      { kind: 'bar_stack', x: 13.2, z: 10.4, block: [0.7, 0.5] },
+      { kind: 'crate', x: 11.5, z: 10.7, block: [0.5, 0.5] },
+      { kind: 'barrel', x: 14.9, z: 8.3, block: [0.5, 0.5] },
     ],
   },
   {
-    // The bank: a stone counting hall. Tellers' counter across the room, the vault door behind.
+    // The bank: a stone counting hall. Tellers' counter across the room, the vault door behind,
+    // clerks' desks and ledger shelves on the tellers' side, benches and candle stands out front.
     id: 'bank', style: 'stone', interior: 'bank', x: 102, z: 69, w: 20, d: 15, wallH: 4.6, roof: ROOF.darkSlate,
     doors: [{ side: 's', at: 8, w: 4 }, { side: 'e', at: 9, w: 3 }],
     windows: [{ side: 's', at: 3.5 }, { side: 's', at: 16.5 }, { side: 'n', at: 4 }, { side: 'n', at: 16 }, { side: 'w', at: 7.5 }],
     fits: [
       { kind: 'vault_door', x: 10, z: 1.2, block: [1.6, 0.4] },
+      { kind: 'banner', x: 6.8, z: 1.0 }, { kind: 'banner', x: 13.2, z: 1.0 },
       { kind: 'strongbox', x: 3, z: 2, block: [0.6, 0.5] }, { kind: 'strongbox', x: 17, z: 2, block: [0.6, 0.5] },
       { kind: 'gold', x: 5.5, z: 2, block: [0.7, 0.5] }, { kind: 'gold', x: 14.5, z: 2.2, block: [0.7, 0.5] },
+      { kind: 'coin_sacks', x: 7.6, z: 2.5, block: [0.45, 0.4] }, { kind: 'coin_sacks', x: 12.4, z: 2.5, rot: 1.2, block: [0.45, 0.4] },
+      { kind: 'shelf', x: 1.4, z: 4.2, rot: Math.PI / 2, len: 1, block: [0.4, 1.3] },
+      { kind: 'shelf', x: 18.6, z: 4.2, rot: -Math.PI / 2, len: 1, block: [0.4, 1.3] },
+      { kind: 'ledger_desk', x: 5.8, z: 4.2, block: [0.9, 0.45] }, { kind: 'ledger_desk', x: 14.2, z: 4.2, block: [0.9, 0.45] },
       { kind: 'rug', x: 10, z: 10.5, len: 6 },
+      { kind: 'candelabra', x: 6.2, z: 8.1, block: [0.3, 0.3] }, { kind: 'candelabra', x: 13.8, z: 8.1, block: [0.3, 0.3] },
       { kind: 'pillar', x: 5.5, z: 10.5, block: [0.5, 0.5] }, { kind: 'pillar', x: 14.5, z: 10.5, block: [0.5, 0.5] },
+      { kind: 'bench', x: 1.6, z: 10.8, rot: Math.PI / 2, block: [0.3, 1.1] },
+      { kind: 'bench', x: 4.4, z: 13.4, block: [1.1, 0.3] },
     ],
   },
   {
@@ -101,21 +138,36 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     fits: [
       { kind: 'strongbox', x: 3, z: 2, block: [0.6, 0.5] }, { kind: 'strongbox', x: 5.5, z: 2, block: [0.6, 0.5] },
       { kind: 'gold', x: 8, z: 2.2, block: [0.7, 0.5] },
+      { kind: 'candelabra', x: 1.7, z: 3.6, block: [0.3, 0.3] },
+      { kind: 'coin_sacks', x: 7.9, z: 4.3, block: [0.45, 0.4] },
+      { kind: 'rug', x: 4.6, z: 6.9, len: 2.6 },
       { kind: 'shelf', x: 8.35, z: 7, rot: -Math.PI / 2, block: [0.4, 1.3] },
       { kind: 'strongbox', x: 4.5, z: 8.6, block: [0.6, 0.5] }, { kind: 'gold', x: 2.5, z: 8.6, block: [0.7, 0.5] },
-      { kind: 'gold', x: 5.5, z: 5.2, block: [0.7, 0.5] },
+      { kind: 'strongbox', x: 7.4, z: 9.4, rot: 0.2, block: [0.6, 0.5] },
+      { kind: 'gold', x: 5.5, z: 4.8, block: [0.7, 0.5] },
     ],
   },
   {
-    // The Quartermaster's shop: a timber shopfront with the counter inside and stocked shelves.
+    // The Quartermaster's shop: a timber shopfront. Counters run wall to wall (the Quartermaster
+    // serves from behind them, stock shelves at his back); customers browse the front of the room.
     id: 'shop', style: 'timber', interior: 'shop', x: 100, z: 104, w: 15, d: 11, wallH: 3.7, roof: ROOF.moss,
     doors: [{ side: 's', at: 6, w: 3 }],
     windows: [{ side: 's', at: 2.5 }, { side: 's', at: 12 }, { side: 'n', at: 3 }, { side: 'n', at: 12 }, { side: 'w', at: 5.5 }, { side: 'e', at: 5.5 }],
     fits: [
-      { kind: 'shelf', x: 4, z: 1.5, block: [1.3, 0.4] }, { kind: 'shelf', x: 11, z: 1.5, block: [1.3, 0.4] },
-      { kind: 'barrel', x: 1.9, z: 8.6, block: [0.5, 0.5] }, { kind: 'crate', x: 13, z: 8.6, block: [0.5, 0.5] },
-      { kind: 'weapon_rack', x: 13.6, z: 4.6, rot: -Math.PI / 2, block: [0.4, 1.1] },
+      // Behind the counter.
+      { kind: 'shelf', x: 5.3, z: 1.5, block: [1.3, 0.4] }, { kind: 'shelf', x: 9.7, z: 1.5, len: 2, block: [1.3, 0.4] },
+      { kind: 'barrel', x: 1.9, z: 1.9, block: [0.5, 0.5] }, { kind: 'sacks', x: 2.2, z: 3.2, block: [0.45, 0.45] },
+      { kind: 'crate', x: 13.1, z: 1.9, block: [0.5, 0.5] }, { kind: 'jars', x: 12.8, z: 3.2, block: [0.45, 0.4] },
+      // The counter line (the Quartermaster's own counter in the middle is the shop station).
+      { kind: 'display_case', x: 3.0, z: 4.5, len: 3.6, block: [1.9, 0.5] },
+      { kind: 'display_case', x: 12.0, z: 4.5, len: 3.6, block: [1.9, 0.5] },
+      // The shop floor.
       { kind: 'rug', x: 7.5, z: 7.6, len: 3.2 },
+      { kind: 'armor_stand', x: 1.8, z: 6.4, rot: Math.PI / 2, block: [0.45, 0.45] },
+      { kind: 'barrel', x: 1.9, z: 8.6, block: [0.5, 0.5] }, { kind: 'sacks', x: 3.3, z: 9.2, block: [0.45, 0.45] },
+      { kind: 'weapon_rack', x: 13.55, z: 6.9, rot: -Math.PI / 2, block: [0.4, 1.1] },
+      { kind: 'crate', x: 13.0, z: 9.1, block: [0.5, 0.5] },
+      { kind: 'display_table', x: 10.9, z: 8.2, block: [0.8, 0.5] },
     ],
   },
   {
@@ -124,12 +176,17 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     doors: [{ side: 's', at: 5, w: 3 }],
     windows: [{ side: 's', at: 2.5 }, { side: 's', at: 10.5 }, { side: 'n', at: 6.5 }, { side: 'e', at: 5 }, { side: 'w', at: 5 }],
     fits: [
-      { kind: 'cauldron', x: 6.5, z: 5, block: [0.8, 0.8] },
-      { kind: 'flasks', x: 3.5, z: 1.8, block: [1.2, 0.5] },
-      { kind: 'shelf', x: 9.5, z: 1.5, block: [1.3, 0.4] },
-      { kind: 'workbench', x: 11.2, z: 6, rot: -Math.PI / 2, block: [0.6, 1.2] },
-      { kind: 'barrel', x: 1.9, z: 7.4, block: [0.5, 0.5] }, { kind: 'crate', x: 2.0, z: 5.6, block: [0.5, 0.5] },
-      { kind: 'rug', x: 6.5, z: 6.8, len: 2.4 },
+      { kind: 'cauldron', x: 6.5, z: 3.8, block: [0.8, 0.8] },
+      { kind: 'rug', x: 6.5, z: 6.4, len: 2.4 },
+      { kind: 'flasks', x: 3.3, z: 1.8, block: [1.2, 0.5] },
+      { kind: 'shelf', x: 9.6, z: 1.5, len: 2, block: [1.3, 0.4] },
+      { kind: 'distiller', x: 9.4, z: 4.2, block: [0.5, 0.5] },
+      { kind: 'sacks', x: 11.3, z: 2.9, block: [0.4, 0.4] },
+      { kind: 'workbench', x: 11.2, z: 6.4, rot: -Math.PI / 2, block: [0.6, 1.2] },
+      { kind: 'herb_rack', x: 1.5, z: 3.4, rot: Math.PI / 2, block: [0.35, 0.9] },
+      { kind: 'crate', x: 2.0, z: 5.6, block: [0.5, 0.5] }, { kind: 'barrel', x: 1.9, z: 7.0, block: [0.5, 0.5] },
+      { kind: 'jars', x: 3.3, z: 8.2, block: [0.45, 0.4] },
+      { kind: 'candles', x: 9.0, z: 7.9 },
     ],
   },
   {
@@ -138,10 +195,14 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     doors: [{ side: 'w', at: 4, w: 3 }],
     windows: [{ side: 's', at: 3 }, { side: 's', at: 8 }, { side: 'n', at: 5.5 }, { side: 'e', at: 5 }],
     fits: [
-      { kind: 'rune_altar', x: 5.5, z: 4.4, block: [1.3, 1.3] },
-      { kind: 'shelf', x: 2.6, z: 1.5, block: [1.3, 0.4] },
+      // A runner from the door to the altar.
+      { kind: 'rug', x: 2.7, z: 5.5, rot: Math.PI / 2, len: 3.4 },
+      { kind: 'rune_altar', x: 5.8, z: 4.2, block: [1.3, 1.3] },
+      { kind: 'shelf', x: 2.6, z: 1.5, len: 1, block: [1.3, 0.4] },
       { kind: 'brazier', x: 9.1, z: 1.9, block: [0.4, 0.4] }, { kind: 'brazier', x: 9.1, z: 7.6, block: [0.4, 0.4] },
-      { kind: 'rug', x: 5.5, z: 7.6, len: 1.6 },
+      { kind: 'crystals', x: 9.0, z: 4.8, block: [0.45, 0.45] }, { kind: 'crystals', x: 1.9, z: 8.0, block: [0.45, 0.45] },
+      { kind: 'lectern', x: 7.4, z: 7.6, rot: -0.5, block: [0.35, 0.35] },
+      { kind: 'candles', x: 7.6, z: 1.8 }, { kind: 'candles', x: 4.2, z: 7.6 },
     ],
   },
   {
@@ -150,9 +211,15 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     doors: [{ side: 'e', at: 5, w: 3 }],
     windows: [{ side: 's', at: 3.5 }, { side: 's', at: 10.5 }, { side: 'n', at: 4 }, { side: 'n', at: 10 }, { side: 'w', at: 6 }],
     fits: [
+      { kind: 'straw', x: 6.5, z: 6.0 }, { kind: 'straw', x: 3.0, z: 6.2 }, { kind: 'straw', x: 10.5, z: 4.4 },
       { kind: 'nest', x: 4, z: 3.8, block: [1, 1] }, { kind: 'nest', x: 9, z: 6.5, block: [1, 1] }, { kind: 'nest', x: 4, z: 8.5, block: [1, 1] },
-      { kind: 'brazier', x: 11, z: 2.5, block: [0.4, 0.4] },
-      { kind: 'coal', x: 11.2, z: 9.6, block: [0.8, 0.6] }, { kind: 'crate', x: 1.9, z: 6.2, block: [0.5, 0.5] },
+      { kind: 'hay', x: 1.9, z: 1.8, block: [0.7, 0.4] }, { kind: 'hay', x: 6.0, z: 1.8, rot: 0.2, block: [0.7, 0.4] },
+      { kind: 'perch', x: 9.2, z: 2.0, block: [1.1, 0.2] },
+      { kind: 'brazier', x: 11.6, z: 2.5, block: [0.4, 0.4] }, { kind: 'brazier', x: 6.6, z: 9.9, block: [0.4, 0.4] },
+      { kind: 'sacks', x: 12.3, z: 3.8, block: [0.4, 0.4] },
+      { kind: 'trough', x: 9.3, z: 10.2, block: [0.9, 0.35] },
+      { kind: 'coal', x: 11.6, z: 9.6, block: [0.8, 0.6] },
+      { kind: 'crate', x: 1.9, z: 6.2, block: [0.5, 0.5] }, { kind: 'egg_crate', x: 1.9, z: 10.2, block: [0.45, 0.4] },
     ],
   },
 ];
@@ -240,10 +307,13 @@ export function buildKeep(seed: number): ZoneLayout {
   st('furnace', 'furnace', inB('smelter', 8.5, 2.6));
   st('shop', 'shop', inB('shop', 7.5, 4.5));
   st('restore', 'board', inB('great_hall', 11, 3.4), 0, 0.6);
-  st('anvil', 'anvil', { x: 27.5, z: 89.5 }, 0, 0.9);
+  st('anvil', 'anvil', { x: 27.5, z: 89.5 }, 0, 1.0);
   st('restore', 'emberforge', { x: 33.5, z: 91 }, 0, 1.3);
   st('npc', 'warden', { x: 81.5, z: 101 }, -Math.PI * 0.6, 0.5);
-  st('npc', 'quartermaster', inB('shop', 7.5, 2.9), 0, 0.4);
+  // The Quartermaster stands right behind his counter. The counter line runs wall to wall (the
+  // display cases), so the floor behind it is sealed off and a click on him walks the hero to the
+  // customer side, within talking reach across the counter.
+  st('npc', 'quartermaster', inB('shop', 7.5, 3.3), 0, 0.4);
   // The two counters block their row (customers stand in front).
   blockRect(G, inB('bank', 10, 6.5).x, inB('bank', 10, 6.5).z, 3.1, 0.6, 0);
   blockRect(G, inB('shop', 7.5, 4.5).x, inB('shop', 7.5, 4.5).z, 2.6, 0.6, 0);
@@ -286,6 +356,123 @@ export function buildKeep(seed: number): ZoneLayout {
   G.prop('signpost', 88.5, 91.5, -0.4, 1, 0.3);
   G.prop('crates', 22.5, 81.5, 0.3, 1, 0.9);
 
+  // ─── District and roadside dressing ──────────────────────────────────────────
+  // Everything here keeps off the roads, the station approaches and the stage (any cell it would
+  // block must be open, unreserved ground; `paved` allows yard and market paving). Pieces that
+  // don't fit are simply skipped, so the walks stay clear however the rim noise falls.
+  const fits = (x: number, z: number, r: number, paved: boolean) => {
+    for (let cz = Math.floor(z - r - 0.5); cz <= z + r + 0.5; cz++) for (let cx = Math.floor(x - r - 0.5); cx <= x + r + 0.5; cx++) {
+      if (Math.hypot(cx + 0.5 - x, cz + 0.5 - z) > r + 0.5) continue;
+      if (!G.inside(cx, cz)) return false;
+      const i = G.idx(cx, cz), gr = G.l.ground[i];
+      if (G.l.cells[i] !== Cell.Ground || G.l.fluid[i] || G.reserved[i] === 1) return false;
+      if (!paved && (gr === Ground.Stone || gr === Ground.Path)) return false;
+    }
+    return true;
+  };
+  // Keep the woods back from a dressed spot (verge: scenery at a tenth of its density).
+  const clearAround = (x: number, z: number, r: number) => G.verge(x, z, r);
+  const dress = (kind: string, x: number, z: number, rot = 0, block = 0.6, opt: { paved?: boolean; len?: number; s?: number } = {}) => {
+    if (!fits(x, z, block, !!opt.paved)) return null;
+    const p = G.prop(kind, x, z, rot, opt.s ?? 1, block);
+    if (opt.len !== undefined) p.len = opt.len;
+    clearAround(x, z, block + 1.5);
+    return p;
+  };
+  /** A fence or hedge from (x0, z0) to (x1, z1): all or nothing, blocking cells along its line. */
+  const line = (kind: 'fence' | 'hedge', x0: number, z0: number, x1: number, z1: number) => {
+    const L = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(L / 0.7), r = kind === 'hedge' ? 0.5 : 0.35;
+    for (let i = 0; i <= n; i++) if (!fits(x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n, r, false)) return;
+    const p = G.prop(kind, (x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0));
+    p.len = L;
+    for (let i = 0; i <= n; i++) blockDisc(G.l, x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n, r);
+    clearAround((x0 + x1) / 2, (z0 + z1) / 2, L / 2 + 1.5);
+  };
+
+  // The main avenue, court to gatehouse: clipped hedges either side with a crossing halfway.
+  for (const sx of [-1, 1]) {
+    line('hedge', 75 + sx * 3.9, 66, 75 + sx * 3.9, 71.5);
+    line('hedge', 75 + sx * 3.9, 74, 75 + sx * 3.9, 80);
+  }
+  dress('fit_bench', 70.2, 72.8, Math.PI / 2, 0.5);
+  dress('fit_bench', 79.8, 72.8, -Math.PI / 2, 0.5);
+
+  // Anvil yard: a grindstone, bar pallets, a woodpile and quench trough, a hand cart of ore.
+  dress('fit_grindstone', 23.6, 97.0, 0.3, 0.6, { paved: true });
+  dress('fit_bar_stack', 35.0, 97.4, 0.2, 0.8, { paved: true });
+  dress('fit_woodpile', 21.2, 90.0, Math.PI / 2, 0.8, { paved: true });
+  dress('fit_trough', 27.2, 95.4, 0, 0.9, { paved: true });
+  dress('fit_tool_rack', 25.0, 84.4, 0.1, 0.9, { paved: true });
+  dress('fit_sacks', 38.2, 95.6, 0, 0.5, { paved: true });
+  dress('cart', 34.5, 82.6, 0.5, 1.1, { paved: true });
+  // Round the smelter: logs against its west wall, barrels and coal sacks by the east door.
+  dress('fit_woodpile', 18.6, 73.0, Math.PI / 2, 0.8);
+  dress('barrels', 39.4, 69.2, 0.4, 0.9);
+  dress('fit_sacks', 41.4, 76.6, 1.2, 0.5);
+
+  // Kitchen garden on the lawn between the smithy road and the avenue: two vegetable beds in a
+  // fence, a scarecrow, a haystack and a bench by the path.
+  dress('veg_patch', 49.0, 83.6, 0.1, 1.5);
+  dress('veg_patch', 53.4, 84.2, 0.1, 1.5);
+  dress('scarecrow', 51.2, 82.0, 0.2, 0.4);
+  line('fence', 46.8, 80.2, 56.2, 80.6);
+  line('fence', 46.0, 81.6, 45.6, 86.8);
+  line('fence', 56.8, 82.4, 56.6, 86.6);
+  dress('haystack', 60.6, 83.2, 0, 1.2);
+  dress('fit_bench', 50.0, 89.4, -0.16, 0.5);
+  dress('lamp_post', 56.0, 90.6, 0, 0.4);
+
+  // Between the court and the bank: a paddock fence along the road, hay and a cart behind it.
+  line('fence', 89.8, 90.8, 101.8, 87.6);
+  dress('haystack', 96.4, 84.6, 0.3, 1.2);
+  dress('cart', 91.6, 85.4, 2.4, 1.1);
+  dress('fit_hay', 100.4, 83.4, 0.3, 0.8);
+  // Bank forecourt: planters either side of the door, a bench facing the square.
+  dress('planter', 108.2, 85.0, 0, 0.7, { paved: true });
+  dress('planter', 115.8, 85.0, 0, 0.7, { paved: true });
+  dress('fit_bench', 117.6, 90.2, -Math.PI / 2, 0.5);
+
+  // Market: a third stall, goods, sacks and a cart round the stalls and along the shop road.
+  G.prop('stall', 87.2, 110.0, Math.PI / 2, 1, 1.6).len = 2;
+  dress('fit_sacks', 90.2, 109.8, 0.4, 0.5, { paved: true });
+  dress('crates', 89.4, 116.4, 0.6, 0.9);
+  dress('barrels', 88.4, 104.6, 0.2, 0.9);
+  dress('cart', 94.4, 120.2, -0.4, 1.1);
+  dress('fit_display_table', 95.0, 110.4, Math.PI / 2, 0.8, { paved: true });
+  dress('fit_barrel', 114.4, 116.4, 0, 0.5);
+  dress('fit_sacks', 101.6, 119.6, 0, 0.5);
+
+  // Alchemy garden: a third herb bed, a bench looking over the pond.
+  dress('herb_bed', 49.8, 103.4, 0, 1.2);
+  dress('herb_bed', 47.8, 111.6, 0, 1.2);
+  dress('fit_bench', 57.4, 120.0, -Math.PI / 2 - 0.3, 0.5);
+  dress('fit_bench', 50.4, 124.6, Math.PI + 0.2, 0.5);
+  dress('scarecrow', 53.6, 108.4, -0.3, 0.4);
+
+  // Bailey: a proper training yard by the dummies (archery butts, a weapon rack, a practice fence)
+  // and planters and benches round the statue plaza.
+  dress('target', 55.8, 55.2, Math.PI / 2, 0.6);
+  dress('target', 57.8, 56.6, Math.PI / 2, 0.6);
+  dress('weapon_rack', 72.0, 55.2, -0.2, 0.8);
+  dress('fit_hay', 61.8, 57.0, 0, 0.8);
+  line('fence', 65.6, 51.9, 72.4, 51.9);
+  dress('planter', 67.6, 42.6, 0, 0.7);
+  dress('planter', 82.4, 42.6, 0, 0.7);
+  dress('fit_bench', 70.4, 46.0, 0.35, 0.5);
+  dress('fit_bench', 79.6, 46.0, -0.35, 0.5);
+  dress('fit_bench', 86.0, 53.6, -Math.PI / 2, 0.5);
+
+  // The rim lawns: a hay paddock in the north-west, a woodcutter's clearing in the north-east.
+  dress('haystack', 31.0, 49.0, 0, 1.2);
+  dress('haystack', 34.6, 51.6, 0.6, 1.2);
+  line('fence', 27.6, 45.6, 38.6, 45.6);
+  line('fence', 27.4, 46.6, 27.4, 55.0);
+  dress('cart', 38.0, 53.2, 1.0, 1.1);
+  dress('stump', 119.0, 42.0, 0.3, 0.6);
+  dress('fit_woodpile', 121.8, 40.2, 0.1, 0.8);
+  dress('log', 116.2, 44.6, 0.7, 0.8);
+  dress('cart', 122.4, 45.4, -0.6, 1.1);
+
   // The hero is staged here for character creation and the pose tools; keep every camera spot
   // around it clear, or the near plane slices whatever prop sits there (the old "purple spike").
   for (const c of STAGE_CAMERAS) G.reserve(KEEP_STAGE.x + c.x, KEEP_STAGE.z + c.z, 2);
@@ -299,7 +486,7 @@ export function buildKeep(seed: number): ZoneLayout {
     if (garden && G.rng() < 0.3 + (G.noise(x * 0.2, z * 0.2) - 0.5) * 0.4) G.l.cells[i] = G.rng() < 0.08 ? Cell.Rock : Cell.Tree;
   }
   // Small groves break up the lawns between the districts.
-  for (const [gx, gz, r] of [[57, 73, 3.2], [93, 69, 3.6], [42, 63, 3], [111, 59, 3.4], [86, 118, 3], [119, 96, 2.6], [62, 124, 2.8], [52, 83, 2.2]]) {
+  for (const [gx, gz, r] of [[57, 73, 3.2], [93, 69, 3.6], [42, 63, 3], [111, 59, 3.4], [86, 118, 3], [119, 96, 2.6], [62, 124, 2.8]]) {
     G.blob(gx, gz, r, 1, (i) => {
       if (G.l.cells[i] === Cell.Ground && !G.reserved[i] && G.rng() < 0.6) G.l.cells[i] = G.rng() < 0.1 ? Cell.Rock : Cell.Tree;
     });

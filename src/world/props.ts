@@ -837,20 +837,163 @@ const BUILDERS: Record<string, Builder> = {
     })();
   },
   anvil: (k, g) => {
-    // A proper horned anvil on a banded stump, a quench trough and a hammer.
-    cb(k, g, [0.9, 0.62, 0.9], [0, 0.31, 0], 0x5a3a22, undefined, 0.2);
-    for (const y of [0.12, 0.5]) cb(k, g, [0.94, 0.07, 0.94], [0, y, 0], IRON, undefined, 0.2);
-    k.mesh(g, taper(0.8, 0.52, 0.42, 0.3, 0.18), IRON, [0, 0.71, 0]);
-    cb(k, g, [0.32, 0.22, 0.26], [0, 0.91, 0], IRON, undefined, 0.03);
-    cb(k, g, [0.95, 0.24, 0.42], [-0.05, 1.14, 0], IRON_L, undefined, 0.04);
-    k.mesh(g, taper(0.36, 0.3, 0.04, 0.06, 0.55), IRON_L, [0.7, 1.12, 0], [0, 0, -Math.PI / 2]);
-    cb(k, g, [0.22, 0.14, 0.34], [-0.6, 1.09, 0], IRON, undefined, 0.03);
-    cb(k, g, [0.06, 0.06, 0.55], [-0.15, 1.3, 0.1], WOOD, [0, 0.5, 0], 0.01);
-    cb(k, g, [0.14, 0.12, 0.2], [-0.02, 1.32, -0.12], IRON, [0, 0.5, 0], 0.02);
-    // Quench trough.
-    cb(k, g, [0.7, 0.5, 1.1], [1.35, 0.25, 0.05], WOOD, undefined, 0.04);
-    for (const z of [-0.35, 0.45]) k.box(g, [0.74, 0.06, 0.06], [1.35, 0.4, z], IRON);
-    k.box(g, [0.56, 0.04, 0.96], [1.35, 0.49, 0.05], 0x24505c);
+    // The Great Anvil on a stone footing with a quench trough. Before 'Reforge the Great Anvil' it
+    // is a cracked, rust-streaked block split clean across the face, its horn snapped off and
+    // lying in the soot, the stump bound with rope. Reforged, it stands on a new iron-banded
+    // stump with a bright steel face, gold inlay round the waist, an ember rune on its flank and a
+    // glowing bar across the face, the hammer laid ready.
+    const a = new THREE.Group();
+    a.scale.setScalar(1.3);
+    g.add(a);
+    const cracked = new THREE.Group(), reforged = new THREE.Group();
+    a.add(cracked, reforged);
+    reforged.visible = false;
+    cb(k, a, [1.7, 0.12, 1.4], [0.35, 0.06, 0], STONE_D, undefined, 0.04);
+    // Quench trough (both states).
+    cb(k, a, [0.7, 0.5, 1.1], [1.35, 0.37, 0.05], WOOD, undefined, 0.04);
+    for (const z of [-0.35, 0.45]) k.box(a, [0.74, 0.06, 0.06], [1.35, 0.52, z], IRON);
+    k.box(a, [0.56, 0.04, 0.96], [1.35, 0.61, 0.05], 0x24505c);
+    const RUST = 0x7a4a2a, SOOT = 0x2a2420;
+    // ── Cracked ──
+    cb(k, cracked, [0.9, 0.62, 0.9], [0, 0.43, 0], 0x4a3020, [0, 0.1, 0], 0.2);
+    for (const y of [0.3, 0.62]) cb(k, cracked, [0.93, 0.08, 0.93], [0, y, 0], 0x8a7050, [0, 0.1, 0], 0.2);
+    k.mesh(cracked, taper(0.8, 0.52, 0.42, 0.3, 0.18), IRON, [0, 0.83, 0]);
+    cb(k, cracked, [0.32, 0.22, 0.26], [0, 1.03, 0], IRON, undefined, 0.03);
+    // The face split in two, the halves sagging apart round a dark crack.
+    cb(k, cracked, [0.46, 0.24, 0.42], [-0.3, 1.25, 0], IRON, [0, 0, 0.07], 0.04);
+    cb(k, cracked, [0.44, 0.24, 0.42], [0.2, 1.24, 0.01], IRON, [0, 0.04, -0.08], 0.04);
+    k.box(cracked, [0.07, 0.26, 0.44], [-0.04, 1.2, 0], SOOT, [0, 0, 0.1]);
+    k.mesh(cracked, taper(0.36, 0.3, 0.2, 0.2, 0.2), IRON, [0.5, 1.22, 0], [0, 0, -Math.PI / 2]);
+    k.mesh(cracked, taper(0.2, 0.2, 0.04, 0.06, 0.34), IRON, [0.5, 0.2, 0.55], [0.1, 0.8, -Math.PI / 2 + 0.3]);
+    cb(k, cracked, [0.22, 0.14, 0.34], [-0.6, 1.2, 0], IRON, undefined, 0.03);
+    // Rust streaks and soot.
+    // (Long thin streaks run down from the crack, off-centre: square patches read as a face.)
+    for (const [x, y, z, sx, sy] of [[0.06, 1.12, 0.215, 0.05, 0.3], [-0.46, 1.17, 0.215, 0.07, 0.2], [0.34, 1.19, 0.215, 0.05, 0.14], [-0.2, 1.15, -0.215, 0.06, 0.26]] as [number, number, number, number, number][]) k.box(cracked, [sx, sy, 0.02], [x, y, z], RUST);
+    k.box(cracked, [0.5, 0.02, 0.36], [-0.28, 1.375, 0], RUST, [0, 0, 0.07]);
+    decal(k.mesh(cracked, raggedDisc(88, 12, 0.7, 0.95, 0.3), 0x3a3430, [0.1, 0.125, 0.1]));
+    // Rope lashing round the stump.
+    cb(k, cracked, [0.95, 0.06, 0.95], [0, 0.46, 0], 0xb09a70, [0, 0.4, 0.05], 0.2);
+    cb(k, cracked, [0.06, 0.06, 0.55], [-0.05, 0.16, 0.8], WOOD, [0, 1.2, 0], 0.01);
+    cb(k, cracked, [0.14, 0.12, 0.22], [0.12, 0.16, 0.62], RUST, [0, 1.2, 0], 0.02);
+    // ── Reforged ──
+    cb(k, reforged, [0.95, 0.62, 0.95], [0, 0.43, 0], WOOD_D, undefined, 0.2);
+    for (const y of [0.24, 0.44, 0.66]) cb(k, reforged, [0.99, 0.07, 0.99], [0, y, 0], IRON, undefined, 0.2);
+    for (const [x, z] of [[-0.5, 0], [0.5, 0], [0, 0.5], [0, -0.5]]) k.box(reforged, [0.07, 0.07, 0.07], [x, 0.66, z], PAL.gold);
+    k.mesh(reforged, taper(0.86, 0.56, 0.44, 0.32, 0.2), IRON, [0, 0.84, 0]);
+    cb(k, reforged, [0.36, 0.22, 0.28], [0, 1.05, 0], IRON, undefined, 0.03);
+    cb(k, reforged, [0.4, 0.05, 0.3], [0, 1.0, 0], PAL.gold, undefined, 0.01);
+    cb(k, reforged, [1.0, 0.24, 0.44], [-0.05, 1.28, 0], IRON_L, undefined, 0.04);
+    cb(k, reforged, [0.96, 0.04, 0.4], [-0.05, 1.41, 0], PAL.steel, undefined, 0.01);
+    k.mesh(reforged, taper(0.38, 0.32, 0.04, 0.06, 0.6), IRON_L, [0.76, 1.26, 0], [0, 0, -Math.PI / 2]);
+    cb(k, reforged, [0.24, 0.16, 0.36], [-0.64, 1.23, 0], IRON, undefined, 0.03);
+    // An ember rune on the flank, facing the smith (+Z).
+    k.mesh(reforged, octagon(0.09, 0.02), 0xffa040, [-0.05, 1.28, 0.225], [0, Math.PI / 2, 0], PAL.fire, 1.8);
+    for (const e of [-1, 1]) k.box(reforged, [0.16, 0.025, 0.02], [-0.05 + e * 0.17, 1.28, 0.225], 0xffa040, undefined, PAL.fire, 1.4);
+    // A bar at working heat across the face, the hammer beside it.
+    cb(k, reforged, [0.6, 0.06, 0.1], [-0.12, 1.465, 0.06], 0xffb050, [0, 0.15, 0], 0.01, PAL.fire, 2.4);
+    cb(k, reforged, [0.07, 0.07, 0.62], [0.3, 1.47, -0.12], WOOD_L, [0, -0.5, 0], 0.01);
+    cb(k, reforged, [0.16, 0.14, 0.26], [0.42, 1.49, -0.34], IRON, [0, -0.5, 0], 0.02);
+    return {
+      obj: g,
+      setState: (s) => {
+        reforged.visible = s === 'restored';
+        cracked.visible = s !== 'restored';
+      },
+    };
+  },
+  // ─── Keep dressing (roadsides, yards, gardens) ─────────────────────────────
+  /** A post-and-rail fence along local X, `len` long. */
+  fence: (k, g, arg) => {
+    const L = Math.max(1.5, arg ?? 6), n = Math.max(1, Math.round(L / 1.6));
+    for (let i = 0; i <= n; i++) {
+      const x = -L / 2 + (i * L) / n;
+      cb(k, g, [0.18, 1.1, 0.18], [x, 0.55, 0], WOOD_D, [0, 0, (hash01(i, 5) - 0.5) * 0.06], 0.03);
+      k.mesh(g, taper(0.18, 0.18, 0.06, 0.06, 0.12), WOOD_D, [x, 1.16, 0]);
+    }
+    for (const y of [0.45, 0.88]) {
+      for (let i = 0; i < n; i++) {
+        const x0 = -L / 2 + (i * L) / n, x1 = -L / 2 + ((i + 1) * L) / n;
+        cb(k, g, [x1 - x0 + 0.1, 0.1, 0.08], [(x0 + x1) / 2, y + (hash01(i, y) - 0.5) * 0.05, 0.1], WOOD, undefined, 0.02);
+      }
+    }
+  },
+  /** A clipped box hedge along local X, `len` long, with leafy lumps on top. */
+  hedge: (k, g, arg) => {
+    const L = Math.max(1.2, arg ?? 4);
+    cb(k, g, [L, 0.9, 0.9], [0, 0.45, 0], 0x3e6a2e, undefined, 0.12);
+    for (let x = -L / 2 + 0.45; x < L / 2 - 0.2; x += 0.7) {
+      const s = 0.5 + hash01(x, 3) * 0.2;
+      cb(k, g, [s + 0.2, 0.3, 0.7], [x + (hash01(x, 1) - 0.5) * 0.2, 0.95, (hash01(x, 2) - 0.5) * 0.12], hash01(x, 4) > 0.5 ? 0x4a7a34 : 0x44722f, [0, hash01(x) * 0.6, 0], 0.12);
+    }
+  },
+  /** A two-wheeled hand cart loaded with sacks and a crate, its shafts resting on the ground. */
+  cart: (k, g) => {
+    cb(k, g, [1.3, 0.12, 1.9], [0, 0.72, 0], WOOD, undefined, 0.02);
+    for (const x of [-0.62, 0.62]) cb(k, g, [0.08, 0.34, 1.9], [x, 0.93, 0], WOOD_D, undefined, 0.02);
+    cb(k, g, [1.3, 0.34, 0.08], [0, 0.93, -0.92], WOOD_D, undefined, 0.02);
+    for (const x of [-0.78, 0.78]) {
+      k.mesh(g, octagon(0.52, 0.12), WOOD_D, [x, 0.52, -0.1]);
+      k.mesh(g, octagon(0.14, 0.16), IRON, [x, 0.52, -0.1]);
+    }
+    cb(k, g, [1.7, 0.08, 0.08], [0, 0.52, -0.1], IRON, undefined, 0.01);
+    for (const x of [-0.5, 0.5]) cb(k, g, [0.09, 0.09, 1.7], [x, 0.42, 1.55], WOOD_D, [-0.42, 0, 0], 0.02);
+    cb(k, g, [0.6, 0.5, 0.5], [-0.25, 1.03, -0.4], 0xb09a70, [0, 0.3, 0], 0.18);
+    cb(k, g, [0.5, 0.46, 0.46], [0.3, 1.01, 0.1], 0xa08a60, [0, -0.2, 0], 0.18);
+    cb(k, g, [0.5, 0.45, 0.5], [-0.2, 1.0, 0.5], WOOD_L, [0, 0.2, 0], 0.04);
+  },
+  /** A straw archery butt on an easel, rings facing +Z. */
+  target: (k, g) => {
+    for (const x of [-0.45, 0.45]) cb(k, g, [0.1, 1.6, 0.1], [x, 0.8, -0.2], WOOD_D, undefined, 0.02);
+    cb(k, g, [0.1, 1.5, 0.1], [0, 0.7, -0.6], WOOD_D, [-0.4, 0, 0], 0.02);
+    cb(k, g, [1.1, 0.08, 0.1], [0, 0.5, -0.2], WOOD_D, undefined, 0.01);
+    k.mesh(g, octagon(0.62, 0.3), 0xc8a858, [0, 1.15, 0], [0, Math.PI / 2, 0]);
+    ([[0.5, 0xe8dcc0], [0.36, 0xa03030], [0.2, 0xe8dcc0], [0.09, PAL.gold]] as [number, number][]).forEach(([r, c], i) => {
+      k.mesh(g, octagon(r, 0.04), c, [0, 1.15, 0.17 + i * 0.03], [0, Math.PI / 2, 0]);
+    });
+    for (const [x, y] of [[0.12, 1.25], [-0.2, 1.05]]) cb(k, g, [0.03, 0.03, 0.5], [x, y, 0.45], WOOD_L, [0.1, 0.1, 0], 0.01);
+  },
+  /** A stone planter box of flowers. */
+  planter: (k, g) => {
+    cb(k, g, [1.4, 0.5, 0.8], [0, 0.25, 0], STONE_L, undefined, 0.05);
+    k.box(g, [1.2, 0.05, 0.6], [0, 0.5, 0], 0x3a2a1e);
+    for (let i = 0; i < 6; i++) {
+      const x = -0.45 + (i % 3) * 0.45, z = i < 3 ? -0.14 : 0.14;
+      cb(k, g, [0.3, 0.26, 0.3], [x, 0.62, z], 0x4a7a34, [0, i, 0], 0.1);
+      cb(k, g, [0.14, 0.1, 0.14], [x + 0.04, 0.78, z], [0xd05a8a, 0xe8c040, 0xe8dcc0, 0x8a5aa0][i % 4], [0, i, 0], 0.03);
+    }
+  },
+  /** A kitchen-garden bed: dark soil in rows of cabbages and leeks. */
+  veg_patch: (k, g) => {
+    cb(k, g, [3.2, 0.2, 1.8], [0, 0.1, 0], 0x4a3624, undefined, 0.06);
+    for (let r = 0; r < 3; r++) for (let i = 0; i < 5; i++) {
+      const x = -1.2 + i * 0.6, z = -0.55 + r * 0.55;
+      if (r === 1) cb(k, g, [0.08, 0.36, 0.08], [x, 0.36, z], 0x6a9a3a, [0, 0, (hash01(i, r) - 0.5) * 0.4], 0.01);
+      else chunk(k, g, 300 + r * 5 + i, [0.34, 0.24, 0.32], [x, 0.16, z], hash01(i, r, 1) > 0.5 ? 0x5a8a3a : 0x6a9a44, i);
+    }
+  },
+  /** A round haystack with a pitchfork leaning on it. */
+  haystack: (k, g) => {
+    k.mesh(g, taper(1.9, 1.9, 1.3, 1.3, 1.0), 0xc8a858, [0, 0.5, 0], [0, 0.4, 0]);
+    k.mesh(g, taper(1.3, 1.3, 0.2, 0.2, 0.9), 0xb8984a, [0, 1.45, 0], [0, 0.4, 0]);
+    cb(k, g, [0.06, 1.8, 0.06], [0.95, 0.9, 0.3], WOOD_L, [0, 0, 0.3], 0.01);
+    cb(k, g, [0.3, 0.2, 0.04], [0.68, 1.75, 0.3], IRON, [0, 0, 0.3], 0.01);
+  },
+  /** A garden scarecrow: sack head, hat, ragged coat on a cross. */
+  scarecrow: (k, g) => {
+    cb(k, g, [0.12, 2.2, 0.12], [0, 1.1, 0], WOOD_D, undefined, 0.02);
+    cb(k, g, [1.3, 0.1, 0.1], [0, 1.6, 0], WOOD_D, undefined, 0.02);
+    cb(k, g, [0.6, 0.7, 0.34], [0, 1.4, 0], 0x5a6a3a, undefined, 0.08);
+    cb(k, g, [0.34, 0.36, 0.32], [0, 2.02, 0], 0xb09a70, undefined, 0.08);
+    k.mesh(g, taper(0.6, 0.6, 0.26, 0.26, 0.28), 0x5a4230, [0, 2.3, 0]);
+    for (const x of [-0.55, 0.55]) cb(k, g, [0.24, 0.3, 0.3], [x, 1.52, 0], 0x5a6a3a, undefined, 0.06);
+  },
+  /** A chopping stump with an axe bitten into it and split logs around it. */
+  stump: (k, g) => {
+    cb(k, g, [0.7, 0.55, 0.7], [0, 0.27, 0], 0x4a3020, undefined, 0.2);
+    k.mesh(g, octagon(0.3, 0.02), 0xa08058, [0, 0.55, 0], [0, 0, Math.PI / 2]);
+    cb(k, g, [0.06, 0.8, 0.06], [0.2, 0.85, 0], WOOD_L, [0, 0, -0.5], 0.01);
+    cb(k, g, [0.26, 0.1, 0.05], [0.02, 0.6, 0], IRON_L, [0, 0, -0.5], 0.01);
+    for (let i = 0; i < 3; i++) cb(k, g, [0.5, 0.22, 0.22], [-0.6 + i * 0.1, 0.11, 0.45 - i * 0.35], 0x8a6a44, [0, i * 0.9, 0], 0.04);
   },
   board: (k, g) => {
     for (const sx of [-1, 1]) cb(k, g, [0.14, 2.3, 0.14], [sx * 0.85, 1.15, 0], PAL.wood, undefined, 0.02);

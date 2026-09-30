@@ -537,7 +537,7 @@ function floorVariation(kind: 'lair' | 'mine' | null) {
 }
 
 /** Height of one cave-rock terrace (terrain.ts builds them; the riser shading below keys to it). */
-export const CAVE_TERRACE = 1.5;
+export const CAVE_TERRACE = 1.0;
 
 /** Cave walls' painted rock (inside the strata block: needs onRock, vSurfNrm, vSurfPos, uMixTex). */
 const CAVE_ROCK = `

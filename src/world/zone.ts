@@ -105,6 +105,8 @@ export class ZoneRuntime {
         }
       } else if (it.kind === 'restore' && it.id !== 'board') {
         it.setState(s.keep[it.id] ? 'restored' : 'ruined');
+      } else if (it.kind === 'anvil') {
+        it.setState(s.keep.anvil_reforged ? 'restored' : 'ruined');
       } else if (it.kind === 'chest') {
         it.setState(s.keep.mine_chest ? 'restored' : 'none');
       } else if (it.kind === 'pedestal') {
