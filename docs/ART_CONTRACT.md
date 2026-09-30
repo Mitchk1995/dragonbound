@@ -58,9 +58,10 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `bow` | `sock_handR` | vertical bow in hand (counter-rotate −90° X inside the socket) |
 | `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
-| `helm_full` | `sock_head` | cube-over-cube full helm with visor slit; hides hair and beard |
+| `helm_full` | `sock_head` | cube-over-cube full helm with visor slit and a low `ROLE_cloth` crest; hides hair and beard |
 | `body_chain` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | box mail shirt with a skirt block, fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
-| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | stacked-slab cuirass, block pauldron caps, lames + rerebrace + couter down the upper arm (same as plate set `p`) |
+| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | stacked-slab cuirass with a crested breastplate, trim bands, rivet rows, a dark mail skirt and a `ROLE_cloth` tabard (dyed like the wearer's tunic), block pauldron caps, lames + rerebrace + couter down the upper arm (same as plate set `p`) |
+| `body_leather` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
 | `gloves` | `sock_handL`, `sock_gloveR` | gauntlet cuffs, slightly bigger than bare hands |
 | `boots` | `sock_footL`, `sock_footR` | covers shoe, cuff at shin |
 | `u_<unique id>` | as its base | hand-built unique look (own colours allowed; metal parts use `_common.metallic()` so they get the forged-metal finish) |

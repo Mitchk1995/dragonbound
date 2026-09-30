@@ -52,7 +52,7 @@ PIECES = ('body_plate', 'helm_full', 'gloves', 'boots')
 SHOULDER_FOLLOW = 0.75          # src/render/anim.ts
 # Tier palettes for the Blender renders (src/data/items.ts TIERS).
 STEEL = {'metal': 0x9AA4B0, 'trim': 0xD4DCE6, 'dark': 0x3E444C, 'leather': 0x3E444C, 'glow': 0xD4DCE6}
-EMBER = {'metal': 0x3A3336, 'trim': 0xFF7A1A, 'dark': 0x171112, 'leather': 0x171112, 'glow': 0xFF7A1A}
+EMBER = {'metal': 0x3A3336, 'trim': 0xFF7A1A, 'dark': 0x5A1A16, 'leather': 0x5A1A16, 'glow': 0xFF7A1A}
 PALETTES = {'p': STEEL, 'e': EMBER}
 
 VARIANTS = {}
@@ -460,17 +460,28 @@ VARIANTS['p'] = {'name': 'Plate', 'body_plate': body_plate, 'helm_full': helm_fu
 
 
 # ═══ E: Emberforged ══════════════════════════════════════════════════════════
-# The same block plate forged from dragon parts: obsidian slabs, staggered rows of small pointed scales over
-# the breast either side of a scute column, a dragon-heart gem in a claw setting, blocky pauldron caps under a
-# folded wing claw with claws hanging off the rim, and a blocky dragon-skull helm (long box snout, brow ridge
-# over angled glowing eye slits, segmented horns swept back and low). The ember glow is kept to a few places so
-# it stays special: the heart, the eye slits, the one seam right under the chest plate and the gauntlet cuffs.
+# The same block plate forged from dragon parts: obsidian slabs with lighter forged edges (EDGE_E) and a deep
+# crimson second tone (the ember palette's ROLE_dark: the bed under the breast scales, scute column, seams, fins,
+# pauldron tops, frills), staggered rows of small pointed scales over the breast either side of a scute column,
+# a dragon-heart gem in a claw setting, blocky pauldron caps under a folded wing claw with claws hanging off the
+# rim, and a dragon-head helm (E_helm). The ember glow is kept to a few places so it stays special: the heart,
+# the eyes, the one seam right under the chest plate and the gauntlet cuffs.
 SLIT_E = 0x0C0A0A
+BONE_E = 0xDCD0BC                                  # fangs
+
+
+def EDGE_E():
+    """Lighter obsidian for plate edges and rims, so the black slabs separate."""
+    return metallic(0x6A5E62)
+
+
+def HORN_E():
+    return metallic(0x8A7C76)
 
 
 def E_body(S):
     c = S('sock_chest')
-    plate_torso(c, seam=(R.glow, R.dark, R.dark), trim=R.dark, centre=False)
+    plate_torso(c, seam=(R.glow, R.dark, R.dark), trim=EDGE_E(), centre=False, groove=0.026)
     box(c, (0.6, 0.26, 0.012), (0, 0.12, 0.292), R.dark, bevel=0)                               # dark bed under the scales
     fr = faces(c, 0.41, 0.29, sides=False)[0][0]
     for j, y in enumerate((0.25, 0.175, 0.1, 0.025)):
@@ -491,14 +502,14 @@ def E_body(S):
         beam(c, (0, y - 0.03, -0.29), (0, y + 0.05, -0.43), 0.03, R.dark, d=0.11, w1=0.012, d1=0.02)
     for s in (1, -1):
         claw_pauldron(S, s)
-    for g, s in upper_arm_plate(S, rim=R.dark):
+    for g, s in upper_arm_plate(S, rim=EDGE_E()):
         beam(g, (s * 0.16, PALM - 0.3, 0), (s * 0.175, PALM - 0.12, -0.02), 0.03, R.dark, d=0.13, w1=0.012, d1=0.06)   # arm scale
 
 
 def claw_pauldron(S, s):
     """Blocky cap under a folded wing: a wing claw sweeps back off the top block and three finger claws hang off
     the side block's rim."""
-    top, side = block_pauldron(S, s, top=R.dark, edge=R.dark, rivets=None)
+    top, side = block_pauldron(S, s, top=R.dark, edge=EDGE_E(), rivets=None)
     w, hgt, _ = CAP_SIDE[0]
     for z in (-0.12, 0.0, 0.12):                                   # finger claws off the rim
         beam(side, (s * 0.01, -hgt / 2 + 0.01, z), (s * 0.05, -hgt / 2 - 0.08, z), 0.045, R.trim, d=0.045, w1=0.01, d1=0.012)
@@ -507,34 +518,51 @@ def claw_pauldron(S, s):
     beam(top, (-s * 0.02, 0.07, 0.1), (s * 0.0, 0.14, 0.2), 0.05, R.trim, w1=0.01)                  # thumb claw forward
 
 
+def chain(p, pts, widths, color, depth=None):
+    """Tapering segmented horn through `pts`: one block per segment, each overlapping the last."""
+    for (a, b), (w0, w1) in zip(zip(pts, pts[1:]), widths):
+        a, b = Vector(a), Vector(b)
+        beam(p, tuple(a - (b - a).normalized() * 0.03), tuple(b), w0, color, w1=w1,
+             d=depth and depth * w0, d1=depth and depth * w1)
+
+
 def E_helm(S):
-    """Blocky dragon skull: cube shell and top block, heavy V brow over angled ember eye slits, a long box
-    snout with nostrils and a nose horn over a lower jaw with teeth, and three-segment horns that start at the
-    back of the skull and sweep back and low (behind the head from the front, long and clear from above)."""
+    """Dragon-head helm. From the front it has to read as a dragon, not a face: the skull narrows forward into
+    a long snout (nose ridge, flared nostril ridges and a nose horn at the tip) over an open maw of bone fangs
+    and a crimson lower jaw; the ember eyes sit at the snout's root, turned out to the sides under swept brow
+    ridges; spiked crimson frills flare out from the jaw hinges and pale horns sweep back and outward from the
+    crown, so from the front and from above the head's outline is horns, frills and snout."""
     h = S('sock_head')
-    box(h, (0.58, 0.46, 0.6), (0, 0.03, 0.0), R.metal, bevel=0.04)                             # skull
-    box(h, (0.44, 0.08, 0.5), (0, 0.29, -0.03), R.metal, bevel=0.024)                           # top block
-    box(h, (0.6, 0.05, 0.62), (0, -0.19, 0.0), R.dark, bevel=0.012)                             # neck rim
-    box(h, (0.5, 0.14, 0.02), (0, 0.07, 0.3), SLIT_E, bevel=0)                                  # shadow behind the eyes
+    edge, horn, bone = EDGE_E(), HORN_E(), BONE_E
+    box(h, (0.56, 0.44, 0.58), (0, 0.04, -0.03), R.metal, bevel=0.04)                          # skull
+    box(h, (0.42, 0.08, 0.46), (0, 0.29, -0.06), R.metal, bevel=0.024)                          # top block
+    box(h, (0.58, 0.05, 0.6), (0, -0.185, -0.03), edge, bevel=0.012)                            # neck rim
+    beam(h, (0, 0.25, -0.02), (0, 0.17, 0.42), 0.4, R.metal, w1=0.28, d=0.1, d1=0.08)            # brow slope into the snout
+    beam(h, (0, 0.1, 0.18), (0, -0.02, 0.88), 0.38, R.metal, w1=0.17, d=0.2, d1=0.1)             # snout, sloping down
+    beam(h, (0, 0.2, 0.3), (0, 0.055, 0.84), 0.08, edge, w1=0.05, d=0.04, d1=0.03)               # nose ridge
+    beam(h, (0, 0.05, 0.76), (0, 0.2, 0.82), 0.07, edge, w1=0.012)                               # nose horn
+    box(h, (0.26, 0.08, 0.44), (0, -0.08, 0.5), SLIT_E, taper=(0.8, 1), bevel=0)                 # the maw's shadow
+    beam(h, (0, -0.15, 0.18), (0, -0.17, 0.74), 0.34, R.dark, w1=0.18, d=0.09, d1=0.06)          # lower jaw
     for s in (-1, 1):
-        box(h, (0.3, 0.085, 0.17), (s * 0.145, 0.15, 0.29), R.dark, rot=(0, 0, s * 0.22), bevel=0.02)   # brow ridge
-        box(h, (0.13, 0.035, 0.03), (s * 0.135, 0.075, 0.305), R.glow, rot=(0, 0, s * 0.3), bevel=0)   # eye slit
-        box(h, (0.2, 0.2, 0.05), (s * 0.19, -0.07, 0.29), R.metal, rot=(0, s * 0.35, 0), bevel=0.015)  # cheek plate
-        horn = [(s * 0.2, 0.15, -0.14), (s * 0.29, 0.13, -0.36), (s * 0.34, 0.03, -0.54), (s * 0.36, -0.12, -0.68)]
-        for (a, b), (w0, w1) in zip(zip(horn, horn[1:]), ((0.14, 0.11), (0.11, 0.075), (0.075, 0.012))):
-            beam(h, tuple(Vector(a) - (Vector(b) - Vector(a)).normalized() * 0.03), b, w0, R.dark, w1=w1)
-        beam(h, (s * 0.27, -0.06, -0.04), (s * 0.35, -0.1, -0.28), 0.05, R.dark, d=0.1, w1=0.01, d1=0.03)   # cheek frill
-        box(h, (0.05, 0.028, 0.03), (s * 0.055, -0.012, 0.7), SLIT_E, bevel=0)                      # nostril
-        for z in (0.38, 0.48, 0.58):
-            x = s * (0.13 - 0.12 * (z - 0.3))
-            beam(h, (x, -0.11, z), (x, -0.2, z + 0.01), 0.032, R.trim, w1=0.006)                   # teeth
-    beam(h, (0, -0.02, 0.22), (0, -0.07, 0.72), 0.34, R.dark, d=0.2, w1=0.2, d1=0.12)           # snout
-    beam(h, (0, -0.2, 0.2), (0, -0.215, 0.62), 0.28, R.dark, d=0.08, w1=0.16, d1=0.05)           # lower jaw
-    for z, hh in ((0.34, 0.065), (0.46, 0.055)):                                                  # nubs down the snout
-        beam(h, (0, 0.04 - (z - 0.22) * 0.1, z), (0, 0.04 - (z - 0.22) * 0.1 + hh, z - 0.045), 0.055, R.metal, w1=0.012)
-    beam(h, (0, -0.02, 0.655), (0, 0.1, 0.69), 0.065, R.trim, w1=0.012)                             # nose horn
-    for z, hh in ((0.1, 0.07), (-0.06, 0.08), (-0.22, 0.07)):                                     # crest fins
-        beam(h, (0, 0.31, z + 0.03), (0, 0.33 + hh, z - 0.07), 0.028, R.dark, d=0.1, w1=0.01, d1=0.02)
+        beam(h, (s * 0.045, 0.045, 0.66), (s * 0.075, 0.065, 0.87), 0.06, R.dark, w1=0.05, d=0.04, d1=0.045)   # nostril ridge
+        box(h, (0.04, 0.025, 0.02), (s * 0.05, 0.005, 0.885), SLIT_E, bevel=0)                       # nostril
+        for z in (0.5, 0.72):                                                                       # fangs along the jaw line
+            x, top = s * (0.15 - (z - 0.3) * 0.14), 0.1 - 0.12 * (z - 0.18) / 0.7 - 0.07
+            beam(h, (x, top, z), (x, top - 0.075, z), 0.03, bone, w1=0.006)
+        beam(h, (s * 0.11, -0.13, 0.62), (s * 0.11, -0.075, 0.62), 0.028, bone, w1=0.006)
+        # eyes at the snout's root, turned out to the sides, under a brow ridge that sweeps back into the horn
+        box(h, (0.1, 0.035, 0.03), (s * 0.245, 0.13, 0.22), R.glow, rot=(0, s * 0.9, s * 0.25), bevel=0)
+        beam(h, (s * 0.1, 0.2, 0.33), (s * 0.3, 0.26, 0.02), 0.09, R.dark, w1=0.06, d=0.07, d1=0.05)
+        chain(h, [(s * 0.22, 0.22, -0.02), (s * 0.36, 0.3, -0.2), (s * 0.5, 0.36, -0.38), (s * 0.58, 0.5, -0.52)],
+              ((0.13, 0.1), (0.1, 0.07), (0.07, 0.012)), horn)
+        # spiked frill flaring out and back from the jaw hinge
+        fr = pivot(h, 'frill', (s * 0.27, -0.04, 0.04), (0, s * 0.6, 0))
+        prism(fr, [(s * x, y) for x, y in ((0, 0.1), (0.24, 0.2), (0.13, 0.06), (0.29, 0.02), (0.13, -0.04), (0.22, -0.11), (0, -0.07))],
+              0.035, (0, 0, 0), R.dark)
+        for t in ((0.24, 0.2), (0.29, 0.02), (0.22, -0.11)):
+            beam(fr, (0, t[1] * 0.35, 0), (s * t[0], t[1], 0), 0.035, edge, w1=0.01, d=0.045, d1=0.012)   # spines
+    for z, hh in ((0.08, 0.08), (-0.1, 0.09), (-0.28, 0.07)):                                    # crest fins
+        beam(h, (0, 0.31, z + 0.04), (0, 0.33 + hh, z - 0.07), 0.03, R.dark, d=0.11, w1=0.01, d1=0.02)
 
 
 def E_gloves(S):
@@ -549,7 +577,7 @@ def E_gloves(S):
 def E_boots(S):
     for name in ('sock_footL', 'sock_footR'):
         f = S(name)
-        plate_sabaton(f, rim=R.dark)
+        plate_sabaton(f, rim=EDGE_E())
         for x in (-0.1, 0.0, 0.1):
             beam(f, (x, -0.1, 0.28), (x, -0.14, 0.4), 0.06, R.trim, w1=0.012)                    # talons
         beam(f, (0, 0.47, 0.19), (0, 0.56, 0.3), 0.07, R.dark, w1=0.012)                          # knee spike

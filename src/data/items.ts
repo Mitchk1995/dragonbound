@@ -63,7 +63,7 @@ export const TIERS: Record<TierId, Tier> = {
   bronze: { id: 'bronze', name: 'Bronze', palette: { main: 0xb4743a, trim: 0xe3a45a, dark: 0x6a4020 }, req: 1, smith: 1, xpPerBar: 12.5, bar: 'bronze_bar', minIlvl: 1 },
   iron: { id: 'iron', name: 'Iron', palette: { main: 0x8a9098, trim: 0xb8bec6, dark: 0x484c52 }, req: 10, smith: 15, xpPerBar: 25, bar: 'iron_bar', minIlvl: 4 },
   steel: { id: 'steel', name: 'Steel', palette: { main: 0x9aa4b0, trim: 0xd4dce6, dark: 0x3e444c }, req: 20, smith: 30, xpPerBar: 37.5, bar: 'steel_bar', minIlvl: 9 },
-  ember: { id: 'ember', name: 'Emberforged', palette: { main: 0x3a3336, trim: 0xff7a1a, dark: 0x171112, glow: true }, req: 30, smith: 40, xpPerBar: 60, bar: 'ember_bar', minIlvl: 15 },
+  ember: { id: 'ember', name: 'Emberforged', palette: { main: 0x3a3336, trim: 0xff7a1a, dark: 0x5a1a16, glow: true }, req: 30, smith: 40, xpPerBar: 60, bar: 'ember_bar', minIlvl: 15 },
 };
 export const TIER_ORDER: TierId[] = ['bronze', 'iron', 'steel', 'ember'];
 
@@ -141,7 +141,7 @@ list.push(
   { id: 'ember_staff', name: 'Emberwood Staff', kind: 'gear', slot: 'weapon', style: 'magic', dmg: [10, 18], speed: SPEED.heavyStaff, req: { skill: 'magic', level: 30 }, minIlvl: 15, value: 150, model: 'staff', palette: { main: 0x2a1a14, trim: 0xff7a1a, dark: 0x140c0a, glow: true } },
   // Leather: drop-only light armour.
   { id: 'leather_cap', name: 'Leather Cap', kind: 'gear', slot: 'helm', armor: 2, minIlvl: 1, value: 3, model: 'helm_open', palette: LEATHER },
-  { id: 'leather_body', name: 'Leather Body', kind: 'gear', slot: 'body', armor: 4, minIlvl: 1, value: 5, model: 'body_chain', palette: LEATHER },
+  { id: 'leather_body', name: 'Leather Body', kind: 'gear', slot: 'body', armor: 4, minIlvl: 1, value: 5, model: 'body_leather', palette: LEATHER },
   { id: 'leather_gloves', name: 'Leather Gloves', kind: 'gear', slot: 'gloves', armor: 1, minIlvl: 1, value: 3, model: 'gloves', palette: LEATHER },
   { id: 'leather_boots', name: 'Leather Boots', kind: 'gear', slot: 'boots', armor: 1, minIlvl: 1, value: 3, model: 'boots', palette: LEATHER },
   // Jewellery: drop-only until Crafting.
