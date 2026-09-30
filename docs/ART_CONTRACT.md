@@ -1,6 +1,10 @@
 # Art contract: Blender ↔ game
 
 Every model is a Python script in `tools/blender/` using `_common.py`, exported to `public/models/<file>.glb`.
+Scripts read and write the checkout named by the `DRAGONBOUND_ROOT` environment variable (else the one two folders
+above the script, else `D:\gameplanning`), so set it when working in a worktree. Headless re-export, e.g.:
+`blender -b --python-expr "exec(open(r'<root>\tools\blender\minions.py').read())"`; for gear, set
+`DB_ONLY = ['staff']` before the `exec` to export only those models.
 Scripts author inside a root rotated +90° about X, so **all coordinates are three.js: Y up, +Z forward**.
 Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 
@@ -44,7 +48,7 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `longsword` | `sock_handR` | ~1.5 long, wider guard |
 | `pickaxe` | `sock_handR` | head at +Y end |
 | `bow` | `sock_handR` | vertical bow in hand (counter-rotate −90° X inside the socket) |
-| `staff` | `sock_handR` | vertical staff, orb/gem uses `ROLE_trim` + `ROLE_glow` |
+| `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | open-faced helm; face visible; hides hair |
 | `helm_full` | `sock_head` | full helm with visor slit; hides hair and beard |
 | `body_chain` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | slimmer; mail texture via ridges |

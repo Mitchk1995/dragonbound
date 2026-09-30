@@ -1,8 +1,12 @@
 """Goblin Grunt, Kobold Slinger and Ember Cultist. Faces +Z; right-side parts (armR/legR) at -X."""
 import math
+import os
 import sys
 
-sys.path.insert(0, r'D:\gameplanning\tools\blender')
+# Repo root: DRAGONBOUND_ROOT, else two levels above this script (when run as a file), else the old fixed path.
+_ROOT = os.environ.get('DRAGONBOUND_ROOT') or (os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                               if '__file__' in globals() else r'D:\gameplanning')
+sys.path.insert(0, os.path.join(_ROOT, 'tools', 'blender'))
 import importlib
 import _common
 importlib.reload(_common)
@@ -11,10 +15,15 @@ from _common import *
 PI = math.pi
 
 
-def leg(parent, name, x, hip, pants, boot, length):
+def leg(parent, name, x, hip, pants, boot, length, shorts=None):
     l = pivot(parent, name, (x, hip, 0))
     box(l, (0.26, length, 0.28), (0, -length / 2, 0), pants, bevel=0.04)
     box(l, (0.32, 0.22, 0.42), (0, -hip + 0.11, 0.06), boot, bevel=0.05)
+    if shorts:   # ragged leather shorts: a cuff over the thigh with torn tabs front and back
+        box(l, (0.3, 0.2, 0.32), (0, -0.09, 0), shorts, bevel=0.04)
+        for z in (-0.155, 0.155):
+            for dx in (-0.07, 0.06):
+                prism(l, [(-0.045, 0), (0.0, -0.075), (0.045, 0)], 0.02, (dx, -0.185, z), shorts)
     return l
 
 
@@ -28,11 +37,12 @@ def arm(parent, name, x, y, sleeve, hand, length):
 def goblin():
     scene, root = fresh_scene('DB_goblin')
     hip = 0.55
-    leg(root, 'legL', 0.15, hip, 'goblinDark', 'leatherDark', 0.4)
-    leg(root, 'legR', -0.15, hip, 'goblinDark', 'leatherDark', 0.4)
+    leg(root, 'legL', 0.15, hip, 'goblinDark', 'leatherDark', 0.4, shorts='leather')
+    leg(root, 'legR', -0.15, hip, 'goblinDark', 'leatherDark', 0.4, shorts='leather')
     body = pivot(root, 'body', (0, hip, 0))
-    box(body, (0.58, 0.22, 0.38), (0, 0.02, 0), 'leather', bevel=0.04)
+    box(body, (0.6, 0.3, 0.4), (0, -0.01, 0), 'leather', bevel=0.04)                          # seat of the shorts
     box(body, (0.5, 0.26, 0.12), (0, -0.12, 0.14), 'leatherDark', taper=(1.2, 1), bevel=0.02)  # loincloth
+    box(body, (0.46, 0.3, 0.1), (0, -0.14, -0.16), 'leatherDark', taper=(1.2, 1), bevel=0.02)  # rear flap
     box(body, (0.62, 0.52, 0.42), (0, 0.34, 0.02), 'goblin', rot=(0.22, 0, 0), taper=(1.12, 1.05), bevel=0.06)
     box(body, (0.4, 0.3, 0.1), (0, 0.3, 0.22), 'goblinDark', rot=(0.22, 0, 0), bevel=0.03)  # belly
     box(body, (0.08, 0.6, 0.06), (0.1, 0.36, 0.22), 'leatherDark', rot=(0.22, 0, 0.6), bevel=0)  # strap
@@ -69,9 +79,9 @@ def kobold():
     box(body, (0.3, 0.38, 0.08), (0, 0.26, 0.19), 'belly', rot=(0.15, 0, 0), bevel=0.03)
     box(body, (0.5, 0.14, 0.4), (0, 0.04, 0), 'leather', bevel=0.03)
     box(body, (0.22, 0.3, 0.14), (-0.1, 0.3, -0.22), 'leatherDark', bevel=0.03)  # stone pouch
-    t1 = pivot(body, 'tail1', (0, 0.05, -0.2))
-    box(t1, (0.18, 0.16, 0.42), (0, 0, -0.2), 'kobold', rot=(-0.3, 0, 0), taper=(0.8, 1), bevel=0.04)
-    t2 = pivot(t1, 'tail2', (0, -0.1, -0.38))
+    t1 = pivot(body, 'tail1', (0, 0.05, -0.14))   # root sits inside the hips so the joint never opens
+    box(t1, (0.18, 0.16, 0.48), (0, 0, -0.24), 'kobold', rot=(-0.3, 0, 0), taper=(0.8, 1), bevel=0.04)
+    t2 = pivot(t1, 'tail2', (0, -0.1, -0.44))
     box(t2, (0.12, 0.11, 0.38), (0, 0, -0.18), 'koboldDark', rot=(-0.2, 0, 0), bevel=0.03)
     cone(t2, 0.07, 0.18, (0, -0.02, -0.42), 'bone', rot=(-PI / 2, 0, 0), seg=4)
     head = pivot(body, 'head', (0, 0.54, 0.06))
@@ -79,11 +89,11 @@ def kobold():
     box(head, (0.28, 0.2, 0.36), (0, 0.09, 0.3), 'kobold', taper=(0.8, 1), bevel=0.04)
     box(head, (0.24, 0.06, 0.32), (0, 0.0, 0.3), 'belly', bevel=0.02)
     for s in (-1, 1):
-        box(head, (0.09, 0.08, 0.02), (s * 0.13, 0.24, 0.195), 'eye', emissive='eye', strength=3, bevel=0)
+        box(head, (0.08, 0.08, 0.02), (s * 0.1, 0.24, 0.195), 'eye', emissive='eye', strength=3, bevel=0)
         cone(head, 0.06, 0.3, (s * 0.12, 0.4, -0.08), 'bone', rot=(-0.7, 0, s * -0.2), seg=4)
-        box(head, (0.03, 0.03, 0.02), (s * 0.06, 0.16, 0.48), 'black', bevel=0)
-    for i in range(3):
-        cone(head, 0.04, 0.14, (0, 0.36, -0.05 - i * 0.12), 'koboldDark', seg=4)
+        box(head, (0.04, 0.03, 0.02), (s * 0.06, 0.12, 0.482), 'black', bevel=0)           # nostrils on the flat snout face
+    for i, (r, h) in enumerate(((0.045, 0.16), (0.04, 0.14), (0.035, 0.11))):             # crest, bases sunk into the skull
+        cone(head, r, h, (0, 0.33, -i * 0.08), 'koboldDark', rot=(-0.25, 0, 0), seg=4)
     arm(body, 'armL', 0.3, 0.42, 'kobold', 'koboldDark', 0.36)
     armR = arm(body, 'armR', -0.3, 0.42, 'kobold', 'koboldDark', 0.36)
     w = pivot(armR, 'weapon', (0, -0.44, 0), (PI / 2, 0, 0))
@@ -117,14 +127,22 @@ def cultist():
         a = pivot(body, name, (x, 1.32, 0))
         box(a, (0.24, 0.62, 0.28), (0, -0.3, 0), 'robe', taper=(1.2, 1.2), bevel=0.04)
         box(a, (0.3, 0.1, 0.32), (0, -0.6, 0), 'gold', bevel=0.02)
-        gem(a, 0.12, (0, -0.72, 0), 'skin')
-        gem(a, 0.09, (0, -0.84, 0.05), 'fire', emissive='fire', strength=5)
-        if name == 'armR':
-            w = pivot(a, 'weapon', (0, -0.7, 0))
-            cyl(w, 0.04, 0.05, 1.8, (0, 0.2, 0), 'black', seg=6)
-            for s in (-1, 1):
-                box(w, (0.05, 0.3, 0.05), (s * 0.1, 1.2, 0), 'black', rot=(0, 0, s * 0.4), bevel=0.01)
-            cone(w, 0.12, 0.32, (0, 1.2, 0), 'fire', rot=(PI, 0, 0), seg=4, emissive='fire', strength=5)
+        if name == 'armL':
+            box(a, (0.22, 0.2, 0.24), (0, -0.75, 0.02), 'skin', bevel=0.05)                   # fist
+        else:
+            # Staff hand: the fist reaches forward so the shaft passes through its front, clear of the sleeve.
+            box(a, (0.22, 0.2, 0.26), (0, -0.75, 0.1), 'skin', bevel=0.05)
+            box(a, (0.07, 0.1, 0.08), (0.05, -0.7, 0.2), 'skin', rot=(0.3, 0, 0), bevel=0.02)  # thumb against the shaft
+            w = pivot(a, 'weapon', (-0.04, -0.75, 0.2), (0.12, 0, -0.05))   # leans forward, butt out to the side
+            cyl(w, 0.04, 0.048, 1.6, (0, 0.47, 0), 0x3A2418, seg=6)                             # dark wood shaft
+            cone(w, 0.05, 0.1, (0, -0.37, 0), 'black', rot=(PI, 0, 0), seg=6)                   # butt cap
+            ring(w, 0.075, 0.035, 0.06, (0, 1.24, 0), 'gold', seg=6)                            # collar
+            for i in range(3):   # iron claws curl up and in around the orb
+                ang = i * 2 * PI / 3 + PI / 2
+                cx, cz = math.cos(ang), math.sin(ang)
+                box(w, (0.045, 0.22, 0.045), (cx * 0.11, 1.34, cz * 0.11), 'black', rot=(cz * 0.5, 0, -cx * 0.5), bevel=0.012)
+                box(w, (0.04, 0.2, 0.04), (cx * 0.11, 1.52, cz * 0.11), 'black', rot=(-cz * 0.6, 0, cx * 0.6), bevel=0.012)
+            gem(w, 0.12, (0, 1.44, 0), 'fire', emissive='fire', strength=5)                     # ember orb
     export('DB_cultist', 'cultist.glb')
     preview_sheet('cultist.png', target=(0, 1.0, 0), dist=4.2)
     remove_preview_rig()

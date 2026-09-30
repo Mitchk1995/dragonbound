@@ -4,13 +4,23 @@ Humanoid rig names body/head/armL/armR/legL/legR/weapon (golem: no weapon). Face
 NPCs use their own authored colours (no ROLE_ materials).
 """
 import math
+import os
 import sys
 
-sys.path.insert(0, r'D:\gameplanning\tools\blender')
+# Repo root: DRAGONBOUND_ROOT, else two levels above this script (when run as a file), else the old fixed path.
+_ROOT = os.environ.get('DRAGONBOUND_ROOT') or (os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                               if '__file__' in globals() else r'D:\gameplanning')
+sys.path.insert(0, os.path.join(_ROOT, 'tools', 'blender'))
 import importlib
 import _common
 importlib.reload(_common)
 from _common import *
+
+# The curved-surface kit (loft_fn / surf / grow / sub) still lives in plate_variants.py; borrow it for the hood.
+_p = os.path.join(_ROOT, 'tools', 'blender', 'plate_variants.py')
+_pv = {'__name__': 'db_pv', '__file__': _p}
+exec(open(_p, encoding='utf-8').read(), _pv)
+loft_fn, surf, grow, sub = _pv['loft_fn'], _pv['surf'], _pv['grow'], _pv['sub']
 
 PI = math.pi
 SKIN_OLD = 0xE2B48E
@@ -59,21 +69,25 @@ def warden():
     head = pivot(body, 'head', (0, 0.78, 0))
     box(head, (0.44, 0.44, 0.44), (0, 0.24, 0), SKIN_OLD, bevel=0.06)
     face(head, SKIN_OLD, beard, brow_h=0.06)
-    box(head, (0.42, 0.34, 0.14), (0, 0.0, 0.2), beard, bevel=0.04)                           # beard
-    box(head, (0.34, 0.26, 0.13), (0, -0.28, 0.25), beard, taper=(1.25, 1), bevel=0.035)
-    box(head, (0.2, 0.22, 0.11), (0, -0.5, 0.28), beard, taper=(1.6, 1.1), bevel=0.03)
-    cone(head, 0.08, 0.2, (0, -0.68, 0.29), beard, rot=(PI, 0, 0), seg=4)
+    # Beard: one long wedge (no stacked slabs, so no seams across it) tipped forward, plus the point.
+    box(head, (0.18, 0.78, 0.1), (0, -0.22, 0.235), beard, taper=(2.35, 1.45), rot=(-0.14, 0, 0), bevel=0.04)
+    cone(head, 0.08, 0.2, (0, -0.68, 0.31), beard, rot=(PI - 0.14, 0, 0), seg=4)
     box(head, (0.34, 0.07, 0.07), (0, 0.13, 0.26), beard, bevel=0.02)                         # moustache
     for s in (-1, 1):
         box(head, (0.07, 0.16, 0.06), (s * 0.16, 0.05, 0.26), beard, rot=(0, 0, s * 0.25), bevel=0.02)
-    # Hood: open at the face
-    box(head, (0.58, 0.1, 0.56), (0, 0.51, -0.02), robe, bevel=0.035)
-    box(head, (0.58, 0.54, 0.1), (0, 0.24, -0.27), robe, bevel=0.03)
-    for s in (-1, 1):
-        box(head, (0.08, 0.52, 0.52), (s * 0.27, 0.23, -0.01), robe, bevel=0.03)
-        box(head, (0.05, 0.5, 0.05), (s * 0.27, 0.23, 0.25), GOLD, bevel=0.012)
-    box(head, (0.58, 0.05, 0.05), (0, 0.53, 0.25), GOLD, bevel=0.012)
-    cone(head, 0.2, 0.4, (0, 0.46, -0.3), robe, rot=(-2.1, 0, 0), seg=4)                      # hood tail
+    # Hood: one lofted cloth shell, open at the face, tucked into the mantle, its crown rising to a soft
+    # point swept back. Gold trim follows the face opening and the brow.
+    ins = (0, 0.24, -0.03)
+    side = loft_fn([(-0.08, 0.32, 0.33, 0, 0, -0.03), (0.2, 0.31, 0.31, 0, 0, -0.03), (0.44, 0.29, 0.3, 0, 0, -0.04)],
+                   2.6, t0=0.8, t1=2 * PI - 0.8)
+    surf(head, side, 10, 2, 0.04, robe, inside=ins)
+    crown = loft_fn([(0.42, 0.29, 0.3, 0, 0, -0.04), (0.52, 0.26, 0.28, 0, 0.03, -0.07), (0.59, 0.19, 0.21, 0, 0.06, -0.12),
+                     (0.64, 0.1, 0.12, 0, 0.06, -0.19), (0.67, 0, 0, 0, 0, -0.28)], 2.6)
+    surf(head, crown, 12, 4, 0.04, robe, closed_u=True, inside=ins, inner=False, walls=(0,))
+    for u0, u1 in ((0, 0.05), (0.95, 1)):
+        surf(head, grow(sub(side, u0, u1, 0, 1), 0.008, ins), 1, 2, 0.02, GOLD, inside=ins)
+    surf(head, grow(loft_fn([(0.42, 0.29, 0.3, 0, 0, -0.04), (0.48, 0.265, 0.28, 0, 0, -0.055)], 2.6, t0=-0.85, t1=0.85),
+                    0.008, ins), 6, 1, 0.02, GOLD, inside=ins)
 
     for name, x in (('armL', 0.47), ('armR', -0.47)):
         a = pivot(body, name, (x, 0.62, 0))
@@ -111,6 +125,8 @@ def quartermaster():
     box(body, (0.6, 0.86, 0.04), (0, 0.18, 0.325), apron, taper=(0.82, 1), rot=(-0.06, 0, 0), bevel=0.015)
     box(body, (0.4, 0.16, 0.03), (0, -0.02, 0.35), 0x3A2618, bevel=0.01)                      # pocket
     box(body, (0.04, 0.16, 0.03), (0.08, 0.1, 0.36), 0xE8DDC4, rot=(0, 0, 0.2), bevel=0)      # quill
+    box(body, (0.15, 0.2, 0.035), (-0.09, 0.04, 0.34), 0x6A2A1E, rot=(0, 0, -0.08), bevel=0.01)  # ledger in the pocket
+    box(body, (0.13, 0.02, 0.025), (-0.082, 0.14, 0.34), 0xE8DDC4, rot=(0, 0, -0.08), bevel=0)
     for s in (-1, 1):
         box(body, (0.06, 0.08, 0.3), (s * 0.24, 0.73, 0.12), apron, bevel=0.01)              # neck straps
     box(body, (0.44, 0.08, 0.34), (0, 0.76, 0), tunic, bevel=0.02)
@@ -133,15 +149,20 @@ def quartermaster():
         box(a, (0.22, 0.26, 0.24), (0, -0.42, 0), skin, bevel=0.04)                           # forearm
         box(a, (0.28, 0.24, 0.28), (0, -0.64, 0), skin, bevel=0.06)
         if name == 'armR':
-            w = pivot(a, 'weapon', (0, -0.66, 0.04))
-            box(w, (0.08, 0.3, 0.24), (0, 0.02, 0.1), 0x6A2A1E, bevel=0.02)                   # ledger
-            box(w, (0.09, 0.28, 0.02), (0, 0.02, 0.1), 0xE8DDC4, bevel=0)
+            # Smith's hammer gripped near the butt, head hanging forward and down.
+            w = pivot(a, 'weapon', (0, -0.66, 0.02), (PI / 2 + 0.7, 0, 0))
+            cyl(w, 0.036, 0.042, 0.74, (0, 0.13, 0), 0x6B4426, seg=6)                           # handle
+            cyl(w, 0.048, 0.048, 0.04, (0, -0.22, 0), 0x3A2618, seg=6)                           # butt knob
+            box(w, (0.075, 0.07, 0.075), (0, 0.44, 0), 0x3E4248, bevel=0.012)                   # iron collar
+            box(w, (0.15, 0.15, 0.22), (0, 0.55, 0.01), 0x5E636B, bevel=0.02)                   # head
+            box(w, (0.17, 0.17, 0.05), (0, 0.55, 0.13), 0x3E4248, bevel=0.015)                  # striking face
+            box(w, (0.1, 0.11, 0.08), (0, 0.55, -0.13), 0x5E636B, bevel=0.012)                  # peen
     return scene
 
 
 def golem():
     scene, root = fresh_scene('DB_golem')
-    rock, dark, light, moss, ember = 0x7E766A, 0x5A544C, 0x9E968A, 0x6E8E3A, 0xFF7A1A
+    rock, dark, light, moss, ember = 0x7E766A, 0x5A544C, 0x9E968A, 0x6E8E3A, 0xFF6A1A
     for name, x in (('legL', 0.13), ('legR', -0.13)):
         l = pivot(root, name, (x, 0.25, 0))
         box(l, (0.17, 0.18, 0.19), (0, -0.1, 0), dark, bevel=0.04)
@@ -152,10 +173,13 @@ def golem():
     box(body, (0.26, 0.1, 0.08), (0.02, 0.06, -0.19), moss, bevel=0.02)
     for s in (-1, 1):
         box(body, (0.2, 0.12, 0.26), (s * 0.25, 0.36, 0), light, rot=(0, 0, s * -0.35), bevel=0.04)  # shoulder stones
-    box(body, (0.2, 0.18, 0.04), (0, 0.22, 0.2), dark, bevel=0.02)                            # core socket
-    gem(body, 0.085, (0, 0.22, 0.21), ember, emissive=ember, strength=5)                        # ember core
-    for rz, dx, dy in ((0.7, 0.1, 0.3), (-0.5, -0.11, 0.12), (1.2, 0.12, 0.1)):
-        box(body, (0.12, 0.018, 0.02), (dx, dy, 0.205), ember, rot=(0, 0, rz), emissive=ember, strength=3, bevel=0)  # glowing cracks
+    # Ember core sunk in an octagonal stone rim, with two short fissures running out from the rim.
+    ring(body, 0.105, 0.072, 0.05, (0, 0.2, 0.2), dark, rot=(PI / 2, PI / 8, 0), seg=8)
+    gem(body, 0.078, (0, 0.2, 0.155), ember, emissive=ember, strength=4)
+    crack = [(0, -0.013), (0.05, 0.012), (0.09, 0.0), (0.05, 0.03), (0, 0.013)]
+    for ang in (0.35, PI + 0.45):
+        prism(body, crack, 0.02, (math.cos(ang) * 0.095, 0.2 + math.sin(ang) * 0.095, 0.205), ember,
+              rot=(0, 0, ang), emissive=ember, strength=1.5)
 
     head = pivot(body, 'head', (0, 0.4, 0.05))
     box(head, (0.3, 0.22, 0.27), (0, 0.1, 0), light, bevel=0.06)

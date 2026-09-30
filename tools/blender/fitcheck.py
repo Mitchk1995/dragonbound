@@ -4,21 +4,26 @@ The game moves every child of a gear file's `sock_X` empty under the hero's `soc
 transform unchanged (registry.ts buildGear/attachParts). We do the same with object copies.
 Run the builder scripts first so their DB_* scenes exist in this .blend.
 
-    exec(open(r'D:\\gameplanning\\tools\\blender\\fitcheck.py').read())
+    exec(open(os.path.join(os.environ['DRAGONBOUND_ROOT'], 'tools', 'blender', 'fitcheck.py')).read())
     fit('plate', ['DB_gear_body_plate', 'DB_gear_longsword'])
 """
+import os
 import re
 import sys
 
-sys.path.insert(0, r'D:\gameplanning\tools\blender')
+# Repo root: DRAGONBOUND_ROOT, else two levels above this script (when run as a file), else the old fixed path.
+_ROOT = os.environ.get('DRAGONBOUND_ROOT') or (os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                               if '__file__' in globals() else r'D:\gameplanning')
+sys.path.insert(0, os.path.join(_ROOT, 'tools', 'blender'))
 import importlib
 import _common
 importlib.reload(_common)
 from _common import *
 from mathutils import Matrix
 
-_g = {'DB_RUN': False, '__name__': 'db_fit'}
-exec(open(r'D:\gameplanning\tools\blender\hero.py').read(), _g)
+_p = os.path.join(_ROOT, 'tools', 'blender', 'hero.py')
+_g = {'DB_RUN': False, '__name__': 'db_fit', '__file__': _p}
+exec(open(_p).read(), _g)
 build_hero = _g['build_hero']
 
 _strip = lambda n: re.sub(r'\.\d{3}$', '', n)

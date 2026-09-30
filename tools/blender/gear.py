@@ -15,9 +15,13 @@ Tier gear uses ROLE_metal / ROLE_trim / ROLE_dark (+ ROLE_leather, ROLE_glow) so
 palette. Uniques (u_*) use their own authored colours. Right side is -X.
 """
 import math
+import os
 import sys
 
-sys.path.insert(0, r'D:\gameplanning\tools\blender')
+# Repo root: DRAGONBOUND_ROOT, else two levels above this script (when run as a file), else the old fixed path.
+_ROOT = os.environ.get('DRAGONBOUND_ROOT') or (os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                               if '__file__' in globals() else r'D:\gameplanning')
+sys.path.insert(0, os.path.join(_ROOT, 'tools', 'blender'))
 import importlib
 import _common
 importlib.reload(_common)
@@ -120,9 +124,15 @@ def bow(S):
     rivet(b, (0, 0, BOW_Z - 0.065), R.glow, 0.03)
 
 
+# Staffs run upright through the front of the fist (socket +Y), not down the forearm axis, with the top
+# leaning forward and a touch outward so the shaft clears the forearm and sleeve.
+STAFF_GRIP = (0, 0.1, 0)
+STAFF_LEAN = (-PI / 2 + 0.2, 0, 0.05)
+
+
 def staff(S):
     h = S('sock_handR')
-    b = pivot(h, 'staffbody', (0, 0, 0.09), (-PI / 2, 0, 0))   # vertical, just in front of the fist
+    b = pivot(h, 'staffbody', STAFF_GRIP, STAFF_LEAN)
     cyl(b, 0.05, 0.062, 1.9, (0, 0.3, 0), R.metal, seg=6)
     cyl(b, 0.068, 0.068, 0.24, (0, 0.0, 0), R.leather, seg=6)
     for y in (-0.5, 0.72):
@@ -314,7 +324,7 @@ def u_emberstring(S):
 
 def u_kindled_ash(S):
     h = S('sock_handR')
-    b = pivot(h, 'staffbody', (0, 0, 0.09), (-PI / 2, 0, 0))
+    b = pivot(h, 'staffbody', STAFF_GRIP, STAFF_LEAN)
     cyl(b, 0.05, 0.064, 1.86, (0, 0.28, 0), 0x9A9088, seg=6)                       # pale ash wood
     for y in (-0.45, 0.35, 0.8):
         cyl(b, 0.07, 0.07, 0.05, (0, y, 0), CHAR, seg=6)

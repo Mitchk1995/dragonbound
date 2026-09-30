@@ -4,9 +4,13 @@ No armour, weapon, hair or helmet: those are separate gear_*.glb / hair_*.glb / 
 attached to the sock_* empties at runtime. Faces +Z; right side (armR/legR) is at -X.
 """
 import math
+import os
 import sys
 
-sys.path.insert(0, r'D:\gameplanning\tools\blender')
+# Repo root: DRAGONBOUND_ROOT, else two levels above this script (when run as a file), else the old fixed path.
+_ROOT = os.environ.get('DRAGONBOUND_ROOT') or (os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                               if '__file__' in globals() else r'D:\gameplanning')
+sys.path.insert(0, os.path.join(_ROOT, 'tools', 'blender'))
 import importlib
 import _common
 importlib.reload(_common)
@@ -39,7 +43,10 @@ def build_hero(scene_name='DB_hero'):
     box(body, (0.68, 0.66, 0.42), (0, 0.42, 0), R.cloth, taper=(1.08, 1.04), bevel=0.05)
     box(body, (0.7, 0.24, 0.44), (0, -0.05, 0), R.cloth, taper=(0.96, 0.96), bevel=0.04)
     box(body, (0.72, 0.05, 0.46), (0, -0.15, 0), R.cloth2, bevel=0.015)            # hem stripe
-    box(body, (0.19, 0.19, 0.04), (0, 0.7, 0.207), R.skin, rot=(0, 0, PI / 4), bevel=0.01)  # V-neck
+    # V-neck: skin wedge tucked under the collar, deep enough to fill the tunic's top edge, apex on the placket.
+    prism(body, [(-0.11, 0), (0, -0.17), (0.11, 0)], 0.08, (0, 0.758, 0.185), R.skin)
+    for s in (-1, 1):
+        box(body, (0.03, 0.21, 0.02), (s * 0.058, 0.672, 0.224), R.cloth2, rot=(0, 0, -s * 0.576), bevel=0.006)  # piping
     box(body, (0.06, 0.36, 0.03), (0, 0.38, 0.222), R.cloth2, bevel=0.01)            # placket
     for y in (0.3, 0.42):
         box(body, (0.05, 0.05, 0.03), (0, y, 0.24), R.leather, bevel=0.01)          # toggles
