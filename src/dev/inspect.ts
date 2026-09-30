@@ -671,8 +671,8 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
         const s: AnimState = { ...newAnimState(), attackKind: kind, attack: t };
         rig.update(0, s);
         bow.update(s, dresser.socket('sock_handL'));
-        const eye = side === 'left' ? new THREE.Vector3(4.6, 1.6, 0.6) : new THREE.Vector3(0.6, 1.6, 4.6);
-        cells.push({ label: `${label} t=${t}`, obj: holder, eye, at: new THREE.Vector3(0, 1.2, 0) });
+        const eye = side === 'left' ? new THREE.Vector3(6.2, 1.9, 0.6) : new THREE.Vector3(0.6, 1.9, 6.2);
+        cells.push({ label: `${label} t=${t}`, obj: holder, eye, at: new THREE.Vector3(0, 1.55, 0) });
         objs.push(holder);
       }
       st.sheet(cells, 4, 2);
