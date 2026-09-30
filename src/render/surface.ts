@@ -163,16 +163,17 @@ export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: Surf
  * Ground: a four-channel atlas (dirt, grass, flagstone, cave rock) projected top-down in world
  * space and blended per vertex by the `aSplat` attribute.
  */
-export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0) {
+export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1) {
   const uniforms = {
     uLava: { value: lava },
+    uTopShade: { value: topShade },
     uGroundTex: { value: groundTexture() },
     uSurfScale: { value: 0.25 },
     uSurfAlbedo: { value: 0.42 },
     uSurfBump: { value: 1.1 },
   };
   addPatch(mat, {
-    key: lava > 0 ? 'ground:lava' : 'ground',
+    key: `ground${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}`,
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
       commonInject(
@@ -186,18 +187,38 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0) {
         varying vec4 vSplat;
         float surfSample(out vec3 grad) {
           vec4 k = vSplat / max(0.001, dot(vSplat, vec4(1.0)));
+          vec3 w = pow(abs(normalize(vSurfNrm)), vec3(4.0));
+          w /= (w.x + w.y + w.z);
+          // Top: the splatted atlas, projected down.
           vec2 uv = vSurfPos.xz * uSurfScale;
           float h = dot(texture2D(uGroundTex, uv), k);
           float hx = dot(texture2D(uGroundTex, uv + vec2(SURF_E, 0.0)), k);
           float hz = dot(texture2D(uGroundTex, uv + vec2(0.0, SURF_E)), k);
-          grad = vec3(hx - h, 0.0, hz - h) * (uSurfScale / SURF_E);
-          return h;
+          vec3 gTop = vec3(hx - h, 0.0, hz - h);
+          // Most ground is flat: skip the side projections there (6 fewer texture fetches).
+          if (w.y > 0.985) {
+            grad = gTop * (uSurfScale / SURF_E);
+            return h;
+          }
+          // Steep faces (cliffs, shore banks): the rock channel on the vertical planes, no stretching.
+          vec2 ux = vSurfPos.zy * uSurfScale, uz = vSurfPos.xy * uSurfScale;
+          float rx = texture2D(uGroundTex, ux).a, rz = texture2D(uGroundTex, uz).a;
+          vec3 gX = vec3(0.0, texture2D(uGroundTex, ux + vec2(0.0, SURF_E)).a - rx, texture2D(uGroundTex, ux + vec2(SURF_E, 0.0)).a - rx);
+          vec3 gZ = vec3(texture2D(uGroundTex, uz + vec2(SURF_E, 0.0)).a - rz, texture2D(uGroundTex, uz + vec2(0.0, SURF_E)).a - rz, 0.0);
+          grad = (gTop * w.y + gX * w.x + gZ * w.z) * (uSurfScale / SURF_E);
+          return h * w.y + rx * w.x + rz * w.z;
         }`,
       );
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 aSplat;\nvarying vec4 vSplat;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvSplat = aSplat;');
       heightInject(shader);
+      if (topShade < 1) {
+        // Cave rock: the higher the rock, the deeper in shadow (tunnel walls fall away into darkness).
+        shader.fragmentShader = shader.fragmentShader
+          .replace('uniform float uLava;', 'uniform float uLava;\nuniform float uTopShade;')
+          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\ndiffuseColor.rgb *= mix(1.0, uTopShade, smoothstep(0.8, 3.4, vSurfPos.y));');
+      }
       if (lava > 0) {
         // Lava pools in the rock channel's deepest crevices, pulsing slowly. Emissive, so it glows
         // regardless of lighting (and feeds bloom).

@@ -15,6 +15,8 @@ export interface PackState {
 }
 
 const LEASH = 26;
+/** Idle enemies farther than this from the hero sleep (see update). */
+const DORMANT_DIST = 42;
 
 export class Enemy extends Unit {
   readonly def: EnemyDef;
@@ -75,6 +77,13 @@ export class Enemy extends Unit {
       this.anim.dead = this.deadT;
       this.updateCommon(dt, g.zone.nav);
       return;
+    }
+    // Dormant when far away and idle: no AI, no animation, not drawn (big zones hold ~100 enemies;
+    // only the ones near the hero cost anything). DORMANT_DIST is well beyond the view and aggro range.
+    if (!this.aggro && !this.returning && this.def.behavior !== 'boss') {
+      const dormant = this.distTo(g.player) > DORMANT_DIST;
+      this.obj.visible = !dormant;
+      if (dormant) return;
     }
     this.atkCd -= dt;
     let moved = 0;

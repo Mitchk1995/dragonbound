@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ENEMIES } from '../data/enemies';
 import { BASES, TIER_ORDER, TIERS, UNIQUES } from '../data/items';
-import { ZONES } from '../data/zones';
+import { KEEP_STAGE, ZONES } from '../data/zones';
 import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
 import { Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
@@ -33,7 +33,8 @@ interface ZoneReport {
   info: { calls: number; triangles: number; programs: number; geometries: number; textures: number };
 }
 interface LumStats { mean: number; p5: number; p95: number; clipped: number; crushed: number; cast: [number, number, number] }
-interface PerfStats { cpuMs: number; frameMs: number; frameP95: number }
+/** frameMs = max(cpu, gpu): the frame cost ignoring vsync. */
+interface PerfStats { cpuMs: number; gpuMs: number; gpuP95: number; frameMs: number }
 
 export async function runInspect(g: Game, suites: string) {
   const api = window.electronAPI!.inspect!;
@@ -87,6 +88,7 @@ export async function runInspect(g: Game, suites: string) {
 
   try {
     if (want('zones')) report.zones = await zonesSuite(g, shot);
+    if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     if (want('ui')) await uiSuite(g, shot);
     if (want('models')) await modelsSuite(g, shot);
     if (want('anims')) await animsSuite(g, shot);
@@ -139,25 +141,45 @@ function lumStats(g: Game): LumStats {
   };
 }
 
-/** CPU time of a frozen update+render, and wall time including a GPU sync (readPixels of one pixel). */
-function perf(g: Game, n = 60): PerfStats {
-  const gl = g.renderer.getContext();
-  const px = new Uint8Array(4);
-  const cpu: number[] = [], full: number[] = [];
+/**
+ * Frame cost with the world frozen (dt = 0, every system still runs its per-frame work):
+ * - cpuMs: update + render submission on the CPU;
+ * - gpuMs: GPU time of the whole render (EXT_disjoint_timer_query_webgl2), the real render cost.
+ * Wall-clock with a readPixels sync is NOT used: it quantises to the display's vsync period.
+ */
+async function perf(g: Game, n = 60): Promise<PerfStats> {
+  const gl = g.renderer.getContext() as WebGL2RenderingContext;
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const cpu: number[] = [];
+  const queries: WebGLQuery[] = [];
   for (let i = 0; i < n; i++) {
     const t0 = performance.now();
-    // dt = 0: the world stays frozen (comparable shots) while every system still runs its per-frame work.
+    const q = ext ? gl.createQuery() : null;
+    if (q && ext) gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
     g.update(0, 1 / 60);
     g.draw();
-    const t1 = performance.now();
-    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    const t2 = performance.now();
-    cpu.push(t1 - t0);
-    full.push(t2 - t0);
+    if (q && ext) {
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      queries.push(q);
+    }
+    cpu.push(performance.now() - t0);
+    if (i % 4 === 3) await raf(); // let the GPU drain so queries don't pile up
   }
-  const med = (a: number[]) => a.sort((x, y) => x - y)[Math.floor(a.length / 2)];
-  const p95 = (a: number[]) => a.sort((x, y) => x - y)[Math.floor(a.length * 0.95)];
-  return { cpuMs: +med(cpu).toFixed(2), frameMs: +med(full).toFixed(2), frameP95: +p95(full).toFixed(2) };
+  const gpu: number[] = [];
+  for (let tries = 0; tries < 60 && gpu.length < queries.length; tries++) {
+    await raf();
+    for (const q of queries) {
+      if ((q as any).done) continue;
+      if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+        if (!gl.getParameter(ext!.GPU_DISJOINT_EXT)) gpu.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+        (q as any).done = true;
+      }
+    }
+  }
+  queries.forEach((q) => gl.deleteQuery(q));
+  const med = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length / 2)] : NaN);
+  const p95 = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length * 0.95)] : NaN);
+  return { cpuMs: +med(cpu).toFixed(2), gpuMs: +med(gpu).toFixed(2), gpuP95: +p95(gpu).toFixed(2), frameMs: +Math.max(med(cpu), med(gpu)).toFixed(2) };
 }
 
 // ─── Zones ──────────────────────────────────────────────────────────────────
@@ -205,7 +227,7 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
       const pois: [string, number, number][] = [['entry', L.entry.x, L.entry.z]];
       for (const s of L.stations.slice(0, 8)) pois.push([`${s.kind}-${s.id}`, s.x, s.z + 2.2]);
       for (const n of L.nodes.filter((n, i, a) => a.findIndex((m) => m.ore === n.ore) === i)) pois.push([`ore-${n.ore}`, n.x, n.z + 1.6]);
-      L.packs.slice(0, 4).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
+      L.packs.slice(0, 10).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
       if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 7]);
       let i = 1;
       for (const [label, x, zz] of pois) {
@@ -215,7 +237,7 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
         g.camPos.copy(p.pos);
         g.debug.timeScale = 0;
         g.update(0);
-        const perfStats = perf(g, 40);
+        const perfStats = await perf(g, 40);
         g.draw();
         const lum = lumStats(g);
         const shotName = `zone-${name}-${String(i++).padStart(2, '0')}-${label}`;
@@ -236,13 +258,90 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
   return out;
 }
 
+// ─── Perf breakdown ─────────────────────────────────────────────────────────
+
+/**
+ * Where does the frame go? At a heavy spot, measure the frame with each feature switched off in
+ * turn (explicit suite: `npm run inspect -- perf`). Differences from the baseline are the cost.
+ */
+async function perfSuite(g: Game) {
+  const out: Record<string, Record<string, number>> = {};
+  for (const [zone, x, z] of [['foothills', 96, 70], ['foothills', 85, 150], ['keep', 48, 50]] as [string, number, number][]) {
+    g.travel(zone, true);
+    await frames(20);
+    const p = g.player;
+    p.pos.set(x, 0, z);
+    g.camPos.copy(p.pos);
+    g.debug.timeScale = 0;
+    const game = g as any;
+    const byName = (test: (o: THREE.Object3D) => boolean) => {
+      const list: THREE.Object3D[] = [];
+      g.zone.group.traverse((o) => {
+        if (test(o)) list.push(o);
+      });
+      return list;
+    };
+    const toggles: [string, () => () => void][] = [
+      ['no shadows', () => {
+        g.sun.castShadow = false;
+        return () => (g.sun.castShadow = true);
+      }],
+      ['no bloom', () => {
+        game.bloom.enabled = false;
+        return () => (game.bloom.enabled = true);
+      }],
+      ['no vegetation', () => {
+        const l = byName((o) => o instanceof THREE.InstancedMesh);
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no terrain', () => {
+        const l = byName((o) => o.name === 'ground' || o.name === 'relief');
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no enemies', () => {
+        g.zone.enemies.forEach((e) => (e.obj.visible = false));
+        return () => g.zone.enemies.forEach((e) => (e.obj.visible = true));
+      }],
+      ['no water', () => {
+        const l = byName((o) => o.name === 'water' || o.name === 'lava');
+        l.forEach((o) => (o.visible = false));
+        return () => l.forEach((o) => (o.visible = true));
+      }],
+      ['no MSAA', () => {
+        const rt = game.composer.renderTarget1;
+        const s = rt.samples;
+        rt.samples = 0;
+        game.composer.renderTarget2.samples = 0;
+        return () => {
+          rt.samples = s;
+          game.composer.renderTarget2.samples = s;
+        };
+      }],
+    ];
+    const row: Record<string, number> = {};
+    await perf(g, 20); // warm up programs
+    row.baseline = (await perf(g, 60)).gpuMs;
+    for (const [name, off] of toggles) {
+      const undo = off();
+      await perf(g, 10);
+      row[name] = (await perf(g, 60)).gpuMs;
+      undo();
+    }
+    out[`${zone}@${x},${z}`] = row;
+    g.debug.timeScale = 1;
+  }
+  return out;
+}
+
 // ─── UI ─────────────────────────────────────────────────────────────────────
 
 async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   g.travel('keep', true);
   await frames(15);
   const p = g.player;
-  p.pos.set(27.5, 0, 33.5);
+  p.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
   g.camPos.copy(p.pos);
   await shot('ui-01-hud');
   const ui = g.ui as any;
@@ -304,7 +403,7 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
 
 class Studio {
   readonly scene = new THREE.Scene();
-  readonly cam = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
+  readonly cam = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
   private overlay: HTMLElement;
   constructor(private g: Game) {
     this.scene.background = new THREE.Color(0x3b3a40);
@@ -413,7 +512,7 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
   for (const [label, gear] of sets) {
     const cells: Parameters<Studio['sheet']>[0] = [];
     const objs: THREE.Object3D[] = [];
-    for (const [v, eye] of views(2.1, 2.1)) {
+    for (const [v, eye] of views(2.2, 2.4)) {
       const m = makeModel('hero');
       const holder = new THREE.Group();
       holder.add(m.root);
@@ -421,11 +520,29 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
       if (label === 'uniques') for (const u of Object.values(UNIQUES)) items[BASES[u.base].slot!] = { ...makeItem(u.base), unique: u.id, rarity: 'unique' } as any;
       new HeroDresser(m).dress({ name: '', skin: 1, hair: 2, hairColor: 1, beard: 1, cloth: 0, cloth2: 5 }, items);
       new Rig(m.root).update(0, newAnimState());
-      cells.push({ label: `${label} · ${v}`, obj: holder, eye, at: new THREE.Vector3(0, 1.0, 0) });
+      cells.push({ label: `${label} · ${v}`, obj: holder, eye, at: new THREE.Vector3(0, 1.15, 0) });
       objs.push(holder);
     }
     st.sheet(cells, 4, 1);
     await shot(`hero-${label.replace(/\s+/g, '_')}`);
+    st.clear(objs);
+  }
+  // Every hair style and beard, 3/4 from above (the gameplay angle shows the crown).
+  {
+    const looks: [string, number, number][] = [['hair 1', 1, 0], ['hair 2', 2, 0], ['hair 3', 3, 0], ['hair 4', 4, 0], ['bald', 0, 0], ['beard 1', 0, 1], ['beard 2', 0, 2], ['beard 3', 0, 3]];
+    const cells: Parameters<Studio['sheet']>[0] = [];
+    const objs: THREE.Object3D[] = [];
+    for (const [label, hair, beard] of looks) {
+      const m = makeModel('hero');
+      const holder = new THREE.Group();
+      holder.add(m.root);
+      new HeroDresser(m).dress({ name: '', skin: 1, hair, hairColor: 1, beard, cloth: 0, cloth2: 5 }, {});
+      new Rig(m.root).update(0, newAnimState());
+      cells.push({ label, obj: holder, eye: new THREE.Vector3(1.1, 2.9, 1.9), at: new THREE.Vector3(0, 1.8, 0) });
+      objs.push(holder);
+    }
+    st.sheet(cells, 4, 2);
+    await shot('hero-hair');
     st.clear(objs);
   }
   document.body.classList.remove('inspect-clean');
@@ -456,7 +573,7 @@ async function animsSuite(g: Game, shot: (n: string) => Promise<void>) {
         rig.update(0, s);
         bow.update(s, dresser.socket('sock_handL'));
         const eye = side === 'left' ? new THREE.Vector3(4.6, 1.6, 0.6) : new THREE.Vector3(0.6, 1.6, 4.6);
-        cells.push({ label: `${label} t=${t}`, obj: holder, eye, at: new THREE.Vector3(0, 1.1, 0) });
+        cells.push({ label: `${label} t=${t}`, obj: holder, eye, at: new THREE.Vector3(0, 1.2, 0) });
         objs.push(holder);
       }
       st.sheet(cells, 4, 2);

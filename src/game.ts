@@ -5,7 +5,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import type { PlayerStats } from './combat/stats';
 import type { AbilityKey } from './data/abilities';
-import { ZONES } from './data/zones';
+import { KEEP_STAGE, ZONES } from './data/zones';
 import type { Enemy } from './entities/enemy';
 import type { GroundItem } from './entities/groundItem';
 import type { Interactable } from './entities/interactable';
@@ -172,7 +172,7 @@ export class Game {
   showCreate() {
     this.mode = 'create';
     // Stage the preview on the open plaza, clear of the island's rim trees.
-    this.player.pos.set(27.5, 0, 33.5);
+    this.player.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
     this.player.facing = this.player.targetFacing = 0;
     this.player.obj.visible = true;
     this.ui.showCreate();

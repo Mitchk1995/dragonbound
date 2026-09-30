@@ -85,6 +85,144 @@ function oreRock(k: ModelKit, g: THREE.Group, color: number): Prop {
 type Builder = (k: ModelKit, g: THREE.Group, arg?: any) => Prop | void;
 
 const BUILDERS: Record<string, Builder> = {
+  // ─── Landmarks & world dressing (zone redesign) ───────────────────────────
+  /** Plank bridge along local +Z; `arg` = span length in cells. */
+  bridge: (k, g, arg) => {
+    const len = Math.max(4, arg ?? 6);
+    const n = Math.round(len / 0.5);
+    for (let i = 0; i < n; i++) {
+      const z = -len / 2 + (i + 0.5) * (len / n);
+      k.box(g, [2.4, 0.12, len / n - 0.04], [0, 0.02 + Math.sin((i / (n - 1)) * Math.PI) * 0.12, z], i % 3 ? PAL.wood : 0x5a3a20, [0, 0, (i % 2 - 0.5) * 0.02]);
+    }
+    for (const sx of [-1, 1]) {
+      for (let i = 0; i <= Math.floor(len / 2); i++) {
+        const z = -len / 2 + i * (len / Math.floor(len / 2));
+        k.box(g, [0.14, 1.1, 0.14], [sx * 1.15, -0.1 + Math.sin(((z + len / 2) / len) * Math.PI) * 0.12, z], 0x4a3020);
+      }
+      k.box(g, [0.1, 0.1, len], [sx * 1.15, 0.72, 0], PAL.wood);
+      // Piers going down into the water.
+      for (const z of [-len / 2 + 0.3, len / 2 - 0.3]) k.box(g, [0.3, 1.4, 0.3], [sx * 1.1, -0.6, z], 0x3a2618);
+    }
+  },
+  /** Basalt-slab bridge along local +Z (lava crossings); `arg` = span. */
+  bridge_stone: (k, g, arg) => {
+    const len = Math.max(4, arg ?? 6);
+    const n = Math.round(len / 0.9);
+    for (let i = 0; i < n; i++) {
+      const z = -len / 2 + (i + 0.5) * (len / n);
+      k.box(g, [2.8, 0.35, len / n - 0.05], [0, -0.1 + Math.sin((i / Math.max(1, n - 1)) * Math.PI) * 0.18, z], i % 2 ? 0x3a3232 : 0x2e2828);
+    }
+    for (const sx of [-1, 1]) {
+      k.box(g, [0.35, 0.5, len], [sx * 1.4, 0.2, 0], 0x241e1e);
+      for (const z of [-len / 2 + 0.4, 0, len / 2 - 0.4]) k.box(g, [0.6, 2, 0.6], [sx * 1.2, -0.9, z], 0x1e1818);
+    }
+  },
+  tower_ruin: (k, g) => {
+    // A broken round watchtower: stepped stone courses, one side collapsed, rubble around.
+    for (let i = 0; i < 7; i++) {
+      const y = i * 0.9 + 0.45;
+      const segs = 10;
+      for (let s = 0; s < segs; s++) {
+        const a = (s / segs) * Math.PI * 2;
+        if (i > 2 && a > 0.4 && a < 0.4 + (i - 2) * 0.55) continue; // the breach widens upward
+        k.box(g, [1.46, 0.92, 0.85], [Math.cos(a) * 2.2, y, Math.sin(a) * 2.2], i % 2 ? STONE : STONE_D, [0, -a + Math.PI / 2, 0]);
+      }
+    }
+    k.box(g, [2.4, 0.3, 0.3], [0.2, 5.2, -1.2], PAL.wood, [0, 0.4, 0.2]);
+    for (let i = 0; i < 9; i++) k.gem(g, 0.35 + (i % 3) * 0.12, [Math.cos(i * 1.3 + 0.8) * (2.8 + (i % 2)), 0.25, Math.sin(i * 1.3 + 0.8) * (2.8 + (i % 2))], STONE_D);
+    k.box(g, [0.8, 1.2, 0.08], [0, 3.4, -2.25], 0x7a2020); // tattered banner
+  },
+  dragon_bones: (k, g) => {
+    // A long-dead dragon: spine arc, ribs, skull and a horn, half sunk in the ground.
+    const bone = PAL.bone, dark = 0xb8ae98;
+    for (let i = 0; i < 16; i++) {
+      const z = -7 + i * 0.9;
+      const y = Math.sin((i / 15) * Math.PI) * 1.4 + 0.4;
+      k.box(g, [0.5, 0.45, 0.7], [0, y, z], i % 2 ? bone : dark, [0.15, 0, 0]);
+      if (i > 3 && i < 12) {
+        for (const sx of [-1, 1]) {
+          k.cone(g, 0.16, 3.2, [sx * 1.3, y - 0.2, z], bone, [0, 0, sx * 2.1], 4);
+        }
+      }
+    }
+    k.box(g, [1.3, 1, 2.2], [0.3, 0.55, 8.4], bone, [0.1, 0.3, 0.1]);
+    k.box(g, [1.1, 0.4, 1.6], [0.3, 0.2, 9.4], dark, [0.2, 0.3, 0]);
+    k.cone(g, 0.25, 1.6, [-0.2, 1.3, 7.6], dark, [-0.9, 0.3, 0.3], 5);
+    k.cone(g, 0.25, 1.6, [0.9, 1.3, 7.8], dark, [-0.9, 0.3, -0.3], 5);
+    for (let i = 0; i < 8; i++) k.cone(g, 0.12, 1.2 - i * 0.1, [0, 0.2, -7.5 - i * 0.7], bone, [Math.PI / 2 - 0.1, 0, 0], 4);
+  },
+  standing_stone: (k, g) => {
+    k.box(g, [0.9, 3.2, 0.6], [0, 1.4, 0], 0x6e6a66, [0.04, 0, 0.05]);
+    k.box(g, [0.7, 0.05, 0.62], [0, 2.2, 0.01], 0x6aa8ff, undefined, 0x3a6ad0, 1.2);
+  },
+  rails: (k, g, arg) => {
+    const len = Math.max(2, arg ?? 6);
+    for (const sx of [-0.35, 0.35]) k.box(g, [0.08, 0.1, len], [sx, 0.06, 0], IRON);
+    for (let z = -len / 2 + 0.3; z < len / 2; z += 0.7) k.box(g, [1.1, 0.08, 0.22], [0, 0.03, z], PAL.wood);
+  },
+  minecart: (k, g) => {
+    k.box(g, [1, 0.6, 1.4], [0, 0.55, 0], 0x5a4a3a);
+    k.box(g, [0.9, 0.2, 1.3], [0, 0.8, 0], 0xb4743a, undefined, 0x3a1a00, 0.3);
+    for (const [x, z] of [[-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45]]) k.cyl(g, 0.18, 0.18, 0.1, [x, 0.2, z], IRON, [0, 0, Math.PI / 2], 8);
+  },
+  dummy: (k, g) => {
+    k.cyl(g, 0.08, 0.08, 1.8, [0, 0.9, 0], PAL.wood);
+    k.box(g, [1.2, 0.1, 0.1], [0, 1.4, 0], PAL.wood);
+    k.cyl(g, 0.32, 0.36, 0.8, [0, 1.25, 0], 0xc8b070, undefined, 7);
+    k.gem(g, 0.24, [0, 1.85, 0], 0xc8b070);
+    k.box(g, [0.3, 0.3, 0.06], [0, 1.3, 0.34], 0xa03030);
+  },
+  palisade: (k, g, arg) => {
+    const len = Math.max(2, arg ?? 6);
+    for (let x = -len / 2; x <= len / 2; x += 0.42) {
+      const hgt = 2 + ((x * 7.3) % 1 + 1) % 1 * 0.5;
+      k.cyl(g, 0.2, 0.22, hgt, [x, hgt / 2, 0], 0x5a3a22, [0, 0, ((x * 3.1) % 1) * 0.06], 5);
+      k.cone(g, 0.2, 0.4, [x, hgt + 0.2, 0], 0x4a2e18, undefined, 5);
+    }
+    k.box(g, [len, 0.12, 0.12], [0, 1.2, 0.22], 0x4a2e18);
+  },
+  signpost: (k, g) => {
+    k.cyl(g, 0.07, 0.08, 2.2, [0, 1.1, 0], PAL.wood);
+    k.box(g, [1.1, 0.26, 0.06], [0.4, 1.8, 0], 0x8a6a44, [0, 0, 0.08]);
+    k.box(g, [0.9, 0.24, 0.06], [-0.3, 1.45, 0.02], 0x8a6a44, [0, 0.4, -0.06]);
+  },
+  well: (k, g) => {
+    k.cyl(g, 0.9, 1, 0.8, [0, 0.4, 0], STONE, undefined, 10);
+    k.cyl(g, 0.72, 0.72, 0.05, [0, 0.72, 0], 0x2a5a6a, undefined, 10);
+    for (const sx of [-0.8, 0.8]) k.box(g, [0.12, 1.6, 0.12], [sx, 1.4, 0], PAL.wood);
+    k.cone(g, 1.3, 0.8, [0, 2.5, 0], ROOF, undefined, 4);
+  },
+  log: (k, g) => {
+    k.cyl(g, 0.3, 0.34, 3, [0, 0.3, 0], 0x4a3020, [0, 0, Math.PI / 2], 7);
+    k.cyl(g, 0.28, 0.28, 0.05, [1.52, 0.3, 0], 0xa08058, [0, 0, Math.PI / 2], 7);
+    k.gem(g, 0.15, [0.4, 0.62, 0.1], 0x5a8a3a);
+  },
+  mushrooms: (k, g) => {
+    for (let i = 0; i < 5; i++) {
+      const x = Math.cos(i * 2.4) * 0.4, z = Math.sin(i * 2.4) * 0.4, s = 0.6 + (i % 3) * 0.25;
+      k.cyl(g, 0.04 * s, 0.05 * s, 0.35 * s, [x, 0.17 * s, z], 0xe8dcc0);
+      k.cone(g, 0.18 * s, 0.14 * s, [x, 0.38 * s, z], 0xb03a2a, undefined, 7, 0x2a0800);
+    }
+  },
+  obsidian: (k, g) => {
+    k.cone(g, 0.8, 4.2, [0, 2.1, 0], 0x1a1418, [0.05, 0, 0.08], 5);
+    k.cone(g, 0.5, 2.6, [0.8, 1.3, 0.3], 0x241c22, [-0.2, 0, -0.25], 5);
+    k.cone(g, 0.4, 1.8, [-0.6, 0.9, -0.4], 0x1a1418, [0.25, 0, 0.3], 5);
+  },
+  crystal_big: (k, g) => {
+    k.cone(g, 0.5, 2.6, [0, 1.3, 0], 0x7ad0ff, [0.15, 0, 0.1], 5, 0x2a8ad0);
+    k.cone(g, 0.35, 1.8, [0.6, 0.9, 0.2], 0x7ad0ff, [-0.3, 0, -0.35], 5, 0x2a8ad0);
+    k.cone(g, 0.3, 1.4, [-0.5, 0.7, -0.3], 0xa0e0ff, [0.35, 0, 0.3], 5, 0x2a8ad0);
+    return { obj: g, light: light(g, 0x6ac0ff, 10, 9, 1.6) };
+  },
+  statue: (k, g) => {
+    // A weathered dragon-knight statue on a plinth.
+    k.box(g, [2, 1, 2], [0, 0.5, 0], STONE_D);
+    k.box(g, [0.8, 1.4, 0.5], [0, 1.9, 0], 0x7a7870);
+    k.box(g, [0.5, 0.5, 0.5], [0, 2.85, 0], 0x7a7870);
+    k.box(g, [0.18, 2.6, 0.14], [0.55, 2.4, 0.2], 0x6a6860, [0, 0, -0.1]);
+    k.box(g, [0.5, 1, 0.12], [-0.6, 1.9, 0.3], 0x6a6860, [0, 0.2, 0]);
+  },
   landing: (k, g) => {
     k.cyl(g, 3, 3.2, 0.25, [0, 0.1, 0], STONE, undefined, 10);
     k.cyl(g, 2.2, 2.2, 0.06, [0, 0.25, 0], 0x6a88c8, undefined, 10, 0x2a4aa0);

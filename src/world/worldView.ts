@@ -4,7 +4,10 @@ import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { Cell, Ground, type ZoneLayout } from './layout';
 import { buildProp, type Prop } from './props';
-import { addPatch, applyGround, applySurface } from '../render/surface';
+import { addPatch, applySurface } from '../render/surface';
+import { buildTerrain, isRelief, smoothNoise } from './terrain';
+
+type TreeKind = ZoneTheme['trees'];
 import type { SurfaceKind } from '../render/textures';
 
 // ─── See-through occlusion ──────────────────────────────────────────────────
@@ -106,22 +109,6 @@ function voidSky(group: THREE.Group, rng: () => number) {
   group.add(stars);
 }
 
-/** Smooth 2D value noise in 0..1 (bilinear-smoothstep over a hashed lattice). */
-function smoothNoise(seed: number) {
-  const hash = (x: number, z: number) => {
-    let hh = (x * 374761393 + z * 668265263 + seed * 2246822519) | 0;
-    hh = Math.imul(hh ^ (hh >>> 13), 1274126177);
-    return ((hh ^ (hh >>> 16)) >>> 0) / 4294967296;
-  };
-  const sm = (t: number) => t * t * (3 - 2 * t);
-  return (x: number, z: number) => {
-    const x0 = Math.floor(x), z0 = Math.floor(z);
-    const fx = sm(x - x0), fz = sm(z - z0);
-    const a = hash(x0, z0), b = hash(x0 + 1, z0), c = hash(x0, z0 + 1), d = hash(x0 + 1, z0 + 1);
-    return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz;
-  };
-}
-
 /** World instancing tile size in cells (see inst()). */
 const CHUNK = 16;
 
@@ -132,6 +119,10 @@ export interface WorldView {
   /** Objects that follow the camera (sky). */
   followers: THREE.Object3D[];
   props: Prop[];
+  /** Terrain height at a world point (scenery and props stand on it). */
+  heightAt(x: number, z: number): number;
+  /** Advance animated surfaces (water, lava). */
+  tick(t: number): void;
 }
 
 export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99): WorldView {
@@ -141,74 +132,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const { w, h } = layout;
   const at = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= h ? Cell.Void : layout.cells[z * w + x]);
 
-  // Ground: one continuous indexed grid (no cracks), heights from smooth noise, colours and
-  // texture weights averaged per vertex so cell borders blend instead of forming a checkerboard.
-  const VW = w + 1;
-  const vi = (x: number, z: number) => z * VW + x;
-  const noise = smoothNoise(seed + 3);
-  const SPLAT: Record<number, number> = {
-    [Ground.Dirt]: 0, [Ground.Path]: 0, [Ground.Camp]: 0, [Ground.Grass]: 1,
-    [Ground.Arena]: 2, [Ground.Stone]: 2, [Ground.Cave]: 3, [Ground.Scorch]: 3,
-  };
-  const nV = VW * (h + 1);
-  const vPos = new Float32Array(nV * 3), vCol = new Float32Array(nV * 3), vSplat = new Float32Array(nV * 4);
-  const vN = new Float32Array(nV), vRaise = new Float32Array(nV);
-  const c = new THREE.Color(), c2 = new THREE.Color();
-  for (let z = 0; z < h; z++) {
-    for (let x = 0; x < w; x++) {
-      const cell = at(x, z);
-      if (cell === Cell.Void) continue;
-      const g = layout.ground[z * w + x] as Ground;
-      const shades = theme.ground[g] ?? theme.ground[Ground.Dirt] ?? [0x6e6048, 0x5a5040];
-      // Large-scale colour drift (no per-cell randomness: that read as pixels).
-      c.setHex(shades[0]).lerp(c2.setHex(shades[1]), noise(x * 0.09, z * 0.09));
-      const ch = theme.splat?.[g] ?? SPLAT[g] ?? 0;
-      const raised = cell === Cell.Cliff || cell === Cell.Wall ? 1 : 0;
-      for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) {
-        const k = vi(xx, zz);
-        vCol[k * 3] += c.r;
-        vCol[k * 3 + 1] += c.g;
-        vCol[k * 3 + 2] += c.b;
-        vSplat[k * 4 + ch] += 1;
-        vRaise[k] += raised;
-        vN[k]++;
-      }
-    }
-  }
-  for (let z = 0; z <= h; z++) {
-    for (let x = 0; x <= w; x++) {
-      const k = vi(x, z);
-      const n = vN[k] || 1;
-      for (let j = 0; j < 3; j++) vCol[k * 3 + j] /= n;
-      // Barely-there undulation (units and props stand at y = 0); rises only fully inside cliffs/walls.
-      const undulate = (noise(x * 0.15, z * 0.15) - 0.5) * 0.06 + (noise(x * 0.5 + 40, z * 0.5) - 0.5) * 0.03;
-      vPos[k * 3] = x;
-      vPos[k * 3 + 1] = undulate + (vRaise[k] === n && vN[k] ? 0.25 : 0);
-      vPos[k * 3 + 2] = z;
-    }
-  }
-  const idx: number[] = [];
-  for (let z = 0; z < h; z++) {
-    for (let x = 0; x < w; x++) {
-      if (at(x, z) === Cell.Void) continue;
-      const a = vi(x, z), b = vi(x + 1, z), cc = vi(x + 1, z + 1), d = vi(x, z + 1);
-      // Alternate the diagonal so shading has no directional grain.
-      if ((x + z) & 1) idx.push(a, d, b, b, d, cc);
-      else idx.push(a, d, cc, a, cc, b);
-    }
-  }
-  const groundGeo = new THREE.BufferGeometry();
-  groundGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3));
-  groundGeo.setAttribute('color', new THREE.BufferAttribute(vCol, 3));
-  groundGeo.setAttribute('aSplat', new THREE.BufferAttribute(vSplat, 4));
-  groundGeo.setIndex(idx);
-  groundGeo.computeVertexNormals();
-  const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
-  applyGround(groundMat, theme.lava ?? 0);
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.receiveShadow = true;
-  ground.name = 'ground';
-  group.add(ground);
+  // Terrain: continuous height grid (relief rises out of it), fluids, and a height query for scenery.
+  const terrain = buildTerrain(layout, theme, seed);
+  for (const tm of terrain.meshes) group.add(tm);
+  if (terrain.relief) makeOccludable(terrain.relief.material as THREE.Material);
+  const heightAt = terrain.heightAt;
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const e = new THREE.Euler();
@@ -241,9 +169,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     }
   };
 
-  // Trees
+  // ─── Scenery: trees, boulders, walls, undergrowth ─────────────────────────
   const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1.2, 5).translate(0, 0.6, 0);
-  const canopy: Record<ZoneTheme['trees'], THREE.BufferGeometry> = {
+  const canopy: Record<TreeKind, THREE.BufferGeometry> = {
     pine: mergeGeometries([
       new THREE.ConeGeometry(0.95, 1.3, 6).translate(0, 1.5, 0),
       new THREE.ConeGeometry(0.75, 1.1, 6).translate(0, 2.2, 0),
@@ -260,58 +188,94 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       new THREE.ConeGeometry(0.08, 0.8, 4).rotateX(0.9).translate(0, 2.0, 0.35),
     ])!,
   };
-  const leafPal: Record<ZoneTheme['trees'], number[]> = {
+  const leafPal: Record<TreeKind, number[]> = {
     pine: [0x3f6b34, 0x4b7a3a, 0x355c2e, 0x7a6a2a, 0x8a4a2a],
     grove: [0x5a9a44, 0x6aa84a, 0x4a8a3c, 0xc8a040, 0xb86a8a],
     ash: [0x2a2420, 0x3a3028, 0x1e1a18],
   };
-  const trees: THREE.Matrix4[] = [], treeCols: THREE.Color[] = [];
+  // Species mix: patches of each kind (noise), weighted by the theme.
+  const mix: Partial<Record<TreeKind, number>> = theme.forest ?? { [theme.trees]: 1 };
+  const kinds = (Object.keys(mix) as TreeKind[]).filter((k) => (mix[k] ?? 0) > 0);
+  const totalW = kinds.reduce((a, k) => a + (mix[k] ?? 0), 0);
+  const speciesNoise = smoothNoise(seed + 71);
+  const speciesAt = (x: number, z: number): TreeKind => {
+    let v = speciesNoise(x * 0.06, z * 0.06) * 0.8 + rng() * 0.2;
+    for (const k of kinds) {
+      v -= (mix[k] ?? 0) / totalW;
+      if (v <= 0) return k;
+    }
+    return kinds[kinds.length - 1];
+  };
+  const trees: Record<TreeKind, { m: THREE.Matrix4[]; c: THREE.Color[] }> = { pine: { m: [], c: [] }, grove: { m: [], c: [] }, ash: { m: [], c: [] } };
+  const addTree = (x: number, z: number, scale = 1) => {
+    const kind = speciesAt(x, z);
+    const sc = (0.8 + rng() * 0.6) * scale;
+    p.set(x + (rng() - 0.5) * 0.3, heightAt(x, z) - 0.05, z + (rng() - 0.5) * 0.3);
+    q.setFromEuler(e.set((rng() - 0.5) * 0.1, rng() * Math.PI * 2, (rng() - 0.5) * 0.1));
+    s.set(sc, sc * (0.9 + rng() * 0.3), sc);
+    trees[kind].m.push(m.compose(p, q, s).clone());
+    const pal = leafPal[kind];
+    const tc = new THREE.Color(pal[rng() < 0.15 ? Math.min(pal.length - 1, 3 + Math.floor(rng() * 2)) : Math.floor(rng() * Math.min(3, pal.length))]);
+    tc.offsetHSL(0, 0, (rng() - 0.5) * 0.05);
+    trees[kind].c.push(tc);
+  };
   const rocks: THREE.Matrix4[] = [], rockCols: THREE.Color[] = [];
   const walls: THREE.Matrix4[] = [], wallCols: THREE.Color[] = [];
   const under: THREE.Matrix4[] = [];
+  const bushes: THREE.Matrix4[] = [], bushCols: THREE.Color[] = [];
+  const flowers: THREE.Matrix4[] = [], flowerCols: THREE.Color[] = [];
+  const reeds: THREE.Matrix4[] = [];
   const wallColor = { castle: 0x8a8478, cave: 0x5e5044, ruin: 0x6a7070 }[theme.wall];
+  const walkable = (x: number, z: number) => {
+    const n = at(x, z);
+    return n === Cell.Ground || n === Cell.Blocked;
+  };
+  const nearWalkable = (x: number, z: number) => {
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (walkable(x + dx, z + dz)) return true;
+    return false;
+  };
+  const nearFluid = (x: number, z: number) => {
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = x + dx, zz = z + dz;
+      if (xx >= 0 && zz >= 0 && xx < w && zz < h && layout.fluid[zz * w + xx]) return true;
+    }
+    return false;
+  };
   for (let z = 0; z < h; z++) {
     for (let x = 0; x < w; x++) {
       const cell = at(x, z);
-      if (cell === Cell.Tree) {
-        const sc = 0.8 + rng() * 0.6;
-        p.set(x + 0.5 + (rng() - 0.5) * 0.3, 0, z + 0.5 + (rng() - 0.5) * 0.3);
-        q.setFromEuler(e.set((rng() - 0.5) * 0.1, rng() * Math.PI * 2, (rng() - 0.5) * 0.1));
-        s.set(sc, sc * (0.9 + rng() * 0.3), sc);
-        trees.push(m.compose(p, q, s).clone());
-        const pal = leafPal[theme.trees];
-        const tc = new THREE.Color(pal[rng() < 0.15 ? Math.min(pal.length - 1, 3 + Math.floor(rng() * 2)) : Math.floor(rng() * Math.min(3, pal.length))]);
-        tc.offsetHSL(0, 0, (rng() - 0.5) * 0.05);
-        treeCols.push(tc);
-      } else if (cell === Cell.Rock || (cell === Cell.Cliff && rng() < 0.55)) {
-        const big = cell === Cell.Cliff;
-        const sc = big ? 1.4 + rng() * 1.6 : 0.6 + rng() * 0.7;
-        p.set(x + 0.5, big ? 0.2 : 0.1, z + 0.5);
+      const i = z * w + x;
+      if (cell === Cell.Tree) addTree(x + 0.5, z + 0.5);
+      else if (cell === Cell.Rock) {
+        const sc = 0.6 + rng() * 0.7;
+        p.set(x + 0.5, heightAt(x + 0.5, z + 0.5) + 0.1, z + 0.5);
         q.setFromEuler(e.set(rng() * 3, rng() * 3, rng() * 3));
-        s.set(sc, sc * (big ? 1.2 + rng() : 0.6 + rng() * 0.4), sc);
+        s.set(sc, sc * (0.6 + rng() * 0.4), sc);
         rocks.push(m.compose(p, q, s).clone());
-        rockCols.push(new THREE.Color(big ? 0x6a5e52 : 0x8a8478).offsetHSL(0, 0, (rng() - 0.5) * 0.1));
+        rockCols.push(new THREE.Color(0x8a8478).offsetHSL(0, 0, (rng() - 0.5) * 0.1));
+      } else if (isRelief(cell, theme)) {
+        const edge = nearWalkable(x, z);
+        if (edge && rng() < (cell === Cell.Wall ? 0.6 : 0.35)) {
+          // Boulders at the foot of cliffs / cave walls break up the faces.
+          const big = cell === Cell.Wall ? 1.4 + rng() * 1.2 : 1.1 + rng() * 1.3;
+          p.set(x + 0.5 + (rng() - 0.5) * 0.4, 0.15, z + 0.5 + (rng() - 0.5) * 0.4);
+          q.setFromEuler(e.set(rng() * 3, rng() * 3, rng() * 3));
+          s.set(big, big * (0.9 + rng() * 0.8), big);
+          rocks.push(m.compose(p, q, s).clone());
+          rockCols.push(new THREE.Color(cell === Cell.Wall ? 0x5e5044 : 0x6a5e52).offsetHSL(0, 0, (rng() - 0.5) * 0.1));
+        } else if (!edge && cell === Cell.Cliff && rng() < (theme.reliefTrees ?? 0)) addTree(x + 0.5, z + 0.5, 1.1);
       } else if (cell === Cell.Wall) {
-        // Only draw walls that border walkable space; the rest is hidden under fog/darkness.
-        let edge = false;
-        for (let dz = -1; dz <= 1 && !edge; dz++) for (let dx = -1; dx <= 1; dx++) {
-          const n = at(x + dx, z + dz);
-          if (n === Cell.Ground || n === Cell.Blocked) edge = true;
-        }
-        if (!edge) continue;
-        const hgt = theme.wall === 'castle' ? 2.4 : theme.wall === 'ruin' ? 1.6 + rng() * 1.8 : 2.6 + rng() * 1.6;
+        if (!nearWalkable(x, z)) continue;
+        const hgt = theme.wall === 'castle' ? 2.4 : 1.6 + rng() * 1.8;
         p.set(x + 0.5, hgt / 2, z + 0.5);
-        q.setFromEuler(e.set(0, theme.wall === 'cave' ? rng() * 0.6 : 0, 0));
-        s.set(theme.wall === 'cave' ? 1.15 + rng() * 0.3 : 1, hgt, theme.wall === 'cave' ? 1.15 + rng() * 0.3 : 1);
+        q.setFromEuler(e.set(0, Math.floor(rng() * 4) * (Math.PI / 2), 0));
+        s.set(1, hgt, 1);
         walls.push(m.compose(p, q, s).clone());
         wallCols.push(new THREE.Color(wallColor).offsetHSL(0, 0, (rng() - 0.5) * 0.08));
       } else if (cell === Cell.Void && theme.ambient === 'void') {
         // Rocky underside beneath the island rim.
         let rim = false;
-        for (let dz = -1; dz <= 1 && !rim; dz++) for (let dx = -1; dx <= 1; dx++) {
-          const n = at(x + dx, z + dz);
-          if (n !== Cell.Void) rim = true;
-        }
+        for (let dz = -1; dz <= 1 && !rim; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz) !== Cell.Void) rim = true;
         if (rim) {
           const depth = 3 + rng() * 5;
           p.set(x + 0.5, -depth / 2 + 0.1, z + 0.5);
@@ -319,16 +283,63 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
           s.set(1.6 + rng(), depth, 1.6 + rng());
           under.push(m.compose(p, q, s).clone());
         }
+      } else if (cell === Cell.Ground && !layout.fluid[i]) {
+        const g = layout.ground[i];
+        const green = g === Ground.Grass || g === Ground.Dirt;
+        // Reeds along shores, bushes where the forest thins out, flowers in open meadows.
+        if (nearFluid(x, z) && rng() < 0.5) {
+          for (let k = 0; k < 3; k++) {
+            p.set(x + rng(), heightAt(x + 0.5, z + 0.5), z + rng());
+            q.setFromEuler(e.set((rng() - 0.5) * 0.3, rng() * 3, (rng() - 0.5) * 0.3));
+            const sc = 0.8 + rng() * 0.7;
+            reeds.push(m.compose(p, q, s.set(sc, sc * 1.4, sc)).clone());
+          }
+        } else if (green && rng() < 0.05) {
+          let treesNear = 0;
+          for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (at(x + dx, z + dz) === Cell.Tree) treesNear++;
+          if (treesNear > 1) {
+            const sc = 0.5 + rng() * 0.5;
+            p.set(x + 0.5 + (rng() - 0.5) * 0.6, heightAt(x + 0.5, z + 0.5), z + 0.5 + (rng() - 0.5) * 0.6);
+            q.setFromEuler(e.set(0, rng() * 3, 0));
+            bushes.push(m.compose(p, q, s.set(sc, sc * 0.75, sc)).clone());
+            bushCols.push(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]).offsetHSL(0, 0.04, -0.03));
+          }
+        } else if (g === Ground.Grass && theme.flowers && rng() < 0.06) {
+          const fc = new THREE.Color(theme.flowers[Math.floor(rng() * theme.flowers.length)]);
+          for (let k = 0; k < 4; k++) {
+            p.set(x + rng(), heightAt(x + 0.5, z + 0.5), z + rng());
+            q.setFromEuler(e.set(0, rng() * 3, 0));
+            const sc = 0.7 + rng() * 0.5;
+            flowers.push(m.compose(p, q, s.set(sc, sc, sc)).clone());
+            flowerCols.push(fc);
+          }
+        }
       }
     }
   }
-  inst(trunkGeo, trees, null, theme.trees === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark');
-  inst(canopy[theme.trees], trees, treeCols, 0, true, theme.trees === 'ash' ? 'bark' : 'leaves');
+  for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) {
+    if (!trees[k].m.length) continue;
+    inst(trunkGeo, trees[k].m, null, k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark');
+    inst(canopy[k], trees[k].m, trees[k].c, 0, true, k === 'ash' ? 'bark' : 'leaves');
+  }
   inst(new THREE.DodecahedronGeometry(0.62, 0), rocks, rockCols, 0, true, 'stone');
-  const wallGeo = theme.wall === 'cave' ? new THREE.DodecahedronGeometry(0.7, 0).scale(1, 0.72, 1) : new THREE.BoxGeometry(1, 1, 1);
-  inst(wallGeo, walls, wallCols, 0, true, 'stone');
+  // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
+  const masonry = mergeGeometries([
+    new THREE.BoxGeometry(1, 0.45, 1).translate(0, -0.275, 0),
+    new THREE.BoxGeometry(0.92, 0.36, 0.94).translate(0.03, 0.125, -0.02),
+    new THREE.BoxGeometry(0.52, 0.3, 0.5).translate(-0.22, 0.45, 0.2),
+    new THREE.BoxGeometry(0.4, 0.2, 0.44).translate(0.26, 0.4, -0.22),
+  ])!;
+  inst(masonry, walls, wallCols, 0, true, 'stone');
+  inst(new THREE.IcosahedronGeometry(0.7, 0).translate(0, 0.45, 0), bushes, bushCols, 0, false, 'leaves');
+  inst(new THREE.ConeGeometry(0.035, 0.7, 3).translate(0, 0.35, 0), reeds, null, 0x6a7a3a, false);
+  const flowerGeo = mergeGeometries([
+    new THREE.CylinderGeometry(0.012, 0.012, 0.25, 3).translate(0, 0.125, 0).toNonIndexed(),
+    new THREE.OctahedronGeometry(0.06, 0).translate(0, 0.27, 0),
+  ])!;
+  inst(flowerGeo, flowers, flowerCols, 0, false);
   if (under.length) {
-    inst(new THREE.ConeGeometry(0.7, 1, 6).rotateX(Math.PI).translate(0, 0, 0), under, null, 0x4a3e38, false, 'stone');
+    inst(new THREE.ConeGeometry(0.7, 1, 6).rotateX(Math.PI), under, null, 0x4a3e38, false, 'stone');
     // A solid core under the whole island so it reads as one mass.
     const coreMat = new THREE.MeshStandardMaterial({ color: 0x3a302c, flatShading: true });
     applySurface(coreMat, 'stone', 'world', 0.5);
@@ -344,8 +355,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const x = rng() * w, z = rng() * h;
     const gi = Math.floor(z) * w + Math.floor(x);
     const g = layout.ground[gi];
-    if (layout.cells[gi] !== Cell.Ground || (g !== Ground.Dirt && g !== Ground.Grass)) continue;
-    p.set(x, 0, z);
+    if (layout.cells[gi] !== Cell.Ground || layout.fluid[gi] || (g !== Ground.Dirt && g !== Ground.Grass)) continue;
+    p.set(x, heightAt(x, z), z);
     q.setFromEuler(e.set((rng() - 0.5) * 0.4, rng() * 3, (rng() - 0.5) * 0.4));
     const sc = 0.7 + rng() * 0.8;
     tufts.push(m.compose(p, q, s.set(sc, sc, sc)).clone());
@@ -370,12 +381,12 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   const props: Prop[] = [];
   for (const pr of layout.props) {
-    const prop = buildProp(pr.kind);
-    prop.obj.position.set(pr.x, 0, pr.z);
+    const prop = buildProp(pr.kind, pr.len);
+    prop.obj.position.set(pr.x, Math.max(0, heightAt(pr.x, pr.z)), pr.z);
     prop.obj.rotation.y = pr.rot ?? 0;
     if (pr.s) prop.obj.scale.setScalar(pr.s);
     group.add(prop.obj);
     props.push(prop);
   }
-  return { group, followers, props };
+  return { group, followers, props, heightAt, tick: terrain.tick };
 }

@@ -50,6 +50,15 @@ export interface PropSpawn {
   z: number;
   rot?: number;
   s?: number;
+  /** Builder argument for length-based props (bridge span, rail length). */
+  len?: number;
+}
+
+/** Liquid in a cell: rendered as a lowered bed with an animated surface. Bridges are walkable cells over it. */
+export enum Fluid {
+  None = 0,
+  Water = 1,
+  Lava = 2,
 }
 
 export interface ZoneLayout {
@@ -57,6 +66,10 @@ export interface ZoneLayout {
   h: number;
   cells: Uint8Array;
   ground: Uint8Array;
+  /** Fluid per cell (Fluid enum). */
+  fluid: Uint8Array;
+  /** Terrain height for raised cells (cliffs, plateaus, cave rock); 0 = use the default for the cell. */
+  elev: Float32Array;
   entry: Vec2;
   packs: PackSpawn[];
   boss?: { id: string; x: number; z: number; r: number };
@@ -66,7 +79,7 @@ export interface ZoneLayout {
 }
 
 export const emptyLayout = (w: number, h: number): ZoneLayout => ({
-  w, h, cells: new Uint8Array(w * h), ground: new Uint8Array(w * h),
+  w, h, cells: new Uint8Array(w * h), ground: new Uint8Array(w * h), fluid: new Uint8Array(w * h), elev: new Float32Array(w * h),
   entry: { x: w / 2, z: h / 2 }, packs: [], nodes: [], stations: [], props: [],
 });
 
