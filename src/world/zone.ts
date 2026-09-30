@@ -69,7 +69,7 @@ export class ZoneRuntime {
   }
 
   private stationArg(kind: string, id: string) {
-    if (kind === 'exit') return 0x9ab8ff;
+    if (kind === 'exit') return 0x5a8aff;
     if (kind === 'portal') return this.g.story.portalState(id).open ? ZONES[id]?.arch ?? 0xffffff : null;
     return undefined;
   }

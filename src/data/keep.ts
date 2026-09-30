@@ -31,8 +31,8 @@ export const RESTORATIONS: Restoration[] = [
     cost: { bronze_bar: 15 }, gold: 300, reqs: [{ skill: 'mining', level: 15 }],
   },
   {
-    id: 'lair_arch', name: 'Relight the Lair Arch',
-    desc: "Attune an arch to Cinderwing's lair for a direct portal, no trek through the Foothills.",
+    id: 'lair_arch', name: 'Relight the Lair Portal',
+    desc: "Attune a portal to Cinderwing's lair for a direct portal, no trek through the Foothills.",
     cost: { steel_bar: 5, emberite_ore: 5 }, gold: 1500, reqs: [], quest: 'cinder_seal', after: ['anvil_reforged'],
   },
   {

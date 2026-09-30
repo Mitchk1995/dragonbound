@@ -256,6 +256,9 @@ export class Gen {
       cut++;
       flood();
     }
+    // Seal off walkable pockets nobody can reach (e.g. a sliver between an ore rock and the
+    // wall), so a click never picks a destination there. Nothing visible changes.
+    for (let i = 0; i < w * h; i++) if (walk(i) && !reach[i]) l.cells[i] = Cell.Blocked;
     return cut;
   }
 
@@ -282,13 +285,23 @@ export class Gen {
 
   pack(x: number, z: number, comp: string[], clear = 7, ground?: Ground) {
     this.clearing(x, z, clear, ground);
+    // Camera-side verge: thin the woods between the camera (+z) and the fight.
+    this.verge(x, z + clear + 3, clear + 3);
     this.l.packs.push({ x, z, comp });
   }
 
+  /** Mark a disc as verge (scenery at a tenth of its density) wherever nothing is reserved yet. */
+  verge(cx: number, cz: number, r: number) {
+    this.blob(cx, cz, r, 1.5, (i) => {
+      if (this.reserved[i] === 0) this.reserved[i] = 2;
+    });
+  }
+
   ore(ore: string, x: number, z: number) {
-    const i = this.idx(Math.floor(x), Math.floor(z));
-    this.l.nodes.push({ ore, x: Math.floor(x) + 0.5, z: Math.floor(z) + 0.5 });
-    this.l.cells[i] = Cell.Blocked;
+    const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5;
+    this.l.nodes.push({ ore, x: cx, z: cz });
+    // Ore rocks are about two cells across: block the cell and its four neighbours.
+    blockDisc(this.l, cx, cz, 1);
   }
 }
 

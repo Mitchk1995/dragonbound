@@ -69,8 +69,8 @@ export function buildKeep(seed: number): ZoneLayout {
   for (let z = 8; z < 23; z++) for (let x = 34; x < 63; x++) if (Math.abs(x + 0.5 - 48) < 7.5 && z < 21) G.l.cells[G.idx(x, z)] = Cell.Blocked;
   for (const a of KEEP_ARCHES) {
     const rad = (a.angle * Math.PI) / 180;
-    const x = plaza.x + Math.cos(rad) * 8.6, z = plaza.z + Math.sin(rad) * 8.6;
-    G.station('portal', a.id, x, z, Math.atan2(plaza.x - x, plaza.z - z), 1.1);
+    const x = plaza.x + Math.cos(rad) * 9.2, z = plaza.z + Math.sin(rad) * 9.2;
+    G.station('portal', a.id, x, z, Math.atan2(plaza.x - x, plaza.z - z), 1.4);
   }
   G.station('bank', 'bank', 64.5, 44, -Math.PI / 2, 2.2);
   G.station('furnace', 'furnace', 31.5, 40, Math.PI / 2, 1.5);
@@ -136,7 +136,7 @@ export function buildMine(seed: number): ZoneLayout {
     });
   }
   G.l.entry = { x: 60, z: 103 };
-  G.station('exit', 'keep', 60, 112, Math.PI, 1.1);
+  G.station('exit', 'keep', 60, 112, Math.PI, 1.4);
   G.station('chest', 'mine_chest', 53.5, 106, Math.PI / 2, 0.7);
   // Ore sits against the cavern walls, never in a tunnel mouth.
   const onRoute = (x: number, z: number) => tunnelPolys.some((p) => distToPoly(x, z, p).d < 3.5);
@@ -179,7 +179,7 @@ export function buildMine(seed: number): ZoneLayout {
   return G.l;
 }
 
-// ─── Ashen Foothills: the big, dangerous hunting grounds ────────────────────
+// ─── Wyrmwood Foothills: the big, dangerous hunting grounds ─────────────────
 
 export function buildFoothills(seed: number): ZoneLayout {
   const w = 170, h = 190;
@@ -237,7 +237,8 @@ export function buildFoothills(seed: number): ZoneLayout {
   P(112, 26, ['cultist', 'cultist', 'cultist']);
   // Landmarks.
   G.clearing(34, 136, 6);
-  G.prop('tower_ruin', 66, 92, 0.6, 1, 2.6);
+  G.prop('tower_ruin', 66, 92, 0.6, 1, 3.0);
+  G.verge(66, 99, 6);
   G.prop('dragon_bones', 100, 70, 0.7, 1);
   for (let k = 0; k < 7; k++) {
     const a = (k / 7) * Math.PI * 2;
@@ -250,19 +251,25 @@ export function buildFoothills(seed: number): ZoneLayout {
   G.prop('brazier', 43.5, 55, 0, 1, 0.5);
   G.prop('statue', 79, 128, Math.PI * 0.8, 1, 1.4);
   for (const [x, z, r] of [[80, 162, 0.2], [90, 142, -0.4], [80, 84, 0.3], [90, 48, 0.2]]) G.prop('signpost', x + 2.5, z, r, 1, 0.3);
-  // Goblin war camp: palisade, tents, fires.
-  G.prop('palisade', 48, 114, 0, 1).len = 12;
-  G.prop('palisade', 38, 124, Math.PI / 2, 1).len = 10;
-  for (const [x, z] of [[42, 119], [53, 128], [45, 130], [66, 136]]) G.prop('tent', x, z, G.rng() * 6, 1, 0.9);
+  // Goblin war camp: a palisade on the dry bank (the river runs just north of it), hide tents
+  // around the fires, war banners at the gaps, crate stacks and weapon racks.
+  G.prop('palisade', 44, 117.5, 0, 1).len = 11;
+  G.prop('palisade', 37.5, 125, Math.PI / 2, 1).len = 10;
+  G.prop('banner', 50.5, 117.8, 0, 1, 0.3);
+  G.prop('banner', 37.8, 131.2, Math.PI / 2, 1, 0.3);
+  G.prop('banner', 64.5, 131, -0.4, 1, 0.3);
+  const tents: [number, number, number][] = [[42, 120.5, 0.3], [54, 128.5, -0.9], [44.5, 130.5, 2.8], [66, 136.5, -2.2], [57.5, 138, 2.5]];
+  tents.forEach(([x, z, r], i) => (G.prop('tent', x, z, r, 1, 1.1).len = i));
   for (const [x, z] of [[48, 124], [60, 134], [70, 158], [106, 152]]) G.prop('campfire', x, z);
-  for (const [x, z] of [[51, 120], [63, 131], [73, 155]]) G.prop('crates', x, z, G.rng() * 6, 1, 0.6);
+  for (const [x, z, r] of [[51.5, 120.5, 0.4], [63, 131, -0.3], [73, 155, 1.2], [40.5, 127, 0.1]]) G.prop('crates', x, z, r, 1, 0.6);
+  for (const [x, z, r] of [[45.5, 118.8, 0], [61.5, 137.5, -0.5], [103, 150, 0.3]]) G.prop('weapon_rack', x, z, r, 1, 0.5);
   for (const [x, z] of [[128, 88], [136, 90], [131, 97], [127, 114], [135, 94]]) G.prop('burrow', x, z, G.rng() * 6, 1, 0.8);
-  for (let k = 0; k < 10; k++) G.prop('bones', 90 + G.rng() * 20, 64 + G.rng() * 14, G.rng() * 6);
+  for (let k = 0; k < 10; k++) G.prop('bones', 90 + G.rng() * 20, 64 + G.rng() * 14, G.rng() * 6).len = k;
   // Emberite veins in the dangerous north and east.
   for (const [x, z] of [[46, 52], [142, 42], [106, 78], [89, 38], [60, 36], [136, 98]]) G.ore('emberite', x, z);
   // Portals.
   G.l.entry = { x: entry.x, z: entry.z };
-  G.station('exit', 'keep', entry.x, entry.z + 6, Math.PI, 1.1);
+  G.station('exit', 'keep', entry.x, entry.z + 6, Math.PI, 1.4);
   // North of the gate is sheer cliff: the lair is a separate place.
   for (let z = 0; z < gate.z; z++) for (let x = 0; x < w; x++) {
     const i = G.idx(x, z);
@@ -326,7 +333,7 @@ export function buildRuin(seed: number): ZoneLayout {
   // Moss and grass reclaiming the stone.
   for (let i = 0; i < w * h; i++) if (G.l.cells[i] === Cell.Ground && G.noise((i % w) * 0.14, Math.floor(i / w) * 0.14) > 0.6) G.l.ground[i] = Ground.Grass;
   G.l.entry = { x: 55, z: 97 };
-  G.station('exit', 'keep', 55, 103, Math.PI, 1.1);
+  G.station('exit', 'keep', 55, 103, Math.PI, 1.4);
   G.station('pedestal', '0', 22, 68, 0, 0.6);
   G.station('pedestal', '1', 88, 66, 0, 0.6);
   G.station('pedestal', '2', 55, 16, 0, 0.6);
@@ -382,11 +389,15 @@ export function buildLair(seed: number): ZoneLayout {
   G.pack(88, 79, ['drakeling', 'drakeling', 'drakeling'], 6);
   G.pack(44, 62, ['drakeling', 'kobold', 'kobold'], 6);
   G.l.entry = { x: 50, z: 118 };
-  G.station('exit', 'keep', 50, 124, Math.PI, 1.1);
+  G.station('exit', 'keep', 50, 124, Math.PI, 1.4);
   G.l.boss = { id: 'cinderwing', x: A.x, z: A.z - 2, r: A.r };
-  for (let k = 0; k < 28; k++) {
-    const a = G.rng() * Math.PI * 2, r = 3 + G.rng() * (A.r - 4);
-    G.prop(k % 2 ? 'bones' : 'crack', A.x + Math.cos(a) * r, A.z + Math.sin(a) * r, G.rng() * 6);
+  // Bone piles gather in drifts against the caldera wall, leaving the fighting floor open.
+  for (let c = 0; c < 5; c++) {
+    const a = c * 1.25 + 0.4 + G.rng() * 0.4;
+    for (let k = 0; k < 3; k++) {
+      const r = A.r - 2.5 - G.rng() * 2.5, aa = a + (G.rng() - 0.5) * 0.35;
+      G.prop('bones', A.x + Math.cos(aa) * r, A.z + Math.sin(aa) * r, G.rng() * 6, 1.1).len = c * 3 + k;
+    }
   }
   G.prop('hoard', A.x - 5, A.z - 9);
   // Obsidian spires and bone fields across the badlands.
@@ -398,7 +409,7 @@ export function buildLair(seed: number): ZoneLayout {
   for (let k = 0; k < 30; k++) {
     const x = 10 + G.rng() * (w - 20), z = 52 + G.rng() * 66;
     const i = G.idx(Math.floor(x), Math.floor(z));
-    if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i]) G.prop('bones', x, z, G.rng() * 6);
+    if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i]) G.prop('bones', x, z, G.rng() * 6).len = k;
   }
   G.prop('dragon_bones', 30, 60, -0.5, 0.8);
   G.scatter((x, z) => (G.noise(x * 0.08, z * 0.08) > 0.6 ? 0.1 : 0.02), 0.5);

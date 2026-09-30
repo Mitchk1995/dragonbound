@@ -25,14 +25,14 @@ export interface Dialogue {
 
 export const TUTORIAL_STEPS = [
   'Speak with the Warden',
-  'Step through the Emberdeep arch',
+  'Step through the Emberdeep portal',
   'Mine 3 copper ore and 3 tin ore',
   'Return to the keep through the exit portal (or press T to recall)',
   'Smelt 3 bronze bars at the furnace',
   'Smith a bronze sword at the anvil',
   'Equip your bronze sword (open your inventory with I)',
   'Speak with the Warden',
-  'Step through the Ashen Foothills arch',
+  'Step through the Wyrmwood Foothills portal',
   'Slay 5 monsters',
   'Recall home with your Veilstone (press T)',
   'Speak with the Warden',
@@ -127,7 +127,7 @@ export class Story {
     }
     if (q && !q.done && q.stage === 2 && baseId === 'cinder_key') {
       q.stage = 3;
-      this.g.announce('The Cinder Key glows in your hand. Now to find the sealed gate in the Ashen Foothills.', 'unique');
+      this.g.announce('The Cinder Key glows in your hand. Now to find the sealed gate in the Wyrmwood Foothills.', 'unique');
       this.g.ui.refresh();
     }
   }
@@ -141,20 +141,20 @@ export class Story {
   portalState(id: string): { open: boolean; reason?: string } {
     const s = this.s;
     const arch = KEEP_ARCHES.find((a) => a.id === id);
-    if (arch?.dormant) return { open: false, reason: `This arch is dormant. (${arch.dormant})` };
+    if (arch?.dormant) return { open: false, reason: `This portal is dormant. (${arch.dormant})` };
     switch (id) {
       case 'mine':
-        return s.portals.mine ? { open: true } : { open: false, reason: 'The arch is dark. Speak with the Warden first.' };
+        return s.portals.mine ? { open: true } : { open: false, reason: 'The portal is dark. Speak with the Warden first.' };
       case 'foothills':
-        return s.portals.foothills ? { open: true } : { open: false, reason: 'The arch is dark. The Warden will open it when you are ready.' };
+        return s.portals.foothills ? { open: true } : { open: false, reason: 'The portal is dark. The Warden will open it when you are ready.' };
       case 'ruin': {
         const q = s.quests[QUEST];
-        if (!q) return { open: false, reason: 'The arch is dark. Perhaps the Warden knows its purpose.' };
+        if (!q) return { open: false, reason: 'The portal is dark. Perhaps the Warden knows its purpose.' };
         if (q.done) return { open: false, reason: 'The Sunken Ruin has given up its secrets.' };
         return { open: true };
       }
       case 'lair':
-        return s.keep.lair_arch ? { open: true } : { open: false, reason: 'Restore the Lair Arch at the Restoration Board to open a direct path.' };
+        return s.keep.lair_arch ? { open: true } : { open: false, reason: 'Restore the Lair Portal at the Restoration Board to open a direct path.' };
     }
     return { open: false };
   }
@@ -165,7 +165,7 @@ export class Story {
       case 'portal': {
         const ps = this.portalState(st.id);
         if (!ps.open) {
-          g.announce(ps.reason ?? 'The arch is dark.', 'deny');
+          g.announce(ps.reason ?? 'The portal is dark.', 'deny');
           g.sfx.play('deny');
           return;
         }
@@ -285,13 +285,13 @@ export class Story {
           next: () => this.say('The dragons came for us. This keep is all that is left, and it is crumbling. The arches in the Portal Circle are our only road back into the world. Most of them have gone dark.', [
             {
               label: 'How do I help?',
-              next: () => this.say('Everything starts with the forge. Take this pickaxe and step through the Emberdeep arch. Bring me copper and tin, and we will make you a blade.', [
+              next: () => this.say('Everything starts with the forge. Take this pickaxe and step through the Emberdeep portal. Bring me copper and tin, and we will make you a blade.', [
                 {
                   label: 'I will.',
                   run: () => {
                     g.items.add(makeItem('bronze_pickaxe'));
                     s.portals.mine = true;
-                    g.announce('The Warden hands you a bronze pickaxe. The Emberdeep arch flickers to life.', 'unique');
+                    g.announce('The Warden hands you a bronze pickaxe. The Emberdeep portal flickers to life.', 'unique');
                     this.advance(1);
                     g.zone.refreshStations();
                   },
@@ -303,7 +303,7 @@ export class Story {
       ]);
     }
     if (s.tutorial === 7) {
-      return this.say('A fine first blade. You have the makings of a smith. The Ashen Foothills lie beyond the red arch. Goblins, kobolds and worse have gathered where the brood once nested. Take these too; try them all, and find the style that suits you.', [
+      return this.say('A fine first blade. You have the makings of a smith. The Wyrmwood Foothills lie beyond the red portal. Goblins, kobolds and worse have gathered where the brood once nested. Take these too; try them all, and find the style that suits you.', [
         {
           label: 'Take the bow and staff.',
           run: () => {
@@ -314,7 +314,7 @@ export class Story {
             g.items.add(makeItem('worn_bow'));
             g.items.add(makeItem('apprentice_staff'));
             s.portals.foothills = true;
-            g.announce('You receive a Worn Shortbow and an Apprentice Staff. The Ashen Foothills arch blazes red.', 'unique');
+            g.announce('You receive a Worn Shortbow and an Apprentice Staff. The Wyrmwood Foothills portal blazes red.', 'unique');
             this.advance(8);
             g.zone.refreshStations();
           },
@@ -346,7 +346,7 @@ export class Story {
       ]);
     }
     if (!q.done && q.stage === 2) return this.say('Three fragments, two iron bars, one emberite ore, and Smithing 25. Forge the key at the anvil.', [bye]);
-    if (!q.done && q.stage === 3) return this.say('The gate is at the far north of the Ashen Foothills. Be ready. Cinderwing does not forgive trespass.', [bye]);
+    if (!q.done && q.stage === 3) return this.say('The gate is at the far north of the Wyrmwood Foothills. Be ready. Cinderwing does not forgive trespass.', [bye]);
     return this.say(this.idleLine(), [
       { label: 'Show me the Restoration Board.', run: () => g.ui.openKeep(null) },
       bye,
@@ -363,7 +363,7 @@ export class Story {
         run: () => {
           s.quests[QUEST] = { stage: 0, done: false };
           if (s.tutorial >= 0) this.finishTutorial(false);
-          g.announce('Quest started: The Cinder Seal. The Sunken Ruin arch shimmers awake.', 'unique');
+          g.announce('Quest started: The Cinder Seal. The Sunken Ruin portal shimmers awake.', 'unique');
           g.zone.refreshStations();
           g.ui.refresh();
         },

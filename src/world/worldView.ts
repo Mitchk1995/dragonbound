@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
-import { Cell, Ground, type ZoneLayout } from './layout';
+import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
 import { buildProp, type Prop } from './props';
 import { addPatch, applyGrade, applySurface, type Grade } from '../render/surface';
-import { buildTerrain, isRelief, smoothNoise } from './terrain';
+import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
+import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
+import { rockBlock, taper } from '../render/blocks';
 
 type TreeKind = ZoneTheme['trees'];
 import type { SurfaceKind } from '../render/textures';
@@ -109,6 +111,68 @@ function voidSky(group: THREE.Group, rng: () => number) {
   group.add(stars);
 }
 
+// ─── Grass ──────────────────────────────────────────────────────────────────
+
+/** Shared wind clock (advanced by WorldView.tick). */
+const WIND = { uWindT: { value: 0 } };
+
+/** Sway instanced geometry with its height (y = 0 stays planted), out of phase per instance. */
+function applyWind(mat: THREE.Material) {
+  addPatch(mat, { key: 'wind', apply: (shader) => {
+    Object.assign(shader.uniforms, WIND);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uWindT;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        {
+          vec3 ip = vec3(0.0);
+          #ifdef USE_INSTANCING
+            ip = instanceMatrix[3].xyz;
+          #endif
+          float sway = sin(uWindT * 1.7 + ip.x * 0.45 + ip.z * 0.3) + 0.5 * sin(uWindT * 2.9 + ip.z * 0.8);
+          transformed.xz += vec2(0.06, 0.035) * sway * transformed.y;
+        }`,
+      );
+  } });
+}
+
+/**
+ * One grass clump: eleven thin tapered blades fanning out from a small root, each leaning away from
+ * the centre. Vertex colour darkens the root into the ground and lightens the tip; normals point
+ * up so the blades light like the ground they grow from (no dark backsides).
+ */
+let clumpGeo: THREE.BufferGeometry | null = null;
+function grassClump() {
+  if (clumpGeo) return clumpGeo;
+  const rng = mulberry32(4242);
+  const pos: number[] = [], col: number[] = [], nrm: number[] = [];
+  const blades = 11;
+  for (let i = 0; i < blades; i++) {
+    const a = (i / blades) * Math.PI * 2 + rng() * 0.5;
+    const r = 0.02 + rng() * 0.08;
+    const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
+    const h = 0.3 + rng() * 0.28;
+    const lean = 0.06 + rng() * 0.14;
+    const tx = bx + Math.cos(a) * lean, tz = bz + Math.sin(a) * lean;
+    const half = 0.026 + rng() * 0.018;
+    const px = -Math.sin(a) * half, pz = Math.cos(a) * half;
+    // Both windings, front-faced: a double-sided material would flip the normal on the back and
+    // turn half the blades black.
+    pos.push(bx - px, 0, bz - pz, bx + px, 0, bz + pz, tx, h, tz, bx + px, 0, bz + pz, bx - px, 0, bz - pz, tx, h, tz);
+    const tip = 1.2 + rng() * 0.18;
+    for (let side = 0; side < 2; side++) {
+      col.push(0.72, 0.74, 0.66, 0.72, 0.74, 0.66, tip, tip, tip * 0.92);
+      nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+    }
+  }
+  clumpGeo = new THREE.BufferGeometry();
+  clumpGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  clumpGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  clumpGeo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  return clumpGeo;
+}
+
 /** World instancing tile size in cells (see inst()). */
 const CHUNK = 24;
 
@@ -140,10 +204,13 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const e = new THREE.Euler();
-  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind, shadow = true, grade?: Grade) => {
+  const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind | PaintKind, shadow = true, grade?: Grade, setup?: (m: THREE.MeshStandardMaterial) => void) => {
     if (!mats.length) return;
     const mat = new THREE.MeshStandardMaterial({ color: cols ? 0xffffff : color, flatShading: true, roughness: 0.9 });
-    if (surface) applySurface(mat, surface, 'world');
+    // Painted albedo (hand-painted look) wherever a paint exists; the old surfaces otherwise.
+    if (surface && isPaintKind(surface)) applyPaint(mat, surface, 'world');
+    else if (surface) applySurface(mat, surface, 'world');
+    setup?.(mat);
     if (grade) applyGrade(mat, grade, 'local');
     if (occlude) makeOccludable(mat);
     // Bucket instances into CHUNK×CHUNK-cell tiles so off-screen tiles are frustum-culled
@@ -172,7 +239,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   // ─── Scenery: trees, boulders, walls, undergrowth ─────────────────────────
   // Foliage is flat-shaded facets and per-instance colour, no texture; undersides sit in shade.
-  const CANOPY_GRADE: Grade = { low: 0.72, from: 1.0, to: 2.6 };
+  const CANOPY_GRADE: Grade = { low: 0.62, from: 1.0, to: 2.7 };
   const BUSH_GRADE: Grade = { low: 0.7, from: 0, to: 0.9 };
   const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1.2, 5).translate(0, 0.6, 0);
   const canopy: Record<TreeKind, THREE.BufferGeometry> = {
@@ -224,12 +291,15 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     trees[kind].c.push(tc);
   };
   const rocks: THREE.Matrix4[] = [], rockCols: THREE.Color[] = [];
+  const rims: THREE.Matrix4[] = [], rimCols: THREE.Color[] = [];
   const walls: THREE.Matrix4[] = [], wallCols: THREE.Color[] = [];
   const under: THREE.Matrix4[] = [];
   const bushes: THREE.Matrix4[] = [], bushCols: THREE.Color[] = [];
   const flowers: THREE.Matrix4[] = [], flowerCols: THREE.Color[] = [];
   const reeds: THREE.Matrix4[] = [];
   const wallColor = { castle: 0x8a8478, cave: 0x5e5044, ruin: 0x6a7070 }[theme.wall];
+  // Loose rocks take the zone's own stone (basalt in the lair, blue-grey in the ruin), not one grey.
+  const rockBase = theme.cliff ? new THREE.Color(theme.cliff[0]).lerp(new THREE.Color(0x8a8478), 0.35) : new THREE.Color(0x8a8478);
   const walkable = (x: number, z: number) => {
     const n = at(x, z);
     return n === Cell.Ground || n === Cell.Blocked;
@@ -252,19 +322,19 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       if (cell === Cell.Tree) addTree(x + 0.5, z + 0.5);
       else if (cell === Cell.Rock) {
         const sc = 0.6 + rng() * 0.7;
-        p.set(x + 0.5, heightAt(x + 0.5, z + 0.5) + 0.1, z + 0.5);
-        q.setFromEuler(e.set(rng() * 3, rng() * 3, rng() * 3));
-        s.set(sc, sc * (0.6 + rng() * 0.4), sc);
+        p.set(x + 0.5, heightAt(x + 0.5, z + 0.5) - 0.12, z + 0.5);
+        q.setFromEuler(e.set((rng() - 0.5) * 0.3, rng() * 6.3, (rng() - 0.5) * 0.3));
+        s.set(sc, sc * (0.6 + rng() * 0.5), sc * (0.8 + rng() * 0.4));
         rocks.push(m.compose(p, q, s).clone());
-        rockCols.push(new THREE.Color(0x8a8478).offsetHSL(0, 0, (rng() - 0.5) * 0.1));
+        rockCols.push(rockBase.clone().offsetHSL(0, 0, (rng() - 0.5) * 0.1));
       } else if (isRelief(cell, theme)) {
         const edge = nearWalkable(x, z);
         if (edge && rng() < (cell === Cell.Wall ? 0.6 : 0.35)) {
           // Boulders at the foot of cliffs / cave walls break up the faces.
           const big = cell === Cell.Wall ? 1.4 + rng() * 1.2 : 1.1 + rng() * 1.3;
-          p.set(x + 0.5 + (rng() - 0.5) * 0.4, 0.15, z + 0.5 + (rng() - 0.5) * 0.4);
-          q.setFromEuler(e.set(rng() * 3, rng() * 3, rng() * 3));
-          s.set(big, big * (0.9 + rng() * 0.8), big);
+          p.set(x + 0.5 + (rng() - 0.5) * 0.4, -0.35, z + 0.5 + (rng() - 0.5) * 0.4);
+          q.setFromEuler(e.set((rng() - 0.5) * 0.35, rng() * 6.3, (rng() - 0.5) * 0.35));
+          s.set(big, big * (0.8 + rng() * 0.8), big * (0.8 + rng() * 0.4));
           rocks.push(m.compose(p, q, s).clone());
           rockCols.push(new THREE.Color(cell === Cell.Wall ? 0x5e5044 : 0x6a5e52).offsetHSL(0, 0, (rng() - 0.5) * 0.1));
         } else if (!edge && cell === Cell.Cliff && rng() < (theme.reliefTrees ?? 0)) addTree(x + 0.5, z + 0.5, 1.1);
@@ -276,6 +346,24 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         s.set(1, hgt, 1);
         walls.push(m.compose(p, q, s).clone());
         wallCols.push(new THREE.Color(wallColor).offsetHSL(0, 0, (rng() - 0.5) * 0.08));
+      } else if (layout.fluid[i] === Fluid.Lava && cell !== Cell.Ground) {
+        // Basalt rim: pools and rivers of lava sit in blocky crater edges, not on flat ground.
+        let shore = false, bridge = false;
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, zz = z + dz;
+          if (xx < 0 || zz < 0 || xx >= w || zz >= h) continue;
+          const j = zz * w + xx;
+          if (layout.cells[j] === Cell.Ground && layout.fluid[j]) bridge = true;
+          else if (!layout.fluid[j] && layout.cells[j] !== Cell.Void && (dx === 0 || dz === 0)) shore = true;
+        }
+        if (shore && !bridge && rng() < 0.8) {
+          const sc = 0.7 + rng() * 0.55;
+          p.set(x + 0.5 + (rng() - 0.5) * 0.5, WATER_Y - 0.2, z + 0.5 + (rng() - 0.5) * 0.5);
+          q.setFromEuler(e.set((rng() - 0.5) * 0.25, rng() * 6.3, (rng() - 0.5) * 0.25));
+          s.set(sc, 0.5 + rng() * 0.6, sc * (0.8 + rng() * 0.4));
+          rims.push(m.compose(p, q, s).clone());
+          rimCols.push(new THREE.Color(0x2c2624).offsetHSL(0, 0, (rng() - 0.5) * 0.05));
+        }
       } else if (cell === Cell.Void && theme.ambient === 'void') {
         // Rocky underside beneath the island rim.
         let rim = false;
@@ -324,9 +412,14 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) {
     if (!trees[k].m.length) continue;
     inst(trunkGeo, trees[k].m, null, k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark');
-    inst(canopy[k], trees[k].m, trees[k].c, 0, true, undefined, true, CANOPY_GRADE);
+    // Painted canopies: leaf clusters on broadleaves, needle tufts on pines, bark on dead ash.
+    inst(canopy[k], trees[k].m, trees[k].c, 0, true, k === 'pine' ? 'needles' : k === 'grove' ? 'leaves' : 'bark', true, CANOPY_GRADE);
   }
-  inst(new THREE.DodecahedronGeometry(0.62, 0), rocks, rockCols, 0, true, 'stone');
+  // Rocks are chunky faceted blocks (two shapes, alternating) sunk into the ground.
+  const half = <T>(list: T[], odd: number) => list.filter((_, i) => i % 2 === odd);
+  inst(rockBlock(7, 1.25, 1.0, 1.1), half(rocks, 0), half(rockCols, 0), 0, true, 'rock');
+  inst(rockBlock(8, 1.1, 1.05, 1.2), half(rocks, 1), half(rockCols, 1), 0, true, 'rock');
+  inst(rockBlock(9, 1.1, 1.0, 1.0), rims, rimCols, 0, false, 'rock');
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
   const masonry = mergeGeometries([
     new THREE.BoxGeometry(1, 0.45, 1).translate(0, -0.275, 0),
@@ -334,8 +427,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     new THREE.BoxGeometry(0.52, 0.3, 0.5).translate(-0.22, 0.45, 0.2),
     new THREE.BoxGeometry(0.4, 0.2, 0.44).translate(0.26, 0.4, -0.22),
   ])!;
-  inst(masonry, walls, wallCols, 0, true, 'stone');
-  inst(new THREE.IcosahedronGeometry(0.7, 0).translate(0, 0.45, 0), bushes, bushCols, 0, false, undefined, true, BUSH_GRADE);
+  inst(masonry, walls, wallCols, 0, true, 'masonry');
+  inst(new THREE.IcosahedronGeometry(0.7, 0).translate(0, 0.45, 0), bushes, bushCols, 0, false, 'leaves', true, BUSH_GRADE);
   inst(new THREE.ConeGeometry(0.035, 0.7, 3).translate(0, 0.35, 0), reeds, null, 0x6a7a3a, false, undefined, false);
   const flowerGeo = mergeGeometries([
     new THREE.CylinderGeometry(0.012, 0.012, 0.25, 3).translate(0, 0.125, 0).toNonIndexed(),
@@ -343,29 +436,39 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   ])!;
   inst(flowerGeo, flowers, flowerCols, 0, false, undefined, false);
   if (under.length) {
-    inst(new THREE.ConeGeometry(0.7, 1, 6).rotateX(Math.PI), under, null, 0x4a3e38, false, 'stone');
+    inst(taper(0.3, 0.3, 1.3, 1.3, 1), under, null, 0x4a3e38, false, 'rock');
     // A solid core under the whole island so it reads as one mass.
     const coreMat = new THREE.MeshStandardMaterial({ color: 0x3a302c, flatShading: true });
-    applySurface(coreMat, 'stone', 'world', 0.5);
+    applyPaint(coreMat, 'rock', 'world', 0.5);
     const core = new THREE.Mesh(new THREE.ConeGeometry(w * 0.38, 16, 9).rotateX(Math.PI), coreMat);
-    core.position.set(w / 2, -8.2, h / 2);
+    // Top at y = -1.2: below the deepest pond bed, or it would cap the water.
+    core.position.set(w / 2, -9.2, h / 2);
     group.add(core);
   }
 
-  // Grass tufts
-  const tuftGeo = new THREE.ConeGeometry(0.08, 0.35, 3).translate(0, 0.17, 0);
-  const tufts: THREE.Matrix4[] = [];
-  for (let i = 0; i < w * h * 0.4; i++) {
+  // Grass: clumps of thin blades fanning out (dark at the root, light at the tip), coloured from
+  // the zone's own grass, thick in meadows, sparse on dirt, none on paths; they sway in the wind.
+  const tufts: THREE.Matrix4[] = [], tuftCols: THREE.Color[] = [];
+  const grassPal = theme.ground[Ground.Grass] ?? [0x5a7a3a, 0x6a8a44];
+  const tuftNoise = smoothNoise(seed + 91);
+  for (let i = 0; i < w * h * 0.7; i++) {
     const x = rng() * w, z = rng() * h;
     const gi = Math.floor(z) * w + Math.floor(x);
     const g = layout.ground[gi];
     if (layout.cells[gi] !== Cell.Ground || layout.fluid[gi] || (g !== Ground.Dirt && g !== Ground.Grass)) continue;
-    p.set(x, heightAt(x, z), z);
-    q.setFromEuler(e.set((rng() - 0.5) * 0.4, rng() * 3, (rng() - 0.5) * 0.4));
-    const sc = 0.7 + rng() * 0.8;
-    tufts.push(m.compose(p, q, s.set(sc, sc, sc)).clone());
+    const meadow = tuftNoise(x * 0.08, z * 0.08);
+    if (rng() > (g === Ground.Grass ? 0.4 + meadow * 0.6 : 0.15)) continue;
+    p.set(x, heightAt(x, z) - 0.02, z);
+    q.setFromEuler(e.set((rng() - 0.5) * 0.2, rng() * 6.3, (rng() - 0.5) * 0.2));
+    const sc = 0.75 + rng() * 0.6 + meadow * 0.3;
+    tufts.push(m.compose(p, q, s.set(sc, sc * (0.85 + rng() * 0.4), sc)).clone());
+    tuftCols.push(new THREE.Color(grassPal[0]).lerp(new THREE.Color(grassPal[1]), rng()).multiplyScalar(g === Ground.Dirt ? 1.05 : 1.22).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.04));
   }
-  inst(tuftGeo, tufts, null, theme.trees === 'grove' ? 0x7aa84a : 0x6f8a3c, false, undefined, false);
+  inst(grassClump(), tufts, tuftCols, 0, false, undefined, false, undefined, (mat) => {
+    mat.vertexColors = true;
+    mat.flatShading = false;
+    applyWind(mat);
+  });
 
   if (theme.ambient === 'void') {
     const skyGroup = new THREE.Group();
@@ -375,7 +478,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     // Drifting debris islands in the distance.
     for (let i = 0; i < 14; i++) {
       const a = rng() * Math.PI * 2, r = 55 + rng() * 50;
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1 + rng() * 3, 0), new THREE.MeshStandardMaterial({ color: 0x5a4e48, flatShading: true }));
+      const size = 2 + rng() * 5;
+      const rock = new THREE.Mesh(rockBlock(20 + i, size, size * 0.8, size * 0.9), new THREE.MeshStandardMaterial({ color: 0x5a4e48, flatShading: true }));
       rock.position.set(w / 2 + Math.cos(a) * r, -10 + rng() * 25, h / 2 + Math.sin(a) * r);
       rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
       rock.name = 'debris';
@@ -392,5 +496,5 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     group.add(prop.obj);
     props.push(prop);
   }
-  return { group, followers, props, heightAt, tick: terrain.tick };
+  return { group, followers, props, heightAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; } };
 }
