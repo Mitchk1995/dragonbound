@@ -15,6 +15,7 @@ import { DIARY_TASKS } from '../src/data/diary';
 import { ENEMIES } from '../src/data/enemies';
 import { DROP_TABLES } from '../src/data/dropTables';
 import { ZONES } from '../src/data/zones';
+import { XP_TUNING } from '../src/data/tuning';
 import { Cell } from '../src/world/layout';
 import { NavGrid } from '../src/world/navgrid';
 
@@ -133,11 +134,25 @@ describe('mining', () => {
   });
   it('XP/hour lands in an OSRS-like range', () => {
     // Bronze pickaxe (5 ticks/swing), copper at level 1; iron pickaxe (4 ticks), iron at 30. Walking ignored.
-    const perHour = (ore: keyof typeof ORES, lvl: number, ticks: number) => (3600 / (ticks * 0.6)) * mineChance(ORES[ore], lvl) * ORES[ore].xp;
+    const perHour = (ore: keyof typeof ORES, lvl: number, ticks: number) => (3600 / (ticks * 0.6)) * mineChance(ORES[ore], lvl) * ORES[ore].xp * XP_TUNING.mining;
     const early = perHour('copper', 1, 5), mid = perHour('iron', 30, 4);
-    expect(early).toBeGreaterThan(8_000);
-    expect(early).toBeLessThan(25_000);
+    expect(early).toBeGreaterThan(3_000);
+    expect(early).toBeLessThan(10_000);
     expect(mid).toBeGreaterThan(early);
+  });
+});
+
+describe('pacing', () => {
+  it('early combat levels take real effort (per-enemy XP, not per-damage)', () => {
+    const goblin = ENEMIES.goblin.xp;
+    expect(xpForLevel(10) / goblin).toBeGreaterThan(80);
+    expect(xpForLevel(30) / ENEMIES.drakeling.xp).toBeGreaterThan(500);
+    // Enemy XP stays well below the old 4-XP-per-hitpoint rate.
+    for (const e of Object.values(ENEMIES)) expect(e.xp, e.id).toBeLessThan(e.hp * 4 * 0.5);
+  });
+  it('a Cinderwing kill is a meaningful chunk but not a level skip at 30', () => {
+    const at30 = xpForLevel(31) - xpForLevel(30);
+    expect(ENEMIES.cinderwing.xp).toBeLessThan(at30);
   });
 });
 

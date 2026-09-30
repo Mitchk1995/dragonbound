@@ -50,7 +50,3 @@ export const FUTURE_SKILLS = [
   { name: 'Enchanting', icon: 'enchanting', chapter: 3 },
   { name: 'Beastmastery', icon: 'beastmastery', chapter: 4 },
 ];
-
-/** OSRS-style XP rates: per point of damage dealt. */
-export const XP_PER_DAMAGE = 4;
-export const HP_XP_PER_DAMAGE = 1.33;

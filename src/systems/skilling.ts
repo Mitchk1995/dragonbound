@@ -2,6 +2,7 @@ import { BASES } from '../data/items';
 import { GEM_CHANCE, GEM_TABLE, GOLEM_CHANCE, mineChance, ORES } from '../data/ores';
 import { masterworkChance, RECIPES, type Recipe } from '../data/recipes';
 import { weighted } from '../core/rng';
+import { XP_TUNING } from '../data/tuning';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { makeItem, makeMasterwork } from '../loot/itemGen';
@@ -133,7 +134,7 @@ export class Skilling {
     const extra = g.save.diaryClaimed.medium && g.zone.def.id === 'mine' && Math.random() < 0.1 ? 1 : 0;
     for (let k = 0; k <= extra; k++) {
       if (!g.items.add(makeItem(ore.ore))) break;
-      g.prog.grant('mining', ore.xp);
+      g.prog.grant('mining', ore.xp * XP_TUNING.mining);
       g.prog.bump(`mine:${ore.ore}`);
     }
     g.sfx.play('pickup', 0.6, 0.8);
@@ -176,7 +177,7 @@ export class Skilling {
     const mw = Math.random() < masterworkChance(g.levels.smithing, r);
     const item = mw ? makeMasterwork(Math.random, r.out, g.levels.smithing) : makeItem(r.out);
     g.items.add(item);
-    g.prog.grant('smithing', r.xp);
+    g.prog.grant('smithing', r.xp * XP_TUNING.smithing);
     this.swingAnim = 1;
     if (r.station === 'anvil') {
       g.sfx.play('hit', 0.7, 1.9);

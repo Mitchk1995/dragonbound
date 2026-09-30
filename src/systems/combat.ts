@@ -13,6 +13,7 @@ import { SKILL_INFO } from '../progression/skills';
 import type { AttackKind } from '../render/anim';
 import { PAL } from '../render/kit';
 import { Cell } from '../world/layout';
+import { XP_TUNING } from '../data/tuning';
 
 export interface HitOpts {
   kb?: number;
@@ -191,7 +192,8 @@ export class Combat {
     if (g.debug.oneShot) hit.amount = e.hp + 999;
     const dealt = Math.min(e.hp, mitigate(hit.amount, e.def.armor));
     e.hp -= dealt;
-    g.prog.combatXp(dealt);
+    // Each enemy is worth a fixed amount of XP, shared by the fraction of its health you dealt.
+    g.prog.combatXp((e.def.xp * dealt) / e.maxHp);
     if (st.lifeOnHit) g.player.hp = Math.min(st.maxHp, g.player.hp + st.lifeOnHit);
 
     e.flash(1);
@@ -313,7 +315,7 @@ export class Combat {
     p.flash(0.8);
     p.anim.hurt = 1;
     // Defence trains a little from absorbing hits, on top of stance XP.
-    g.prog.grant('defence', Math.max(0, amount - dmg) * 2);
+    g.prog.grant('defence', Math.max(0, amount - dmg) * XP_TUNING.defencePerAbsorbed);
     g.text.damage(dmg, p.x, 2.2, p.z, 'hurt');
     g.sfx.play('playerHurt', 0.8);
     g.ui.hurtFlash(dmg / g.stats.maxHp);
