@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { ZONES, type ZoneDef } from '../data/zones';
+import { KEEP_ARCHES, ZONES, type ZoneDef } from '../data/zones';
+import type { PortalSpec } from './portalFx';
 import type { Enemy, PackState } from '../entities/enemy';
 import type { GroundItem } from '../entities/groundItem';
 import { Interactable } from '../entities/interactable';
@@ -47,7 +48,7 @@ export class ZoneRuntime {
     for (const s of L.stations) {
       const arg = this.stationArg(s.kind, s.id);
       const it = new Interactable(s.kind, s.id, s.x, s.z, s.rot ?? 0, arg);
-      if (s.kind === 'portal') it.state = arg ? 'lit' : 'dark';
+      if (s.kind === 'portal') it.state = arg?.color != null ? 'lit' : 'dark';
       this.addInteractable(it);
     }
     this.refreshStations();
@@ -68,9 +69,17 @@ export class ZoneRuntime {
     this.group.add(it.obj);
   }
 
-  private stationArg(kind: string, id: string) {
-    if (kind === 'exit') return 0x5a8aff;
-    if (kind === 'portal') return this.g.story.portalState(id).open ? ZONES[id]?.arch ?? 0xffffff : null;
+  private stationArg(kind: string, id: string): PortalSpec | undefined {
+    if (kind === 'exit') return { dest: 'keep', name: ZONES.keep.name, color: 0x5a8aff, theme: ZONES.keep.theme };
+    if (kind === 'portal') {
+      const dest = ZONES[id], dormant = KEEP_ARCHES.find((a) => a.id === id)?.dormant;
+      const open = this.g.story.portalState(id).open;
+      return {
+        dest: id, theme: dest?.theme, color: open ? dest?.arch ?? 0xffffff : null,
+        name: dest?.name ?? dormant?.split(':')[0] ?? id[0].toUpperCase() + id.slice(1),
+        hint: dormant?.split(':')[1]?.trim() ?? 'Sealed',
+      };
+    }
     return undefined;
   }
 
