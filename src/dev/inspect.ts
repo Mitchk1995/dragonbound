@@ -89,6 +89,7 @@ export async function runInspect(g: Game, suites: string) {
   try {
     if (want('zones')) report.zones = await zonesSuite(g, shot);
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
+    if (want('effects')) await effectsSuite(g, shot);
     if (want('ui')) await uiSuite(g, shot);
     if (want('models')) await modelsSuite(g, shot);
     if (want('anims')) await animsSuite(g, shot);
@@ -256,6 +257,90 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
     }
   }
   return out;
+}
+
+// ─── Effects ────────────────────────────────────────────────────────────────
+
+/**
+ * Combat effects captured mid-flight: every weapon style's basic attack and abilities against a
+ * few targets, plus loot drops. The simulation is stepped by hand (the frame loop only renders)
+ * so each capture lands at a fixed time after the trigger.
+ */
+async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
+  g.travel('foothills', true);
+  await frames(15);
+  // An open clearing (the southern goblin camp, emptied for the test).
+  const spot = { x: 106, z: 157 };
+  const p = g.player;
+  const step = (secs: number) => {
+    for (let i = 0; i < Math.round(secs * 60); i++) g.update(1 / 60);
+  };
+  g.debug.hold = () => false; // render only; the suite advances time itself
+  const setup = (weapon: string) => {
+    for (const e of g.zone.enemies) {
+      e.dead = true;
+      e.obj.removeFromParent();
+    }
+    g.zone.enemies = [];
+    for (const it of g.zone.items) it.group.removeFromParent();
+    g.zone.items = [];
+    g.text.clear();
+    equip(g, { weapon });
+    p.pos.set(spot.x, 0, spot.z);
+    p.stop();
+    p.cds = {};
+    p.action = null;
+    p.dash = null;
+    g.camPos.copy(p.pos);
+    const targets = [[0, -5.5], [-2, -6.5], [2, -6.8]].map(([dx, dz]) => g.combat.spawnEnemy('goblin', spot.x + dx, spot.z + dz, null));
+    for (const t of targets) t.faceTo(p.x, p.z, true);
+    g.hovered = targets[0];
+    g.ground.set(targets[0].x, 0, targets[0].z);
+    p.faceTo(targets[0].x, targets[0].z, true);
+    step(0.1);
+    return targets;
+  };
+  const cases: [string, string, (t: ReturnType<typeof setup>) => void, number[]][] = [
+    ['melee-basic', 'steel_sword', (t) => g.combat.startBasicAttack(t[0]), [0.2, 0.26, 0.34]],
+    ['melee-cleave', 'steel_sword', () => g.combat.useAbility('Q'), [0.15, 0.22, 0.3]],
+    ['melee-leap_slam', 'steel_longsword', () => g.combat.useAbility('W'), [0.25, 0.55]],
+    ['melee-war_cry', 'steel_sword', () => g.combat.useAbility('E'), [0.15, 0.5]],
+    ['ranged-basic', 'worn_bow', (t) => g.combat.startBasicAttack(t[0]), [0.3, 0.42]],
+    ['ranged-multishot', 'worn_bow', () => g.combat.useAbility('Q'), [0.3, 0.45]],
+    ['ranged-roll', 'worn_bow', () => g.combat.useAbility('W'), [0.12]],
+    ['ranged-arrow_rain', 'worn_bow', () => g.combat.useAbility('E'), [0.6, 1.2]],
+    ['magic-basic', 'apprentice_staff', (t) => g.combat.startBasicAttack(t[0]), [0.3, 0.42]],
+    ['magic-fireball', 'apprentice_staff', () => g.combat.useAbility('Q'), [0.35, 0.6]],
+    ['magic-frost_nova', 'apprentice_staff', () => g.combat.useAbility('W'), [0.15, 0.35]],
+    ['magic-chain_lightning', 'apprentice_staff', () => g.combat.useAbility('E'), [0.1, 0.25]],
+  ];
+  let n = 1;
+  for (const [name, weapon, trigger, times] of cases) {
+    const t = setup(weapon);
+    // Aim at the first target (hover is recomputed from the mouse each update, so set it last).
+    g.hovered = t[0];
+    g.ground.set(t[0].x, 0, t[0].z);
+    trigger(t);
+    let at = 0;
+    for (const time of times) {
+      step(time - at);
+      at = time;
+      await shot(`fx-${String(n++).padStart(2, '0')}-${name}-${time}s`);
+    }
+    step(1.5);
+  }
+  // Loot: a unique and a rare drop (beams, labels).
+  setup('steel_sword');
+  const u = Object.values(UNIQUES)[0];
+  g.items.drop({ ...makeItem(u.base), unique: u.id, rarity: 'unique' } as any, 0, spot.x + 1, spot.z - 2, 1);
+  g.items.drop({ ...makeItem('steel_platebody'), rarity: 'rare' } as any, 120, spot.x - 1.5, spot.z - 2.5, 1);
+  step(1.2);
+  await shot(`fx-${String(n++).padStart(2, '0')}-loot-drops`);
+  g.altHeld = true;
+  step(0.1);
+  await shot(`fx-${String(n++).padStart(2, '0')}-loot-labels`);
+  g.altHeld = false;
+  g.debug.hold = null;
 }
 
 // ─── Perf breakdown ─────────────────────────────────────────────────────────

@@ -78,8 +78,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       // Large-scale colour drift (per-cell randomness reads as pixels).
       c.setHex(shades[0]).lerp(c2.setHex(shades[1]), noise(x * 0.09, z * 0.09));
       const relief = isRelief(cell, theme);
-      if (relief) c.copy(cliffC.setHex(cliffShades[0]).lerp(c2.setHex(cliffShades[1]), noise(x * 0.21 + 50, z * 0.21)));
-      const ch = relief ? 3 : (theme.splat?.[g] ?? SPLAT[g] ?? 0);
+      const mesaTop = relief && cell === Cell.Cliff && theme.mesaTop !== undefined;
+      if (mesaTop) {
+        const top = theme.ground[theme.mesaTop!] ?? shades;
+        c.setHex(top[0]).lerp(c2.setHex(top[1]), noise(x * 0.09, z * 0.09));
+      } else if (relief) c.copy(cliffC.setHex(cliffShades[0]).lerp(c2.setHex(cliffShades[1]), noise(x * 0.21 + 50, z * 0.21)));
+      const ch = mesaTop ? (theme.splat?.[theme.mesaTop!] ?? SPLAT[theme.mesaTop!] ?? 1) : relief ? 3 : (theme.splat?.[g] ?? SPLAT[g] ?? 0);
       const elev = relief ? (layout.elev[i] || (cell === Cell.Wall ? CAVE_WALL_H : CLIFF_H)) : 0;
       const fluid = layout.fluid[i] !== Fluid.None;
       for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) {
@@ -184,7 +188,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     for (const k of ['position', 'normal', 'color', 'aSplat']) g.setAttribute(k, geo.getAttribute(k));
     g.setIndex(index);
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
-    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1);
+    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null);
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
     mesh.castShadow = name === 'relief';

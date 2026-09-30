@@ -32,6 +32,8 @@ export interface ZoneTheme {
   flowers?: number[];
   /** Brightness multiplier for the tops of high relief (caves: rock falls away into darkness). */
   topShade?: number;
+  /** Ground on top of cliffs/mesas (their steep faces are rock); undefined = rock all over. */
+  mesaTop?: Ground;
 }
 
 export interface ZoneDef {
@@ -80,6 +82,7 @@ export const ZONES: Record<string, ZoneDef> = {
       ambient: 'embers', trees: 'pine', wall: 'cave', ground: FOOTHILLS_GROUND,
       forest: { pine: 0.55, grove: 0.3, ash: 0.15 },
       reliefTrees: 0.22,
+      mesaTop: Ground.Grass,
       flowers: [0xf0c040, 0xd85a4a, 0xa888ff, 0xf4f0e0],
       cliff: [0x7a6a5a, 0x5a4e44],
       water: [0x4a8aa0, 0x16384a],

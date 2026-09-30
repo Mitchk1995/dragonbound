@@ -275,7 +275,7 @@ export function buildFoothills(seed: number): ZoneLayout {
   // Woods: clustered forests and copses, open meadows between; logs and mushrooms in the woods.
   G.scatter((x, z) => {
     const n = G.noise(x * 0.035, z * 0.035);
-    const woods = n > 0.56 ? 0.55 + (n - 0.56) * 2 : n > 0.46 ? 0.08 : 0.015;
+    const woods = n > 0.6 ? 0.5 + (n - 0.6) * 2 : n > 0.5 ? 0.05 : 0.012;
     return Math.min(0.85, woods);
   }, 0.1);
   for (let k = 0; k < 60; k++) {

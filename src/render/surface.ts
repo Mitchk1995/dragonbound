@@ -163,17 +163,19 @@ export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: Surf
  * Ground: a four-channel atlas (dirt, grass, flagstone, cave rock) projected top-down in world
  * space and blended per vertex by the `aSplat` attribute.
  */
-export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1) {
+/** `cliff`: colour steep faces blend to (slope-based texturing: mesa tops keep their grass). */
+export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null) {
   const uniforms = {
     uLava: { value: lava },
     uTopShade: { value: topShade },
+    uCliff: { value: new THREE.Color(cliff ?? 0x6a5e52) },
     uGroundTex: { value: groundTexture() },
     uSurfScale: { value: 0.25 },
     uSurfAlbedo: { value: 0.42 },
     uSurfBump: { value: 1.1 },
   };
   addPatch(mat, {
-    key: `ground${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}`,
+    key: `ground${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}${cliff !== null ? ':cliff' : ''}`,
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
       commonInject(
@@ -213,6 +215,15 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
         .replace('#include <common>', '#include <common>\nattribute vec4 aSplat;\nvarying vec4 vSplat;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvSplat = aSplat;');
       heightInject(shader);
+      if (cliff !== null) {
+        // Steep faces take the cliff rock colour whatever the vertex colour (tops stay grassy).
+        shader.fragmentShader = shader.fragmentShader
+          .replace('uniform float uLava;', 'uniform float uLava;\nuniform vec3 uCliff;')
+          .replace(
+            '#include <roughnessmap_fragment>',
+            '#include <roughnessmap_fragment>\n{ float steep = smoothstep(0.42, 0.78, 1.0 - abs(normalize(vSurfNrm).y)); diffuseColor.rgb = mix(diffuseColor.rgb, uCliff * (0.75 + surfH * 0.5), steep); }',
+          );
+      }
       if (topShade < 1) {
         // Cave rock: the higher the rock, the deeper in shadow (tunnel walls fall away into darkness).
         shader.fragmentShader = shader.fragmentShader
