@@ -82,11 +82,10 @@ export class Enemy extends Unit {
     }
     // Dormant when far away and idle: no AI, no animation, not drawn (big zones hold ~100 enemies;
     // only the ones near the hero cost anything). DORMANT_DIST is well beyond the view and aggro range.
-    if (!this.aggro && !this.returning && this.def.behavior !== 'boss') {
-      const dormant = this.distTo(g.player) > DORMANT_DIST;
-      this.obj.visible = !dormant;
-      if (dormant) return;
-    }
+    // Visibility is recomputed every frame, so an enemy woken by its pack (aggro) reappears.
+    const dormant = !this.aggro && !this.returning && this.def.behavior !== 'boss' && this.distTo(g.player) > DORMANT_DIST;
+    this.obj.visible = !dormant;
+    if (dormant) return;
     this.atkCd -= dt;
     let moved = 0;
     if (this.def.behavior === 'boss') {
