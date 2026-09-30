@@ -255,8 +255,8 @@ export class Story {
     const g = this.g;
     const q = this.s.quests[QUEST];
     q.done = true;
-    g.prog.grant('smithing', 2500);
-    g.prog.grant('mining', 1500);
+    g.prog.grant('smithing', 1250);
+    g.prog.grant('mining', 750);
     this.s.gold += 750;
     g.ui.questComplete(QUESTS[QUEST].name, QUESTS[QUEST].rewards);
     g.ui.refresh();
@@ -464,7 +464,7 @@ export class Story {
     s.diaryClaimed[tier] = true;
     if (tier === 'easy') {
       s.potionMax = Math.min(7, s.potionMax + 1);
-      g.prog.grant(lampSkill ?? 'mining', 2000);
+      g.prog.grant(lampSkill ?? 'mining', 1000);
     }
     g.prog.recomputeStats();
     g.announce(`${tier[0].toUpperCase() + tier.slice(1)} diary rewards claimed: ${DIARY_REWARDS[tier].text.join(', ')}.`, 'unique');

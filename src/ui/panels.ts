@@ -5,6 +5,7 @@ import { RESTORATIONS } from '../data/keep';
 import { QUESTS } from '../data/quests';
 import { masterworkChance, recipesFor, RECIPES, type Recipe } from '../data/recipes';
 import { SHOP } from '../data/shop';
+import { XP_TUNING } from '../data/tuning';
 import { DROP_TABLES } from '../data/dropTables';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
@@ -229,7 +230,7 @@ export class Panels {
           ${itemSlot(makeItem(r.out))}
           <div class="rc-main"><div class="rc-name">${esc(BASES[r.out].name)} <span class="${lvlOk ? 'lv' : 'lv bad'}">Lv ${r.level}</span></div>
           <div class="rc-in">${ins}</div>
-          <div class="rc-xp">${r.xp} XP${mw > 0 ? ` · ${(mw * 100).toFixed(1)}% masterwork` : ''}${r.needs && !g.save.keep[r.needs] ? ' · <span class="no">needs forge restoration</span>' : ''}</div></div>
+          <div class="rc-xp">${+(r.xp * XP_TUNING.smithing).toFixed(1)} XP${mw > 0 ? ` · ${(mw * 100).toFixed(1)}% masterwork` : ''}${r.needs && !g.save.keep[r.needs] ? ' · <span class="no">needs forge restoration</span>' : ''}</div></div>
           <div class="rc-btns">${[1, 5, 10].map((n) => `<button class="btn sm" data-q="${n}" ${err ? 'disabled' : ''}>${n}</button>`).join('')}<button class="btn sm" data-q="${Math.max(1, max)}" ${err ? 'disabled' : ''}>All</button></div>
         </div>`;
       }).join('');

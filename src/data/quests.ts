@@ -24,6 +24,6 @@ export const QUESTS: Record<string, QuestDef> = {
       { text: 'Forge the Cinder Key at the anvil: 3 seal fragments, 2 iron bars and 1 emberite ore (Smithing 25).' },
       { text: 'Use the Cinder Key on the sealed gate at the far north of the Ashen Foothills.' },
     ],
-    rewards: ['2,500 Smithing XP', '1,500 Mining XP', '750 gold', "Access to Cinderwing's Lair", 'Unlocks the Lair Arch restoration'],
+    rewards: ['1,250 Smithing XP', '750 Mining XP', '750 gold', "Access to Cinderwing's Lair", 'Unlocks the Lair Arch restoration'],
   },
 };

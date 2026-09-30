@@ -40,7 +40,7 @@ export const DIARY_TASKS: DiaryTask[] = [
 ];
 
 export const DIARY_REWARDS: Record<DiaryTier, { text: string[] }> = {
-  easy: { text: ['+1 potion belt charge', '2,000 XP lamp (any skill)'] },
+  easy: { text: ['+1 potion belt charge', '1,000 XP lamp (any skill)'] },
   medium: { text: ['10% chance to mine an extra ore in Emberdeep', 'Veilstone recall takes 1.5s instead of 3s'] },
   hard: { text: ['Ashen Cloak (cosmetic)', '+5% experience in the Foothills and the Lair'] },
 };
