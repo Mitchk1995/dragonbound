@@ -163,15 +163,16 @@ export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: Surf
  * Ground: a four-channel atlas (dirt, grass, flagstone, cave rock) projected top-down in world
  * space and blended per vertex by the `aSplat` attribute.
  */
-export function applyGround(mat: THREE.MeshStandardMaterial) {
+export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0) {
   const uniforms = {
+    uLava: { value: lava },
     uGroundTex: { value: groundTexture() },
     uSurfScale: { value: 0.25 },
     uSurfAlbedo: { value: 0.42 },
     uSurfBump: { value: 1.1 },
   };
   addPatch(mat, {
-    key: 'ground',
+    key: lava > 0 ? 'ground:lava' : 'ground',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
       commonInject(
@@ -181,6 +182,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial) {
         uniform float uSurfScale;
         uniform float uSurfAlbedo;
         uniform float uSurfBump;
+        uniform float uLava;
         varying vec4 vSplat;
         float surfSample(out vec3 grad) {
           vec4 k = vSplat / max(0.001, dot(vSplat, vec4(1.0)));
@@ -196,6 +198,20 @@ export function applyGround(mat: THREE.MeshStandardMaterial) {
         .replace('#include <common>', '#include <common>\nattribute vec4 aSplat;\nvarying vec4 vSplat;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvSplat = aSplat;');
       heightInject(shader);
+      if (lava > 0) {
+        // Lava pools in the rock channel's deepest crevices, pulsing slowly. Emissive, so it glows
+        // regardless of lighting (and feeds bloom).
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          {
+            float rockW = vSplat.w / max(0.001, dot(vSplat, vec4(1.0)));
+            float crev = smoothstep(0.34, 0.16, surfH) * rockW;
+            float pulse = 0.75 + 0.25 * sin(vSurfPos.x * 0.7 + vSurfPos.z * 0.5);
+            totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * crev * pulse * 2.2 * uLava;
+          }`,
+        );
+      }
     },
   });
 }
@@ -218,12 +234,14 @@ function isSkinTone(c: THREE.Color) {
   return hsl.h > 0.04 && hsl.h < 0.1 && hsl.s > 0.4 && hsl.l > 0.65 && hsl.l < 0.85;
 }
 
-/** Surface for a colour with no other information: grey → stone, brown → wood, dark bluish grey → metal. */
+/** Surface for a colour with no other information: grey → stone, brown → wood, dark bluish grey → metal, saturated → cloth. */
 export function guessSurface(c: THREE.Color): SurfaceKind {
   const hsl = c.getHSL({ h: 0, s: 0, l: 0 });
   if (hsl.l > 0.85) return 'generic';
   if (hsl.s < 0.12) return hsl.h > 0.55 && hsl.h < 0.75 && hsl.l < 0.35 ? 'metal' : 'stone';
   if (hsl.h > 0.03 && hsl.h < 0.14 && hsl.l < 0.45) return 'wood';
+  // Strongly coloured props are banners, awnings and tents.
+  if (hsl.s > 0.35) return 'cloth';
   return 'generic';
 }
 

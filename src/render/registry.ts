@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CLOTH_COLORS, HAIR_COLORS, SKIN_TONES } from '../data/appearance';
 import { BASES, UNIQUES, type Palette } from '../data/items';
 import type { Appearance } from '../save/save';
@@ -57,10 +58,57 @@ function normalizeAuthoredFrame(scene: THREE.Object3D) {
   }
 }
 
+/** Authored primitive parts are exported as p<N>; anything else is a named part code may look up. */
+const ANON_PART = /^p\d+$/;
+
+/**
+ * Merge a model's anonymous rigid leaf meshes that share a parent and a material into one mesh
+ * (merged in the parent's space, so they still move with that rig part). A creature drops from
+ * ~40-90 draw calls to one per part per material, and shadows halve with it.
+ * Named meshes, meshes with children and gear (whose parts are identified by shape) are left alone.
+ */
+export function mergeRigidParts(root: THREE.Object3D) {
+  const parents = new Set<THREE.Object3D>();
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh && !o.children.length && ANON_PART.test(o.name) && o.parent) parents.add(o.parent);
+  });
+  let before = 0, after = 0;
+  for (const parent of parents) {
+    const byMat = new Map<THREE.Material, THREE.Mesh[]>();
+    for (const c of parent.children) {
+      if (!(c instanceof THREE.Mesh) || c.children.length || !ANON_PART.test(c.name) || Array.isArray(c.material)) continue;
+      const list = byMat.get(c.material) ?? [];
+      list.push(c);
+      byMat.set(c.material, list);
+    }
+    for (const [mat, meshes] of byMat) {
+      before += meshes.length;
+      after++;
+      if (meshes.length < 2) continue;
+      const geos = meshes.map((m) => {
+        m.updateMatrix();
+        let g = m.geometry.clone().applyMatrix4(m.matrix);
+        for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+        if (g.index) g = g.toNonIndexed();
+        return g;
+      });
+      const merged = mergeGeometries(geos);
+      if (!merged) continue;
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.name = meshes[0].name;
+      mesh.castShadow = mesh.receiveShadow = meshes.some((m) => m.castShadow);
+      for (const m of meshes) m.removeFromParent();
+      parent.add(mesh);
+    }
+  }
+  return { before, after };
+}
+
 /** Register a parsed glTF scene under a model name (used by the browser loader and by tests). */
 export function registerModelScene(name: string, scene: THREE.Group) {
   cleanNames(scene);
   normalizeAuthoredFrame(scene);
+  if (!name.startsWith('gear_')) mergeRigidParts(scene);
   const box = new THREE.Box3().setFromObject(scene);
   loaded.set(name, { scene, height: box.max.y - box.min.y });
 }

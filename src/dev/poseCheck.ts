@@ -207,6 +207,6 @@ export function installPoseCheck(g: Game) {
   /** Step the simulation manually (the pane may be throttled when hidden). */
   w.__step = (secs: number) => {
     for (let i = 0; i < Math.round(secs * 60); i++) g.update(1 / 60);
-    g.renderer.render(g.scene, g.camera);
+    g.draw();
   };
 }

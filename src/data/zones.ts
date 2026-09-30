@@ -14,6 +14,10 @@ export interface ZoneTheme {
   ground: Partial<Record<Ground, [number, number]>>;
   trees: 'pine' | 'ash' | 'grove';
   wall: 'castle' | 'cave' | 'ruin';
+  /** Ground texture per ground type (0 dirt, 1 grass, 2 flagstone, 3 rock) when it differs from the default. */
+  splat?: Partial<Record<Ground, 0 | 1 | 2 | 3>>;
+  /** Glowing lava in the ground's deepest crevices. */
+  lava?: number;
 }
 
 export interface ZoneDef {
@@ -390,7 +394,7 @@ export const ZONES: Record<string, ZoneDef> = {
   ruin: {
     id: 'ruin', name: 'Sunken Ruin', kind: 'quest', arch: 0x6ad0c0, build: buildRuin,
     theme: {
-      bg: 0x141a22, fog: [26, 60], hemi: [0x9ab8d0, 0x2a3a3a, 1.0], sun: [0xc8e0ff, 1.5], exposure: 1.1,
+      bg: 0x141a22, fog: [30, 66], hemi: [0xa8c4d8, 0x34443e, 1.35], sun: [0xd8e8ff, 2.1], exposure: 1.2,
       ambient: 'ash', trees: 'grove', wall: 'ruin',
       ground: { [Ground.Stone]: [0x6a7070, 0x5a6060], [Ground.Grass]: [0x3a5a3a, 0x4a6a44] },
     },
@@ -398,9 +402,11 @@ export const ZONES: Record<string, ZoneDef> = {
   lair: {
     id: 'lair', name: "Cinderwing's Lair", kind: 'lair', arch: 0xff2a1a, build: buildLair,
     theme: {
-      bg: 0x1c0a08, fog: [34, 70], hemi: [0xd89a7a, 0x3a1a10, 0.9], sun: [0xff9a6a, 2.2], exposure: 1.05,
+      bg: 0x1c0a08, fog: [34, 70], hemi: [0xe8b090, 0x4a2418, 1.3], sun: [0xffb07a, 2.6], exposure: 1.2,
       ambient: 'embers', trees: 'ash', wall: 'cave',
-      ground: { [Ground.Arena]: [0x3a2420, 0x4a2a1a], [Ground.Path]: [0x4a3a30, 0x3a2e26] },
+      ground: { [Ground.Arena]: [0x5a443c, 0x4a3832], [Ground.Path]: [0x5a4a40, 0x4a3e36] },
+      splat: { [Ground.Arena]: 3, [Ground.Path]: 3 },
+      lava: 1,
     },
   },
 };

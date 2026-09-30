@@ -53,6 +53,20 @@ describe('pose audit: models loaded', () => {
   it('uses the exported hero, gear and dragons (not placeholders)', () => {
     for (const n of ['hero', 'gear_sword', 'gear_longsword', 'gear_bow', 'gear_staff', 'gear_body_plate', 'cinderwing', 'drakeling', 'whelp']) expect(hasModel(n), n).toBe(true);
   });
+  it('merges anonymous rigid parts per rig node and material (draw calls)', () => {
+    const count = (name: string) => {
+      let n = 0;
+      makeModel(name).root.traverse((o) => {
+        if (o instanceof THREE.Mesh) n++;
+      });
+      return n;
+    };
+    // Authored part counts are 77 / 97 / 29; merged they must drop well below that (≤60%), with rig parts intact.
+    expect(count('drakeling')).toBeLessThanOrEqual(46);
+    expect(count('cinderwing')).toBeLessThanOrEqual(58);
+    expect(count('goblin')).toBeLessThanOrEqual(17);
+    for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
+  });
 });
 
 describe('pose audit: one-handed melee weapons', () => {

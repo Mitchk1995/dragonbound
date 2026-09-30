@@ -4,7 +4,13 @@
     {
       "name": "dragonbound-web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5173",
+        "--strictPort",
+        "--force"
+      ],
       "port": 5173
     }
   ]

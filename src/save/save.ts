@@ -135,6 +135,13 @@ declare global {
       readSave(): Promise<string | null>;
       writeSave(json: string): Promise<boolean>;
       savePath(): Promise<string>;
+      inspect?: {
+        config(): Promise<string | null>;
+        capture(name: string): Promise<boolean>;
+        write(name: string, text: string): Promise<boolean>;
+        log(text: string): Promise<boolean>;
+        done(code?: number): Promise<boolean>;
+      };
     };
   }
 }

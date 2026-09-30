@@ -100,7 +100,7 @@ function rock(seed: number): Gen {
     // Cracks only in patches, so cell outlines never read as tiles.
     const crack = f2 - f1 < 1.2 && mask(x, y) > 0.58 ? 0.14 : 0;
     const ridge = 1 - Math.abs(ridgeN(x, y) * 2 - 1);
-    return 0.25 + n(x, y) * 0.5 + ridge * 0.2 - crack;
+    return 0.28 + n(x, y) * 0.52 + ridge * 0.1 - crack;
   };
 }
 

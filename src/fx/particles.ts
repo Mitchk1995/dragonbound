@@ -12,7 +12,26 @@ export interface BurstOpts {
   spread?: number;
 }
 
-/** Pooled chunky cube particles on a single InstancedMesh. */
+/** Radial falloff sprite for additive glow particles (bright core, soft edge). */
+function softDot() {
+  const n = 64;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const d = Math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2) / (n / 2);
+    const v = Math.max(0, 1 - d);
+    const a = Math.round(255 * (v * v * 0.7 + Math.pow(v, 8) * 0.3));
+    data.set([a, a, a, 255], (y * n + x) * 4);
+  }
+  const t = new THREE.DataTexture(data, n, n);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Pooled particles on a single InstancedMesh. */
 export class Particles {
   readonly mesh: THREE.InstancedMesh;
   private n = 0;
@@ -37,8 +56,21 @@ export class Particles {
       transparent: additive,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       depthWrite: !additive,
+      map: additive ? softDot() : null,
     });
-    this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, max);
+    // Solid particles are chunky cubes (debris, sparks); glow particles are soft camera-facing discs.
+    if (additive) {
+      mat.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <project_vertex>',
+          `vec4 mvPosition = modelViewMatrix * vec4(instanceMatrix[3].xyz, 1.0);
+          mvPosition.xy += position.xy * length(instanceMatrix[0].xyz) * 2.2;
+          gl_Position = projectionMatrix * mvPosition;`,
+        );
+      };
+      mat.customProgramCacheKey = () => 'glow-billboard';
+    }
+    this.mesh = new THREE.InstancedMesh(additive ? new THREE.PlaneGeometry(1, 1) : new THREE.BoxGeometry(1, 1, 1), mat, max);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
