@@ -51,7 +51,7 @@ def build_hero(scene_name='DB_hero'):
     for y in (0.3, 0.42):
         box(body, (0.05, 0.05, 0.03), (0, y, 0.24), R.leather, bevel=0.01)          # toggles
     box(body, (0.4, 0.06, 0.3), (0, 0.76, 0), R.cloth2, bevel=0.02)                 # collar
-    cyl(body, 0.1, 0.11, 0.12, (0, 0.8, 0), R.skin, seg=6)                           # neck
+    box(body, (0.2, 0.12, 0.2), (0, 0.8, 0), R.skin, bevel=0.03)                     # neck
     # Belt + buckle + pouch
     box(body, (0.72, 0.12, 0.46), (0, 0.07, 0), R.leather, bevel=0.03)
     box(body, (0.13, 0.11, 0.04), (0, 0.07, 0.235), BUCKLE, bevel=0.015)

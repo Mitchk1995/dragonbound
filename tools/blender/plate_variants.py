@@ -38,10 +38,10 @@ from mathutils.bvhtree import BVHTree
 _p = os.path.join(_ROOT, 'tools', 'blender', 'gear.py')
 _g = {'DB_RUN': False, '__name__': 'db_gear', '__file__': _p}
 exec(open(_p, encoding='utf-8').read(), _g)
-SOCKET_POS, SLIT = _g['SOCKET_POS'], _g['SLIT']
-CHEST_IN, HELM_IN, CUIRASS, GREAT_HELM, PAULDRON = _g['CHEST_IN'], _g['HELM_IN'], _g['CUIRASS'], _g['GREAT_HELM'], _g['PAULDRON']
-mp, row_v, cuirass, band_on, tasset, helm_shell = _g['mp'], _g['row_v'], _g['cuirass'], _g['band_on'], _g['tasset'], _g['helm_shell']
-pauldron, pauldron_trim, scale_row = _g['pauldron'], _g['pauldron_trim'], _g['scale_row']
+SOCKET_POS = _g['SOCKET_POS']
+body_plate, helm_full, plate_torso, block_pauldron = _g['body_plate'], _g['helm_full'], _g['plate_torso'], _g['block_pauldron']
+plate_gauntlet, plate_sabaton, faces, scale_plate = _g['plate_gauntlet'], _g['plate_sabaton'], _g['faces'], _g['scale_plate']
+PAULDRON_STEPS = _g['PAULDRON_STEPS']
 _p = os.path.join(_ROOT, 'tools', 'blender', 'fitcheck.py')
 _f = {'__name__': 'db_fit', '__file__': _p}
 exec(open(_p, encoding='utf-8').read(), _f)
@@ -439,239 +439,121 @@ def closeup(vid, file_name, pose='idle', views=(dict(yaw=0, pitch=8), dict(yaw=4
     return p
 
 
-# ═══ Shared plate parts ══════════════════════════════════════════════════════
-
-LAMES = ((-0.39, -0.295), (-0.465, -0.37))
-
-
-def plate_waist(c, seam=None, rim=R.trim):
-    """Two abdominal lames, belt and buckle, a short mail fauld, two-lame front tassets and a culet with rolled
-    `rim`s. `seam` (a colour) adds a thin line where each lame tucks under the plate above it."""
-    for i, (y0, y1) in enumerate(LAMES):
-        a, b = 0.41 - 0.005 * i, 0.305 - 0.004 * i
-        hoop(c, y0, y1, (a, b), (a - 0.01, b - 0.008), 0.024, R.metal, nu=12, e=3.6, rf=(0.02, 0.02), rw=0.6, nm=f'lame{i}', walls=(0,))
-        if seam:
-            hoop(c, y0 - 0.012, y0 + 0.004, (a - 0.004, b - 0.004), (a - 0.004, b - 0.004), 0.02, seam, nu=12, e=3.6, nm=f'lame_seam{i}')
-    hoop(c, -0.53, -0.465, (0.405, 0.3), (0.405, 0.3), 0.025, R.leather, nu=12, e=3.6, nm='belt')
-    tag(box(c, (0.14, 0.09, 0.03), (0, -0.497, 0.315), R.trim, bevel=0.01), 'buckle')
-    hoop(c, -0.66, -0.52, (0.425, 0.3), (0.41, 0.295), 0.02, R.dark, nu=12, e=5.0, nm='fauld_mail', walls=(0,))
-    for s in (-1, 1):
-        t0, t1 = (0.2, 1.25) if s > 0 else (-1.25, -0.2)
-        sd = 'LR'[s < 0]
-        tasset(c, t0, t1, -0.52, -0.65, 0.435, 0.315, rim=None, nm=f'tasset_up{sd}', e=5.0)
-        tasset(c, t0, t1, -0.62, -0.76, 0.45, 0.33, rim=rim, nm=f'tasset_lo{sd}', e=5.0)
-    tasset(c, PI - 1.0, PI + 1.0, -0.52, -0.72, 0.435, 0.315, rim=rim, nm='culet', e=5.0, nu=4)
-
-
-def gorget(c, rim=R.trim):
-    hoop(c, 0.34, 0.415, (0.305, 0.295), (0.29, 0.28), 0.03, R.metal, nu=10, e=2.6, bevel=0.012, nm='gorget', walls=(1,))
-    hoop(c, 0.405, 0.43, (0.297, 0.287), (0.292, 0.282), 0.03, rim, nu=10, e=2.6, nm='gorget_rim')
-
-
-def gauntlet(g, s, cuff_rim=R.trim):
-    tag(box(g, (0.31, 0.26, 0.31), (0, -0.01, 0), R.metal, bevel=0.05), 'fist')
-    tag(box(g, (0.325, 0.08, 0.325), (0, -0.11, 0.005), R.metal, bevel=0.012), 'finger_lame')
-    tag(box(g, (0.33, 0.03, 0.33), (0, -0.06, 0.005), R.dark, bevel=0), 'knuckle_gap')
-    tag(box(g, (0.125, 0.185, 0.135), (-s * 0.07, 0.03, 0.168), R.metal, rot=(0.3, 0, 0), bevel=0.03), 'thumb')
-    cf = loft_fn([(0.1, 0.14, 0.145, 0, 0), (0.3, 0.158, 0.165, 0, 0)], 2.4)
-    surf(g, cf, 8, 1, 0.025, R.metal, closed_u=True, inside=(0, 0.2, 0), nm='cuff', inner=False)
-    band_on(g, cf, 0.8, 1.0, color=cuff_rim, nu=8, lift=0.004, nm='cuff_roll', ins=(0, 0.2, 0))
-    return cf
-
-
-def sabaton(f, knee=True):
-    tag(box(f, (0.34, 0.195, 0.44), (0, -0.08, 0.055), R.metal, bevel=0.05), 'foot')
-    tag(box(f, (0.31, 0.12, 0.14), (0, -0.06, 0.24), R.metal, rot=(-0.3, 0, 0), bevel=0.03), 'sabaton_toe')
-    tag(box(f, (0.36, 0.035, 0.46), (0, -0.166, 0.055), R.dark, bevel=0), 'sole')
-    gi = (0, 0.15, 0)
-    gf = loft_fn([(0.035, 0.18, 0.185, 0.02, 0), (0.34, 0.17, 0.175, 0.035, 0)], 2.6)
-    surf(f, gf, 8, 1, 0.025, R.metal, closed_u=True, inside=gi, nm='greave', inner=False)
-    if knee:
-        kf = loft_fn([(0.32, 0.2, 0.2, 0.02, 0), (0.47, 0.205, 0.205, 0.04, 0)], 2.4, t0=-1.8, t1=1.8)
-        surf(f, kf, 5, 1, 0.025, R.metal, inside=(0, 0.39, 0), bevel=0.01, nm='poleyn', inner=False)
-    return gf
-
-
-def front(fn, half, v0, v1):
-    """Patch of a lofted surface around its front (u in -half..half turns)."""
-    return lambda u, v: fn((-half + 2 * half * u) % 1.0, v0 + (v1 - v0) * v)
-
-
 # ═══ P: plate (bronze, iron, steel) ══════════════════════════════════════════
-# OSRS-style plate: a rounded cuirass with a soft centre ridge and a slight chest swell, rolled rims at the
-# neck and waist, plain lames, belt and tassets; rounded pauldrons hugging the arm; a rounded great helm with
-# one clean visor slit; plain gauntlets and sabatons. Trim is a lighter tint of the same metal (tier palette).
-
-def P_body(S):
-    c = S('sock_chest')
-    fn = cuirass(c)
-    band_on(c, fn, 0.0, 0.035, nm='waist_roll')
-    # plackart: the lower breastplate laid over the cuirass, its top edge a shallow V, rolled
-    pl = lambda u, v: fn((-0.16 + 0.32 * u) % 1.0, 0.02 + (0.42 - 0.13 * abs(2 * u - 1) - 0.02) * v)
-    surf(c, grow(pl, 0.012, CHEST_IN), 6, 2, 0.02, R.metal, inside=CHEST_IN, inner=False, nm='plackart')
-    surf(c, grow(lambda u, v: pl(u, 0.88 + 0.12 * v), 0.016, CHEST_IN), 6, 1, 0.022, R.trim, inside=CHEST_IN, inner=False, nm='plackart_roll')
-    gorget(c)
-    tag(box(c, (0.04, 0.44, 0.02), (0, 0.0, -0.328), R.dark, bevel=0), 'spine')
-    plate_waist(c)
-    for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
-        pauldron(S(name), s)
-
-
-def P_helm(S):
-    h = S('sock_head')
-    fn = helm_shell(h)
-    band_on(h, fn, 0.0, 0.06, nm='helm_rim', ins=HELM_IN, thick=0.035)
-    vs0, vs1 = row_v(GREAT_HELM, 0.035), row_v(GREAT_HELM, 0.085)
-    surf(h, grow(front(fn, 0.15, vs0, vs1), 0.004, HELM_IN), 6, 1, 0.02, SLIT, inside=HELM_IN, inner=False, nm='eye_slit')
-    surf(h, grow(front(fn, 0.16, 0.06, vs0), 0.012, HELM_IN), 6, 2, 0.024, R.metal, inside=HELM_IN, bevel=0.008, inner=False, nm='visor')
-    surf(h, grow(front(fn, 0.16, vs1, row_v(GREAT_HELM, 0.13)), 0.012, HELM_IN), 6, 1, 0.024, R.trim, inside=HELM_IN, inner=False, nm='brow')
-    for u in (0.25, 0.75):
-        tag(stud_on(h, fn, u, vs0, HELM_IN, R.dark), 'visor_rivet')
-
+# OSRS-style plate in modular blocks (gear.py plate kit): a broad chest block with a raised breastplate,
+# stepped lames, belt and box tassets; pauldrons of blocks stepping down the shoulder; a cube-over-cube full
+# helm whose eye slit is the gap between brow band and face plates; box gauntlets and sabatons. Trim is a
+# lighter tint of the same metal (tier palette).
 
 def P_gloves(S):
     for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
-        gauntlet(S(name), s)
+        plate_gauntlet(S(name), s)
 
 
 def P_boots(S):
     for name in ('sock_footL', 'sock_footR'):
-        sabaton(S(name))
+        plate_sabaton(S(name))
 
 
-VARIANTS['p'] = {'name': 'Plate', 'body_plate': P_body, 'helm_full': P_helm, 'gloves': P_gloves, 'boots': P_boots}
+VARIANTS['p'] = {'name': 'Plate', 'body_plate': body_plate, 'helm_full': helm_full, 'gloves': P_gloves, 'boots': P_boots}
 
 
 # ═══ E: Emberforged ══════════════════════════════════════════════════════════
-# The plate silhouette forged from dragon parts: obsidian plates split by thin glowing ember seams, rows of
-# overlapping dragon scales over the breast either side of a smooth scute column, a dragon-heart gem in a claw
-# setting at the sternum, pauldrons of folded wing plates with a wing bone and claws, and a dragon-skull helm
-# (long snout visor, brow ridges over glowing eyes, horns swept straight back).
-
-def snout_fn(rows, e=2.6):
-    """Tapering muzzle lofted along +Z. rows: (z, centre y, half width, half height); u goes round from the top."""
-    def fn(u, v):
-        k = v * (len(rows) - 1)
-        i = min(int(k), len(rows) - 2)
-        f = k - i
-        z, yc, w, hh = [a + (b - a) * f for a, b in zip(rows[i], rows[i + 1])]
-        t = 2 * PI * u
-        return (w * ssin(t, e), yc + hh * scos(t, e), z)
-    return fn
+# The same block plate forged from dragon parts: obsidian slabs split by glowing ember seams, staggered rows of
+# small pointed scales over the breast either side of a scute column, a dragon-heart gem in a claw setting,
+# pauldrons of stacked blocks tipped with wedge claws, and a blocky dragon-skull helm (long box snout, brow
+# ridge over angled glowing eye slits, segmented horns swept back and low).
+SLIT_E = 0x0C0A0A
 
 
 def E_body(S):
     c = S('sock_chest')
-    fn = cuirass(c)
-    band_on(c, fn, 0.0, 0.035, color=R.dark, nm='waist_roll')
-    # scale field: ember glows through the gaps between the scales
-    surf(c, grow(front(fn, 0.26, row_v(CUIRASS, -0.17), row_v(CUIRASS, 0.12)), 0.004, CHEST_IN), 12, 3, 0.01, R.glow,
-         inside=CHEST_IN, inner=False, nm='scale_glow')
-    for j, (ya, yb) in enumerate(((0.14, 0.3), (0.03, 0.19), (-0.08, 0.08), (-0.19, -0.03))):
-        v0, v1 = row_v(CUIRASS, ya), row_v(CUIRASS, yb)
-        u_mid = (0.0 if j % 2 else 0.0375) + 1.5 * 0.075
-        for s in (-1, 1):
-            scale_row(c, fn, u_mid if s > 0 else 1 - u_mid, 3, 0.075, v0, v1, R.metal, CHEST_IN, point=0.05, lift=0.008 + 0.004 * j,
-                      flare=0.028, nm='scale')
-    for y in (0.05, -0.05, -0.15, -0.25):
-        scale_row(c, fn, 0.0, 1, 0.085, row_v(CUIRASS, y), row_v(CUIRASS, y + 0.1), R.metal, CHEST_IN, point=0.02, lift=0.03,
-                  flare=0.012, nm='scute')
-    # dragon heart at the sternum, held in a ring and four claws
-    v = row_v(CUIRASS, 0.17)
-    n = surf_normal(fn, 0.0, v, CHEST_IN)
-    ctr = V(fn(0.0, v)) + n * 0.05
-    tag(gem(c, 0.07, tuple(ctr), R.glow), 'heart')
-    tag(ring(c, 0.1, 0.07, 0.045, tuple(ctr - n * 0.02), R.dark, rot=rot_to(n), seg=8), 'heart_ring')
-    for k in range(3):
-        a = PI / 2 + k * 2 * PI / 3
-        r_ = Vector((math.cos(a), math.sin(a), 0))
-        horn(c, [tuple(ctr + r_ * 0.1 - n * 0.02), tuple(ctr + r_ * 0.095 + n * 0.04), tuple(ctr + r_ * 0.045 + n * 0.08)],
-             (0.028, 0.02, 0.004), R.dark, seg=4)
-    gorget(c, rim=R.dark)
-    hoop(c, 0.328, 0.345, (0.304, 0.296), (0.304, 0.296), 0.02, R.glow, nu=10, e=2.6, nm='gorget_seam')
-    for y, hgt in ((0.26, 0.12), (0.1, 0.14), (-0.06, 0.12), (-0.2, 0.09)):
-        tag(prism(c, [(-0.07, 0.0), (0.07, 0.0), (-0.04, hgt)], 0.035, (0, y, -0.325), R.dark, rot=(0, PI / 2, 0.5)), 'dorsal')
-    plate_waist(c, seam=R.glow, rim=R.dark)
+    plate_torso(c, seam=R.glow, trim=R.dark, centre=False)
+    box(c, (0.57, 0.02, 0.51), (0, 0.32, 0), R.glow, bevel=0)                                  # gorget seam
+    box(c, (0.6, 0.26, 0.012), (0, 0.12, 0.292), R.dark, bevel=0)                               # dark bed under the scales
+    fr = faces(c, 0.41, 0.29, sides=False)[0][0]
+    for j, y in enumerate((0.25, 0.175, 0.1, 0.025)):
+        for i in range(4):
+            x = 0.115 + 0.074 * i + 0.037 * (j % 2)
+            if x < 0.37:
+                for s in (-1, 1):
+                    scale_plate(fr, s * x, y, R.metal, w=0.076, hgt=0.1, tilt=-0.4)
+    for y in (0.03, -0.1, -0.21):                                                                # scute column
+        box(c, (0.12, 0.08, 0.05), (0, y, 0.3), R.dark, bevel=0.015)
+    # dragon heart at the sternum, in a square setting held by four wedge claws
+    box(c, (0.17, 0.17, 0.04), (0, 0.2, 0.305), R.dark, rot=(0, 0, PI / 4), bevel=0.012)
+    facet_gem(c, 0.075, (0, 0.2, 0.335), R.glow)
+    for a in range(4):
+        d = Vector((math.cos(a * PI / 2), math.sin(a * PI / 2), 0))
+        beam(c, tuple(Vector((0, 0.2, 0.31)) + d * 0.13), tuple(Vector((0, 0.2, 0.37)) + d * 0.07), 0.04, R.trim, w1=0.01, d=0.03, d1=0.012)
+    for y in (0.24, 0.1, -0.04):                                                                  # dorsal fins
+        beam(c, (0, y - 0.03, -0.29), (0, y + 0.05, -0.43), 0.03, R.dark, d=0.11, w1=0.012, d1=0.02)
     for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
-        wing_pauldron(S(name), s)
+        claw_pauldron(S(name), s)
 
 
-def wing_pauldron(sh, s):
-    """Pauldron dome under a folded wing: finger plates fan down over the outside of the shoulder, a wing bone
-    runs front to back over the top with a thumb claw forward and the wing's elbow claw behind."""
-    capf, _ = pauldron(sh, s, roll=R.dark, lame_edge=R.glow)
-    O = PAULDRON[0]
-    ins = (O[0], O[1] - 0.04, 0)
-    th1 = 1.2
-
-    def at(a, th, d=0.0):
-        u, v = (a + PI) / (2 * PI), th / th1
-        return V(capf(u, v)) + surf_normal(capf, u, v, ins) * d
-    for i, a in enumerate((0.75, 0.0, -0.75)):
-        base = at(a, 0.55, 0.02)
-        nrm = (base - V(ins)).normalized()
-        d = V((0.22, -0.9, -0.28 - 0.08 * i + a * 0.35))
-        bf, bi = blade_fn(tuple(base), tuple(d), tuple(nrm), 0.28, 0.12, curl=0.05, bulge=0.025, taper=0.7, tipw=0.012)
-        surf(sh, mirror(bf, s), 2, 3, 0.022, R.metal, inside=mp(bi, s), inner=True, nm=f'wing_plate{i}')
-        tip, back = V(bf(0.5, 1.0)), V(bf(0.5, 0.8))
-        tag(spike(sh, mp(tuple(tip), s), mp(tuple((tip - back).normalized()), s), 0.02, 0.07, R.trim, seg=4), 'wing_claw')
-    bone = [at(PI / 2, 1.0, 0.03), at(PI / 2, 0.45, 0.035), at(0.0, 0.0, 0.04), at(-PI / 2, 0.45, 0.035), at(-PI / 2, 0.95, 0.03)]
-    bone.append(bone[-1] + V((0.02, 0.04, -0.12)))
-    horn(sh, [mp(tuple(p), s) for p in bone], (0.04, 0.042, 0.045, 0.042, 0.035, 0.012), R.dark, seg=5)
-    tag(spike(sh, mp(tuple(bone[0]), s), mp((0.1, 0.55, 1.0), s), 0.03, 0.12, R.trim), 'thumb_claw')
-
-
-# A low, long skull: the brow ridges run back along its sides into the horns.
-DRAGON_HELM = [(-0.25, 0.32, 0.33, 0.02, 0), (0.0, 0.315, 0.33, 0.03, 0), (0.15, 0.3, 0.315, 0.03, 0), (0.24, 0.25, 0.27, 0.02, 0),
-               (0.285, 0.15, 0.17, 0.0, 0), (0.3, 0.0, 0.0, 0, 0)]
+def claw_pauldron(sh, s):
+    fr = block_pauldron(sh, s, top=R.dark, edge=R.dark, seam=R.glow)
+    (w, _, _), _, _ = PAULDRON_STEPS[-1]
+    for z in (-0.13, 0.0, 0.13):                                   # claws off the lowest block's edge
+        beam(fr[-1], (s * (w / 2 - 0.03), 0.0, z), (s * (w / 2 + 0.1), -0.035, z), 0.05, R.trim, d=0.05, w1=0.01, d1=0.012)
+    (w, _, _), _, _ = PAULDRON_STEPS[1]
+    for z in (-0.1, 0.1):
+        beam(fr[1], (s * (w / 2 - 0.03), 0.0, z), (s * (w / 2 + 0.07), -0.02, z), 0.045, R.trim, d=0.045, w1=0.01, d1=0.01)
+    top = fr[0]                                                    # wing claw sweeping back off the top block
+    beam(top, (-s * 0.03, 0.07, -0.1), (s * 0.03, 0.17, -0.26), 0.08, R.dark, w1=0.055)
+    beam(top, (s * 0.025, 0.16, -0.25), (s * 0.06, 0.18, -0.4), 0.055, R.trim, w1=0.01)
 
 
 def E_helm(S):
+    """Blocky dragon skull: cube shell and top block, heavy V brow over angled ember eye slits, a long box
+    snout with nostrils and a nose horn over a lower jaw with teeth, and three-segment horns that start at the
+    back of the skull and sweep back and low (behind the head from the front, long and clear from above)."""
     h = S('sock_head')
-    fn = helm_shell(h, rows=DRAGON_HELM)
-    band_on(h, fn, 0.0, 0.06, color=R.dark, nm='helm_rim', ins=HELM_IN, thick=0.035)
-    band_on(h, fn, 0.06, 0.075, color=R.glow, nm='helm_seam', ins=HELM_IN, thick=0.02, lift=0.002)
-    # long wedge snout over a lower jaw, with nostrils and a row of short teeth
-    up = [(0.18, 0.02, 0.14, 0.15), (0.34, -0.02, 0.125, 0.13), (0.46, -0.07, 0.1, 0.095), (0.56, -0.11, 0.07, 0.065),
-          (0.62, -0.13, 0.04, 0.04), (0.63, -0.13, 0.0, 0.0)]
-    surf(h, snout_fn(up, e=2.0), 10, len(up) - 1, 0.03, R.dark, closed_u=True, inside=(0, -0.08, 0.4), nm='snout', inner=False, walls=(0,))
-    jaw = [(0.24, -0.19, 0.14, 0.045), (0.38, -0.205, 0.115, 0.04), (0.52, -0.215, 0.07, 0.03), (0.55, -0.215, 0.0, 0.0)]
-    surf(h, snout_fn(jaw), 8, len(jaw) - 1, 0.03, R.dark, closed_u=True, inside=(0, -0.2, 0.35), nm='jaw', inner=False, walls=(0,))
-    for i, (y, z, hgt) in enumerate(((0.12, 0.31, 0.07), (0.07, 0.4, 0.06), (0.0, 0.49, 0.05))):   # ridge of nubs down the snout
-        tag(spike(h, (0, y, z), (0, 1, 0.5), 0.03, hgt, R.metal, seg=4), 'snout_nub')
-    tag(spike(h, (0, -0.1, 0.57), (0, 1, 0.35), 0.035, 0.1, R.metal, seg=5), 'nose_horn')
+    box(h, (0.58, 0.46, 0.6), (0, 0.03, 0.0), R.metal, bevel=0.04)                             # skull
+    box(h, (0.44, 0.08, 0.5), (0, 0.29, -0.03), R.metal, bevel=0.024)                           # top block
+    box(h, (0.6, 0.05, 0.62), (0, -0.19, 0.0), R.dark, bevel=0.012)                             # neck rim
+    box(h, (0.585, 0.018, 0.605), (0, -0.157, 0.0), R.glow, bevel=0)                            # ember seam
+    box(h, (0.5, 0.14, 0.02), (0, 0.07, 0.3), SLIT_E, bevel=0)                                  # shadow behind the eyes
     for s in (-1, 1):
-        tag(box(h, (0.035, 0.02, 0.04), (s * 0.035, -0.087, 0.6), R.dark, rot=(0.6, 0, 0), bevel=0), 'nostril')
-        for k, z in enumerate((0.34, 0.42, 0.5)):
-            tag(spike(h, (s * (0.1 - 0.022 * k), -0.175, z), (0, -1, 0.15), 0.016, 0.05, R.trim, seg=3), 'tooth')
-        # glowing eyes; horns rise from the brow above them and sweep back over the skull
-        tag(box(h, (0.12, 0.035, 0.03), (s * 0.15, 0.12, 0.31), R.glow, rot=(0, s * 0.35, s * 0.25), bevel=0), 'eye')
-        horn(h, [(s * 0.1, 0.2, 0.3), (s * 0.17, 0.29, 0.19), (s * 0.24, 0.35, -0.01), (s * 0.3, 0.39, -0.25), (s * 0.33, 0.38, -0.49),
-                 (s * 0.33, 0.34, -0.7)], (0.04, 0.06, 0.065, 0.05, 0.03, 0.006), R.dark, seg=6)
-        for k in (-1, 0, 1):     # cheek frill
-            horn(h, [(s * 0.3, 0.0 + 0.04 * k, 0.06), (s * (0.42 - 0.03 * abs(k)), 0.02 + 0.08 * k, -0.2 - 0.03 * k)], (0.04, 0.004), R.dark, seg=4)
-    for i, (z, y) in enumerate(((-0.04, 0.28), (-0.19, 0.25))):
-        tag(prism(h, [(-0.05, 0.0), (0.05, 0.0), (-0.035, 0.08 - 0.012 * i)], 0.03, (0, y, z), R.dark, rot=(0, PI / 2, 0)), 'crest_spine')
+        box(h, (0.3, 0.085, 0.17), (s * 0.145, 0.15, 0.29), R.dark, rot=(0, 0, s * 0.22), bevel=0.02)   # brow ridge
+        box(h, (0.13, 0.035, 0.03), (s * 0.135, 0.075, 0.305), R.glow, rot=(0, 0, s * 0.3), bevel=0)   # eye slit
+        box(h, (0.2, 0.2, 0.05), (s * 0.19, -0.07, 0.29), R.metal, rot=(0, s * 0.35, 0), bevel=0.015)  # cheek plate
+        horn = [(s * 0.2, 0.15, -0.14), (s * 0.29, 0.13, -0.36), (s * 0.34, 0.03, -0.54), (s * 0.36, -0.12, -0.68)]
+        for (a, b), (w0, w1) in zip(zip(horn, horn[1:]), ((0.14, 0.11), (0.11, 0.075), (0.075, 0.012))):
+            beam(h, tuple(Vector(a) - (Vector(b) - Vector(a)).normalized() * 0.03), b, w0, R.dark, w1=w1)
+        beam(h, (s * 0.27, -0.06, -0.04), (s * 0.35, -0.1, -0.28), 0.05, R.dark, d=0.1, w1=0.01, d1=0.03)   # cheek frill
+        box(h, (0.05, 0.028, 0.03), (s * 0.055, -0.012, 0.7), SLIT_E, bevel=0)                      # nostril
+        for z in (0.38, 0.48, 0.58):
+            x = s * (0.13 - 0.12 * (z - 0.3))
+            beam(h, (x, -0.11, z), (x, -0.2, z + 0.01), 0.032, R.trim, w1=0.006)                   # teeth
+    beam(h, (0, -0.02, 0.22), (0, -0.07, 0.72), 0.34, R.dark, d=0.2, w1=0.2, d1=0.12)           # snout
+    beam(h, (0, -0.2, 0.2), (0, -0.215, 0.62), 0.28, R.dark, d=0.08, w1=0.16, d1=0.05)           # lower jaw
+    for z, hh in ((0.34, 0.065), (0.46, 0.055)):                                                  # nubs down the snout
+        beam(h, (0, 0.04 - (z - 0.22) * 0.1, z), (0, 0.04 - (z - 0.22) * 0.1 + hh, z - 0.045), 0.055, R.metal, w1=0.012)
+    beam(h, (0, -0.02, 0.655), (0, 0.1, 0.69), 0.065, R.trim, w1=0.012)                             # nose horn
+    for z, hh in ((0.1, 0.07), (-0.06, 0.08), (-0.22, 0.07)):                                     # crest fins
+        beam(h, (0, 0.31, z + 0.03), (0, 0.33 + hh, z - 0.07), 0.028, R.dark, d=0.1, w1=0.01, d1=0.02)
 
 
 def E_gloves(S):
     for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
         g = S(name)
-        gauntlet(g, s, cuff_rim=R.glow)
+        plate_gauntlet(g, s, cuff_rim=R.glow)
         for x in (-0.08, 0.0, 0.08):
-            tag(spike(g, (x, -0.13, 0.12), (0, -1, 0.5), 0.022, 0.09, R.trim, seg=3), 'claw')
-        tag(prism(g, [(-0.07, 0.07), (0.07, 0.07), (0.07, -0.01), (0.0, -0.08), (-0.07, -0.01)], 0.025, (s * 0.165, 0.0, 0), R.dark,
-                  rot=(0, PI / 2, 0), bevel=0.006), 'hand_scale')
+            beam(g, (x, -0.12, 0.12), (x, -0.2, 0.23), 0.045, R.trim, w1=0.01)                     # claws
+        beam(g, (s * 0.18, -0.06, 0), (s * 0.2, 0.14, -0.02), 0.03, R.dark, d=0.14, w1=0.012, d1=0.06)   # back scale
 
 
 def E_boots(S):
     for name in ('sock_footL', 'sock_footR'):
         f = S(name)
-        gf = sabaton(f)
-        band_on(f, gf, 0.9, 0.98, color=R.glow, nu=8, lift=0.003, thick=0.02, nm='greave_seam', ins=(0, 0.15, 0))
+        plate_sabaton(f, rim=R.glow)
         for x in (-0.1, 0.0, 0.1):
-            tag(spike(f, (x, -0.1, 0.28), (0, -0.3, 1), 0.03, 0.1, R.trim, seg=3), 'talon')
-        tag(spike(f, (0, 0.42, 0.22), (0, 0.4, 1), 0.035, 0.12, R.dark, seg=4), 'knee_spike')
+            beam(f, (x, -0.1, 0.28), (x, -0.14, 0.4), 0.06, R.trim, w1=0.012)                    # talons
+        beam(f, (0, 0.47, 0.19), (0, 0.56, 0.3), 0.07, R.dark, w1=0.012)                          # knee spike
 
 
 VARIANTS['e'] = {'name': 'Emberforged', 'body_plate': E_body, 'helm_full': E_helm, 'gloves': E_gloves, 'boots': E_boots}
+
+

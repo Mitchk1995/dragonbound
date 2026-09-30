@@ -229,6 +229,26 @@ def prism(parent, pts, depth, pos, color, rot=(0, 0, 0), emissive=None, strength
     return _mesh_obj(bm, parent, pos, rot, color, emissive, strength)
 
 
+def beam(parent, a, b, w, color, w1=None, d=None, d1=None, bevel=0.015, emissive=None, strength=2.0):
+    """Chamfered block from point a to point b: w wide (x-ish) and d deep at a, tapering to w1 x d1 at b.
+    The building block for horns, claws, tines, spikes and limbs in the blocky style."""
+    a, b = Vector(a), Vector(b)
+    d = w if d is None else d
+    w1 = w if w1 is None else w1
+    d1 = d if d1 is None else d1
+    tx, tz = w1 / w, d1 / d
+    if min(tx, tz) < 0.4:   # near-pointed tips: a chamfer would fold over the tiny end face
+        bevel = 0.0
+    return box(parent, (w, (b - a).length, d), tuple((a + b) / 2), color, rot=rot_to(b - a), bevel=bevel,
+               emissive=emissive, strength=strength, taper=(tx, tz))
+
+
+def facet_gem(parent, r, pos, color, emissive=None, strength=2.0, rot=(0, 0, math.pi / 4), depth=None):
+    """Cut gem: a square turned to a diamond with deep chamfers, so every face is a flat facet."""
+    s = r * 1.45
+    return box(parent, (s, s, depth or r * 1.2), pos, color, rot=rot, bevel=r * 0.34, emissive=emissive, strength=strength)
+
+
 def ring(parent, r_out, r_in, h, pos, color, rot=(0, 0, 0), seg=8, emissive=None, strength=2.0):
     """Flat band / collar around local Y (rims, cage hoops, bracelets)."""
     bm = bmesh.new()
@@ -262,6 +282,12 @@ def rot_to(n):
 def face_rot(n):
     """ZYX euler that turns local +Z onto n (thin boxes lying on a surface)."""
     e = Vector((0, 0, 1)).rotation_difference(Vector(n).normalized()).to_euler('ZYX')
+    return (e.x, e.y, e.z)
+
+
+def corner_up():
+    """ZYX euler that stands a cube on its corner (a floating orb gem: facet_gem(..., rot=corner_up(), depth=r * 1.45))."""
+    e = Vector((1, 1, 1)).rotation_difference(Vector((0, 1, 0))).to_euler('ZYX')
     return (e.x, e.y, e.z)
 
 
