@@ -308,6 +308,7 @@ async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
     p.pos.set(spot.x, 0, spot.z);
     p.stop();
     p.cds = {};
+    g.combat.mana = Infinity; // every case starts with a full pool
     p.action = null;
     p.dash = null;
     g.camPos.copy(p.pos);
@@ -508,65 +509,190 @@ async function perfSuite(g: Game) {
 
 // ─── UI ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Drive the HUD with synthetic input and check it reacts: tab hotkeys, folding, Escape, hovering
+ * UI marks the world as covered, and an OSRS drag swaps two inventory slots (captured mid-drag).
+ * Failures go to console.error, which lands in report.json's errors.
+ */
+async function interactionChecks(g: Game, next: (n: string) => Promise<void>) {
+  const ui = g.ui as any;
+  const fail = (what: string) => console.error(`ui check failed: ${what}`);
+  const key = (k: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+  ui.showTab('inventory');
+  key('k');
+  if (ui.sideTab !== 'skills') fail('K opens the skills tab');
+  key('k');
+  if (!document.querySelector('.sidepanel.collapsed')) fail('K again folds the side panel');
+  key('c');
+  if (ui.sideTab !== 'equipment' || document.querySelector('.sidepanel.collapsed')) fail('C opens equipment and unfolds');
+  key('Escape');
+  if (ui.sideTab !== 'help') fail('Esc with nothing open shows settings');
+  key('Escape');
+  if (ui.sideTab !== 'inventory') fail('Esc again returns to the inventory');
+  await frames(2);
+
+  const cell = (i: number) => document.querySelector<HTMLElement>(`.sidepanel [data-inv="${i}"]`)!;
+  cell(0).dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  if (!ui.overUI) fail('hovering the side panel counts as over UI');
+  const inv = g.save.inventory;
+  const last = inv.length - 1;
+  const first = inv[0], lastWas = inv[last];
+  const at = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    return { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, button: 0 };
+  };
+  const from = at(cell(0)), to = at(cell(last));
+  cell(0).dispatchEvent(new MouseEvent('mousedown', from));
+  window.dispatchEvent(new MouseEvent('mousemove', { ...from, clientX: from.clientX + 20 }));
+  window.dispatchEvent(new MouseEvent('mousemove', { ...to, clientX: to.clientX - 30, clientY: to.clientY - 20 }));
+  await next('drag-inventory');
+  window.dispatchEvent(new MouseEvent('mouseup', to));
+  if (inv[last] !== first || inv[0] !== lastWas) fail('dragging slot 0 onto the last slot swaps them');
+  if (document.querySelector('.dragghost')) fail('the drag ghost is removed on release');
+  // Swap back so later captures match.
+  [inv[0], inv[last]] = [inv[last], inv[0]];
+  ui.refresh();
+  ui.overUI = false;
+}
+
 async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   g.travel('keep', true);
   await frames(15);
   const p = g.player;
   p.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
   g.camPos.copy(p.pos);
-  await shot('ui-01-hud');
   const ui = g.ui as any;
-  const panels: [string, () => void][] = [
-    ['inventory', () => ui.toggle('inventory', true)],
-    ['skills', () => ui.toggle('skills', true)],
-    ['journal', () => ui.toggle('journal', true)],
-    ['collection', () => ui.toggle('collection', true)],
-    ['help', () => ui.toggle('help', true)],
+  let i = 1;
+  const next = (name: string) => shot(`ui-${String(i++).padStart(2, '0')}-${name}`);
+  const closeWindows = () => {
+    for (const id of ['bank', 'shop', 'keep', 'craft']) ui.toggle(id, false);
+  };
+  // The always-visible side panel, one capture per tab (inventory is the default).
+  ui.showTab('inventory');
+  await next('hud');
+  for (const tab of ['equipment', 'skills', 'journal', 'collection', 'help']) {
+    ui.showTab(tab);
+    await next(`tab-${tab}`);
+  }
+  ui.showTab('journal');
+  ui.panels.journalTab = 'diary';
+  ui.refresh();
+  await next('tab-journal-diary');
+  ui.panels.journalTab = 'quests';
+  ui.pressTab('journal'); // pressing the open tab folds the panel down to its tab row
+  await next('side-collapsed');
+  ui.showTab('inventory');
+  // Station windows open beside the side panel.
+  const stations: [string, () => void][] = [
     ['bank', () => ui.openBank(false)],
     ['shop', () => ui.openShop()],
     ['keep-board', () => ui.openKeep(null)],
   ];
-  let i = 2;
-  for (const [name, open] of panels) {
+  for (const [name, open] of stations) {
     open();
-    await shot(`ui-${String(i++).padStart(2, '0')}-${name}`);
-    for (const id of ['inventory', 'skills', 'journal', 'collection', 'help', 'bank', 'shop', 'keep', 'craft']) ui.toggle(id, false);
+    await next(name);
+    closeWindows();
   }
   for (const kind of ['furnace', 'anvil'] as const) {
     const st = g.zone.interactables.find((it) => it.kind === kind);
     if (st) {
       ui.openCraft(kind, st);
-      await shot(`ui-${String(i++).padStart(2, '0')}-craft-${kind}`);
+      await next(`craft-${kind}`);
       ui.closeCraftMenu();
     }
   }
   ui.openDialogue(g.story.talk('warden'));
-  await shot(`ui-${String(i++).padStart(2, '0')}-dialogue-warden`);
+  await next('dialogue-warden');
   ui.closeDialogue();
   // Tooltip over the first inventory item.
-  ui.toggle('inventory', true);
   await frames(2);
-  const slot = document.querySelector<HTMLElement>('#panel-inventory .slot.filled, #panel-inventory [data-inv]');
+  const slot = document.querySelector<HTMLElement>('.sidepanel [data-inv]');
   const item = g.save.inventory.find(Boolean);
   if (slot && item) {
     ui.showItemTooltip(item, slot.getBoundingClientRect(), true);
-    await shot(`ui-${String(i++).padStart(2, '0')}-tooltip`);
+    await next('tooltip');
     ui.hideTooltip();
   }
-  ui.toggle('inventory', false);
+  await interactionChecks(g, next);
   ui.levelBanner('smithing', 42);
   await frames(45); // the banner animates in
   ui.xpDrop('smithing', 37.5);
-  await shot(`ui-${String(i++).padStart(2, '0')}-level-banner`);
+  await next('level-banner');
+
+  // The console mid-fight: cooldowns sweeping, a pool too low for the big skill, life low.
+  g.travel('foothills', true);
+  await frames(15);
+  const spot = { x: 106, z: 157 };
+  const stage = (weapon: string) => {
+    for (const e of g.zone.enemies) {
+      e.dead = true;
+      e.obj.removeFromParent();
+    }
+    g.zone.enemies = [];
+    equip(g, { weapon });
+    p.pos.set(spot.x, 0, spot.z);
+    p.stop();
+    g.camPos.copy(p.pos);
+    const foe = g.combat.spawnEnemy('goblin', spot.x + 1, spot.z - 5, null);
+    g.hovered = foe;
+    return foe;
+  };
+  stage('apprentice_staff');
+  p.cds = { fireball: 1.4, frost_nova: 5.2 };
+  g.combat.mana = 11;
+  p.hp = g.stats.maxHp * 0.26;
+  await frames(4);
+  await next('combat-magic-lowmana');
+  const q = document.querySelector<HTMLElement>('.sk[data-key="E"]');
+  if (q) {
+    ui.abilityTip('E', q);
+    await next('skill-tooltip');
+    ui.hideTooltip();
+  }
+  stage('worn_bow');
+  p.cds = { multishot: 1.8 };
+  g.combat.mana = Infinity;
+  p.hp = g.stats.maxHp;
+  await frames(4);
+  await next('combat-ranged');
+
+  // The smallest supported window: the console and side panel shrink, the view stays open.
+  const api = window.electronAPI?.inspect;
+  if (api?.resize) {
+    await api.resize(1280, 720);
+    await frames(20);
+    stage('steel_sword');
+    p.cds = { cleave: 2 };
+    g.combat.mana = 30;
+    await frames(4);
+    await next('720-combat');
+    g.hovered = null;
+    g.travel('keep', true);
+    await frames(10);
+    p.pos.set(KEEP_STAGE.x, 0, KEEP_STAGE.z);
+    g.camPos.copy(p.pos);
+    ui.openBank(false);
+    await next('720-bank');
+    closeWindows();
+    ui.showTab('skills');
+    await next('720-skills');
+    ui.showTab('inventory');
+    await api.resize(W, H);
+    await frames(20);
+  }
+  g.hovered = null;
+  g.travel('keep', true);
+  await frames(10);
+
   // Title and creation screens.
   g.mode = 'title';
   document.getElementById('hud')?.classList.add('hidden');
   ui.showTitle();
   await frames(30);
-  await shot(`ui-${String(i++).padStart(2, '0')}-title`);
+  await next('title');
   g.showCreate();
   await frames(20);
-  await shot(`ui-${String(i++).padStart(2, '0')}-create`);
+  await next('create');
   g.continueGame();
   await frames(10);
 }

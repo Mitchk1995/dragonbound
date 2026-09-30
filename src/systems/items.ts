@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BELT_PRICES, SHOP, type ShopEntry } from '../data/shop';
 import { BASES, PETS, UNIQUES } from '../data/items';
+import { MANA_TUNING } from '../data/tuning';
 import { GroundItem } from '../entities/groundItem';
 import { Pet } from '../entities/pet';
 import type { Game } from '../game';
@@ -400,7 +401,7 @@ export class Items {
       g.sfx.play('deny');
       return;
     }
-    if (p.hp >= g.stats.maxHp) {
+    if (p.hp >= g.stats.maxHp && g.combat.manaFull) {
       g.sfx.play('deny', 0.5);
       return;
     }
@@ -408,6 +409,7 @@ export class Items {
     p.potionCd = 1;
     p.healT = 1.5;
     p.healRate = (g.stats.maxHp * 0.45) / 1.5;
+    g.combat.restoreMana(MANA_TUNING.potionFrac, 1.5);
     g.sfx.play('potion');
     g.glow.burst(p.pos.clone().setY(1), { count: 16, color: [0xff4a6a, 0xff9ab0], speed: 1.5, up: 3, life: 0.8, gravity: -1, size: 0.1 });
   }

@@ -15,6 +15,18 @@
   --r-magic: #7c9cff;
   --r-rare: #ffe066;
   --r-unique: #ff9a2e;
+  --mana: #4a7cff;
+  /* HUD geometry (1600x900 and up; shrunk below for 1280x720). */
+  --slot: 50px;
+  --gap: 4px;
+  --side-w: calc(4 * var(--slot) + 3 * var(--gap) + 12px + 24px);
+  --orb: 112px;
+  --sk: 54px;
+  --belt: 42px;
+  --console-h: 122px;
+}
+@media (max-height: 820px), (max-width: 1440px) {
+  :root { --slot: 43px; --orb: 96px; --sk: 48px; --belt: 38px; --console-h: 108px; }
 }
 
 * { box-sizing: border-box; }
@@ -155,16 +167,9 @@ svg { display: block; }
 .plaque::after { right: 10px; }
 .goldline { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; color: #ffd860; text-shadow: 0 1px 2px #000; }
 .weak { color: #ff8a6a; font-size: 13px; text-shadow: 0 1px 2px #000; }
-.objective { position: absolute; left: 16px; top: 92px; max-width: 320px; padding: 8px 12px; background: linear-gradient(90deg, rgba(10,8,6,0.8), rgba(10,8,6,0)); border-left: 3px solid var(--gold); pointer-events: auto; }
+.objective { position: absolute; left: 16px; top: 64px; max-width: 320px; padding: 8px 12px; background: linear-gradient(90deg, rgba(10,8,6,0.8), rgba(10,8,6,0)); border-left: 3px solid var(--gold); pointer-events: auto; }
 .obj-title { font-family: var(--serif); font-size: 12px; letter-spacing: 2px; color: var(--gold); text-transform: uppercase; }
 .obj-text { font-size: 15px; color: var(--text); text-shadow: 0 1px 2px #000; }
-.topbtns { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; pointer-events: auto; }
-.topbtns button {
-  position: relative; width: 50px; height: 50px; display: grid; place-items: center; border-radius: 4px;
-  background: var(--tex-inset); border: 2px solid #4a4c52; box-shadow: inset 0 2px 6px #000, 0 2px 6px rgba(0,0,0,0.6);
-}
-.topbtns button:hover { border-color: var(--gold); }
-.topbtns button span { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; color: var(--gold); text-shadow: 0 1px 1px #000; }
 
 .target { display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%); text-align: center; }
 .target .tname { font-family: var(--serif); font-size: 15px; text-shadow: 0 1px 3px #000; }
@@ -180,7 +185,7 @@ svg { display: block; }
 .hoverlabel em { color: #8ad0ff; font-style: normal; }
 .hoverlabel i { color: var(--dim); }
 
-.xpdrops { position: absolute; right: 26px; top: 140px; width: 180px; height: 300px; }
+.xpdrops { position: absolute; right: 26px; top: 60px; width: 180px; height: 300px; }
 .xpdrop { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; gap: 6px; font-family: var(--serif); font-weight: 600; font-size: 17px; color: #fff; text-shadow: 0 1px 0 #000, 0 0 3px #000; animation: xprise 1.6s linear forwards; }
 @keyframes xprise { from { transform: translateY(0); opacity: 1; } 80% { opacity: 1; } to { transform: translateY(-240px); opacity: 0; } }
 
@@ -198,7 +203,7 @@ svg { display: block; }
 .qd-name { font-family: var(--serif); font-weight: 800; font-size: 28px; color: var(--gold-hi); }
 .questdone ul { text-align: left; margin: 8px 0 0; padding-left: 20px; }
 
-.chat { position: absolute; left: 14px; bottom: 128px; width: 470px; font-size: 14px; }
+.chat { position: absolute; left: 14px; bottom: calc(var(--console-h) + 16px); width: 440px; font-size: 14px; }
 .chat .msg { padding: 1px 8px; text-shadow: 0 1px 2px #000, 0 0 2px #000; transition: opacity 2s; }
 .chat .msg.old { opacity: 0; }
 .chat .msg.info { color: #d8d0bc; }
@@ -211,39 +216,112 @@ svg { display: block; }
 
 .death { position: absolute; top: 38%; width: 100%; text-align: center; font-family: var(--serif); font-weight: 800; font-size: 50px; color: #d8302a; text-shadow: 0 0 20px #000, 0 3px 3px #000; opacity: 0; transition: opacity 0.6s; }
 .death.show { opacity: 1; }
-.castbar { position: absolute; left: 50%; bottom: 170px; transform: translateX(-50%); width: 260px; height: 20px; background: #0c0a08; border: 2px solid #4a4c52; border-radius: 3px; overflow: hidden; }
+/* The top-right is free now, so the cast bar sits over the console and XP drops by the side panel. */
+.castbar { position: absolute; left: 50%; bottom: calc(var(--console-h) + 34px); transform: translateX(-50%); width: 260px; height: 20px; background: #0c0a08; border: 2px solid #4a4c52; border-radius: 3px; overflow: hidden; }
 .castbar .cb-fill { height: 100%; background: linear-gradient(#8ab8ff, #3a5aa0); transition: width 0.1s; }
 .castbar span { position: absolute; inset: 0; text-align: center; font-size: 13px; line-height: 16px; text-shadow: 0 1px 2px #000; }
 
-.bar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 10px; pointer-events: auto; }
-.barmid { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; background: var(--tex-stone); border: 3px solid #1a1a1e; border-radius: 6px; box-shadow: inset 0 0 0 1px #5a5c62, 0 6px 18px rgba(0,0,0,0.7); }
-.slots { display: flex; gap: 6px; }
-.aslot { position: relative; width: 58px; height: 58px; border-radius: 4px; overflow: hidden; background: var(--tex-inset); border: 2px solid #4a4c52; box-shadow: inset 0 3px 8px #000; cursor: pointer; }
-.aslot:hover { border-color: var(--gold); }
-.aslot .ic { position: absolute; inset: 5px; display: grid; place-items: center; }
-.aslot .cd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.72); display: grid; place-content: center; font-weight: 700; font-size: 16px; text-shadow: 0 1px 2px #000; }
-.aslot .key { position: absolute; left: 3px; top: 0; font-size: 12px; font-weight: 700; color: var(--gold-hi); text-shadow: 0 1px 1px #000, 0 0 3px #000; }
-.aslot .lock { display: none; position: absolute; right: 2px; bottom: 2px; }
-.aslot.locked .ic { filter: grayscale(1) brightness(0.45); }
-.aslot.locked .lock { display: block; }
-.aslot.empty { opacity: 0.4; }
-.aslot.potion { margin-left: 10px; }
-.aslot .count { position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-weight: 700; text-shadow: 0 1px 1px #000; }
-.xpline { position: relative; height: 13px; background: #0c0a08; border: 1px solid #000; border-radius: 2px; overflow: hidden; box-shadow: inset 0 2px 3px #000; }
-.xpline .fill { height: 100%; background: linear-gradient(#e8c050, #7a5010); transition: width 0.2s; }
-.xpline span { position: absolute; inset: 0; font-size: 11px; line-height: 12px; text-align: center; text-shadow: 0 1px 1px #000; }
-.orb {
-  position: relative; width: 106px; height: 106px; border-radius: 50%; overflow: hidden;
-  background: radial-gradient(circle, #1a0c0c, #080404);
-  border: 5px solid #4a4c52; box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 5px #6b6e74, 0 0 0 7px #0c0c0e, 0 8px 20px rgba(0,0,0,0.8);
+/* ── Console (Diablo): life orb · potion belt | skills · mana orb ── */
+.console { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); display: flex; align-items: flex-end; pointer-events: auto; }
+.cbody {
+  position: relative; z-index: 1; margin: 0 calc(var(--orb) * -0.2); padding: 7px calc(var(--orb) * 0.2 + 12px) 8px;
+  border: 10px solid transparent; border-image: var(--tex-frame) 16 round; border-bottom-width: 8px;
+  background: var(--tex-stone) repeat; background-clip: padding-box;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
 }
-.orb .fill { position: absolute; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 40% 30%, #ff6a6a, #a0101a 60%, #4a0008); transition: height 0.12s; }
-.orb .glass { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(ellipse at 35% 22%, rgba(255,255,255,0.45) 0 12%, transparent 30%), radial-gradient(circle, transparent 60%, rgba(0,0,0,0.5)); }
-.orb span { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
-.orb.style .fill { background: radial-gradient(circle at 40% 30%, color-mix(in srgb, var(--c) 60%, #fff), var(--c) 55%, #0c0c14); }
-.orb.style span b { font-family: var(--serif); font-weight: 800; font-size: 22px; }
+/* A carved gold rule under the XP bar. */
+.xpline {
+  --c: var(--gold);
+  position: relative; height: 12px; margin-bottom: 7px; background: #0b0908; border: 1px solid #000; border-radius: 6px; overflow: hidden;
+  box-shadow: inset 0 2px 3px #000, 0 1px 0 rgba(255,255,255,0.08); pointer-events: auto;
+}
+.xpline .fill { height: 100%; background: linear-gradient(color-mix(in srgb, var(--c) 55%, #fff), var(--c) 55%, color-mix(in srgb, var(--c) 45%, #000)); transition: width 0.2s; }
+.xpline span { position: absolute; inset: 0; font-size: 11px; font-weight: 700; line-height: 11px; text-align: center; color: #f4ecd8; text-shadow: 0 1px 1px #000, 0 0 3px #000; }
+.crow { display: flex; align-items: center; gap: 6px; }
+.belt, .skillrow { display: flex; gap: 5px; align-items: center; }
+.cdiv { width: 2px; align-self: stretch; margin: 3px 5px; background: linear-gradient(transparent, var(--gold-dim), transparent); }
+
+/* Potion belt: small inset pockets. */
+.bslot {
+  position: relative; width: var(--belt); height: var(--belt); border-radius: 4px; cursor: pointer;
+  background: var(--tex-inset); border: 1px solid #0a0806; box-shadow: inset 0 3px 7px #000, 0 0 0 1px #4a4c52;
+  display: grid; place-items: center;
+}
+.bslot:hover { box-shadow: inset 0 3px 7px #000, 0 0 0 1px var(--gold); }
+.bslot .ic svg { width: calc(var(--belt) - 8px); height: calc(var(--belt) - 8px); }
+.bslot .key { position: absolute; left: 3px; top: 0; font-size: 11px; font-weight: 700; color: var(--gold-hi); text-shadow: 0 1px 1px #000, 0 0 3px #000; }
+.bslot .count { position: absolute; right: 2px; bottom: 0; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px #000, 0 0 2px #000; }
+.bslot.spent .ic { filter: grayscale(1) brightness(0.45); }
+.bslot.spent .count { color: var(--bad); }
+
+/* Skill slots: painted tiles in an iron bezel. */
+.sk {
+  --cd: 0;
+  position: relative; width: var(--sk); height: var(--sk); border-radius: 4px; overflow: hidden; cursor: pointer; flex: none;
+  background: #0b0908; border: 2px solid #5a5c62;
+  box-shadow: 0 0 0 1px #0c0c0e, inset 0 0 0 1px rgba(0,0,0,0.6), 0 3px 6px rgba(0,0,0,0.6);
+}
+.sk img { display: block; width: 100%; height: 100%; }
+.sk::after { content: ''; position: absolute; inset: 0; border-radius: 2px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 6px rgba(0,0,0,0.6); pointer-events: none; }
+.sk:hover { border-color: var(--gold); }
+.sk.basic { border-color: #7a6a4a; }
+.sk .sweep { position: absolute; inset: 0; background: conic-gradient(rgba(6,4,8,0.74) calc(var(--cd) * 360deg), transparent 0); pointer-events: none; }
+.sk .cdnum { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--serif); font-weight: 800; font-size: 18px; color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }
+.sk .key { position: absolute; left: 3px; top: 1px; z-index: 1; font-size: 12px; font-weight: 700; color: var(--gold-hi); text-shadow: 0 1px 1px #000, 0 0 3px #000, 0 0 3px #000; }
+.sk .key.mouse { top: 3px; }
+.sk .cost { position: absolute; right: 3px; bottom: 0; z-index: 1; font-size: 11px; font-weight: 700; color: #a8c4ff; text-shadow: 0 1px 1px #000, 0 0 3px #000, 0 0 3px #000; }
+.sk .lock { display: none; position: absolute; right: 2px; top: 2px; z-index: 1; }
+.sk.locked img { filter: grayscale(1) brightness(0.4); }
+.sk.locked .lock { display: block; }
+.sk.locked .cost { display: none; }
+/* Not enough mana: the Diablo blue wash. */
+.sk.nomana img { filter: saturate(0.3) brightness(0.55); }
+.sk.nomana::before { content: ''; position: absolute; inset: 0; z-index: 1; background: rgba(30, 60, 170, 0.42); pointer-events: none; }
+.sk.nomana .cost { color: #ff8a7a; }
+.sk.empty { opacity: 0.35; }
+
+/* Orbs: glass globes in an iron ring, overlapping the console's ends. */
+.orb {
+  position: relative; z-index: 2; flex: none; width: var(--orb); height: var(--orb); border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle at 50% 62%, #2e0e12, #0c0506 72%);
+  border: 5px solid #45474d; pointer-events: auto;
+  box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 4px #7a6a4a, 0 0 0 6px #0c0c0e, 0 8px 22px rgba(0,0,0,0.85), inset 0 0 18px rgba(0,0,0,0.9);
+}
+.orb.mana { background: radial-gradient(circle at 50% 62%, #101a3c, #05070f 72%); }
+.orb .fill { position: absolute; left: 0; right: 0; bottom: 0; transition: height 0.12s; }
+/* The liquid's surface: a bright meniscus line. */
+.orb .fill::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: rgba(255, 235, 225, 0.45); filter: blur(0.6px); }
+.orb.hp .fill { background: radial-gradient(circle at 40% 30%, #ff7a6a, #b4141e 55%, #4a0008); }
+.orb.mana .fill { background: radial-gradient(circle at 40% 30%, #8ab0ff, #2a4ec8 55%, #0a1450); }
+.orb .glass { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(ellipse 34% 18% at 42% 17%, rgba(255,255,255,0.42), rgba(255,255,255,0.08) 65%, transparent 72%), radial-gradient(ellipse 30% 14% at 60% 88%, rgba(255,255,255,0.1), transparent 70%), radial-gradient(circle, transparent 56%, rgba(0,0,0,0.6)); }
+.orb span { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-weight: 700; font-size: 14px; color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 4px #000; }
 .orb.low { animation: pulse 0.6s infinite alternate; }
-@keyframes pulse { to { box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 5px #6b6e74, 0 0 0 7px #0c0c0e, 0 0 30px #ff2a1a; } }
+@keyframes pulse { to { box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 4px #7a6a4a, 0 0 0 6px #0c0c0e, 0 0 30px #ff2a1a, inset 0 0 18px rgba(0,0,0,0.9); } }
+.orb.mana.flash { animation: manaflash 0.45s ease-out; }
+@keyframes manaflash { 30% { box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 4px #7a6a4a, 0 0 0 6px #0c0c0e, 0 0 34px #6a9aff, inset 0 0 18px rgba(0,0,0,0.9); } }
+
+/* ── Side panel (OSRS): always-visible tabs, inventory by default ── */
+.sidepanel { position: absolute; right: 8px; bottom: 8px; width: var(--side-w); display: flex; flex-direction: column; pointer-events: auto; border-width: 12px; }
+.stabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin: -3px -3px 6px; }
+.stab {
+  height: 34px; padding: 0; display: grid; place-items: center; border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(#3e3b36, #221f1b); border: 1px solid #0c0a08;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -3px 5px rgba(0,0,0,0.5);
+}
+.stab svg { width: 24px; height: 24px; filter: saturate(0.55) brightness(0.78); transition: filter 0.1s; }
+.stab:hover svg { filter: none; }
+.stab.on { background: linear-gradient(#74401c, #3a1c0a); border-color: #c89a48; box-shadow: inset 0 1px 0 rgba(255,220,150,0.35), inset 0 0 10px rgba(255,160,60,0.3), 0 0 6px rgba(216,178,90,0.35); }
+.stab.on svg { filter: drop-shadow(0 0 3px rgba(255,200,120,0.5)); }
+.sbody { height: calc(7 * var(--slot) + 6 * var(--gap) + 48px); padding: 0 1px; overflow-x: hidden; }
+.sidepanel.collapsed .sbody { display: none; }
+.sidepanel.collapsed .stabs { margin-bottom: -3px; }
+.sechead { font-family: var(--serif); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); margin: 2px 0 5px; padding-bottom: 2px; border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, var(--gold-dim), transparent) 1; }
+.sechead ~ .sechead { margin-top: 10px; }
+.sidepanel .slot { width: var(--slot); height: var(--slot); }
+
+.dragghost { position: fixed; left: 0; top: 0; z-index: 30; width: 48px; height: 48px; margin: -24px 0 0 -24px; pointer-events: none; opacity: 0.85; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.8)); }
+.dragghost img { width: 100%; height: 100%; }
+.slot.dragfrom img { opacity: 0.25; }
 
 .fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.35s; pointer-events: none; }
 .fade.on { opacity: 1; }
@@ -266,44 +344,52 @@ svg { display: block; }
 .pbody { padding: 2px 4px; overflow: auto; }
 .pbody::-webkit-scrollbar { width: 8px; }
 .pbody::-webkit-scrollbar-thumb { background: #4a4c52; border-radius: 4px; }
-.p-inventory { right: 14px; top: 76px; }
-.p-skills { left: 14px; top: 130px; width: 560px; }
-.p-bank { left: 14px; top: 76px; width: 540px; }
-.p-shop { left: 14px; top: 76px; width: 420px; }
-.p-craft { left: 14px; top: 76px; width: 560px; }
-.p-keep { left: 14px; top: 76px; width: 540px; }
-.p-journal { left: 50%; top: 80px; transform: translateX(-50%); width: 560px; }
-.p-collection { left: 50%; top: 80px; transform: translateX(-50%); width: 540px; }
-.p-help { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 560px; }
+/* Windows you trade items through (bank, shop) open right beside the inventory, clear of the console.
+   Tall reading/crafting boards open on the left like Diablo's character panels, so the hero stays in view. */
+.p-bank, .p-shop { right: calc(var(--side-w) + 16px); bottom: calc(var(--console-h) + 12px); max-height: calc(100vh - 64px - var(--console-h) - 12px); }
+.p-craft, .p-keep { left: 14px; top: 60px; max-height: calc(100vh - 60px - var(--console-h) - 12px); }
+.p-bank { width: 540px; }
+.p-shop { width: 420px; }
+.p-craft { width: 560px; }
+.p-keep { width: 540px; }
 .p-debug { left: 14px; top: 130px; width: 340px; }
 
-.invwrap { display: flex; gap: 14px; }
-.equip { display: grid; grid-template-columns: repeat(2, 62px); gap: 4px 10px; align-content: start; }
-.eq label { display: block; font-family: var(--serif); font-size: 10px; color: var(--dim); text-align: center; }
-.eq .slot { width: 62px; height: 62px; }
-.statgrid { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 13px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #4a3a20; color: var(--dim); }
+.invgrid { display: grid; grid-template-columns: repeat(4, var(--slot)); gap: var(--gap); padding: 1px; border-radius: 5px; }
+.invgrid.moded { box-shadow: 0 0 0 1px rgba(216,178,90,0.55), 0 0 10px rgba(216,178,90,0.2); }
+.invfoot { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 8px; }
+.invfoot .goldline { margin: 0; font-size: 14px; }
+.modechip { font-family: var(--serif); font-size: 11px; letter-spacing: 1px; color: #1a1006; background: linear-gradient(#f0d08a, #b08a44); border-radius: 8px; padding: 1px 8px; box-shadow: 0 1px 2px #000; }
+
+/* Equipment: an OSRS paper doll, then the numbers. */
+.doll {
+  display: grid; justify-content: center; gap: 8px 12px; margin: 4px 0 10px;
+  grid-template-columns: repeat(3, calc(var(--slot) + 8px));
+  grid-template-areas: "amulet helm ring" "weapon body gloves" ". boots .";
+  background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.35), transparent 70%);
+}
+.doll .eq .slot { width: calc(var(--slot) + 8px); height: calc(var(--slot) + 8px); }
+.eq-helm { grid-area: helm; } .eq-amulet { grid-area: amulet; } .eq-weapon { grid-area: weapon; } .eq-body { grid-area: body; }
+.eq-gloves { grid-area: gloves; } .eq-boots { grid-area: boots; } .eq-ring { grid-area: ring; }
+.doll .slot.empty svg { opacity: 0.55; }
+.statgrid { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; font-size: 13px; padding-top: 8px; border-top: 1px solid #4a3a20; color: var(--dim); }
 .statgrid b { color: var(--text); text-align: right; }
 .statgrid i { color: var(--dim); font-style: normal; font-weight: 400; }
-.invgrid { display: grid; grid-template-columns: repeat(4, 52px); gap: 5px; }
-.invfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.invfoot .goldline { margin: 0; }
 
-.stances { display: flex; gap: 6px; margin-bottom: 10px; }
-.stance { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px; font-family: var(--serif); font-size: 13px; background: var(--tex-inset); border: 2px solid #3a3a40; border-radius: 4px; color: var(--dim); }
-.stance.on { border-color: var(--gold); color: var(--gold-hi); box-shadow: 0 0 10px rgba(216,178,90,0.3); }
-.skills { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.skill { display: flex; gap: 10px; padding: 7px; background: var(--tex-inset); border: 1px solid #0a0806; border-radius: 4px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.8); pointer-events: auto; }
-.skill .sicon { width: 40px; flex: none; }
-.skill .smain { flex: 1; min-width: 0; }
-.skill .sname { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--serif); font-size: 14px; }
-.skill .sname b { color: var(--c); font-size: 18px; }
-.skill .sname small { color: var(--dim); font-size: 11px; }
-.skill .sbar { height: 6px; background: #080604; border-radius: 3px; margin: 3px 0; overflow: hidden; }
-.skill .sbar div { height: 100%; background: var(--c); }
-.skill .snext { font-size: 12px; color: var(--dim); line-height: 1.35; }
-.skill .snext em { color: var(--c); font-style: normal; font-weight: 700; }
-.skill.locked { opacity: 0.4; --c: #888; }
-.total { margin-top: 10px; font-size: 13px; color: var(--dim); text-align: center; }
+/* Skills: stance switch, then OSRS's grid of icon + level tiles. */
+.stances { display: flex; gap: 4px; }
+.stance { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px 3px; font-size: 11.5px; background: var(--tex-inset); border: 1px solid #3a3a40; border-radius: 4px; color: var(--dim); }
+.stance.on { border-color: var(--gold); color: var(--gold-hi); box-shadow: 0 0 8px rgba(216,178,90,0.3), inset 0 0 8px rgba(216,178,90,0.15); }
+.skillgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.stile {
+  position: relative; display: flex; align-items: center; justify-content: space-between; gap: 2px; height: 42px; padding: 3px 6px 6px 4px;
+  background: var(--tex-inset); border: 1px solid #0a0806; border-radius: 4px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.8); pointer-events: auto;
+}
+.stile:hover { border-color: var(--gold-dim); }
+.stile b { font-family: var(--serif); font-weight: 800; font-size: 18px; color: var(--c); text-shadow: 0 1px 2px #000; }
+.stile .sbar { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 3px; background: #050403; border-radius: 2px; overflow: hidden; }
+.stile .sbar div { height: 100%; background: var(--c); }
+.stile.locked { opacity: 0.38; --c: #999; }
+.total { margin-top: 8px; font-size: 13px; color: var(--dim); text-align: center; }
 .total b { color: var(--gold); }
 
 .banktop { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; color: var(--dim); font-size: 13px; }
@@ -381,8 +467,33 @@ svg { display: block; }
 .debug label { display: flex; align-items: center; gap: 6px; }
 .dbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 4px; }
 
+/* Tabs whose content was written for wide windows, compacted for the side panel. */
+.sidepanel .tabs { gap: 4px; margin-bottom: 8px; }
+.sidepanel .tab { flex: 1; justify-content: center; padding: 4px 6px; font-size: 12px; }
+.sidepanel .quest, .sidepanel .diary { padding: 6px 7px; margin-bottom: 6px; }
+.sidepanel .q-head { font-size: 13px; gap: 6px; align-items: flex-start; }
+.sidepanel .q-head .tag { flex: none; font-size: 10px; padding: 0 6px; }
+.sidepanel .q-reqs, .sidepanel .q-rew { font-size: 12px; margin: 3px 0; }
+.sidepanel .quest p { font-size: 12.5px; line-height: 1.3; margin: 3px 0; }
+.sidepanel .task { font-size: 12.5px; line-height: 1.3; }
+.sidepanel .claimrow { flex-wrap: wrap; }
+.sidepanel .csec { margin-bottom: 10px; }
+.sidepanel .ch { font-size: 13px; }
+.sidepanel .cstats { font-size: 12px; margin: 3px 0 6px; line-height: 1.35; }
+.sidepanel .cgrid { grid-template-columns: repeat(4, var(--slot)); gap: var(--gap); }
+.sidepanel .clog { padding: 0; }
+.sidepanel .clog .cn { display: none; }
+.sidepanel .clog .cc { top: 0; right: 3px; }
+.sidepanel .keys { font-size: 12px; }
+.sidepanel .keys td { padding: 3px 3px; vertical-align: top; line-height: 1.3; }
+.sidepanel .keys td:first-child { width: 68px; font-size: 11px; }
+.sidepanel .setting { gap: 8px; margin-top: 8px; font-size: 13px; }
+.sidepanel .setting label { width: 64px; font-size: 12px; }
+.sidepanel .btnrow { justify-content: center; margin-top: 12px; }
+.sidepanel .petrow select { max-width: 100%; }
+
 /* ── Dialogue ─────────────────────────────────────────────────── */
-.dlg { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(720px, 90vw); display: flex; gap: 14px; pointer-events: auto; }
+.dlg { position: absolute; left: calc((100vw - var(--side-w)) / 2); bottom: calc(var(--console-h) + 28px); transform: translateX(-50%); width: min(700px, calc(100vw - var(--side-w) - 40px)); display: flex; gap: 14px; pointer-events: auto; }
 .dlg-portrait { width: 84px; height: 84px; flex: none; display: grid; place-items: center; background: var(--tex-inset); border: 2px solid #4a4c52; border-radius: 4px; box-shadow: inset 0 3px 8px #000; }
 .dlg-main { flex: 1; }
 .dlg-name { font-family: var(--serif); font-weight: 800; font-size: 17px; color: var(--gold-hi); letter-spacing: 1px; }
@@ -407,6 +518,8 @@ svg { display: block; }
 .tt-up { color: var(--ok); }
 .tt-down { color: var(--bad); }
 .tt-hint { margin-top: 6px; color: var(--gold); font-size: 12px; }
+.tt-mana { color: #8ab0ff; font-weight: 700; margin-top: 4px; }
+.tt-mana.tt-bad { color: var(--bad); }
 
 /* ── World overlays ───────────────────────────────────────────── */
 .floater { position: absolute; left: 0; top: 0; font-family: var(--serif); font-weight: 800; font-size: 20px; color: #fff; text-shadow: 0 2px 0 #000, 0 0 4px #000; white-space: nowrap; will-change: transform; }
