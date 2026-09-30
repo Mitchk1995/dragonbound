@@ -114,6 +114,10 @@ def kobold():
     remove_preview_rig()
 
 
+HOOD_EDGE = 0xA83A4A     # lighter crimson lip round the face opening, so the hood reads in the dark
+EMBROIDERY = 0x2A0A14    # near-black inlay in the back sigil
+
+
 def cultist():
     scene, root = fresh_scene('DB_cultist')
     body = pivot(root, 'body', (0, 0, 0))
@@ -123,6 +127,9 @@ def cultist():
     box(body, (0.8, 0.42, 0.62), (0, 0.64, 0), 'robe', taper=(0.84, 0.84), bevel=0.045)
     box(body, (0.84, 0.07, 0.66), (0, 0.45, 0), 'robeDark', bevel=0.02)
     box(body, (0.2, 0.76, 0.06), (0, 0.43, 0.34), 'gold', rot=(-0.2, 0, 0), taper=(1.35, 1), bevel=0.01)  # sash
+    box(body, (0.14, 0.62, 0.05), (0, 0.5, -0.33), 'gold', rot=(0.2, 0, 0), taper=(1.3, 1), bevel=0.01)  # back strip
+    box(body, (0.95, 0.025, 0.78), (0, 0.09, 0), 'gold', bevel=0.006)                                  # hem piping
+    box(body, (0.8, 0.025, 0.625), (0, 0.495, 0), 'gold', bevel=0.006)
     box(body, (0.72, 0.12, 0.56), (0, 0.84, 0), 'gold', bevel=0.03)
     box(body, (0.68, 0.34, 0.52), (0, 1.02, 0), 'robe', taper=(1.0, 1.0), bevel=0.045)
     box(body, (0.68, 0.32, 0.52), (0, 1.28, 0), 'robe', taper=(0.9, 0.9), bevel=0.05)
@@ -132,6 +139,8 @@ def cultist():
     for s in (-1, 1):
         box(body, (0.3, 0.08, 0.5), (s * 0.33, 1.4, -0.02), 'robeDark', rot=(0, 0, -s * 0.55), bevel=0.025)
     box(body, (0.12, 0.12, 0.03), (0, 1.3, 0.265), 'gold', rot=(0, 0, PI / 4), bevel=0.01)
+    box(body, (0.16, 0.16, 0.03), (0, 1.2, -0.25), 'gold', rot=(0, 0, PI / 4), bevel=0.012)            # sigil on the back
+    box(body, (0.08, 0.08, 0.03), (0, 1.2, -0.262), EMBROIDERY, rot=(0, 0, PI / 4), bevel=0)
     facet_gem(body, 0.07, (0, 1.3, 0.29), 'fire', emissive='fire', strength=5)  # amulet
     head = pivot(body, 'head', (0, 1.42, 0))
     # Hood: two angled side panels meeting at a peak that leans back (a hood's profile from the side), a filler
@@ -143,7 +152,7 @@ def cultist():
     for s, nm in ((-1, 'cowlR'), (1, 'cowlL')):
         panel = pivot(cowl, nm, (s * 0.3, 0.0, 0), (0, 0, s * 0.44))
         prism(panel, side, 0.1, (-s * 0.05, 0, 0), 'robeDark', rot=(0, PI / 2, 0), bevel=0.02)
-        prism(panel, edge, 0.106, (-s * 0.05, 0, 0), 'robe', rot=(0, PI / 2, 0))                             # front edge
+        prism(panel, edge, 0.106, (-s * 0.05, 0, 0), HOOD_EDGE, rot=(0, PI / 2, 0))                         # front edge
     prism(cowl, [(-0.02, 0.3), (0.08, 0.55), (0.24, 0.3), (0.25, 0.02), (0.02, 0.02)], 0.26, (0, 0, 0), 'robeDark',
           rot=(0, PI / 2, 0))                                                                                   # filler
     box(cowl, (0.3, 0.4, 0.3), (0, 0.2, -0.05), 'black', taper=(0.4, 1), bevel=0.03)                         # face shadow

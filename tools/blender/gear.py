@@ -176,10 +176,10 @@ LAMES = ((-0.1, 0.78, 0.12, 0.56), (-0.21, 0.75, 0.12, 0.54))
 BELT_Y = -0.315
 
 
-def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True):
+def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True, groove=0.016):
     """Cuirass of stacked slabs: a broad chest block (raised centre plate), two stepped abdominal lames, belt,
     tassets and a box gorget. `seam` fills the grooves between the slabs: one colour for all three grooves
-    (top first), or a tuple with one colour (or None) per groove."""
+    (top first), or a tuple with one colour (or None) per groove; `groove` is how tall those lines are."""
     seams = tuple(seam) if isinstance(seam, (tuple, list)) else (seam,) * 3
     y, w, hgt, d = CHEST
     box(c, (w, hgt, d), (0, y, 0), R.metal, bevel=0.05)
@@ -197,10 +197,10 @@ def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True):
     for i, (ly, lw, lh, ld) in enumerate(LAMES):
         box(c, (lw, lh, ld), (0, ly, 0), R.metal, bevel=0.03)
         if seams[i]:
-            box(c, (lw - 0.02, 0.016, ld - 0.02), (0, prev, 0), seams[i], bevel=0)              # groove line
+            box(c, (lw - 0.02, groove, ld - 0.02), (0, prev, 0), seams[i], bevel=0)             # groove line
         prev = ly - lh / 2
     if seams[2]:
-        box(c, (0.74, 0.016, 0.53), (0, prev, 0), seams[2], bevel=0)
+        box(c, (0.74, groove, 0.53), (0, prev, 0), seams[2], bevel=0)
     box(c, (0.8, 0.09, 0.57), (0, BELT_Y, 0), R.leather, bevel=0.02)                           # belt
     box(c, (0.13, 0.1, 0.03), (0, BELT_Y, 0.29), trim, bevel=0.012)                            # buckle
     gorget(c, trim)
@@ -427,20 +427,26 @@ def helm_open(S):
 
 
 def helm_full(S):
-    """Full helm, cube over cube: a box shell over the head cube with a smaller block on top, a brow band and
-    a visor of two face plates; the eye slit and the breath slit are the gaps between the blocks."""
+    """Full helm, cube over cube: a box shell over the head cube with a smaller block on top crowned by a low
+    crest dyed like the wearer's tunic (ROLE_cloth), a riveted brow band and a visor of two face plates with a
+    centre ridge and breaths; the eye slit is the gap between the blocks."""
     h = S('sock_head')
     box(h, (0.58, 0.5, 0.6), (0, 0.02, 0.01), R.metal, bevel=0.04)                           # shell
     box(h, (0.46, 0.08, 0.48), (0, 0.3, 0.01), R.metal, bevel=0.024)                          # top block
     box(h, (0.2, 0.035, 0.4), (0, 0.353, 0.0), R.trim, bevel=0.01)                            # top ridge
+    box(h, (0.08, 0.12, 0.4), (0, 0.425, -0.02), R.cloth, taper=(1, 0.8), bevel=0.022)         # dyed crest
     box(h, (0.6, 0.065, 0.62), (0, 0.145, 0.01), R.trim, bevel=0.014)                         # brow band
     box(h, (0.6, 0.05, 0.62), (0, -0.205, 0.01), R.trim, bevel=0.012)                         # lower rim
     box(h, (0.5, 0.3, 0.02), (0, -0.03, 0.31), SLIT, bevel=0)                                 # slit backing
+    box(h, (0.055, 0.27, 0.03), (0, -0.07, 0.356), R.trim, bevel=0.01)                        # centre ridge
     for s in (-1, 1):
         box(h, (0.242, 0.27, 0.045), (s * 0.133, -0.07, 0.325), R.metal, bevel=0.014)         # face plate
-        rivet(h, (s * 0.2, 0.145, 0.323), R.dark, 0.018)
+        for x in (0.08, 0.21):
+            rivet(h, (s * x, 0.145, 0.323), R.dark, 0.018)
         for z in (-0.16, 0.16):
             rivet(h, (s * 0.303, 0.145, z), R.dark, 0.018, rot=(PI / 4, PI / 2, 0))
+        for k in range(3):                                                                     # breaths
+            box(h, (0.07, 0.02, 0.02), (s * 0.12, -0.11 - k * 0.045, 0.348), SLIT, bevel=0)
 
 
 # ─── Body armour (sock_chest + shoulders) ────────────────────────────────────
@@ -475,12 +481,128 @@ def body_chain(S):
     mail_sleeve(S)
 
 
-def body_plate(S):
-    """Platebody (the plate sets in plate_variants.py build on this: set P is exactly it): stacked-slab cuirass,
-    blocky pauldron caps, and lames, rerebraces and couters down the upper arms."""
-    plate_torso(S('sock_chest'))
+STITCH = 0xD8C8A0
+BRASS = 0xB08A48
+
+
+def stitches(f, pts, color=STITCH, pitch=0.045, ln=0.024, t=0.008, z=0.002):
+    """Running stitch along a polyline of (x, y) points on a face frame (local +Z out): short flat dashes
+    `pitch` apart lying just on the face. One mesh."""
+    bm = bmesh.new()
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        a, b = Vector((x0, y0, 0)), Vector((x1, y1, 0))
+        d = b - a
+        n = max(1, int(d.length / pitch))
+        u = d.normalized()
+        v = Vector((-u.y, u.x, 0)) * t / 2
+        for i in range(n):
+            p = a + d * ((i + 0.5) / n) - u * ln / 2
+            q = p + u * ln
+            bm.faces.new([bm.verts.new(tuple(c_ + Vector((0, 0, z)))) for c_ in (p - v, q - v, q + v, p + v)])
+    o = _common._mesh_obj(bm, f, (0, 0, 0), (0, 0, 0), color)
+    o.name = 'stitch'
+    return o
+
+
+def panel_stitched(f, x, y, w, hgt, color=R.metal, depth=0.035, inset=0.028):
+    """Raised leather panel on a face frame with a running stitch just inside its edge."""
+    box(f, (w, hgt, depth), (x, y, depth / 2), color, bevel=0.012)
+    hw, hh = w / 2 - inset, hgt / 2 - inset
+    stitches(f, [(x - hw, y - hh), (x + hw, y - hh), (x + hw, y + hh), (x - hw, y + hh), (x - hw, y - hh)], z=depth + 0.002)
+
+
+def body_leather(S):
+    """Leather jerkin: stitched leather panels over a dark underlayer (the gaps between them read as seams),
+    a stand-up collar, a strap across the chest with a brass buckle, a belt, a skirt of hanging flaps, layered
+    leather shoulder caps with studs and leather sleeves with a strap. Main leather is ROLE_metal (the leather
+    palette's main colour), straps and collar trim are ROLE_trim (darker), the underlayer ROLE_dark."""
+    c = S('sock_chest')
+    box(c, (0.76, 0.64, 0.5), (0, -0.01, 0), R.dark, bevel=0.04)                               # underlayer
+    fr, bk, sl, sr = faces(c, 0.38, 0.25)
+    for s in (-1, 1):
+        panel_stitched(fr[0], s * 0.18, 0.15, 0.33, 0.3)                                          # chest panels
+        panel_stitched(fr[0], s * 0.18, -0.17, 0.33, 0.28)                                        # belly panels
+        panel_stitched(bk[0], s * 0.18, -0.01, 0.33, 0.6)                                         # back panels
+    for f, hw in (sl, sr):
+        panel_stitched(f, 0, -0.01, 0.44, 0.6)
+    # stand-up collar with a darker rim over a shoulder yoke
+    box(c, (0.52, 0.11, 0.44), (0, 0.35, -0.01), R.metal, bevel=0.025)
+    box(c, (0.54, 0.035, 0.46), (0, 0.41, -0.01), R.trim, bevel=0.01)
+    box(c, (0.7, 0.05, 0.46), (0, 0.32, -0.01), R.metal, bevel=0.018)                        # shoulder yoke
+    # strap from the left shoulder across the chest to the right hip, with a brass buckle
+    st = pivot(c, 'strap', (0, 0.02, 0.3), (0, 0, 0.62))
+    box(st, (0.1, 0.72, 0.03), (0, 0, 0), R.trim, bevel=0.01)
+    box(st, (0.13, 0.11, 0.03), (0, -0.05, 0.012), BRASS, bevel=0.012)
+    box(st, (0.07, 0.05, 0.03), (0, -0.05, 0.02), R.trim, bevel=0)
+    stb = pivot(c, 'strap', (0, 0.02, -0.3), (0, 0, 0.62))
+    box(stb, (0.1, 0.72, 0.03), (0, 0, 0), R.trim, bevel=0.01)
+    box(c, (0.8, 0.085, 0.54), (0, -0.33, 0), R.trim, bevel=0.02)                              # belt
+    box(c, (0.12, 0.1, 0.03), (0, -0.33, 0.275), BRASS, bevel=0.012)
+    # skirt: hanging flaps over a dark under-skirt
+    box(c, (0.72, 0.24, 0.46), (0, -0.48, 0), R.dark, bevel=0.02)
+    for z in (0.25, -0.25):
+        for x in (-0.24, 0.0, 0.24):
+            f = pivot(pivot(c, 'flap', (x, -0.37, z), (0, 0 if z > 0 else PI, 0)), 'flap_tilt', (0, 0, 0), (-0.1, 0, 0))
+            box(f, (0.21, 0.26, 0.035), (0, -0.13, 0), R.metal, bevel=0.012)
+            stitches(f, [(-0.075, -0.23), (-0.075, -0.03)], z=0.02)
+            stitches(f, [(0.075, -0.23), (0.075, -0.03)], z=0.02)
+    for s in (-1, 1):
+        f = pivot(c, 'flap', (s * 0.37, -0.37, 0), (0, 0, s * 0.1))
+        box(f, (0.035, 0.24, 0.36), (0, -0.12, 0), R.metal, bevel=0.012)
+    # layered leather shoulder caps with studs, leather sleeves with a strap
     for s in (1, -1):
-        block_pauldron(S, s)
+        top, side = block_pauldron(S, s, top=R.trim, edge=R.trim, rivets=BRASS)
+    for name, s in ARM_SOCKS:
+        g = S(name)
+        arm_box(g, s, (0.29, 0.38, 0.31), (0, -0.15, 0), R.metal, bevel=0.03)
+        arm_box(g, s, (0.3, 0.045, 0.32), (0, -0.325, 0), R.dark, bevel=0.01)
+        arm_box(g, s, (0.305, 0.05, 0.325), (0, -0.2, 0), R.trim, bevel=0.01)                  # strap
+        arm_lames(g, s, (R.metal, R.metal), R.dark)
+
+
+def plate_crafting(c, trim=R.trim, dark=R.dark, cloth=R.cloth):
+    """Smith's detail on the plate cuirass that still reads from the game camera: a trim ridge down the
+    breastplate with a crest boss, trim edges along the breastplate's slanted sides and a trim band with dark
+    rivets under the chest block, a dark mail skirt under the tassets, and a cloth tabard hanging from the belt
+    (ROLE_cloth: it takes the wearer's tunic colour) so the knight is not one grey mass."""
+    y, w, hgt, d = CHEST
+    zf = d / 2
+    box(c, (0.07, 0.3, 0.03), (0, y - 0.005, zf + 0.06), trim, bevel=0.01)                     # central ridge
+    for s in (-1, 1):                                                                            # breastplate side edges
+        box(c, (0.05, 0.3, 0.03), (s * 0.214, y + 0.005, zf + 0.03), trim, rot=(0, 0, -s * 0.25), bevel=0.01)
+    box(c, (0.16, 0.16, 0.03), (0, y + 0.07, zf + 0.07), dark, rot=(0, 0, PI / 4), bevel=0.012)     # crest: dark lozenge
+    box(c, (0.1, 0.1, 0.03), (0, y + 0.07, zf + 0.085), trim, rot=(0, 0, PI / 4), bevel=0.014)      # raised trim boss
+    box(c, (0.06, 0.26, 0.02), (0, y + 0.01, -zf - 0.035), trim, bevel=0.008)                   # back ridge
+    for s in (-1, 1):                                                                            # back straps and buckles
+        box(c, (0.075, hgt + 0.02, 0.02), (s * 0.2, y, -zf - 0.05), R.leather, bevel=0.006)
+        box(c, (0.1, 0.07, 0.02), (s * 0.2, y - 0.07, -zf - 0.062), trim, bevel=0.008)
+    by = y - hgt / 2 + 0.03
+    box(c, (w + 0.014, 0.05, d + 0.014), (0, by, 0), trim, bevel=0.012)                        # trim band under the chest
+    for x in (-0.33, -0.2, 0.2, 0.33):
+        rivet(c, (x, by, zf + 0.012), dark, 0.016)
+    # dark mail skirt under the tassets: shows between the plates and at the hips
+    sk = pivot(c, 'mail_skirt', (0, -0.49, 0))
+    box(sk, (0.76, 0.26, 0.47), (0, 0, 0), dark, bevel=0.02)
+    mail_links(faces(sk, 0.38, 0.235, sides=False)[0][0], 0.35, (-0.1, -0.04, 0.02), R.metal, hgt=0.012)
+    # tabard: a cloth panel falling from the belt between the front tassets, a shorter one at the back
+    for z, tilt, ln in ((0.29, -0.12, 0.34), (-0.29, 0.12, 0.28)):
+        s = 1 if z > 0 else -1
+        f = pivot(c, 'tabard', (0, -0.355, z), (tilt, 0, 0))
+        box(f, (0.27, ln, 0.03), (0, -ln / 2, s * 0.045), cloth, bevel=0.01)
+        box(f, (0.28, 0.04, 0.036), (0, -ln + 0.03, s * 0.045), trim, bevel=0.008)            # hem stripe
+        if z > 0:
+            box(f, (0.09, 0.09, 0.02), (0, -0.14, 0.064), trim, rot=(0, 0, PI / 4), bevel=0.008)  # device
+
+
+def body_plate(S):
+    """Platebody (the plate sets in plate_variants.py build on this: set P is exactly it): stacked-slab cuirass
+    with a crested breastplate, trim bands and rivet rows, back straps, a dark mail skirt and a cloth tabard,
+    pauldron caps with a trim ridge, and lames, rerebraces and couters down the upper arms."""
+    c = S('sock_chest')
+    plate_torso(c, groove=0.032)
+    plate_crafting(c)
+    for s in (1, -1):
+        block_pauldron(S, s, top=R.trim)
     upper_arm_plate(S)
 
 
@@ -652,6 +774,7 @@ def u_scaleguard(S):
 GEAR = {
     'sword': sword, 'longsword': longsword, 'pickaxe': pickaxe, 'bow': bow, 'staff': staff,
     'helm_open': helm_open, 'helm_full': helm_full, 'body_chain': body_chain, 'body_plate': body_plate,
+    'body_leather': body_leather,
     'gloves': gloves, 'boots': boots,
     'u_cinderfang': u_cinderfang, 'u_emberstring': u_emberstring, 'u_kindled_ash': u_kindled_ash,
     'u_ashen_crown': u_ashen_crown, 'u_scaleguard': u_scaleguard,

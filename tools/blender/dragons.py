@@ -237,9 +237,9 @@ def drakeling():
 
 def cinderwing():
     # Unlike the bright red drakeling: charcoal black-red scales, ember-orange belly plates, a furnace glowing through
-    # cracks in the throat and chest, near-black wings whose trailing edges smoulder. Ash-pale horns keep the
-    # silhouette readable in the dark lair.
-    main, dark, belly, horn_col, bone, skin, frill = 0x3A1B18, 0x170C0B, 0xC8561C, 0xD2C4AC, 0x1A0D0B, 0x2A1411, 0x221010
+    # cracks in the throat and chest, dark wings on lighter bones whose trailing edges smoulder. Deep red fins, brow
+    # and frills are the second tone and ash-pale horns keep the silhouette readable in the dark lair.
+    main, dark, belly, horn_col, bone, skin, frill = 0x4C2622, 0x2C1714, 0xC8561C, 0xD2C4AC, 0x4A2C26, 0x3C1C18, 0x6A1E18
     ember = dict(emissive=0xFF7A1A, strength=2.5)
     hot = 0xFFA040
     scene, root = fresh_scene('DB_cinderwing')
@@ -258,7 +258,7 @@ def cinderwing():
         box(body, (0.52 - abs(i - 1.5) * 0.05, 0.08, 0.2), (0, -0.35 + (0.07 if i == 0 else 0), z), hot if i < 2 else belly,
             rot=(-0.3 if i == 0 else 0, 0, 0), bevel=0, taper=(0.8, 0.8), **(ember if i < 2 else {}))
     for i in range(5):
-        fin(body, (0, 0.46 - abs(i - 1) * 0.02, 0.5 - i * 0.28), 0.26, 0.3 - abs(i - 1) * 0.03, dark, thick=0.07)
+        fin(body, (0, 0.46 - abs(i - 1) * 0.02, 0.5 - i * 0.28), 0.26, 0.3 - abs(i - 1) * 0.03, frill, thick=0.07)
     for s in (-1, 1):
         # furnace cracks across each flank, and seams either side of the spine for the top-down camera
         x = s * 0.505
@@ -274,7 +274,7 @@ def cinderwing():
             x = s * (w - 0.005)
             seam(n, [(x, -w * 0.8, 0.34), (x, -w * 0.35, 0.18), (x, w * 0.05, 0.3)], 0.035, hot)
             seam(n, [(s * w * 0.45, w - 0.005, 0.36), (s * w * 0.6, w - 0.005, 0.14), (s * w * 0.4, w - 0.005, -0.08)], 0.03, hot)
-        fin(n, (0, w - 0.03, 0.16), 0.24, 0.2, dark, thick=0.06)
+        fin(n, (0, w - 0.03, 0.16), 0.24, 0.2, frill, thick=0.06)
     last = segments(body, 'neck', 3, (0, 0.32, 0.76), (0.4, 0.4, 0.4), (-0.35, -0.35, -0.35), neck)
 
     head = pivot(last, 'head', (0, 0.02, 0.44), (0.4, 0, 0))
@@ -307,14 +307,14 @@ def cinderwing():
     def tail(t, i):
         w = 0.3 - i * 0.045
         beam(t, (0, 0, 0.1), (0, 0, -0.54), 2 * (w + 0.02), 2 * (w + 0.02), main, taper=((w - 0.03) / (w + 0.02),) * 2, bevel=0.03)
-        fin(t, (0, w - 0.02, -0.22), 0.22, 0.24 - i * 0.03, dark, thick=0.06)
+        fin(t, (0, w - 0.02, -0.22), 0.22, 0.24 - i * 0.03, frill, thick=0.06)
     last = segments(body, 'tail', 5, (0, 0.03, -0.66), (-0.48,) * 4, (0.18, 0.05, 0.05, 0.05, 0.05), tail)
     prism(last, [(0, 0.28), (-0.2, 0.02), (0, -0.12), (0.2, 0.02)], 0.06, (0, 0, -0.56), dark, rot=(-PI / 2, 0, 0))  # tail blade
     for s in (-1, 1):
         horn(last, curve((s * 0.06, 0, -0.36), (s * 0.34, 0.06, -0.6), (0, 0.04, 0)), 0.09, horn_col)
 
     for side, s in (('L', 1), ('R', -1)):
-        bat_wing(body, side, (s * 0.36, 0.36, 0.34), 2.0, bone, skin, horn_col, edge=0xFF6A1A)
+        bat_wing(body, side, (s * 0.36, 0.36, 0.34), 2.0, bone, skin, horn_col, skin_glow=0x2A0804, edge=0xFF6A1A)
     finish('DB_cinderwing', 'cinderwing.glb')
 
 

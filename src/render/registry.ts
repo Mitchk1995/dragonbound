@@ -408,11 +408,11 @@ export class HeroDresser {
     for (const o of this.attached) o.removeFromParent();
     this.attached = [];
     const a = look ?? { name: '', skin: 1, hair: 1, hairColor: 1, beard: 0, cloth: 0, cloth2: 5 };
+    const dye = { cloth: CLOTH_COLORS[a.cloth] ?? CLOTH_COLORS[0], cloth2: CLOTH_COLORS[a.cloth2] ?? CLOTH_COLORS[5] };
     applyRoles(this.model.root, {
       skin: SKIN_TONES[a.skin] ?? SKIN_TONES[1],
       hair: HAIR_COLORS[a.hairColor] ?? HAIR_COLORS[1],
-      cloth: CLOTH_COLORS[a.cloth] ?? CLOTH_COLORS[0],
-      cloth2: CLOTH_COLORS[a.cloth2] ?? CLOTH_COLORS[5],
+      ...dye,
       leather: 0x6a4428,
     });
 
@@ -425,7 +425,11 @@ export class HeroDresser {
     for (const slot of ['helm', 'body', 'gloves', 'boots'] as Slot[]) {
       const item = equipment[slot];
       const gl = item ? gearLook(item) : null;
-      if (gl) this.attachParts(buildGear(gl.model, gl.palette));
+      if (!gl) continue;
+      // Cloth on armour (the plate tabard) is dyed to match the wearer's tunic.
+      const parts = buildGear(gl.model, gl.palette);
+      for (const g of parts.values()) applyRoles(g, dye);
+      this.attachParts(parts);
     }
     if (override?.weaponModel) {
       this.attachParts(buildGear(override.weaponModel, override.weaponPalette ?? { main: 0x888888, trim: 0xcccccc, dark: 0x444444 }));
@@ -492,7 +496,7 @@ export class HeroDresser {
 export const MODEL_FILES = [
   'hero', 'goblin', 'kobold', 'cultist', 'drakeling', 'cinderwing', 'whelp', 'golem', 'warden', 'quartermaster',
   'gear_sword', 'gear_longsword', 'gear_pickaxe', 'gear_bow', 'gear_staff', 'gear_helm_open', 'gear_helm_full',
-  'gear_body_chain', 'gear_body_plate', 'gear_gloves', 'gear_boots',
+  'gear_body_chain', 'gear_body_plate', 'gear_body_leather', 'gear_gloves', 'gear_boots',
   ...['p', 'e'].flatMap((v) => [`gear_body_plate_${v}`, `gear_helm_full_${v}`, `gear_gloves_${v}`, `gear_boots_${v}`]),
   'gear_u_cinderfang', 'gear_u_emberstring', 'gear_u_kindled_ash', 'gear_u_ashen_crown', 'gear_u_scaleguard',
   'hair_1', 'hair_2', 'hair_3', 'hair_4', 'beard_1', 'beard_2', 'beard_3',

@@ -26,8 +26,8 @@ PAL = {
     'skin': 0xF2C49B, 'steel': 0xB9C6D2, 'steelDark': 0x7D8A99, 'gold': 0xE8B64A,
     'leather': 0x8A5A34, 'leatherDark': 0x5A3A22, 'cloth': 0x2F6DB5, 'clothDark': 0x1F4A80,
     'red': 0xC0392B, 'wood': 0x6B4426, 'goblin': 0x74B347, 'goblinDark': 0x4E7F2C,
-    'kobold': 0xC77B3A, 'koboldDark': 0x8F5222, 'belly': 0xF2B45A, 'robe': 0x5B1A2C,
-    'robeDark': 0x3A0F1C, 'fire': 0xFF7A1A, 'ember': 0xFFB040, 'bone': 0xEEE4CC,
+    'kobold': 0xC77B3A, 'koboldDark': 0x8F5222, 'belly': 0xF2B45A, 'robe': 0x762438,
+    'robeDark': 0x4A1426, 'fire': 0xFF7A1A, 'ember': 0xFFB040, 'bone': 0xEEE4CC,
     'black': 0x1A1414, 'eye': 0xFFE070, 'arcane': 0x6AA8FF, 'white': 0xFFFFFF,
 }
 
