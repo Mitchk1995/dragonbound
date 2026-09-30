@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ModelKit, PAL } from '../render/kit';
 import { hasModel, makeModel } from '../render/registry';
+import { applySurface, guessSurface } from '../render/surface';
 
 export interface Prop {
   obj: THREE.Group;
@@ -288,10 +289,12 @@ export function buildProp(kind: string, arg?: any): Prop {
   }
   const k = new ModelKit();
   const g = new THREE.Group();
-  if (kind === 'arch') return arch(k, g, arg ?? null);
-  if (kind.startsWith('rock_')) return oreRock(k, g, arg ?? 0x888888);
-  const b = BUILDERS[kind];
-  const res = b ? b(k, g, arg) : undefined;
+  let res: Prop | void;
+  if (kind === 'arch') res = arch(k, g, arg ?? null);
+  else if (kind.startsWith('rock_')) res = oreRock(k, g, arg ?? 0x888888);
+  else res = BUILDERS[kind]?.(k, g, arg);
+  // Static props line their detail up in world space.
+  for (const m of k.mats) if (m.emissive.getHex() === 0 || m.emissiveIntensity === 0) applySurface(m, guessSurface(m.color), 'world');
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.castShadow = true;
