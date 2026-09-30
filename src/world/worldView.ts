@@ -3,7 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
-import { buildProp, type Prop } from './props';
+import { buildProp, OCCLUDING_PROPS, type Prop } from './props';
+import { buildBuilding, type BuildingProp } from './buildingModel';
 import { addPatch, applyGrade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
@@ -77,6 +78,19 @@ export function makeOccludable(mat: THREE.Material) {
         }`,
       );
   } });
+}
+
+/** Make every material under an object dissolve between the camera and the hero. */
+function occludeAll(root: THREE.Object3D) {
+  const seen = new Set<THREE.Material>();
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (seen.has(m) || m instanceof THREE.ShaderMaterial || m.userData.noOcclude) continue;
+      seen.add(m);
+      makeOccludable(m);
+    }
+  });
 }
 
 // ─── Sky ────────────────────────────────────────────────────────────────────
@@ -188,6 +202,8 @@ export interface WorldView {
   /** Objects that follow the camera (sky). */
   followers: THREE.Object3D[];
   props: Prop[];
+  /** Enterable buildings (roofs lift while the hero is inside). */
+  buildings: BuildingProp[];
   /** Terrain height at a world point (scenery and props stand on it). */
   heightAt(x: number, z: number): number;
   /** Advance animated surfaces (water, lava). */
@@ -636,8 +652,17 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     prop.obj.position.set(pr.x, Math.max(0, heightAt(pr.x, pr.z)), pr.z);
     prop.obj.rotation.y = pr.rot ?? 0;
     if (pr.s) prop.obj.scale.setScalar(pr.s);
+    if (OCCLUDING_PROPS.has(pr.kind)) occludeAll(prop.obj);
     group.add(prop.obj);
     props.push(prop);
   }
-  return { group, followers, props, heightAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; } };
+  // Buildings stand on the flat floor they stamped; their walls dissolve around the hero like
+  // any other occluder.
+  const buildings = (layout.buildings ?? []).map((b) => {
+    const bp = buildBuilding(b);
+    occludeAll(bp.obj);
+    group.add(bp.obj);
+    return bp;
+  });
+  return { group, followers, props, buildings, heightAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; } };
 }

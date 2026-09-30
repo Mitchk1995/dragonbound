@@ -67,6 +67,13 @@ export class Interactable {
         this.radius = 1;
         this.height = 2.4;
       }
+      // Plot markers (a signpost by each plot's door) are small: keep the pick close to them so
+      // clicks on the floor around them still walk.
+      if (kind === 'restore' && id !== 'board' && id !== 'emberforge') {
+        this.reach = 2;
+        this.radius = 1;
+        this.height = 2.6;
+      }
     }
     if (this.prop) this.obj.add(this.prop.obj);
   }
@@ -84,7 +91,7 @@ export class Interactable {
       case 'exit':
         return 'Return portal';
       case 'bank':
-        return 'Bank vault';
+        return 'Bank counter';
       case 'chest':
         return 'Deposit chest';
       case 'furnace':
@@ -92,7 +99,7 @@ export class Interactable {
       case 'anvil':
         return 'Anvil';
       case 'shop':
-        return "Quartermaster's stall";
+        return "Quartermaster's counter";
       case 'gate':
         return 'Sealed gate';
       case 'pedestal':

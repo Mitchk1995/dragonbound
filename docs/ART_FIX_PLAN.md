@@ -55,9 +55,11 @@ The owner rated 32 models and map areas and left notes. Average score 2.1 / 5. F
 - Portal platform plus a flowing portal effect.
 - Re-author the mine (organic caverns, ore veins, distinct ore rocks), Foothills (organic edges, renamed Wyrmwood Foothills, goblin camp kit, shrine, new tower), lair (bigger arena, bone piles, no glowing sticks), and Sunken Ruin (asymmetric drowned city).
 
-### Phase 4: the keep
-- About a 150×150 island with districts: great hall, smithing quarter, bank and vault, market, portal court, and profession lots.
-- Every building is a Blender model with ruined and restored states.
+### Phase 4: the keep (done)
+- A 150×150 island with districts around the portal court: the walled inner keep (gatehouse, great hall, rune and hatchery plots), the smithing quarter (smelter house, anvil yard, Emberforge), the bank and its side vault, the Quartermaster's shop and market, and the alchemy plot.
+- Buildings are enterable. One spec per building (`src/data/zoneMaps.ts` `KEEP_BUILDINGS`, types in `src/world/building.ts`) drives both the nav grid (walls block, doorways and floors walk) and the model (`src/world/buildingModel.ts`), so they can never disagree. Stations stand inside (bank counter, furnace, shop counter, Restoration Board).
+- When the hero is inside, the roof, gables and the camera-side wall above a clean stone course dissolve away; other walls dissolve around the hero like any occluder.
+- Buildings are code-built blocks rather than Blender models: the grid-exact walls, doorways and the cut-away need the spec, and plots swap between ruined foundations and restored buildings on the same footprint.
 
 ### Phase 5: HUD
 - A D2-style bottom console: health and mana orbs (mana is new: skills cost mana), potion belt, LMB/Q/W/E/RMB skill slots and a mini-menu. No top-right strip.
