@@ -401,6 +401,7 @@ export class Game {
     this.updateRecall(raw);
 
     this.player.update(dt, this);
+    this.combat.updateMana(dt);
     if (this.player.dead) {
       this.deathT += raw;
       if (this.deathT > 3 && !this.traveling) this.respawn();

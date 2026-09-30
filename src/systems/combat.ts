@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { castAbility } from '../abilities';
 import { newBossState } from '../ai/boss';
 import { mitigate, rollHit } from '../combat/damage';
-import { swingTiming } from '../combat/stats';
+import { canAfford, swingTiming } from '../combat/stats';
 import { abilityFor, type AbilityKey } from '../data/abilities';
 import { Enemy, type PackState } from '../entities/enemy';
 import { ATTACK_ANIM } from '../entities/player';
@@ -14,7 +14,7 @@ import { SKILL_INFO } from '../progression/skills';
 import type { AttackKind } from '../render/anim';
 import { PAL } from '../render/kit';
 import { Cell } from '../world/layout';
-import { COMBAT_TUNING, XP_TUNING } from '../data/tuning';
+import { COMBAT_TUNING, MANA_TUNING, XP_TUNING } from '../data/tuning';
 
 export interface HitOpts {
   kb?: number;
@@ -49,8 +49,41 @@ const BREATH_RATE = 600;
 export class Combat {
   potionProgress = 0;
   bossEngagedAt = 0;
+  /** Current mana (one pool for every style). Starts full; clamped to the max each frame. */
+  mana = Infinity;
+  /** Potion mana still to arrive, and how fast (per second). */
+  private manaHealT = 0;
+  private manaHealRate = 0;
 
   constructor(private g: Game) {}
+
+  // ─── Mana ────────────────────────────────────────────────────────────────
+
+  /** Regenerate mana. Full in the keep and while dead (you wake with a full pool). */
+  updateMana(dt: number) {
+    const g = this.g, p = g.player, st = g.stats, M = MANA_TUNING;
+    if (p.dead || g.zone.def.kind === 'hub') {
+      this.mana = st.maxMana;
+      this.manaHealT = 0;
+      return;
+    }
+    let regen = st.manaRegen + (p.sinceHit > M.outOfCombatAfter ? st.maxMana * M.outOfCombatFrac : 0);
+    if (this.manaHealT > 0) {
+      this.manaHealT -= dt;
+      regen += this.manaHealRate;
+    }
+    this.mana = Math.min(st.maxMana, this.mana + regen * dt);
+  }
+
+  /** Restore `frac` of max mana over `secs` (the healing potion). */
+  restoreMana(frac: number, secs: number) {
+    this.manaHealT = secs;
+    this.manaHealRate = (this.g.stats.maxMana * frac) / secs;
+  }
+
+  get manaFull() {
+    return this.mana >= this.g.stats.maxMana;
+  }
 
   private get z() {
     return this.g.zone;
@@ -117,7 +150,15 @@ export class Combat {
       return;
     }
     if (p.action && !p.action.done) return;
+    if (!canAfford(Math.min(this.mana, g.stats.maxMana), def.mana)) {
+      if (!quiet) {
+        g.sfx.play('deny', 0.5);
+        g.ui.noMana();
+      }
+      return;
+    }
     g.skilling.stop();
+    this.mana = Math.min(this.mana, g.stats.maxMana) - def.mana;
     p.cds[def.id] = def.cooldown * (1 - g.stats.cdr);
     castAbility(g, def, { x: g.ground.x, z: g.ground.z, target: g.hovered });
   }
