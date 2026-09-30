@@ -369,12 +369,19 @@ export class Panels {
         <tr><td>Space · Esc</td><td>Stop · close windows</td></tr>
       </table>
       <div class="setting"><label>Volume</label><input type="range" min="0" max="1" step="0.05" value="${g.save.settings.volume}" class="vol"></div>
+      <div class="setting"><label>Graphics</label><select class="gfx">${(['high', 'medium', 'low'] as const).map((q) => `<option value="${q}"${(g.save.settings.graphics ?? 'high') === q ? ' selected' : ''}>${q[0].toUpperCase() + q.slice(1)}</option>`).join('')}</select></div>
       <div class="setting"><span class="dim">Progress saves automatically to your ${g.backend.describe()}.</span></div>
       <div class="btnrow"><button class="btn" data-act="title">Save & return to title</button></div>`);
     el.querySelector<HTMLInputElement>('.vol')!.addEventListener('input', (e) => {
       const v = Number((e.target as HTMLInputElement).value);
       g.save.settings.volume = v;
       g.sfx.setVolume(v);
+      g.dirty = true;
+    });
+    el.querySelector<HTMLSelectElement>('.gfx')!.addEventListener('change', (e) => {
+      const q = (e.target as HTMLSelectElement).value as 'high' | 'medium' | 'low';
+      g.save.settings.graphics = q;
+      g.applyGraphics(q);
       g.dirty = true;
     });
     el.querySelector('[data-act="title"]')!.addEventListener('click', async () => {

@@ -20,6 +20,9 @@ export interface QuestState {
   done: boolean;
 }
 
+/** Render quality preset (see Game.applyGraphics). */
+export type Graphics = 'high' | 'medium' | 'low';
+
 export interface SaveData {
   version: number;
   /** Null until character creation is finished. */
@@ -50,7 +53,7 @@ export interface SaveData {
   /** Tutorial step index; -1 when finished or skipped. */
   tutorial: number;
   stats: { deaths: number; kills: number; playtime: number; bestBossTime: number | null };
-  settings: { volume: number };
+  settings: { volume: number; graphics?: Graphics };
 }
 
 export const emptyEquipment = (): Record<Slot, Item | null> => ({
