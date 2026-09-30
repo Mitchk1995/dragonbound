@@ -213,6 +213,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     }
   }
   const hgt = new Float32Array(nV);
+  // Cave rock: raw (unterraced) heights, and the terrace profile: wide flat ledges, short risers.
+  const raw = new Float32Array(nV);
+  const terrace = (y: number) => {
+    const t = y / CAVE_TERRACE, f = t - Math.floor(t);
+    return (Math.floor(t) + sstep(0.72, 0.9, f)) * CAVE_TERRACE;
+  };
   for (let z = 0; z <= h; z++) {
     for (let x = 0; x <= w; x++) {
       const k = vi(x, z);
@@ -229,8 +235,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
           // risers) whose edges wander slowly, so the walls read as layered strata in a single
           // body of rock. Only slow noise: fine per-vertex noise made the tops lumpy.
           y = top * (0.9 + noise(x * 0.18 + 9, z * 0.18) * 0.2) + (noise(x * 0.16 + 20, z * 0.16) - 0.5) * 3.0 + (noise(x * 0.4 + 40, z * 0.4) - 0.5) * 1.2 + rise[k];
-          const step = CAVE_TERRACE, t = y / step, f = t - Math.floor(t);
-          y = (Math.floor(t) + sstep(0.66, 0.98, f)) * step + (noise(x * 0.9 + 3, z * 0.9) - 0.5) * 0.06;
+          // Narrow risers (steep, short faces) between wide flat ledges: with the faceted shading
+          // below, each terrace reads as a slab with a crisp lip, like the stacked slabs at the foot.
+          // (The cave relief mesh is rebuilt finer below from the raw height; the grid keeps the
+          // terraced value for height queries.)
+          raw[k] = y;
+          y = terrace(y);
         } else {
           y = top * (0.85 + noise(x * 0.35 + 9, z * 0.35) * 0.3) + (noise(x * 1.3, z * 1.3) - 0.5) * 0.5 + rise[k];
         }
@@ -274,12 +284,17 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   }
   for (let k = 0; k < nV; k++) pos[k * 3 + 1] = hgt[k];
 
-  const flat: number[] = [], rough: number[] = [];
+  const flat: number[] = [], rough: number[] = [], caveCells: number[] = [];
   for (let z = 0; z < h; z++) {
     for (let x = 0; x < w; x++) {
       if (at(x, z) === Cell.Void) continue;
       const a = vi(x, z), b = vi(x + 1, z), cc = vi(x + 1, z + 1), d = vi(x, z + 1);
       const tris = (x + z) & 1 ? [a, d, b, b, d, cc] : [a, d, cc, a, cc, b];
+      // Cave rock is rebuilt finer (caveRelief below): its cells leave the grid mesh entirely.
+      if (theme.wallRise && [a, b, cc, d].some((v) => hgt[v] > 0.6)) {
+        caveCells.push(x, z);
+        continue;
+      }
       // A triangle is relief if any corner is raised (so cliff faces dissolve as one piece).
       for (let t = 0; t < 6; t += 3) {
         const tri = tris.slice(t, t + 3);
@@ -295,12 +310,58 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   geo.setIndex([...flat, ...rough]);
   geo.computeVertexNormals();
   const wet = layout.fluid.some((f) => f === Fluid.Water);
+  /**
+   * Cave rock, rebuilt at twice the grid's resolution from the raw heights and terraced per
+   * sub-vertex, then faceted (one normal per triangle). On the coarse grid a terrace riser had to
+   * span a whole cell, so the ledges melted into soft, clay-like slopes; here each riser is a short
+   * steep face with a crisp lip, and the colour alternates light and dark by terrace like the slabs
+   * stacked at the wall foot. High vertices are nudged off the grid so the facets don't line up in
+   * rows. Edges shared with the floor mesh stay exactly on it (no cracks).
+   */
+  function caveRelief() {
+    const S = 2, band = [1.16, 0.82, 1.04, 0.88];
+    const P: number[] = [], C: number[] = [], A: number[] = [];
+    const src = (k: number) => (fullRelief(k) ? raw[k] : hgt[k]);
+    const sample = (x: number, z: number, u: number, v: number) => {
+      const k00 = vi(x, z), k10 = vi(x + 1, z), k01 = vi(x, z + 1), k11 = vi(x + 1, z + 1);
+      const w00 = (1 - u) * (1 - v), w10 = u * (1 - v), w01 = (1 - u) * v, w11 = u * v;
+      const bil = (arr: ArrayLike<number>, n: number, j: number) => arr[k00 * n + j] * w00 + arr[k10 * n + j] * w10 + arr[k01 * n + j] * w01 + arr[k11 * n + j] * w11;
+      const r = src(k00) * w00 + src(k10) * w10 + src(k01) * w01 + src(k11) * w11;
+      const up = sstep(0.9, 1.6, r);
+      const y = r < 0.9 ? r : terrace(r);
+      const px = x + u, pz = z + v;
+      const jx = (noise(px * 0.61 + 11, pz * 0.61) - 0.5) * 0.36 * up, jz = (noise(px * 0.61 + 29, pz * 0.61 + 7) - 0.5) * 0.36 * up;
+      const b = Math.floor(y / CAVE_TERRACE + 0.3 + (noise(px * 0.05 + 3, pz * 0.05) - 0.5) * 0.3);
+      const f = 1 + (band[((b % 4) + 4) % 4] * (0.95 + noise(px * 0.3 + 60, pz * 0.3) * 0.1) - 1) * up;
+      return { p: [px + jx, y, pz + jz], c: [bil(col, 3, 0) * f * (1 + 0.03 * up), bil(col, 3, 1) * f, bil(col, 3, 2) * f * (1 - 0.04 * up)], a: [0, 1, 2, 3].map((j) => bil(splat, 4, j)) };
+    };
+    for (let i = 0; i < caveCells.length; i += 2) {
+      const x = caveCells[i], z = caveCells[i + 1];
+      const grid: ReturnType<typeof sample>[] = [];
+      for (let jv = 0; jv <= S; jv++) for (let ju = 0; ju <= S; ju++) grid.push(sample(x, z, ju / S, jv / S));
+      const at2 = (ju: number, jv: number) => grid[jv * (S + 1) + ju];
+      for (let jv = 0; jv < S; jv++) for (let ju = 0; ju < S; ju++) {
+        const q00 = at2(ju, jv), q10 = at2(ju + 1, jv), q01 = at2(ju, jv + 1), q11 = at2(ju + 1, jv + 1);
+        const alt = (x * S + ju + z * S + jv) & 1;
+        const tris = alt ? [q00, q01, q10, q10, q01, q11] : [q00, q01, q11, q00, q11, q10];
+        for (const q of tris) {
+          P.push(...q.p);
+          C.push(...q.c);
+          A.push(...q.a);
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    g.setAttribute('aSplat', new THREE.Float32BufferAttribute(A, 4));
+    g.computeVertexNormals();
+    return g;
+  }
   const make = (index: number[], name: string) => {
     const g = new THREE.BufferGeometry();
     for (const k of ['position', 'normal', 'color', 'aSplat']) g.setAttribute(k, geo.getAttribute(k));
     g.setIndex(index);
-    // Smooth-shaded everywhere: cave rock gets its edges from painted strata and crevices
-    // (surface.ts), not from per-triangle facets (which read as a heap of separate lumps).
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange, !!theme.wallRise, wet ? WATER_Y : null, theme.water?.[1]);
     const mesh = new THREE.Mesh(g, mat);
@@ -312,7 +373,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     return mesh;
   };
   const meshes = [make(flat, 'ground')];
-  const relief = rough.length ? make(rough, 'relief') : null;
+  let relief = rough.length ? make(rough, 'relief') : null;
+  if (caveCells.length) {
+    relief = make([], 'relief');
+    relief.geometry.dispose();
+    relief.geometry = caveRelief();
+  }
   if (relief) meshes.push(relief);
 
   // Fluids: one surface mesh per kind over its cells (plus a one-cell skirt so it meets the shore).

@@ -5,7 +5,8 @@ import { KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
 import { cellRole, inRoom, sideLen, wallCell, wallRuns, type BuildingSpec } from '../src/world/building';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
-import { Cell } from '../src/world/layout';
+import { Cell, Ground } from '../src/world/layout';
+import { buildProp } from '../src/world/props';
 import { NavGrid } from '../src/world/navgrid';
 
 const L = ZONES.keep.build(1000 + 'keep'.length * 97);
@@ -99,6 +100,40 @@ describe('Dragonspire Keep', () => {
       if (a === b) continue;
       const from = nav.nearestWalkable(a.x, a.z + 1.5)!;
       expect(nav.findPath(from.x, from.z, b.x, b.z), `${a.id} → ${b.id}`).not.toBeNull();
+    }
+  });
+  it('the Quartermaster is talked to across his counter, from the customer side', () => {
+    const q = station('npc', 'quartermaster'), counter = station('shop', 'shop');
+    // A click on him paths to the nearest open cell: it must be in front of the counter and
+    // within talking reach (NPC reach 2.2 + the hero's radius 0.45).
+    const stand = nav.nearestWalkable(q.x, q.z)!;
+    expect(stand.z).toBeGreaterThan(counter.z);
+    expect(Math.hypot(stand.x - q.x, stand.z - q.z)).toBeLessThanOrEqual(2.65);
+    const path = nav.findPath(L.entry.x, L.entry.z, q.x, q.z)!;
+    const end = path[path.length - 1];
+    expect(end.z).toBeGreaterThan(counter.z);
+  });
+  it('the Great Anvil looks different once reforged', () => {
+    const p = buildProp('anvil');
+    const visible = () => {
+      let n = 0;
+      p.obj.traverseVisible((o) => { if (o instanceof THREE.Mesh) n += (o.geometry.getAttribute('position').count); });
+      return n;
+    };
+    p.setState!('ruined');
+    const cracked = visible();
+    let hot = false;
+    p.setState!('restored');
+    p.obj.traverseVisible((o) => { if (o instanceof THREE.Mesh && (o.material as THREE.MeshStandardMaterial).emissiveIntensity > 1) hot = true; });
+    expect(visible()).not.toBe(cracked);
+    expect(hot, 'the reforged anvil has a glowing bar / rune').toBe(true);
+  });
+  it('yard and roadside dressing never blocks a road', () => {
+    for (const p of L.props) {
+      const i = Math.floor(p.z) * L.w + Math.floor(p.x);
+      if (['fence', 'hedge', 'cart', 'haystack', 'veg_patch', 'planter', 'target', 'scarecrow', 'stump'].includes(p.kind) || p.kind.startsWith('fit_')) {
+        expect(L.ground[i] === Ground.Path, `${p.kind} at ${p.x},${p.z}`).toBe(false);
+      }
     }
   });
   it('every restorable plot is a real restoration with a marker to inspect it', () => {

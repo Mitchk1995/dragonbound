@@ -4,7 +4,7 @@ import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
 import { buildProp, OCCLUDING_PROPS, type Prop } from './props';
-import { buildBuilding, type BuildingProp } from './buildingModel';
+import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
 import { addPatch, applyGrade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
@@ -582,7 +582,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   const props: Prop[] = [];
   for (const pr of layout.props) {
-    const prop = buildProp(pr.kind, pr.len);
+    const prop = pr.kind.startsWith('fit_') ? buildFitProp(pr.kind.slice(4), pr.len) : buildProp(pr.kind, pr.len);
     prop.obj.position.set(pr.x, Math.max(0, heightAt(pr.x, pr.z)), pr.z);
     prop.obj.rotation.y = pr.rot ?? 0;
     if (pr.s) prop.obj.scale.setScalar(pr.s);
