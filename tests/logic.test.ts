@@ -77,6 +77,13 @@ describe('items & loot', () => {
     expect(BASES.steel_platebody.req).toEqual({ skill: 'defence', level: TIERS.steel.req });
     expect(BASES.bronze_pickaxe.kind).toBe('tool');
   });
+  it('steel trim is a lighter steel tone, not gold', () => {
+    const rgb = (h: number) => [(h >> 16) & 255, (h >> 8) & 255, h & 255];
+    const { main, trim } = TIERS.steel.palette;
+    const [r, g, b] = rgb(trim);
+    expect((Math.max(r, g, b) - Math.min(r, g, b)) / Math.max(r, g, b)).toBeLessThan(0.15);
+    expect(r + g + b).toBeGreaterThan(rgb(main).reduce((a, c) => a + c, 0));
+  });
   it('uniques reference real bases', () => {
     for (const u of Object.values(UNIQUES)) expect(BASES[u.base], u.id).toBeDefined();
   });

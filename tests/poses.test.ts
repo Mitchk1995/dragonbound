@@ -165,6 +165,12 @@ describe('pose audit: staff', () => {
     const w = weaponFacts(h.root)!;
     expect(w.dir.y).toBeGreaterThan(0.85);
   });
+  it('idle: shaft held in front of the fist and leaning forward, not running down the forearm', () => {
+    h.pose('cast', -1);
+    const w = weaponFacts(h.root)!;
+    const hand = h.dresser.socket('sock_handR')!.getWorldPosition(new THREE.Vector3());
+    expect(w.tip.z - hand.z).toBeGreaterThan(0.15);
+  });
   it('cast: staff raised, head leaning toward the target', () => {
     h.pose('cast', IMPACT);
     const w = weaponFacts(h.root)!;

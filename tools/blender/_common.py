@@ -1,8 +1,10 @@
 """
 Shared helpers for Dragonbound model scripts.
 
-Every model is built from code so it can be tweaked and re-exported at will:
-    exec(open(r'D:\\gameplanning\\tools\\blender\\hero.py').read())
+Every model is built from code so it can be tweaked and re-exported at will. Exports land in the
+checkout named by DRAGONBOUND_ROOT (set it when working in a worktree), else the one holding this file:
+    set DRAGONBOUND_ROOT=D:\\gameplanning\\.claude\\worktrees\\<name>
+    blender -b --python-expr "exec(open(r'%DRAGONBOUND_ROOT%\\tools\\blender\\hero.py').read())"
 
 Models are authored inside a root empty rotated +90 degrees about X, so all positions and
 rotations below use three.js coordinates (Y up, +Z forward) and match the in-game rig.
@@ -16,7 +18,7 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
-ROOT = r'D:\gameplanning'
+ROOT = os.environ.get('DRAGONBOUND_ROOT') or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT_DIR = os.path.join(ROOT, 'public', 'models')
 PREVIEW_DIR = os.path.join(ROOT, 'tools', 'blender', 'previews')
 

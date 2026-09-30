@@ -4,7 +4,7 @@ Each set is a full kit with the same socket contract as gear.py (body_plate on s
 sock_shoulderL/R, helm_full on sock_head, gloves on sock_handL + sock_gloveR, boots on sock_footL/R)
 and only role materials, so any tier palette recolours it.
 
-    exec(open(r'D:\\gameplanning\\tools\\blender\\plate_variants.py').read())
+    exec(open(os.path.join(os.environ['DRAGONBOUND_ROOT'], 'tools', 'blender', 'plate_variants.py')).read())
     build_variant('A'); report = audit_variant('A'); render_variant('A'); export_variant('A')
 
 Pose checks are numeric, not eyeballed: `audit_variant` dresses the hero the way the game does
@@ -23,7 +23,10 @@ import os
 import re
 import sys
 
-sys.path.insert(0, r'D:\gameplanning\tools\blender')
+# Repo root: DRAGONBOUND_ROOT, else two levels above this script (when run as a file), else the old fixed path.
+_ROOT = os.environ.get('DRAGONBOUND_ROOT') or (os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                               if '__file__' in globals() else r'D:\gameplanning')
+sys.path.insert(0, os.path.join(_ROOT, 'tools', 'blender'))
 import importlib
 import _common
 importlib.reload(_common)
@@ -32,11 +35,13 @@ from _common import _mesh_obj
 from mathutils import Euler, Matrix, Quaternion, Vector
 from mathutils.bvhtree import BVHTree
 
-_g = {'DB_RUN': False, '__name__': 'db_gear'}
-exec(open(r'D:\gameplanning\tools\blender\gear.py').read(), _g)
+_p = os.path.join(_ROOT, 'tools', 'blender', 'gear.py')
+_g = {'DB_RUN': False, '__name__': 'db_gear', '__file__': _p}
+exec(open(_p).read(), _g)
 SOCKET_POS = _g['SOCKET_POS']
-_f = {'__name__': 'db_fit'}
-exec(open(r'D:\gameplanning\tools\blender\fitcheck.py').read(), _f)
+_p = os.path.join(_ROOT, 'tools', 'blender', 'fitcheck.py')
+_f = {'__name__': 'db_fit', '__file__': _p}
+exec(open(_p).read(), _f)
 build_hero, dress = _f['build_hero'], _f['dress']
 
 PI = math.pi
@@ -44,7 +49,7 @@ SLIT = 0x0C0A0A
 VAR_DIR = os.path.join(ROOT, 'public', 'models', 'variants')
 PIECES = ('body_plate', 'helm_full', 'gloves', 'boots')
 SHOULDER_FOLLOW = 0.75          # src/render/anim.ts
-STEEL = {'metal': 0x9AA4B0, 'trim': 0xD9B25A, 'dark': 0x3E444C, 'leather': 0x6A4428}
+STEEL = {'metal': 0x9AA4B0, 'trim': 0xD4DCE6, 'dark': 0x3E444C, 'leather': 0x6A4428}
 
 # ─── Geometry kit ────────────────────────────────────────────────────────────
 

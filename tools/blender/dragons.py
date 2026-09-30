@@ -3,9 +3,13 @@
 Faces +Z; right-side parts (legFR/legBR/wingR) at -X, left at +X.
 """
 import math
+import os
 import sys
 
-sys.path.insert(0, r'D:\gameplanning\tools\blender')
+# Repo root: DRAGONBOUND_ROOT, else two levels above this script (when run as a file), else the old fixed path.
+_ROOT = os.environ.get('DRAGONBOUND_ROOT') or (os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                               if '__file__' in globals() else r'D:\gameplanning')
+sys.path.insert(0, os.path.join(_ROOT, 'tools', 'blender'))
 import importlib
 import _common
 importlib.reload(_common)
