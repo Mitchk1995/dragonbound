@@ -27,6 +27,12 @@ const ease = (t: number) => t * t * (3 - 2 * t);
 const QA = new THREE.Quaternion(), QB = new THREE.Quaternion(), QC = new THREE.Quaternion(), QD = new THREE.Quaternion();
 const V1 = new THREE.Vector3();
 
+/** Dragon head/neck levelling and sword wrist angle; tuned against tests/poses.test.ts. */
+export const HEAD_LEVEL = 0.35;
+export const HEAD_FLY_LEVEL = -0.1;
+export const NECK_FLY_EXTEND = 0.25;
+export const SWING_WRIST = 1.23;
+
 /** How much of the upper arm's rotation the pauldron follows (see Rig.followShoulders). */
 export const SHOULDER_FOLLOW = 0.75;
 
@@ -102,22 +108,25 @@ export class Rig {
       this.rot('legBL', -sw * 0.6 * moveAmt * (1 - s.fly) + tuck);
       for (const leg of ['legFL', 'legFR', 'legBL', 'legBR']) this.offset(leg, 0, lift);
       this.offset('body', 0, Math.abs(sw) * 0.05 * moveAmt + breathe + lift);
-      this.rot('body', hurtLean * 0.5 - s.fly * 0.15);
+      this.rot('body', hurtLean * 0.5);
       for (let i = 1; i <= 6; i++) this.rot(`tail${i}`, Math.sin(t * 1.3 - i * 0.5) * 0.05, Math.sin(t * 2 - i * 0.7) * (0.12 + i * 0.04) * (1 + moveAmt));
-      for (let i = 1; i <= 3; i++) this.rot(`neck${i}`, Math.sin(t * 1.6 - i) * 0.04, Math.sin(t * 0.9 - i) * 0.06);
+      // The neck is authored curving upward; flatten it in flight so the head leads the body.
+      for (let i = 1; i <= 3; i++) this.rot(`neck${i}`, Math.sin(t * 1.6 - i) * 0.04 + s.fly * NECK_FLY_EXTEND, Math.sin(t * 0.9 - i) * 0.06);
       const flapSpeed = s.fly > 0.1 ? 9 : moveAmt > 0.2 ? 4 : 1.6;
       const flapAmp = s.fly > 0.1 ? 0.9 : 0.12 + moveAmt * 0.2;
       const flap = Math.sin(t * flapSpeed) * flapAmp;
       this.rot('wingL', 0, 0, -flap);
       this.rot('wingR', 0, 0, flap);
-      this.rot('head');
+      // Head pitch correction keeps the snout level (verified in tests/poses.test.ts).
+      const headPitch = HEAD_LEVEL + s.fly * HEAD_FLY_LEVEL;
+      this.rot('head', headPitch);
       this.rot('jaw');
 
       if (s.special >= 0) {
         // Breath: rear the head back, then thrust forward with the jaw open.
         const up = s.special < 0.6 ? ease(s.special / 0.6) : 1 - ease((s.special - 0.6) / 0.4);
         this.rot('neck1', -0.5 * up);
-        this.rot('head', 0.2 + 0.3 * (1 - up));
+        this.rot('head', headPitch - 0.2 + 0.3 * (1 - up));
         this.rot('jaw', 0.6);
       }
       if (s.attack >= 0) {
@@ -125,7 +134,7 @@ export class Rig {
         if (s.attackKind === 'bite') {
           const lunge = a < 0.5 ? -ease(a / 0.5) * 0.5 : -0.5 + ease((a - 0.5) / 0.5) * 0.9;
           this.rot('neck1', lunge * 0.8);
-          this.rot('head', -lunge * 0.4);
+          this.rot('head', headPitch - lunge * 0.4);
           this.rot('jaw', a < 0.55 ? 0.7 : 0.1);
         } else if (s.attackKind === 'slam') {
           const rear = a < 0.6 ? ease(a / 0.6) : 1 - ease((a - 0.6) / 0.4);
@@ -144,7 +153,7 @@ export class Rig {
     this.rot('body', hurtLean + moveAmt * 0.08);
     this.rot('head', -moveAmt * 0.05, Math.sin(t * 0.7) * 0.05);
     this.rot('armL', -sw * 0.5 * moveAmt, 0, -0.08);
-    this.rot('armR', sw * 0.5 * moveAmt, 0, 0.08);
+    this.rot('armR', sw * 0.3 * moveAmt, 0, 0.08);
     this.rot('sock_handR');
     this.rot('tail1', 0, Math.sin(t * 3) * 0.3);
     this.rot('tail2', 0, Math.sin(t * 3 - 0.8) * 0.4);
@@ -184,6 +193,9 @@ export class Rig {
         else if (a < 0.6) x = -3.2 + 3.0 * ease((a - 0.4) / 0.2);
         else x = -0.2 * (1 - ease((a - 0.6) / 0.4));
         this.rot('armR', x, 0, 0.1);
+        // Wrist: cock the blade back over the head in the windup, keep it through the strike, relax after.
+        const wrist = a < 0.55 ? SWING_WRIST * ease(Math.min(1, a / 0.4)) : SWING_WRIST * (1 - ease((a - 0.55) / 0.45));
+        this.rot('sock_handR', wrist);
         this.rot('body', a < 0.4 ? -0.1 : 0.15, a < 0.4 ? 0.3 * ease(a / 0.4) : -0.3 * (1 - a), 0);
         break;
       }

@@ -56,14 +56,19 @@ function normalizeAuthoredFrame(scene: THREE.Object3D) {
   }
 }
 
+/** Register a parsed glTF scene under a model name (used by the browser loader and by tests). */
+export function registerModelScene(name: string, scene: THREE.Group) {
+  cleanNames(scene);
+  normalizeAuthoredFrame(scene);
+  const box = new THREE.Box3().setFromObject(scene);
+  loaded.set(name, { scene, height: box.max.y - box.min.y });
+}
+
 async function loadOne(name: string) {
   if (loaded.has(name)) return true;
   try {
     const gltf = await loader.loadAsync(`./models/${name}.glb`);
-    cleanNames(gltf.scene);
-    normalizeAuthoredFrame(gltf.scene);
-    const box = new THREE.Box3().setFromObject(gltf.scene);
-    loaded.set(name, { scene: gltf.scene, height: box.max.y - box.min.y });
+    registerModelScene(name, gltf.scene);
     return true;
   } catch {
     return false;
@@ -175,6 +180,7 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
 }
 
 const BOW_MODELS = new Set(['bow', 'u_emberstring']);
+const BLADE_MODELS = new Set(['sword', 'longsword', 'u_cinderfang']);
 
 const HAIR_HIDDEN_BY: Record<string, 'hair' | 'all'> = { helm_open: 'hair', helm_full: 'all', u_ashen_crown: 'hair' };
 
@@ -227,6 +233,9 @@ export class HeroDresser {
         // Bows are authored with the string on the socket's +Y side; turn them so the string
         // faces the archer when shooting (verified: string sits behind the grip at full draw).
         if (BOW_MODELS.has(gl.model)) parts.get('sock_handR')?.rotateX(Math.PI);
+        // Blades are authored flat across the socket; turn them edge-on so the edge leads a vertical swing
+        // (verified: blade width axis stays in the swing plane in tests/poses.test.ts).
+        if (BLADE_MODELS.has(gl.model)) parts.get('sock_handR')?.rotateY(Math.PI / 2);
         this.attachParts(parts);
       }
     }
