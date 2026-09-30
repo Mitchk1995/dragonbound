@@ -102,6 +102,7 @@ export class Screens {
     }));
     root.querySelector('[data-act="back"]')!.addEventListener('click', () => {
       this.g.mode = 'title';
+      this.g.player.obj.visible = false;
       this.title();
     });
     root.querySelector('[data-act="begin"]')!.addEventListener('click', () => {

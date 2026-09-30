@@ -17,7 +17,7 @@ export const QUESTS: Record<string, QuestDef> = {
   cinder_seal: {
     id: 'cinder_seal',
     name: 'The Cinder Seal',
-    reqs: [{ skill: 'smithing', level: 25 }, { skill: 'mining', level: 32 }],
+    reqs: [{ skill: 'smithing', level: 25 }],
     stages: [
       { text: 'The Warden says Cinderwing\'s lair is sealed by an old ward. Take the Sunken Ruin arch and recover the three seal fragments.' },
       { text: 'I have all three fragments. I should bring them back to the Warden.' },

@@ -247,10 +247,11 @@ export class Items {
     this.changed();
   }
 
+  /** Deposit everything except tools, so a miner at the deposit chest keeps their pickaxe. */
   depositAll() {
     for (let i = 0; i < this.inv.length; i++) {
       const it = this.inv[i];
-      if (!it) continue;
+      if (!it || BASES[it.base]?.kind === 'tool') continue;
       if (!this.bankPut(it)) {
         this.g.announce('Your bank is full.', 'deny');
         break;
@@ -313,7 +314,8 @@ export class Items {
   // ─── Shop ────────────────────────────────────────────────────────────────
 
   shopPrice(entry: ShopEntry) {
-    if (entry.special === 'belt') return BELT_PRICES[this.g.save.potionMax] ?? null;
+    // Prices follow belt upgrades bought, not charges from other sources (the diary adds one on top).
+    if (entry.special === 'belt') return BELT_PRICES[this.g.save.potionMax - (this.g.save.diaryClaimed.easy ? 1 : 0)] ?? null;
     return entry.price;
   }
 

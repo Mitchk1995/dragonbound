@@ -29,9 +29,12 @@ export function updateBoss(e: Enemy, dt: number, g: Game): number {
   const playerInArena = Math.hypot(p.x - A.x, p.z - A.z) < A.r;
 
   if (!b.engaged) {
+    // Immune until the fight starts, so it can't be farmed from outside the arena.
+    e.untargetable = true;
     e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.2 * dt);
     if (!p.dead && playerInArena) {
       b.engaged = true;
+      e.untargetable = false;
       b.actionCd = 1.8;
       g.combat.onBossEngage(e);
     }
@@ -48,7 +51,7 @@ export function updateBoss(e: Enemy, dt: number, g: Game): number {
     b.phase = 1;
     b.summoned = false;
     b.fightTime = 0;
-    e.untargetable = false;
+    e.untargetable = true;
     e.anim.fly = 0;
     e.anim.special = -1;
     e.anim.attack = -1;

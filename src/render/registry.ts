@@ -23,11 +23,45 @@ function cleanNames(root: THREE.Object3D) {
   });
 }
 
+/**
+ * Blender scripts author everything under a root rotated +90° about X, in three.js coordinates.
+ * The glTF exporter's Y-up conversion then leaves every node below that root expressed in a
+ * rotated frame (local = C·T·C⁻¹ with C = RotX(-90°)), so rig offsets on those nodes would
+ * move along the wrong axes (a Y "bob" goes forward, a yaw becomes a roll). Undo it once at
+ * load time: T = C⁻¹·local·C for every node, vertices v = C⁻¹·v, and the root becomes identity.
+ */
+const C = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+const C_INV = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+
+function normalizeAuthoredFrame(scene: THREE.Object3D) {
+  const roots: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    if (/^DB_.*_root$/.test(o.name) && Math.abs(o.rotation.x - Math.PI / 2) < 1e-3) roots.push(o);
+  });
+  const m = new THREE.Matrix4();
+  const done = new Set<THREE.BufferGeometry>();
+  for (const root of roots) {
+    root.traverse((o) => {
+      if (o === root) return;
+      m.compose(o.position, o.quaternion, o.scale);
+      m.premultiply(C_INV).multiply(C);
+      m.decompose(o.position, o.quaternion, o.scale);
+      if (o instanceof THREE.Mesh && !done.has(o.geometry)) {
+        o.geometry.applyMatrix4(C_INV);
+        done.add(o.geometry);
+      }
+    });
+    root.quaternion.identity();
+    root.updateMatrixWorld(true);
+  }
+}
+
 async function loadOne(name: string) {
   if (loaded.has(name)) return true;
   try {
     const gltf = await loader.loadAsync(`./models/${name}.glb`);
     cleanNames(gltf.scene);
+    normalizeAuthoredFrame(gltf.scene);
     const box = new THREE.Box3().setFromObject(gltf.scene);
     loaded.set(name, { scene: gltf.scene, height: box.max.y - box.min.y });
     return true;
@@ -140,6 +174,8 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
   return parts;
 }
 
+const BOW_MODELS = new Set(['bow', 'u_emberstring']);
+
 const HAIR_HIDDEN_BY: Record<string, 'hair' | 'all'> = { helm_open: 'hair', helm_full: 'all', u_ashen_crown: 'hair' };
 
 /**
@@ -186,7 +222,13 @@ export class HeroDresser {
       this.attachParts(buildGear(override.weaponModel, override.weaponPalette ?? { main: 0x888888, trim: 0xcccccc, dark: 0x444444 }));
     } else if (equipment.weapon) {
       const gl = gearLook(equipment.weapon);
-      if (gl) this.attachParts(buildGear(gl.model, gl.palette));
+      if (gl) {
+        const parts = buildGear(gl.model, gl.palette);
+        // Bows are authored with the string on the socket's +Y side; turn them so the string
+        // faces the archer when shooting (verified: string sits behind the grip at full draw).
+        if (BOW_MODELS.has(gl.model)) parts.get('sock_handR')?.rotateX(Math.PI);
+        this.attachParts(parts);
+      }
     }
     this.refreshMaterials();
   }

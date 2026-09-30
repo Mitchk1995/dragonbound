@@ -469,5 +469,6 @@ export class Combat {
     g.shake(0.8, 1);
     g.hitstop(0.25);
     g.fx.fireBurst(e.x, e.z, 5);
+    g.story.checkDiary();
   }
 }

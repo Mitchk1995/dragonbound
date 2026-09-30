@@ -68,6 +68,7 @@ export class WorldText {
     this.bars.clear();
     this.floaters = [];
     this.labelHovered = false;
+    this.g.ui.hideTooltip();
   }
 
   removeLabel(it: GroundItem) {
@@ -76,6 +77,7 @@ export class WorldText {
     if (this.g.hoveredItem === it) {
       this.g.hoveredItem = null;
       this.labelHovered = false;
+      this.g.ui.hideTooltip();
     }
   }
 

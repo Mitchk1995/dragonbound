@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { bowDrawAmount } from './bowDraw';
+
 export type AttackKind = 'swing' | 'bow' | 'cast' | 'bite' | 'slam' | 'throw';
 
 export interface AnimState {
@@ -21,6 +23,11 @@ export interface AnimState {
 export const newAnimState = (): AnimState => ({ speed: 0, attack: -1, attackKind: 'swing', hurt: 0, dead: -1, fly: 0, special: -1 });
 
 const ease = (t: number) => t * t * (3 - 2 * t);
+
+/** Extra hand-socket rotation during the bow shot so the bow stands upright with the string facing the archer. */
+// Found by searching quarter turns with __bowReport: upright through the draw, arrow at the target,
+// nock on the draw hand, string behind the grip both drawn and at rest (brace toward the archer).
+export const BOW_SOCKET: [number, number, number] = [0, Math.PI / 2, Math.PI / 2];
 
 /** Procedural animation over named rigid parts. */
 export class Rig {
@@ -132,6 +139,7 @@ export class Rig {
     this.rot('head', -moveAmt * 0.05, Math.sin(t * 0.7) * 0.05);
     this.rot('armL', -sw * 0.5 * moveAmt, 0, -0.08);
     this.rot('armR', sw * 0.5 * moveAmt, 0, 0.08);
+    this.rot('sock_handR');
     this.rot('tail1', 0, Math.sin(t * 3) * 0.3);
     this.rot('tail2', 0, Math.sin(t * 3 - 0.8) * 0.4);
 
@@ -156,15 +164,25 @@ export class Rig {
         break;
       }
       case 'bow': {
-        const draw = a < 0.6 ? ease(a / 0.6) : 1 - ease((a - 0.6) / 0.4);
-        this.rot('armL', -Math.PI / 2, 0.2);
-        this.rot('armR', -Math.PI / 2 + 0.2 * draw, -0.3 - 0.5 * draw);
-        this.rot('body', 0, -0.3);
+        // Side-on archer stance: the bow shoulder (right, -X) turns to lead, the bow arm points
+        // straight at the target, the draw hand anchors under the chin on the same line, and the
+        // head turns to look down the arrow. Verified numerically with __bowReport (dev/poseCheck).
+        const raise = ease(Math.min(1, a / 0.2));
+        const draw = bowDrawAmount(a);
+        this.root.rotation.y = (Math.PI / 2) * raise;
+        this.rot('armR', 0, 0, (-Math.PI / 2) * raise);
+        this.rot('sock_handR', BOW_SOCKET[0] * raise, BOW_SOCKET[1] * raise, BOW_SOCKET[2] * raise);
+        // Draw arm: from the chest at nocking to the chin anchor at full draw (rigid arm from the left shoulder).
+        this.rot('armL', (-1.6 - 1.16 * draw) * raise, 0, (-0.4 - 0.51 * draw) * raise);
+        this.rot('head', 0, (-Math.PI / 2) * 0.85 * raise);
         break;
       }
       case 'cast': {
         const lift = a < 0.5 ? ease(a / 0.5) : 1 - ease((a - 0.5) / 0.5);
-        this.rot('armR', -1.2 - 1.0 * lift);
+        const armX = -1.2 - 1.0 * lift;
+        this.rot('armR', armX);
+        // Keep the staff mostly upright, leaning slightly toward the target at the peak.
+        this.rot('sock_handR', -armX + 0.35);
         this.rot('armL', -1.0 - 0.8 * lift);
         this.rot('body', -0.1 * lift);
         break;

@@ -307,6 +307,10 @@ export class Story {
         {
           label: 'Take the bow and staff.',
           run: () => {
+            if (g.items.freeSlots() < 2) {
+              g.announce('Make room in your inventory first (2 free slots), then speak with the Warden again.', 'deny');
+              return;
+            }
             g.items.add(makeItem('worn_bow'));
             g.items.add(makeItem('apprentice_staff'));
             s.portals.foothills = true;
@@ -459,7 +463,7 @@ export class Story {
     if (s.diaryClaimed[tier] || !this.tierComplete(tier)) return;
     s.diaryClaimed[tier] = true;
     if (tier === 'easy') {
-      s.potionMax = Math.min(6, s.potionMax + 1);
+      s.potionMax = Math.min(7, s.potionMax + 1);
       g.prog.grant(lampSkill ?? 'mining', 2000);
     }
     g.prog.recomputeStats();

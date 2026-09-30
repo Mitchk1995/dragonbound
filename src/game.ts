@@ -71,7 +71,7 @@ export class Game {
   deathT = 0;
   recallT = -1;
   traveling = false;
-  debug = { god: false, dropMult: 1, timeScale: 1, oneShot: false };
+  debug = { god: false, dropMult: 1, timeScale: 1, oneShot: false, poseView: false };
 
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
@@ -170,9 +170,11 @@ export class Game {
 
   /** Start a brand-new character (overwrites any existing save). */
   newGame(look: Appearance, skipTutorial: boolean) {
-    const keepSettings = this.save.settings;
+    const prev = this.save;
     this.save = newSave();
-    this.save.settings = keepSettings;
+    this.save.settings = prev.settings;
+    // A migrated demo save has progress but no character yet: carry levels and logs over.
+    if (!prev.character) Object.assign(this.save, { skills: prev.skills, kc: prev.kc, collection: prev.collection, gold: prev.gold, stats: prev.stats, pets: prev.pets, activePet: prev.activePet });
     this.save.character = look;
     this.prog.refreshLevels();
     this.prog.recomputeStats();
@@ -417,6 +419,7 @@ export class Game {
       this.camera.position.z += (Math.random() - 0.5) * m;
     }
     this.camera.lookAt(this.camPos.x, this.camPos.y + 1, this.camPos.z);
+    OCCLUDE.uOccOn.value = 1;
     OCCLUDE.uOccPlayer.value.copy(p);
     OCCLUDE.uOccCam.value.copy(this.camera.position);
     this.sun.position.set(p.x + 14, 28, p.z + 10);
@@ -440,12 +443,14 @@ export class Game {
       p.obj.rotation.y = this.previewYaw + Math.sin(this.time * 0.4) * 0.15;
       p.anim.speed = 0;
       p.rig.update(dt, p.anim);
-      // Frame the hero right of centre so the creation panel doesn't cover them.
-      this.camera.position.set(p.x - 1.4, 2.2, p.z + 5.2);
-      this.camera.lookAt(p.x - 1.4, 1.15, p.z);
+      // Frame the hero right of centre so the creation panel doesn't cover them
+      // (debug pose checks centre them instead).
+      const off = this.debug.poseView ? 0 : -1.4;
+      this.camera.position.set(p.x + off, 2.2, p.z + 5.2);
+      this.camera.lookAt(p.x + off, 1.15, p.z);
       this.sun.position.set(p.x + 6, 14, p.z + 10);
       this.sun.target.position.set(p.x, 0, p.z);
-      OCCLUDE.uOccCam.value.set(0, -1000, 0);
+      OCCLUDE.uOccOn.value = 0;
       for (const f of this.zone.view.followers) f.position.set(p.x, 0, p.z);
       return;
     }
@@ -454,7 +459,7 @@ export class Game {
     const t = this.time * 0.05;
     this.camera.position.set(cx + Math.cos(t) * 52, 26, cz + Math.sin(t) * 52);
     this.camera.lookAt(cx, 2, cz);
-    OCCLUDE.uOccCam.value.set(0, -1000, 0);
+    OCCLUDE.uOccOn.value = 0;
     this.sun.position.set(cx + 20, 40, cz + 10);
     this.sun.target.position.set(cx, 0, cz);
     const d = this.titleDragon;
@@ -462,7 +467,8 @@ export class Game {
       const a = this.time * 0.22;
       const r = 42;
       d.obj.position.set(cx + Math.cos(a) * r, 8 + Math.sin(a * 2) * 3, cz + Math.sin(a) * r);
-      d.obj.rotation.y = -a + Math.PI;
+      // Orbiting counter-clockwise: velocity is (-sin a, cos a), so heading = atan2(-sin a, cos a) = -a.
+      d.obj.rotation.y = -a;
       d.rig.update(dt, d.anim);
     }
     for (const f of this.zone.view.followers) f.position.set(cx, 0, cz);
@@ -532,6 +538,11 @@ export class Game {
       if (e.key === 'Alt') {
         this.altHeld = true;
         e.preventDefault();
+        return;
+      }
+      const t = e.target as HTMLElement;
+      if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement) {
+        if (e.key === 'Escape') t.blur();
         return;
       }
       if (this.mode !== 'play') {

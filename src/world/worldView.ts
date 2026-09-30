@@ -12,6 +12,8 @@ export const OCCLUDE = {
   uOccPlayer: { value: new THREE.Vector3() },
   uOccCam: { value: new THREE.Vector3() },
   uOccRadius: { value: 0.16 },
+  /** 1 during gameplay; 0 on the title/creation screens where nothing should be cut away. */
+  uOccOn: { value: 0 },
 };
 
 /**
@@ -41,6 +43,7 @@ export function makeOccludable(mat: THREE.Material) {
         uniform vec3 uOccPlayer;
         uniform vec3 uOccCam;
         uniform float uOccRadius;
+        uniform float uOccOn;
         float occBayer(vec2 p) {
           ivec2 i = ivec2(mod(p, 4.0));
           int idx = i.x + i.y * 4;
@@ -58,7 +61,7 @@ export function makeOccludable(mat: THREE.Material) {
           vec3 dirP = toP / lenP;
           vec3 toF = vOccWorld - uOccCam;
           float along = dot(toF, dirP);
-          if (along > 0.5 && along < lenP - 0.8) {
+          if (uOccOn > 0.5 && along > 0.5 && along < lenP - 0.8) {
             float perp = length(toF - dirP * along);
             float screen = perp / along;
             float fade = 1.0 - smoothstep(uOccRadius * 0.55, uOccRadius, screen);

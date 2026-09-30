@@ -1,5 +1,6 @@
 import { BASES } from '../data/items';
 import type { AttackKind } from '../render/anim';
+import { BowDraw } from '../render/bowDraw';
 import { HeroDresser, makeModel } from '../render/registry';
 import type { Style } from '../types';
 import type { Game } from '../game';
@@ -57,6 +58,7 @@ export class Player extends Unit {
   deadT = 0;
   style: Style = 'melee';
   readonly dresser: HeroDresser;
+  readonly bow: BowDraw;
   private tool: string | null = null;
   private g: Game | null = null;
 
@@ -64,6 +66,7 @@ export class Player extends Unit {
     super(makeModel('hero'), 0.45, 100);
     this.turnSpeed = 18;
     this.dresser = new HeroDresser(this.model);
+    this.bow = new BowDraw(this.model.root);
   }
 
   bind(g: Game) {
@@ -80,6 +83,7 @@ export class Player extends Unit {
     if (!g) return;
     const tool = this.tool ? BASES[this.tool] : null;
     this.dresser.dress(g.save.character, g.save.equipment, tool ? { weaponModel: tool.model, weaponPalette: tool.palette } : undefined);
+    this.bow.attach();
   }
 
   toolOverride(baseId: string | null) {
@@ -180,6 +184,7 @@ export class Player extends Unit {
     }
     this.anim.speed = dt > 0 ? moved / dt : 0;
     this.updateCommon(dt, g.zone.nav);
+    this.bow.update(this.anim, this.dresser.socket('sock_handL'));
   }
 
   private updateDash(dt: number, g: Game) {
