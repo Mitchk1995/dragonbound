@@ -8,7 +8,7 @@ import type { Item, Slot } from '../types';
 import type { Model } from './kit';
 import { applyFinish, type Finish } from './env';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
-import { applyGrade, MODEL_GRADE, trackGradeRoot } from './surface';
+import { applyCharPaint, applyGrade, CHAR_PAINTS, MODEL_GRADE, paintAttributes, prepareCharGeometry, setCharPaint, trackGradeRoot, type CharPaint, type CharPaintKind } from './surface';
 
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
@@ -101,14 +101,18 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
       const geos = meshes.map((m) => {
         m.updateMatrix();
         let g = m.geometry.clone().applyMatrix4(m.matrix);
-        for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+        for (const k of Object.keys(g.attributes)) if (!KEEP_ATTRS.has(k)) g.deleteAttribute(k);
         if (g.index) g = g.toNonIndexed();
         if (baked) {
-          const c = (m.material as THREE.MeshStandardMaterial).color;
+          const mm = m.material as THREE.MeshStandardMaterial;
+          const c = mm.color;
           const n = g.attributes.position.count;
           const col = new Float32Array(n * 3);
           for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
           g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+          // Each baked colour keeps its own painted recipe (a goblin's skin, belt and loincloth).
+          const kind = fixedPaint(model, c, mm.metalness > 0.5, mm.side === THREE.DoubleSide);
+          paintAttributes(g, kind ? CHAR_PAINTS[kind] : null);
         }
         return g;
       });
@@ -136,10 +140,77 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
   return { before, after };
 }
 
+/** Geometry attributes merged parts keep (the painted shader's rest frame and face coordinates). */
+const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace']);
+
+// ─── Painted albedo recipes ──────────────────────────────────────────────────
+
+const ROLE_PAINT: Record<string, CharPaintKind | null> = {
+  skin: 'skin', hair: 'hair', cloth: 'cloth', cloth2: 'cloth', leather: 'leather',
+  metal: 'metal', trim: 'trim', dark: 'darkMetal', glow: null,
+};
+
+const SCALY = new Set(['drakeling', 'cinderwing', 'kobold', 'whelp']);
+
+/**
+ * Pattern size per model (1 = hero-sized): scales and blotches stay readable on a boss and
+ * small and soft on the whelp.
+ */
+const PAINT_SIZE: Record<string, number> = { goblin: 0.8, kobold: 0.75, drakeling: 1.3, cinderwing: 4.5, whelp: 0.5, golem: 0.55 };
+
+/**
+ * The recipe for a fixed (authored) colour, from the model it belongs to and the colour itself:
+ * dragons are scaled with bone horns and claws, the golem is mossy stone, NPC and unique parts
+ * are judged by colour (gold trim, skin, dark browns as leather, the rest cloth).
+ */
+export function fixedPaint(model: string, c: THREE.Color, metallic: boolean, double = false): CharPaintKind | null {
+  const { h, s, l } = c.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
+  const hue = h * 360;
+  if (metallic) return 'metal';
+  if (l < 0.09) return null; // eyes, pupils, visor slits stay clean
+  if (model === 'golem') return 'stone';
+  if (SCALY.has(model)) {
+    if (double) return 'membrane';
+    if (l > 0.72) return model === 'whelp' ? 'soft' : 'bone';
+    return model === 'whelp' ? 'softScales' : 'scales';
+  }
+  if (model === 'gear_u_scaleguard' && s > 0.45 && (hue < 20 || hue > 340)) return 'scales';
+  if (l > 0.75 && s < 0.6) return model.startsWith('gear_') ? 'bone' : 'soft';
+  if (hue >= 34 && hue <= 56 && s > 0.5 && l > 0.4 && l < 0.78) return 'trim';
+  if (s < 0.14) return 'metal';
+  if (model === 'goblin' && hue > 70 && hue < 160) return 'hide';
+  if (hue >= 14 && hue <= 40 && s > 0.4 && l > 0.58 && l < 0.86) return 'skin';
+  if (hue >= 10 && hue <= 45 && l < 0.42) return 'leather';
+  return 'cloth';
+}
+
+const glowing = (m: THREE.MeshStandardMaterial) =>
+  m.transparent || (m.emissive.r * 0.3 + m.emissive.g * 0.59 + m.emissive.b * 0.11) * m.emissiveIntensity > 0.2;
+
+/** The painted recipe a model's material starts with ('vertex': merged parts carry their own). */
+function paintFor(model: string, mesh: THREE.Mesh, m: THREE.MeshStandardMaterial): CharPaint | 'vertex' | null {
+  if (!mesh.geometry.getAttribute('aRest')) return null; // code-built placeholders stay flat
+  if (m.vertexColors) return mesh.geometry.getAttribute('aPaintW') ? 'vertex' : null;
+  const role = roleOf(m);
+  if (role) {
+    const k = ROLE_PAINT[role];
+    return k ? CHAR_PAINTS[k] : null;
+  }
+  if (glowing(m)) return null;
+  const k = fixedPaint(model, m.color, m.metalness > 0.5, m.side === THREE.DoubleSide);
+  return k ? CHAR_PAINTS[k] : null;
+}
+
 /** Register a parsed glTF scene under a model name (used by the browser loader and by tests). */
 export function registerModelScene(name: string, scene: THREE.Group) {
   cleanNames(scene);
   normalizeAuthoredFrame(scene);
+  // Rest frame and flat-face coordinates for the painted albedo, before parts are merged.
+  scene.updateMatrixWorld(true);
+  const inv = scene.matrixWorld.clone().invert(), rest = new THREE.Matrix4();
+  scene.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.geometry = prepareCharGeometry(o.geometry, rest.multiplyMatrices(inv, o.matrixWorld));
+  });
   // Bows stay unmerged: BowDraw finds the static string by its shape.
   if (name !== 'gear_bow' && name !== 'gear_u_emberstring') mergeRigidParts(scene, name);
   const box = new THREE.Box3().setFromObject(scene);
@@ -165,8 +236,8 @@ export async function preloadModels(names: string[]) {
 export const hasModel = (name: string) => loaded.has(name);
 
 /**
- * Models are clean flat colour: no surface texture, just the soft vertical grade (shade toward
- * the feet of whatever model the mesh ends up part of) for depth.
+ * Models get hand-painted albedo per material (surface.ts applyCharPaint) plus the soft vertical
+ * grade (shade toward the feet of whatever model the mesh ends up part of) for depth.
  */
 function gradeMeshes(root: THREE.Object3D) {
   root.traverse((o) => {
@@ -175,9 +246,10 @@ function gradeMeshes(root: THREE.Object3D) {
 }
 
 /** Clone with per-instance materials so hit flashes and recolours stay local. */
-function cloneWithMaterials(src: THREE.Object3D) {
+function cloneWithMaterials(src: THREE.Object3D, model: string) {
   const root = src.clone(true);
   const cloned = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+  const size = PAINT_SIZE[model] ?? 1;
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     o.castShadow = true;
@@ -187,6 +259,8 @@ function cloneWithMaterials(src: THREE.Object3D) {
       m = orig.clone();
       m.userData.baseEmissive = m.emissive.clone();
       m.userData.baseIntensity = m.emissiveIntensity;
+      const paint = paintFor(model, o, m);
+      if (paint) applyCharPaint(m, paint, size);
       applyGrade(m, MODEL_GRADE, 'root');
       cloned.set(orig, m);
     }
@@ -200,7 +274,7 @@ export function makeModel(name: string): Model {
   const src = loaded.get(name);
   let model: Model;
   if (src) {
-    const { root, mats } = cloneWithMaterials(src.scene);
+    const { root, mats } = cloneWithMaterials(src.scene, name);
     model = { root: root as THREE.Group, mats, height: src.height };
   } else {
     model = MODEL_BUILDERS[name]();
@@ -251,6 +325,16 @@ export function gearLook(item: Item): { model: string; palette: Palette } | null
   return { model, palette: base.palette ?? { main: 0x888888, trim: 0xcccccc, dark: 0x444444 } };
 }
 
+/**
+ * The palette decides what a gear model's metal roles are made of: forged tiers are metal,
+ * bows and staves are wood, leather armour is leather.
+ */
+function gearPaint(model: string, role: string | null, palette: Palette): CharPaintKind | null {
+  if (role !== 'metal' && role !== 'dark') return null;
+  if (palette.metal) return role === 'metal' ? 'metal' : 'darkMetal';
+  return /bow|staff|emberstring|kindled/.test(model) ? 'wood' : 'leather';
+}
+
 /** Build a detached copy of a gear model: a map of socket name → group to attach there. */
 export function buildGear(model: string, palette: Palette): Map<string, THREE.Object3D> {
   const file = `gear_${model}`;
@@ -267,7 +351,7 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     if (!ph) return parts;
     src = ph;
   }
-  const { root, mats } = cloneWithMaterials(src);
+  const { root, mats } = cloneWithMaterials(src, file);
   // A glowing palette lights the trim, unless the model has its own glow accents (eyes, gems):
   // then only those glow, instead of flooding large trim surfaces.
   let ownGlow = false;
@@ -281,6 +365,8 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     const role = roleOf(m);
     if (palette.metal && (role === 'metal' || role === 'trim' || role === 'dark')) applyFinish(m, role as Finish);
     else if (!role && m.metalness > 0.5) applyFinish(m, 'metal');
+    const paint = gearPaint(model, role, palette);
+    if (paint) setCharPaint(m, CHAR_PAINTS[paint]);
   }
   const sockets: THREE.Object3D[] = [];
   root.traverse((o) => {
@@ -362,7 +448,7 @@ export class HeroDresser {
   private attachFile(file: string, colors: RoleColors) {
     const src = loaded.get(file)?.scene ?? PLACEHOLDER_GEAR[file]?.();
     if (!src) return;
-    const { root } = cloneWithMaterials(src);
+    const { root } = cloneWithMaterials(src, file);
     applyRoles(root, colors);
     const parts = new Map<string, THREE.Object3D>();
     root.traverse((o) => {

@@ -39,9 +39,9 @@ export const PAINTS: Record<PaintKind, PaintParams> = {
   hide: { atlas: 1, channel: 1, scale: 0.7, amount: 0.24 },
   plaster: { atlas: 1, channel: 2, scale: 0.5, amount: 0.2 },
   soft: { atlas: 1, channel: 3, scale: 0.6, amount: 0.18 },
-  bark: { atlas: 2, channel: 0, scale: 1.0, amount: 0.34 },
-  leaves: { atlas: 2, channel: 1, scale: 0.5, amount: 0.36 },
-  needles: { atlas: 2, channel: 2, scale: 0.6, amount: 0.3 },
+  bark: { atlas: 2, channel: 0, scale: 1.0, amount: 0.4 },
+  leaves: { atlas: 2, channel: 1, scale: 0.5, amount: 0.48 },
+  needles: { atlas: 2, channel: 2, scale: 0.6, amount: 0.46 },
 };
 
 const smooth = (a: number, b: number, x: number) => {
@@ -153,25 +153,70 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
     };
   },
   leaves: () => {
-    // Clustered leaf blobs: each cluster lit in the middle, darker where clusters meet.
-    const cells = worley(591, 5), blot = fbm(592, 4, 2);
-    return (x, y) => {
-      const [f1, f2, id] = cells(x, y);
-      const dome = Math.max(0, 1 - (f1 / 34) ** 2);
-      const edge = smooth(0, 7, f2 - f1);
-      return posterize(0.2 + dome * 0.42 + (id - 0.5) * 0.14 + (blot(x, y) - 0.5) * 0.12, 5) * (0.84 + 0.16 * edge);
-    };
+    // Overlapping leaf clumps: each lit from the upper left and shaded to a dark lower rim, tucked
+    // under the clumps above, with a few painted leaf dabs. Big enough to read from the camera.
+    const dabs = worley(592, 14), blot = fbm(593, 3, 2);
+    return clumps(591, 4, (c, x, y) => {
+      const [f1] = dabs(x, y);
+      const dab = f1 < 3.5 ? (c.light > 0.55 ? 0.08 : -0.06) : 0;
+      return posterize(0.3 + c.light * 0.36 + (c.tone - 0.5) * 0.16 - c.rim * 0.16 - c.tuck * 0.2 + dab + (blot(x, y) - 0.5) * 0.06, 5);
+    });
   },
   needles: () => {
-    // Pine: short soft needle tufts in rows, lighter tips.
-    const tufts = worley(601, 7), streak = tileNoise(602, 20, 5), blot = fbm(603, 3, 2);
-    return (x, y) => {
-      const [f1] = tufts(x, y);
-      const tuft = Math.max(0, 1 - f1 / 24);
-      return posterize(0.22 + tuft * 0.36 + (streak(x, y) - 0.5) * 0.14 + (blot(x, y) - 0.5) * 0.12, 5);
-    };
+    // Pine: tiers of needle tufts hanging over the ones below, streaked along the needles, pale
+    // tips along each tuft's lower edge and a dark shadow under the tier above.
+    const streak = tileNoise(602, 40, 3), blot = fbm(603, 3, 2);
+    return clumps(601, 6, (c, x, y) => {
+      const tip = smooth(0.6, 0.82, c.d) * (c.ly < 0 ? 1 : 0) * (1 - c.rim);
+      return posterize(0.3 + c.light * 0.3 + (c.tone - 0.5) * 0.1 + tip * 0.12 - c.rim * 0.2 - c.tuck * 0.24 + (streak(x, y) - 0.5) * 0.16 + (blot(x, y) - 0.5) * 0.06, 5);
+    });
   },
 };
+
+interface Clump {
+  /** 0..1: lit toward the clump's upper left. */
+  light: number;
+  /** Dark band along the clump's lower (free) edge. */
+  rim: number;
+  /** Shadow cast by the clump above. */
+  tuck: number;
+  /** Distance from the clump centre as a share of its radius, and height within it (-1..1). */
+  d: number;
+  ly: number;
+  /** Per-clump random tone. */
+  tone: number;
+}
+
+/**
+ * Jittered round clumps, n × n per tile, where the higher clump overlaps the lower one (V is up on
+ * side faces), shaded by `shade`. Tiles seamlessly.
+ */
+function clumps(seed: number, n: number, shade: (c: Clump, x: number, y: number) => number): Gen {
+  const cell = SIZE / n, R = cell * 0.9, rng = mulberry32(seed);
+  const pts = Array.from({ length: n * n }, (_, i) => ({ x: ((i % n) + 0.15 + rng() * 0.7) * cell, y: (Math.floor(i / n) + 0.15 + rng() * 0.7) * cell, t: rng(), r: R * (0.95 + rng() * 0.2) }));
+  const wrap = (i: number) => ((i % n) + n) % n;
+  return (x, y) => {
+    const px = x + 0.5, py = y + 0.5, cx = Math.floor(px / cell), cy = Math.floor(py / cell);
+    const near: { ox: number; oy: number; d: number; t: number; r: number }[] = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const gx = wrap(cx + dx), gy = wrap(cy + dy), p = pts[gy * n + gx];
+      const ox = p.x + (cx + dx - gx) * cell, oy = p.y + (cy + dy - gy) * cell;
+      near.push({ ox, oy, d: Math.hypot(px - ox, py - oy), t: p.t, r: p.r });
+    }
+    let hit: (typeof near)[number] | null = null;
+    for (const c of near) if (c.d < c.r && (!hit || c.oy > hit.oy)) hit = c;
+    if (!hit) return 0.3;
+    let above = Infinity;
+    for (const c of near) if (c.oy > hit.oy) above = Math.min(above, c.d - c.r);
+    const lx = (px - hit.ox) / hit.r, ly = (py - hit.oy) / hit.r, d = hit.d / hit.r;
+    return shade({
+      light: Math.max(0, Math.min(1, 0.5 + ly * 0.55 - lx * 0.3)),
+      rim: smooth(0.72, 0.98, d) * (ly < 0.2 ? 1 : 0.45),
+      tuck: 1 - smooth(0, cell * 0.12, above),
+      d, ly, tone: hit.t,
+    }, x, y);
+  };
+}
 
 const atlases: (THREE.DataTexture | null)[] = [null, null, null];
 

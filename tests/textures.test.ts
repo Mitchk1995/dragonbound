@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { applyGrade, applyGround, applySurface, gradeRow, MODEL_GRADE, patchKeys, propSurface } from '../src/render/surface';
-import { groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
+import { applyCharPaint, applyGrade, applyGround, applySurface, CHAR_PAINTS, gradeRow, MODEL_GRADE, patchKeys, prepareCharGeometry, propSurface, setCharPaint, setPaintGain } from '../src/render/surface';
+import { charTexture, groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
 import { makeOccludable } from '../src/world/worldView';
 
 const px = (t: THREE.Texture) => t.image as { data: Uint8Array; width: number; height: number };
@@ -49,6 +49,115 @@ describe('procedural textures', () => {
     for (let c = 0; c < 4; c++) {
       expect(colDiff(img, n, 0, c), `channel ${c}`).toBeLessThan(maxStep(img, colDiff, c) * 1.05 + 2);
       expect(rowDiff(img, n, 0, c), `channel ${c}`).toBeLessThan(maxStep(img, rowDiff, c) * 1.05 + 2);
+    }
+  });
+
+  it('paving: separate stones with dark mortar between them and their own tones', () => {
+    const img = px(groundTexture());
+    const vals: number[] = [];
+    for (let i = 2; i < img.data.length; i += 4) vals.push(img.data[i]);
+    const mortar = vals.filter((v) => v < 0.2 * 255).length / vals.length;
+    // Joints are a thin network, not a crack-riddled surface.
+    expect(mortar).toBeGreaterThan(0.04);
+    expect(mortar).toBeLessThan(0.25);
+    const faces = vals.filter((v) => v > 0.35 * 255);
+    expect(Math.max(...faces) - Math.min(...faces), 'per-stone tone variation').toBeGreaterThan(50);
+  });
+
+  it('cave floor never dips into the lava-crevice range (the lair floor glows only at its pools)', () => {
+    const img = px(groundTexture());
+    let min = 255;
+    for (let i = 3; i < img.data.length; i += 4) min = Math.min(min, img.data[i]);
+    expect(min / 255).toBeGreaterThan(0.34);
+  });
+
+  it('character atlas: every channel tiles, with real contrast', () => {
+    const img = px(charTexture());
+    const n = img.width - 1;
+    for (let c = 0; c < 4; c++) {
+      expect(colDiff(img, n, 0, c), `channel ${c}`).toBeLessThan(maxStep(img, colDiff, c) * 1.05 + 2);
+      expect(rowDiff(img, n, 0, c), `channel ${c}`).toBeLessThan(maxStep(img, rowDiff, c) * 1.05 + 2);
+      let lo = 255, hi = 0, sum = 0;
+      for (let i = c; i < img.data.length; i += 4) {
+        lo = Math.min(lo, img.data[i]);
+        hi = Math.max(hi, img.data[i]);
+        sum += img.data[i];
+      }
+      expect(hi - lo, `channel ${c} contrast`).toBeGreaterThan(60);
+      // 0.5 is the base colour: patterns swing both ways, so the model keeps its authored tone.
+      expect(sum / (img.data.length / 4) / 255, `channel ${c} mean`).toBeGreaterThan(0.38);
+      expect(sum / (img.data.length / 4) / 255, `channel ${c} mean`).toBeLessThan(0.62);
+    }
+  });
+});
+
+describe('character painting', () => {
+  const compile = (mat: THREE.Material) => {
+    const lib = THREE.ShaderLib.standard;
+    const shader = { uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader } as any;
+    mat.onBeforeCompile(shader, null as any);
+    return shader;
+  };
+
+  it('one atlas fetch, colour only, composes with the grade', () => {
+    const mat = new THREE.MeshStandardMaterial();
+    applyCharPaint(mat, CHAR_PAINTS.metal);
+    applyGrade(mat, MODEL_GRADE, 'root');
+    expect(patchKeys(mat)).toEqual(['cpaint:uniform', 'grade:root']);
+    const s = compile(mat);
+    expect(s.fragmentShader.match(/texture2D\(uCharTex/g)).toHaveLength(1);
+    expect(s.fragmentShader).not.toContain('normal = ');
+    expect(s.uniforms.uCharTex.value).toBe(charTexture());
+    // Per-vertex recipes are a separate program.
+    const vc = new THREE.MeshStandardMaterial();
+    applyCharPaint(vc, 'vertex');
+    expect(patchKeys(vc)).toEqual(['cpaint:vertex']);
+    expect(compile(vc).vertexShader).toContain('attribute vec4 aPaintW');
+  });
+
+  it('setCharPaint and setPaintGain change the uniforms, not the program', () => {
+    const mat = new THREE.MeshStandardMaterial();
+    applyCharPaint(mat, CHAR_PAINTS.metal);
+    const key = mat.customProgramCacheKey();
+    setCharPaint(mat, CHAR_PAINTS.leather);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(), mat);
+    setPaintGain(mesh, 0.5);
+    const s = compile(mat);
+    expect(s.uniforms.uPaintW.value.x).toBeCloseTo(CHAR_PAINTS.leather.w[0]);
+    expect(s.uniforms.uPaintX.value.x).toBeCloseTo(CHAR_PAINTS.leather.edge);
+    expect(s.uniforms.uCharGain.value).toBe(0.5);
+    expect(mat.customProgramCacheKey()).toBe(key);
+  });
+
+  it('every recipe is calm: bounded pattern weights', () => {
+    for (const [k, p] of Object.entries(CHAR_PAINTS)) {
+      expect(Math.max(...p.w), k).toBeLessThanOrEqual(0.36);
+      expect(Math.abs(p.edge), k).toBeLessThanOrEqual(0.3);
+      expect(Math.abs(p.grad), k).toBeLessThanOrEqual(0.25);
+    }
+    // Faces stay clean.
+    expect(Math.max(...CHAR_PAINTS.skin.w)).toBeLessThanOrEqual(0.06);
+    expect(CHAR_PAINTS.skin.edge).toBe(0);
+  });
+
+  it('face coordinates: v runs up every side face (no flipped direction), edges measured on the face', () => {
+    const rest = new THREE.Matrix4().makeTranslation(1, 2, 3);
+    const geo = prepareCharGeometry(new THREE.BoxGeometry(0.4, 1, 0.6), rest);
+    expect(geo.index).toBeNull();
+    const pos = geo.attributes.position, face = geo.attributes.aFace, r = geo.attributes.aRest, fn = geo.attributes.aRestN;
+    for (let i = 0; i < pos.count; i++) {
+      // Rest frame = the given transform.
+      expect(r.getY(i)).toBeCloseTo(pos.getY(i) + 2);
+      const u = face.getX(i), v = face.getY(i), w = face.getZ(i), h = face.getW(i);
+      expect(u).toBeGreaterThanOrEqual(-1e-6);
+      expect(u).toBeLessThanOrEqual(w + 1e-6);
+      if (Math.abs(fn.getY(i)) < 0.5) {
+        // Side faces: full height, v = height above the face's foot.
+        expect(h).toBeCloseTo(1);
+        expect(v).toBeCloseTo(pos.getY(i) + 0.5);
+      } else {
+        expect([w, h].sort()).toEqual([0.4, 0.6].map((x) => expect.closeTo(x, 5)));
+      }
     }
   });
 });
@@ -141,5 +250,13 @@ describe('shader patches compose', () => {
     const s = compile(mat);
     expect(s.vertexShader).toContain('attribute vec4 aSplat');
     expect(s.fragmentShader).toContain('uGroundTex');
+    expect(s.fragmentShader).not.toMatch(/float (ash|stain)/);
+    // Lair floors get ash drifts and scorch, mine floors mineral stains: distinct programs.
+    const lair = new THREE.MeshStandardMaterial(), mine = new THREE.MeshStandardMaterial();
+    applyGround(lair, 1, 0.55);
+    applyGround(mine, 0, 0.3);
+    expect(compile(lair).fragmentShader).toContain('float ash');
+    expect(compile(mine).fragmentShader).toContain('float stain');
+    expect(lair.customProgramCacheKey()).not.toBe(mine.customProgramCacheKey());
   });
 });
