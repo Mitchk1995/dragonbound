@@ -39,17 +39,11 @@ def build_hero(scene_name='DB_hero'):
         pivot(leg, 'sock_footL' if x > 0 else 'sock_footR', (0, -0.72, 0))
 
     body = pivot(root, 'body', (0, HIP, 0))
-    # Tunic torso (flares to the shoulders), skirt below the belt, V-neck, collar, hem.
+    # Tunic torso (flares to the shoulders), skirt below the belt, collar, hem. The front is plain cloth: no
+    # neckline cut-out, placket or toggles (a separate V-neck wedge read as a floating diamond).
     box(body, (0.68, 0.66, 0.42), (0, 0.42, 0), R.cloth, taper=(1.08, 1.04), bevel=0.05)
     box(body, (0.7, 0.24, 0.44), (0, -0.05, 0), R.cloth, taper=(0.96, 0.96), bevel=0.04)
     box(body, (0.72, 0.05, 0.46), (0, -0.15, 0), R.cloth2, bevel=0.015)            # hem stripe
-    # V-neck: skin wedge tucked under the collar, deep enough to fill the tunic's top edge, apex on the placket.
-    prism(body, [(-0.11, 0), (0, -0.17), (0.11, 0)], 0.08, (0, 0.758, 0.185), R.skin)
-    for s in (-1, 1):
-        box(body, (0.03, 0.21, 0.02), (s * 0.058, 0.672, 0.224), R.cloth2, rot=(0, 0, -s * 0.576), bevel=0.006)  # piping
-    box(body, (0.06, 0.36, 0.03), (0, 0.38, 0.222), R.cloth2, bevel=0.01)            # placket
-    for y in (0.3, 0.42):
-        box(body, (0.05, 0.05, 0.03), (0, y, 0.24), R.leather, bevel=0.01)          # toggles
     box(body, (0.4, 0.06, 0.3), (0, 0.76, 0), R.cloth2, bevel=0.02)                 # collar
     box(body, (0.2, 0.12, 0.2), (0, 0.8, 0), R.skin, bevel=0.03)                     # neck
     # Belt + buckle + pouch

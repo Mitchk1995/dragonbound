@@ -75,47 +75,84 @@ def goblin():
 
 
 def kobold():
+    """Kobold Slinger: a short, big-headed little lizard (about half the hero's height) on clawed feet, with a
+    sling-stone pouch on its hip and a thick tail that tapers in segments down to the ground and flicks up at
+    the tip."""
     scene, root = fresh_scene('DB_kobold')
-    hip = 0.5
-    leg(root, 'legL', 0.14, hip, 'koboldDark', 'koboldDark', 0.36)
-    leg(root, 'legR', -0.14, hip, 'koboldDark', 'koboldDark', 0.36)
+    hip = 0.34
+    for name, x in (('legL', 0.13), ('legR', -0.13)):
+        l = pivot(root, name, (x, hip, 0))
+        box(l, (0.22, 0.22, 0.24), (0, -0.09, 0), 'koboldDark', bevel=0.04)                   # stubby thigh
+        box(l, (0.2, 0.12, 0.3), (0, -hip + 0.06, 0.04), 'koboldDark', bevel=0.035)           # foot, sole on the ground
+        for dx in (-0.06, 0.0, 0.06):                                                         # three toe claws
+            beam(l, (dx, -hip + 0.05, 0.17), (dx * 1.2, -hip + 0.01, 0.25), 0.045, 'bone', w1=0.01, d=0.04, d1=0.01)
     body = pivot(root, 'body', (0, hip, 0))
-    box(body, (0.46, 0.5, 0.36), (0, 0.26, 0), 'kobold', rot=(0.15, 0, 0), taper=(1.1, 1), bevel=0.05)
-    box(body, (0.3, 0.38, 0.08), (0, 0.26, 0.19), 'belly', rot=(0.15, 0, 0), bevel=0.03)
-    box(body, (0.5, 0.14, 0.4), (0, 0.04, 0), 'leather', bevel=0.03)
-    box(body, (0.22, 0.3, 0.14), (-0.1, 0.3, -0.22), 'leatherDark', bevel=0.03)  # stone pouch
-    t1 = pivot(body, 'tail1', (0, 0.05, -0.14))   # root sits inside the hips so the joint never opens
-    box(t1, (0.18, 0.16, 0.48), (0, 0, -0.24), 'kobold', rot=(-0.3, 0, 0), taper=(0.8, 1), bevel=0.04)
-    t2 = pivot(t1, 'tail2', (0, -0.1, -0.44))
-    box(t2, (0.12, 0.11, 0.38), (0, 0, -0.18), 'koboldDark', rot=(-0.2, 0, 0), bevel=0.03)
-    beam(t2, (0, -0.02, -0.34), (0, -0.02, -0.52), 0.1, 'bone', d=0.08, w1=0.015, d1=0.015)   # tail spike
-    head = pivot(body, 'head', (0, 0.54, 0.06))
+    box(body, (0.44, 0.42, 0.34), (0, 0.22, 0), 'kobold', rot=(0.12, 0, 0), taper=(1.1, 1), bevel=0.05)
+    box(body, (0.28, 0.32, 0.07), (0, 0.21, 0.175), 'belly', rot=(0.12, 0, 0), bevel=0.025)
+    box(body, (0.47, 0.11, 0.37), (0, 0.03, 0), 'leather', bevel=0.03)                         # belt
+    # Sling-stone pouch hanging off the belt on the left hip: a leather bag with a flap, stones showing at the top.
+    pouch = pivot(body, 'pouch', (0.17, -0.06, 0.17), (0, 0.5, 0))
+    box(pouch, (0.15, 0.15, 0.11), (0, 0, 0), 'leatherDark', bevel=0.035)
+    box(pouch, (0.16, 0.05, 0.12), (0, 0.07, 0.005), 'leather', rot=(0.2, 0, 0), bevel=0.012)
+    for dx in (-0.035, 0.035):
+        box(pouch, (0.06, 0.05, 0.06), (dx, 0.1, -0.01), 'steelDark', rot=(0.4, 0.6, 0.2), bevel=0.015)
+    # Tail: three tapering segments drooping from the hips to the ground, the last lifting into a dark tip.
+    t1 = pivot(body, 'tail1', (0, 0.06, -0.12))   # root sits inside the hips so the joint never opens
+    beam(t1, (0, 0.0, 0.04), (0, -0.1, -0.3), 0.22, 'kobold', w1=0.17, d=0.2, d1=0.15)
+    t2 = pivot(t1, 'tail2', (0, -0.1, -0.3))
+    beam(t2, (0, 0.01, 0.03), (0, -0.14, -0.28), 0.17, 'kobold', w1=0.12, d=0.15, d1=0.1)
+    t3 = pivot(t2, 'tail3', (0, -0.14, -0.28))
+    beam(t3, (0, 0.01, 0.03), (0, -0.04, -0.24), 0.12, 'kobold', w1=0.07, d=0.1, d1=0.06)
+    beam(t3, (0, -0.045, -0.23), (0, 0.02, -0.38), 0.07, 'koboldDark', w1=0.01, d=0.06, d1=0.01)   # flicked-up tip
+    beam(t1, (0, 0.07, -0.08), (0, 0.13, -0.17), 0.03, 'koboldDark', w1=0.01, d=0.08, d1=0.02)
+    beam(t2, (0, 0.05, -0.07), (0, 0.09, -0.15), 0.03, 'koboldDark', w1=0.01, d=0.07, d1=0.02)   # ridge nubs
+    head = pivot(body, 'head', (0, 0.44, 0.05))
     box(head, (0.42, 0.36, 0.38), (0, 0.16, 0), 'kobold', bevel=0.06)
-    box(head, (0.28, 0.2, 0.36), (0, 0.09, 0.3), 'kobold', taper=(0.8, 1), bevel=0.04)
-    box(head, (0.24, 0.06, 0.32), (0, 0.0, 0.3), 'belly', bevel=0.02)
+    box(head, (0.28, 0.2, 0.34), (0, 0.09, 0.29), 'kobold', taper=(0.8, 1), bevel=0.04)          # snout
+    box(head, (0.24, 0.06, 0.3), (0, 0.0, 0.29), 'belly', bevel=0.02)                            # jaw
     for s in (-1, 1):
         box(head, (0.08, 0.08, 0.02), (s * 0.1, 0.24, 0.195), 'eye', emissive='eye', strength=3, bevel=0)
-        horn = [(s * 0.12, 0.28, 0.02), (s * 0.15, 0.4, -0.1), (s * 0.17, 0.46, -0.26)]    # two-segment horns swept back
+        horn = [(s * 0.12, 0.28, 0.02), (s * 0.15, 0.38, -0.1), (s * 0.17, 0.42, -0.24)]    # two-segment horns swept back
         beam(head, horn[0], horn[1], 0.08, 'bone', w1=0.06)
         beam(head, horn[1], horn[2], 0.06, 'bone', w1=0.012)
-        box(head, (0.04, 0.03, 0.02), (s * 0.06, 0.12, 0.482), 'black', bevel=0)           # nostrils on the flat snout face
-    for i, hgt in enumerate((0.13, 0.12, 0.1)):                                           # crest fins, bases sunk into the skull
+        box(head, (0.04, 0.03, 0.02), (s * 0.06, 0.12, 0.462), 'black', bevel=0)           # nostrils on the flat snout face
+    for i, hgt in enumerate((0.12, 0.11, 0.09)):                                          # crest fins, bases sunk into the skull
         z = -i * 0.08
         beam(head, (0, 0.3, z + 0.02), (0, 0.3 + hgt, z - 0.05), 0.03, 'koboldDark', d=0.08, w1=0.01, d1=0.02)
-    arm(body, 'armL', 0.3, 0.42, 'kobold', 'koboldDark', 0.36)
-    armR = arm(body, 'armR', -0.3, 0.42, 'kobold', 'koboldDark', 0.36)
-    w = pivot(armR, 'weapon', (0, -0.44, 0), (PI / 2, 0, 0))
-    box(w, (0.025, 0.42, 0.025), (0.05, 0.2, 0), 'leather', bevel=0)
-    box(w, (0.025, 0.42, 0.025), (-0.05, 0.2, 0), 'leather', bevel=0)
-    box(w, (0.16, 0.12, 0.12), (0, 0.44, 0), 'leatherDark', bevel=0.03)
-    box(w, (0.1, 0.09, 0.1), (0, 0.5, 0), 'steelDark', rot=(0.3, 0.5, 0.2), bevel=0.025)   # sling stone
+    arm(body, 'armL', 0.29, 0.36, 'kobold', 'koboldDark', 0.26)
+    armR = arm(body, 'armR', -0.29, 0.36, 'kobold', 'koboldDark', 0.26)
+    w = pivot(armR, 'weapon', (0, -0.34, 0), (PI / 2, 0, 0))
+    box(w, (0.025, 0.4, 0.025), (0.05, 0.19, 0), 'leather', bevel=0)
+    box(w, (0.025, 0.4, 0.025), (-0.05, 0.19, 0), 'leather', bevel=0)
+    box(w, (0.16, 0.12, 0.12), (0, 0.42, 0), 'leatherDark', bevel=0.03)
+    box(w, (0.1, 0.09, 0.1), (0, 0.48, 0), 'steelDark', rot=(0.3, 0.5, 0.2), bevel=0.025)   # sling stone
     export('DB_kobold', 'kobold.glb')
-    preview_sheet('kobold.png', target=(0, 0.6, 0), dist=3.2)
+    preview_sheet('kobold.png', target=(0, 0.45, 0), dist=2.6)
     remove_preview_rig()
 
 
 HOOD_EDGE = 0xA83A4A     # lighter crimson lip round the face opening, so the hood reads in the dark
 EMBROIDERY = 0x2A0A14    # near-black inlay in the back sigil
+
+
+# Hood rows (head space, y up from the neck): (y, half width, half depth, z offset, half-angle of the front
+# opening in degrees). A wide mantle over the shoulders, the neck, round the face, over the crown, and a peak that
+# leans back; the opening is a V under the chin, widest round the face and closes toward the peak.
+HOOD_ROWS = ((-0.2, 0.52, 0.37, -0.02, 9), (-0.05, 0.36, 0.32, -0.02, 18), (0.1, 0.29, 0.3, 0.0, 44),
+             (0.27, 0.28, 0.29, -0.02, 42), (0.42, 0.21, 0.24, -0.07, 30), (0.54, 0.11, 0.14, -0.15, 16),
+             (0.63, 0.0, 0.0, -0.25, 4))
+
+
+def hood_fn(u, v):
+    """The cultist's hood as one surface: v climbs the rows (mantle to peak), u runs round from the left edge of
+    the face opening, round the back, to its right edge."""
+    k = v * (len(HOOD_ROWS) - 1)
+    i = min(int(k), len(HOOD_ROWS) - 2)
+    f = k - i
+    y, a, b, dz, op = [p + (q - p) * f for p, q in zip(HOOD_ROWS[i], HOOD_ROWS[i + 1])]
+    al = math.radians(op)
+    t = al + (2 * PI - 2 * al) * u
+    return (a * ssin(t, 2.6), y, dz + b * scos(t, 2.6))
 
 
 def cultist():
@@ -133,31 +170,20 @@ def cultist():
     box(body, (0.72, 0.12, 0.56), (0, 0.84, 0), 'gold', bevel=0.03)
     box(body, (0.68, 0.34, 0.52), (0, 1.02, 0), 'robe', taper=(1.0, 1.0), bevel=0.045)
     box(body, (0.68, 0.32, 0.52), (0, 1.28, 0), 'robe', taper=(0.9, 0.9), bevel=0.05)
-    # The hood's cape: a collar block under the cowl and a slab either side sloping on down over the shoulders,
-    # continuing the hood's line (no flat brim).
-    box(body, (0.52, 0.1, 0.46), (0, 1.44, -0.02), 'robeDark', bevel=0.03)
-    for s in (-1, 1):
-        box(body, (0.3, 0.08, 0.5), (s * 0.33, 1.4, -0.02), 'robeDark', rot=(0, 0, -s * 0.55), bevel=0.025)
-    box(body, (0.12, 0.12, 0.03), (0, 1.3, 0.265), 'gold', rot=(0, 0, PI / 4), bevel=0.01)
-    box(body, (0.16, 0.16, 0.03), (0, 1.2, -0.25), 'gold', rot=(0, 0, PI / 4), bevel=0.012)            # sigil on the back
-    box(body, (0.08, 0.08, 0.03), (0, 1.2, -0.262), EMBROIDERY, rot=(0, 0, PI / 4), bevel=0)
-    facet_gem(body, 0.07, (0, 1.3, 0.29), 'fire', emissive='fire', strength=5)  # amulet
+    box(body, (0.16, 0.16, 0.03), (0, 1.03, -0.262), 'gold', rot=(0, 0, PI / 4), bevel=0.012)            # sigil on the back
+    box(body, (0.08, 0.08, 0.03), (0, 1.03, -0.274), EMBROIDERY, rot=(0, 0, PI / 4), bevel=0)
+    box(body, (0.12, 0.12, 0.03), (0, 1.15, 0.262), 'gold', rot=(0, 0, PI / 4), bevel=0.01)          # amulet setting
+    facet_gem(body, 0.07, (0, 1.15, 0.285), 'fire', emissive='fire', strength=5)                     # amulet
     head = pivot(body, 'head', (0, 1.42, 0))
-    # Hood: two angled side panels meeting at a peak that leans back (a hood's profile from the side), a filler
-    # between them, a deep dark face opening framed by a lighter front edge, the glowing eyes set back in the
-    # shadow. Panel outlines are (-z, y), turned to lie in the side plane.
-    cowl = pivot(head, 'cowl', (0, 0.0, 0), (-0.06, 0, 0))
-    side = [(-0.2, 0.0), (-0.16, 0.34), (0.1, 0.6), (0.26, 0.3), (0.27, 0.0)]
-    edge = [(-0.235, 0.0), (-0.195, 0.36), (0.09, 0.635), (0.1, 0.6), (-0.16, 0.34), (-0.2, 0.0)]
-    for s, nm in ((-1, 'cowlR'), (1, 'cowlL')):
-        panel = pivot(cowl, nm, (s * 0.3, 0.0, 0), (0, 0, s * 0.44))
-        prism(panel, side, 0.1, (-s * 0.05, 0, 0), 'robeDark', rot=(0, PI / 2, 0), bevel=0.02)
-        prism(panel, edge, 0.106, (-s * 0.05, 0, 0), HOOD_EDGE, rot=(0, PI / 2, 0))                         # front edge
-    prism(cowl, [(-0.02, 0.3), (0.08, 0.55), (0.24, 0.3), (0.25, 0.02), (0.02, 0.02)], 0.26, (0, 0, 0), 'robeDark',
-          rot=(0, PI / 2, 0))                                                                                   # filler
-    box(cowl, (0.3, 0.4, 0.3), (0, 0.2, -0.05), 'black', taper=(0.4, 1), bevel=0.03)                         # face shadow
+    # Hood: one continuous cloth shell (hood_fn) from a mantle over the shoulders up round the head to a peak that
+    # leans back, open at the front: the opening narrows to a V under the chin and widens round the face. A lighter
+    # lip follows the opening's edges, the face is a dark void inside with the glowing eyes set back in it.
+    surf(head, hood_fn, 16, 8, 0.035, 'robeDark', inside=(0, 0.15, -0.02), bevel=0.01)
+    for u0, u1 in ((0.0, 0.045), (0.955, 1.0)):
+        surf(head, grow(sub(hood_fn, u0, u1, 0.0, 0.9), 0.004, (0, 0.15, -0.02)), 1, 7, 0.03, HOOD_EDGE, inside=(0, 0.15, -0.02))
+    box(head, (0.34, 0.42, 0.34), (0, 0.2, -0.04), 'black', taper=(0.6, 1), bevel=0.03)                 # face shadow
     for s in (-1, 1):
-        box(cowl, (0.07, 0.045, 0.02), (s * 0.07, 0.16, 0.105), 'fire', emissive='fire', strength=6, bevel=0)
+        box(head, (0.07, 0.045, 0.02), (s * 0.07, 0.17, 0.14), 'fire', emissive='fire', strength=6, bevel=0)
     for name, x in (('armL', 0.4), ('armR', -0.4)):
         a = pivot(body, name, (x, 1.32, 0))
         box(a, (0.24, 0.62, 0.28), (0, -0.3, 0), 'robe', taper=(1.2, 1.2), bevel=0.04)
@@ -183,7 +209,7 @@ def cultist():
     remove_preview_rig()
 
 
-goblin()
-kobold()
-cultist()
+for _build in (goblin, kobold, cultist):   # DB_ONLY = ['kobold'] exports only those
+    if _build.__name__ in (globals().get('DB_ONLY') or ('goblin', 'kobold', 'cultist')):
+        _build()
 result = {'ok': True}

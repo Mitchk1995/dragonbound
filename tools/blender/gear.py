@@ -67,34 +67,47 @@ def grip(p, y0, y1, w, color, wraps=(), wrap_color=R.dark):
 
 # ─── Weapons (sock_handR) ────────────────────────────────────────────────────
 
+def blade(h, y0, length, w, tip, depth=0.05):
+    """Sword blade along +Y from y0: a bright bevelled edge (ROLE_trim) all round a raised metal spine, with a thin
+    bright fuller down the spine, so the blade reads as polished steel with a cutting edge at game size (a dark
+    fuller made it read as a dull grey bar)."""
+    y1, yt = y0 + length - tip, y0 + length
+    prism(h, [(-w / 2, y0), (w / 2, y0), (w * 0.43, y1), (0.0, yt), (-w * 0.43, y1)], depth * 0.7, (0, 0, 0), R.trim, bevel=0.006)
+    sw = w * 0.52
+    prism(h, [(-sw / 2, y0), (sw / 2, y0), (sw * 0.4, y1 + tip * 0.1), (0.0, yt - tip * 0.35), (-sw * 0.4, y1 + tip * 0.1)],
+          depth, (0, 0, 0), R.metal, bevel=0.008)
+    fl = length - tip * 1.2
+    box(h, (w * 0.12, fl, depth + 0.012), (0, y0 + fl / 2 + 0.02, 0), R.trim, bevel=0)             # fuller
+
+
+def crossguard(h, y, width, color=R.trim, block=R.metal, gem=0.035):
+    """Straight crossguard bar with flared block ends over a centre block with a small gem."""
+    box(h, (0.15, 0.12, 0.14), (0, y - 0.01, 0), block, bevel=0.03)                     # centre block
+    box(h, (width, 0.07, 0.1), (0, y, 0), color, bevel=0.022)                          # bar
+    for s in (-1, 1):
+        box(h, (0.07, 0.11, 0.12), (s * (width / 2 - 0.02), y + 0.01, 0), color, bevel=0.022)   # flared ends
+    facet_gem(h, gem, (0, y - 0.01, 0.075), R.glow)
+
+
 def sword(S):
+    """Arming sword, ~1.45 long: square grip, block pommel, a proper crossguard and a long bright-edged blade."""
     h = S('sock_handR')
     grip(h, -0.15, 0.15, 0.085, R.leather, (-0.08, 0.06))
     box(h, (0.12, 0.08, 0.12), (0, -0.19, 0), R.trim, bevel=0.025)                 # pommel block
     box(h, (0.08, 0.04, 0.08), (0, -0.245, 0), R.trim, bevel=0.012)
-    box(h, (0.14, 0.13, 0.13), (0, 0.17, 0), R.dark, bevel=0.03)                   # guard block
-    box(h, (0.46, 0.07, 0.11), (0, 0.18, 0), R.trim, bevel=0.025)                  # crossguard
-    for s in (-1, 1):
-        box(h, (0.08, 0.12, 0.13), (s * 0.24, 0.2, 0), R.trim, rot=(0, 0, s * -0.3), bevel=0.025)
-    facet_gem(h, 0.035, (0, 0.17, 0.07), R.glow)
-    prism(h, [(-0.075, 0.22), (0.075, 0.22), (0.065, 0.8), (0.0, 0.94), (-0.065, 0.8)], 0.05, (0, 0, 0), R.metal, bevel=0.012)
-    box(h, (0.035, 0.5, 0.058), (0, 0.5, 0), R.dark, bevel=0)                     # fuller
+    crossguard(h, 0.19, 0.5)
+    blade(h, 0.22, 0.98, 0.15, 0.2)
 
 
 def longsword(S):
+    """Longsword, ~1.85 long: long two-hand grip, heavier pommel, a wide crossguard and a long, broad blade."""
     h = S('sock_handR')
     grip(h, -0.21, 0.21, 0.09, R.leather, (-0.12, 0.0, 0.12))
     box(h, (0.12, 0.06, 0.12), (0, -0.24, 0), R.trim, taper=(0.75, 0.75), bevel=0.015)
     box(h, (0.14, 0.1, 0.14), (0, -0.31, 0), R.trim, bevel=0.03)                   # pommel block
-    box(h, (0.17, 0.16, 0.15), (0, 0.24, 0), R.dark, bevel=0.035)
-    box(h, (0.62, 0.08, 0.12), (0, 0.25, 0), R.trim, bevel=0.03)
-    for s in (-1, 1):
-        box(h, (0.09, 0.16, 0.13), (s * 0.33, 0.22, 0), R.trim, rot=(0, 0, s * 0.45), bevel=0.03)  # down-swept quillons
-        rivet(h, (s * 0.2, 0.25, 0.065), R.dark, 0.02)
-    facet_gem(h, 0.045, (0, 0.24, 0.08), R.glow)
-    box(h, (0.16, 0.12, 0.07), (0, 0.35, 0), R.metal, bevel=0.02)                  # ricasso
-    prism(h, [(-0.09, 0.3), (0.09, 0.3), (0.085, 1.02), (0.0, 1.22), (-0.085, 1.02)], 0.06, (0, 0, 0), R.metal, bevel=0.014)
-    box(h, (0.045, 0.72, 0.068), (0, 0.68, 0), R.dark, bevel=0)
+    crossguard(h, 0.25, 0.64, gem=0.045)
+    box(h, (0.14, 0.1, 0.07), (0, 0.33, 0), R.metal, bevel=0.02)                   # ricasso
+    blade(h, 0.3, 1.26, 0.18, 0.24, depth=0.06)
 
 
 def pickaxe(S):
@@ -176,10 +189,11 @@ LAMES = ((-0.1, 0.78, 0.12, 0.56), (-0.21, 0.75, 0.12, 0.54))
 BELT_Y = -0.315
 
 
-def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True, groove=0.016):
-    """Cuirass of stacked slabs: a broad chest block (raised centre plate), two stepped abdominal lames, belt,
-    tassets and a box gorget. `seam` fills the grooves between the slabs: one colour for all three grooves
-    (top first), or a tuple with one colour (or None) per groove; `groove` is how tall those lines are."""
+def plate_torso(c, seam=(R.dark, None, None), trim=R.trim, centre=True, back=True, groove=0.02):
+    """Cuirass of stacked slabs: a broad chest block (raised centre plate with a keel), two stepped abdominal lames,
+    belt, tassets and a box gorget. `seam` fills the grooves between the slabs: one colour for all three grooves
+    (top first), or a tuple with one colour (or None) per groove; by default only the line under the chest block,
+    so the lames read by their steps, not by a stack of dark lines. `groove` is how tall those lines are."""
     seams = tuple(seam) if isinstance(seam, (tuple, list)) else (seam,) * 3
     y, w, hgt, d = CHEST
     box(c, (w, hgt, d), (0, y, 0), R.metal, bevel=0.05)
@@ -187,12 +201,8 @@ def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True, groove=0.01
     if centre:
         box(c, (0.36, 0.28, 0.05), (0, y + 0.01, d / 2 + 0.012), R.metal, taper=(1.4, 1), bevel=0.018)  # raised breastplate
         box(c, (0.06, 0.3, 0.04), (0, y + 0.0, d / 2 + 0.034), R.metal, bevel=0.014)          # keel
-        box(c, (0.52, 0.035, 0.06), (0, y + 0.15, d / 2 + 0.014), trim, bevel=0.008)          # neckline edge
     if back:
         box(c, (0.46, 0.26, 0.04), (0, y + 0.01, -d / 2 - 0.008), R.metal, bevel=0.015)      # back plate
-    for s in (-1, 1):
-        rivet(c, (s * 0.3, y + 0.12, d / 2 + 0.004), trim, 0.02)
-        rivet(c, (s * 0.3, y - 0.12, d / 2 + 0.004), trim, 0.02)
     prev = y - hgt / 2
     for i, (ly, lw, lh, ld) in enumerate(LAMES):
         box(c, (lw, lh, ld), (0, ly, 0), R.metal, bevel=0.03)
@@ -204,7 +214,7 @@ def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True, groove=0.01
     box(c, (0.8, 0.09, 0.57), (0, BELT_Y, 0), R.leather, bevel=0.02)                           # belt
     box(c, (0.13, 0.1, 0.03), (0, BELT_Y, 0.29), trim, bevel=0.012)                            # buckle
     gorget(c, trim)
-    plate_tassets(c, trim)
+    plate_tassets(c)
 
 
 def gorget(c, trim=R.trim, color=R.metal):
@@ -212,20 +222,17 @@ def gorget(c, trim=R.trim, color=R.metal):
     box(c, (0.58, 0.03, 0.52), (0, 0.41, 0), trim, bevel=0.008)
 
 
-def plate_tassets(c, trim=R.trim):
-    """Box tassets hanging from the belt: two front plates of two lames each, hip plates and a rear culet."""
+def plate_tassets(c):
+    """Box tassets hanging from the belt: a plate of two lames over each thigh, hip plates and a rear culet, plain
+    slabs (no rivets or trim edges)."""
     for s in (-1, 1):
         f = pivot(c, 'tasset', (s * 0.175, -0.36, 0.275), (-0.12, 0, s * 0.03))
         box(f, (0.3, 0.19, 0.05), (0, -0.09, 0), R.metal, bevel=0.018)
         box(f, (0.28, 0.12, 0.05), (0, -0.22, 0.012), R.metal, bevel=0.016)
-        box(f, (0.29, 0.03, 0.058), (0, -0.28, 0.012), trim, bevel=0.006)
-        rivet(f, (0, -0.05, 0.028), trim, 0.018)
         hp = pivot(c, 'tasset', (s * 0.415, -0.36, 0), (0, 0, s * 0.12))
         box(hp, (0.05, 0.24, 0.36), (0, -0.11, 0), R.metal, bevel=0.016)
-        box(hp, (0.058, 0.03, 0.37), (0, -0.225, 0), trim, bevel=0.006)
     cul = pivot(c, 'tasset', (0, -0.36, -0.275), (0.12, 0, 0))
     box(cul, (0.58, 0.2, 0.05), (0, -0.1, 0), R.metal, bevel=0.018)
-    box(cul, (0.59, 0.03, 0.058), (0, -0.2, 0), trim, bevel=0.006)
 
 
 # Pauldron cap (left side): a top block over the shoulder corner, sloping down with the shoulder, over an outer
@@ -426,27 +433,32 @@ def helm_open(S):
     open_helm(S('sock_head'))
 
 
-def helm_full(S):
-    """Full helm, cube over cube: a box shell over the head cube with a smaller block on top crowned by a low
-    crest dyed like the wearer's tunic (ROLE_cloth), a riveted brow band and a visor of two face plates with a
-    centre ridge and breaths; the eye slit is the gap between the blocks."""
-    h = S('sock_head')
+def great_helm(h, crest=R.cloth, slit=SLIT, trim=R.trim, studs=R.dark):
+    """Cube-over-cube great helm: a box shell over the head cube with a smaller block on top crowned by a low crest,
+    a riveted brow band and a visor of two face plates with a centre ridge and breaths; the eye slit is the gap
+    between the blocks, lined by `slit` (dark, or ROLE_glow for a burning visor). Every heavy tier wears it."""
     box(h, (0.58, 0.5, 0.6), (0, 0.02, 0.01), R.metal, bevel=0.04)                           # shell
     box(h, (0.46, 0.08, 0.48), (0, 0.3, 0.01), R.metal, bevel=0.024)                          # top block
-    box(h, (0.2, 0.035, 0.4), (0, 0.353, 0.0), R.trim, bevel=0.01)                            # top ridge
-    box(h, (0.08, 0.12, 0.4), (0, 0.425, -0.02), R.cloth, taper=(1, 0.8), bevel=0.022)         # dyed crest
-    box(h, (0.6, 0.065, 0.62), (0, 0.145, 0.01), R.trim, bevel=0.014)                         # brow band
-    box(h, (0.6, 0.05, 0.62), (0, -0.205, 0.01), R.trim, bevel=0.012)                         # lower rim
-    box(h, (0.5, 0.3, 0.02), (0, -0.03, 0.31), SLIT, bevel=0)                                 # slit backing
-    box(h, (0.055, 0.27, 0.03), (0, -0.07, 0.356), R.trim, bevel=0.01)                        # centre ridge
+    box(h, (0.2, 0.035, 0.4), (0, 0.353, 0.0), trim, bevel=0.01)                              # top ridge
+    if crest:
+        box(h, (0.08, 0.12, 0.4), (0, 0.425, -0.02), crest, taper=(1, 0.8), bevel=0.022)       # crest
+    box(h, (0.6, 0.065, 0.62), (0, 0.145, 0.01), trim, bevel=0.014)                           # brow band
+    box(h, (0.6, 0.05, 0.62), (0, -0.205, 0.01), trim, bevel=0.012)                           # lower rim
+    box(h, (0.5, 0.3, 0.02), (0, -0.03, 0.31), slit, bevel=0)                                 # slit backing
+    box(h, (0.055, 0.27, 0.03), (0, -0.07, 0.356), trim, bevel=0.01)                          # centre ridge
     for s in (-1, 1):
         box(h, (0.242, 0.27, 0.045), (s * 0.133, -0.07, 0.325), R.metal, bevel=0.014)         # face plate
         for x in (0.08, 0.21):
-            rivet(h, (s * x, 0.145, 0.323), R.dark, 0.018)
+            rivet(h, (s * x, 0.145, 0.323), studs, 0.018)
         for z in (-0.16, 0.16):
-            rivet(h, (s * 0.303, 0.145, z), R.dark, 0.018, rot=(PI / 4, PI / 2, 0))
+            rivet(h, (s * 0.303, 0.145, z), studs, 0.018, rot=(PI / 4, PI / 2, 0))
         for k in range(3):                                                                     # breaths
             box(h, (0.07, 0.02, 0.02), (s * 0.12, -0.11 - k * 0.045, 0.348), SLIT, bevel=0)
+
+
+def helm_full(S):
+    """Full helm: the great helm with a low crest dyed like the wearer's tunic (ROLE_cloth)."""
+    great_helm(S('sock_head'))
 
 
 # ─── Body armour (sock_chest + shoulders) ────────────────────────────────────
@@ -560,50 +572,26 @@ def body_leather(S):
         arm_lames(g, s, (R.metal, R.metal), R.dark)
 
 
-def plate_crafting(c, trim=R.trim, dark=R.dark, cloth=R.cloth):
-    """Smith's detail on the plate cuirass that still reads from the game camera: a trim ridge down the
-    breastplate with a crest boss, trim edges along the breastplate's slanted sides and a trim band with dark
-    rivets under the chest block, a dark mail skirt under the tassets, and a cloth tabard hanging from the belt
-    (ROLE_cloth: it takes the wearer's tunic colour) so the knight is not one grey mass."""
-    y, w, hgt, d = CHEST
-    zf = d / 2
-    box(c, (0.07, 0.3, 0.03), (0, y - 0.005, zf + 0.06), trim, bevel=0.01)                     # central ridge
-    for s in (-1, 1):                                                                            # breastplate side edges
-        box(c, (0.05, 0.3, 0.03), (s * 0.214, y + 0.005, zf + 0.03), trim, rot=(0, 0, -s * 0.25), bevel=0.01)
-    box(c, (0.16, 0.16, 0.03), (0, y + 0.07, zf + 0.07), dark, rot=(0, 0, PI / 4), bevel=0.012)     # crest: dark lozenge
-    box(c, (0.1, 0.1, 0.03), (0, y + 0.07, zf + 0.085), trim, rot=(0, 0, PI / 4), bevel=0.014)      # raised trim boss
-    box(c, (0.06, 0.26, 0.02), (0, y + 0.01, -zf - 0.035), trim, bevel=0.008)                   # back ridge
-    for s in (-1, 1):                                                                            # back straps and buckles
-        box(c, (0.075, hgt + 0.02, 0.02), (s * 0.2, y, -zf - 0.05), R.leather, bevel=0.006)
-        box(c, (0.1, 0.07, 0.02), (s * 0.2, y - 0.07, -zf - 0.062), trim, bevel=0.008)
-    by = y - hgt / 2 + 0.03
-    box(c, (w + 0.014, 0.05, d + 0.014), (0, by, 0), trim, bevel=0.012)                        # trim band under the chest
-    for x in (-0.33, -0.2, 0.2, 0.33):
-        rivet(c, (x, by, zf + 0.012), dark, 0.016)
-    # dark mail skirt under the tassets: shows between the plates and at the hips
-    sk = pivot(c, 'mail_skirt', (0, -0.49, 0))
-    box(sk, (0.76, 0.26, 0.47), (0, 0, 0), dark, bevel=0.02)
-    mail_links(faces(sk, 0.38, 0.235, sides=False)[0][0], 0.35, (-0.1, -0.04, 0.02), R.metal, hgt=0.012)
-    # tabard: a cloth panel falling from the belt between the front tassets, a shorter one at the back
-    for z, tilt, ln in ((0.29, -0.12, 0.34), (-0.29, 0.12, 0.28)):
-        s = 1 if z > 0 else -1
-        f = pivot(c, 'tabard', (0, -0.355, z), (tilt, 0, 0))
-        box(f, (0.27, ln, 0.03), (0, -ln / 2, s * 0.045), cloth, bevel=0.01)
-        box(f, (0.28, 0.04, 0.036), (0, -ln + 0.03, s * 0.045), trim, bevel=0.008)            # hem stripe
-        if z > 0:
-            box(f, (0.09, 0.09, 0.02), (0, -0.14, 0.064), trim, rot=(0, 0, PI / 4), bevel=0.008)  # device
+def plate_accent(c, tabard=R.cloth, under=R.dark):
+    """The plate's one accent: a plain tabard falling from the belt between the front tassets (ROLE_cloth: it takes
+    the wearer's tunic colour, so the knight is not one grey mass), over a plain dark under-skirt that shows between
+    the plates at the hips."""
+    box(c, (0.76, 0.26, 0.47), (0, -0.49, 0), under, bevel=0.02)
+    f = pivot(c, 'tabard', (0, -0.355, 0.29), (-0.12, 0, 0))
+    box(f, (0.25, 0.36, 0.03), (0, -0.18, 0.03), tabard, taper=(1.12, 1), bevel=0.01)
 
 
 def body_plate(S):
-    """Platebody (the plate sets in plate_variants.py build on this: set P is exactly it): stacked-slab cuirass
-    with a crested breastplate, trim bands and rivet rows, back straps, a dark mail skirt and a cloth tabard,
-    pauldron caps with a trim ridge, and lames, rerebraces and couters down the upper arms."""
+    """Platebody (the plate sets in plate_variants.py build on this: set P is exactly it). Deliberately clean: a
+    stacked-slab cuirass with a raised breastplate, one line under the chest block, plain tassets and one accent (a
+    plain dyed tabard); pauldron caps with a raised trim plate, and plain lames, rerebraces and couters down the upper
+    arms. No straps, rivet rows or trim bands: at the gameplay camera they only add noise."""
     c = S('sock_chest')
-    plate_torso(c, groove=0.032)
-    plate_crafting(c)
+    plate_torso(c)
+    plate_accent(c)
     for s in (1, -1):
-        block_pauldron(S, s, top=R.trim)
-    upper_arm_plate(S)
+        block_pauldron(S, s, top=R.trim, rivets=None)
+    upper_arm_plate(S, edge=None)
 
 
 # ─── Gloves & boots ──────────────────────────────────────────────────────────
@@ -753,8 +741,9 @@ def _scale_mix(i, j):
 def u_scaleguard(S):
     """Hauberk of shed dragon scales: overlapping rows of small flat scale plates (two close reds, each standing
     out a little at its lower edge, a dark gap under every row) all round a dark mail box cuirass and over the
-    skirt; gold collar and buckle; blocky scale shoulder caps with swept-back bone horns, red scale lames down a
-    dark mail sleeve."""
+    skirt; gold collar and buckle. Its one strong feature is the shoulders: gold-rimmed scale caps with three big
+    pointed dragon scales shingled down the outside of each upper arm, over a dark mail sleeve, so the hauberk has
+    a broad, layered silhouette of its own (no horns or spikes)."""
     c = S('sock_chest')
     hauberk(c, mail=metallic(CHAR2), dark=metallic(CHAR), belt=0x3A2A22, buckle=metallic(GOLD), collar=metallic(GOLD), links=False)
     body = [(-0.33 + 0.09 * k, -0.33 + 0.09 * k + 0.115) for k in range(7)]
@@ -764,11 +753,12 @@ def u_scaleguard(S):
         scale_rows(pivot(f, 'skirt_face', (0, 0, 0.01)), hw - 0.005, skirt, [SCALE, SCALE_MID], SCALE_GAP, w=0.13, flare=0.032, gap=0.04,
                    pattern=lambda i, j: _scale_mix(i, j + 1), nm='skirt_scale')
     for s in (1, -1):
-        top = block_pauldron(S, s, color=SCALE, top=SCALE_DK, edge=metallic(GOLD), rivets=None)[0]
-        beam(top, (-s * 0.04, 0.06, -0.08), (s * 0.02, 0.15, -0.24), 0.06, BONE, w1=0.03)        # swept-back horn
-        beam(top, (s * 0.02, 0.145, -0.235), (s * 0.05, 0.16, -0.36), 0.035, BONE, w1=0.008)
+        block_pauldron(S, s, color=SCALE_DK, top=SCALE, edge=metallic(GOLD), rivets=None)
     for g, s in mail_sleeve(S, color=metallic(CHAR2), hem=metallic(GOLD), link=metallic(CHAR)):
-        arm_lames(g, s, (SCALE, SCALE_MID), SCALE_GAP)
+        # big pointed scales shingled down the outside of the upper arm, each over the top of the next
+        for k, (y, w, hgt, col) in enumerate(((-0.06, 0.34, 0.2, SCALE), (-0.15, 0.31, 0.18, SCALE_MID), (-0.235, 0.27, 0.16, SCALE))):
+            f = pivot(g, 'big_scale', (s * (0.168 - 0.008 * k), PALM + y, 0), (0, s * PI / 2, 0))
+            scale_plate(f, 0, 0, col, w=w, hgt=hgt, tilt=-0.3)
 
 
 GEAR = {

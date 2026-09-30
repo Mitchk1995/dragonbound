@@ -21,12 +21,6 @@ from _common import _mesh_obj
 import bmesh
 from mathutils import Vector
 
-# The curved-surface kit (surf / ssin / scos) still lives in plate_variants.py; borrow it for the shells.
-_p = os.path.join(_ROOT, 'tools', 'blender', 'plate_variants.py')
-_pv = {'__name__': 'db_pv', '__file__': _p}
-exec(open(_p, encoding='utf-8').read(), _pv)
-surf, ssin, scos = _pv['surf'], _pv['ssin'], _pv['scos']
-
 PI = math.pi
 H = R.hair
 BAND = 0x5A3A22   # leather hair tie (authored colour)
@@ -36,11 +30,17 @@ BEAD = 0xD9A640   # braid beads (authored colour)
 SECTION = {6: ((-1, 0), (-0.5, -1), (0.5, -1), (1, 0), (0.5, 1), (-0.5, 1)), 4: ((-1, 0), (0, -1), (1, 0), (0, 1))}
 
 
-class Scalp:
-    """Superellipsoid the hair is shaped on: centre (0, yc, dz), half-widths a (x) and b (z), crown at y = top.
-    `e` squares off the plan view, `ev` the profile. Angles t run round from the forehead (0) to +X (pi/2)."""
+# The head the hair sits on (sock_head space): a 0.46 cube with 0.06 chamfers, centred on the socket.
+HEAD_HALF, HEAD_BEVEL = 0.23, 0.06
 
-    def __init__(self, a, b, top, yc=0.0, dz=0.0, e=3.0, ev=2.4):
+
+class Scalp:
+    """Rounded box the hair is shaped on: centre (0, yc, dz), half-widths a (x) and b (z), crown at y = top.
+    `e` squares off the plan view, `ev` the profile. The head is a cube, so the scalp is boxy enough (e, ev
+    around 5 and 4) to wrap its corners: a rounder shell lets the cube's corners poke through at the temples
+    and above the ears, which read as bald patches. Angles t run round from the forehead (0) to +X (pi/2)."""
+
+    def __init__(self, a=0.266, b=0.272, top=0.315, yc=0.0, dz=-0.004, e=5.0, ev=4.0):
         self.a, self.b, self.hgt, self.e, self.ev = a, b, top - yc, e, ev
         self.c = Vector((0, yc, dz))
 
@@ -53,6 +53,10 @@ class Scalp:
         """Surface point at angle t and elevation phi (-pi/2 bottom .. pi/2 crown)."""
         r = scos(phi, self.ev)
         return self.c + Vector((self.a * r * ssin(t, self.e), self.hgt * ssin(phi, self.ev), self.b * r * scos(t, self.e)))
+
+    def bearing(self, t):
+        """Real compass bearing (degrees from the forehead) of the surface point at angle t."""
+        return math.degrees(math.atan2(self.a * ssin(t, self.e), self.b * scos(t, self.e)))
 
     def elevation(self, y):
         s = max(-0.99, min(0.99, (y - self.c.y) / self.hgt))
@@ -71,9 +75,10 @@ class Scalp:
 
 
 def hairline(keys):
-    """Hairline height at angle t from (degrees from the forehead, y) keys, mirrored left/right, eased between keys."""
-    def y(t):
-        deg = abs(math.degrees(math.atan2(math.sin(t), math.cos(t))))
+    """Hairline height at a bearing (degrees from the forehead: 45 = front corner of the head, 90 = over the ear,
+    180 = nape) from (bearing, y) keys, mirrored left/right, eased between keys."""
+    def y(deg):
+        deg = abs((deg + 180) % 360 - 180)
         for (d0, y0), (d1, y1) in zip(keys, keys[1:]):
             if deg <= d1:
                 s = (deg - d0) / (d1 - d0)
@@ -82,14 +87,50 @@ def hairline(keys):
     return y
 
 
-def hair_shell(h, sc, line, nu=24, nv=5, thick=0.045):
-    """Rounded cap of hair: the scalp `sc` from the crown down to `line`, a (degrees, y) hairline that sits
-    high at the forehead, dips into a sideburn in front of the ear, clears the ear and runs low at the nape."""
+def head_points(n=16):
+    """Points over the chamfered head cube (sock_head space)."""
+    h, r, pts = HEAD_HALF, HEAD_BEVEL, []
+    for i in range(n + 1):
+        for j in range(n + 1):
+            u, v = -h + 2 * h * i / n, -h + 2 * h * j / n
+            for p in ((u, v, h), (u, v, -h), (h, u, v), (-h, u, v), (u, h, v)):
+                q = list(p)
+                for a, b in ((0, 1), (0, 2), (1, 2)):      # pull onto the chamfer planes
+                    ex = abs(q[a]) + abs(q[b]) - (2 * h - r)
+                    if ex > 0:
+                        q[a] -= math.copysign(ex / 2, q[a])
+                        q[b] -= math.copysign(ex / 2, q[b])
+                pts.append(Vector(q))
+    return pts
+
+
+def coverage(sc, line, margin=0.012):
+    """Worst gauge of the head surface above the hairline (bald-spot check): every point there has to sit inside
+    the shell (gauge < 1, with room for the flat facets), or skin shows through the hair."""
     lo = hairline(line)
+    worst = 0.0
+    for p in head_points():
+        if p.y < lo(math.degrees(math.atan2(p.x, p.z - sc.c.z))) + margin:
+            continue
+        worst = max(worst, sc.gauge(p - sc.c))
+    return worst
+
+
+def hair_shell(h, sc, line, nu=28, nv=8, thick=0.045, jag=0.035):
+    """One continuous cap of hair: the scalp `sc` from the crown down to `line`, a (bearing, y) hairline that sits
+    high at the forehead, comes down at the temples and in a sideburn, clears the ear and runs low at the nape.
+    `jag` notches the lower edge into points all the way round, so it ends in hair tips rather than a helmet rim.
+    Raises if the head cube would show through anywhere above the hairline."""
+    lo = hairline(line)
+    worst = coverage(sc, line)
+    if worst > 0.955:
+        raise ValueError(f'hair shell leaves the head showing (gauge {worst:.3f})')
 
     def fn(u, v):
         t = 2 * PI * u
-        p0 = sc.elevation(lo(t))
+        x = u * nu / 2
+        tooth = jag * (1 - abs(2 * (x - math.floor(x)) - 1))
+        p0 = sc.elevation(lo(sc.bearing(t)) - tooth)
         return tuple(sc.at(t, p0 + (PI / 2 - p0) * v))
     return surf(h, fn, nu, nv, thick, H, closed_u=True, inside=tuple(sc.c), bevel=0.012, inner=False, walls=(0,))
 
@@ -137,52 +178,70 @@ def spike(h, sc, root, out, back, length, w, sides=4):
     return lock(h, spine, w, w * 0.7, n, sides)
 
 
-def hair_1(h):  # short crop: tight rounded cap, short textured crown, small fringe
-    sc = Scalp(0.262, 0.27, 0.31, dz=-0.005)
-    hair_shell(h, sc, [(0, 0.15), (30, 0.14), (55, 0.09), (72, 0.02), (90, 0.07), (105, 0.03), (130, -0.06), (180, -0.13)])
+# Shared hairline (bearing from the forehead in degrees, y): high over the forehead, down at the temples into a
+# sideburn in front of the ear, up and over the ear, down behind it and low at the nape.
+LINE = [(0, 0.155), (28, 0.145), (45, 0.1), (68, -0.03), (80, 0.065), (102, 0.065), (114, -0.03), (145, -0.1), (180, -0.13)]
+
+
+def side_locks(h, sc, s, n=3, y0=0.3, length=0.2, w=0.13, d=0.05, rake=0.08):
+    """Locks lying over the side of the head from the crown edge down toward the ear, raked back: hair texture on
+    what would otherwise be a smooth wall of shell."""
+    for k in range(n):
+        z = 0.14 - k * 0.14
+        strand(h, sc, [(s * 0.16, y0, z, -0.02), (s * 0.27, y0 - length * 0.45, z - rake * 0.5, 0.02),
+                       (s * 0.27, y0 - length, z - rake, 0.012)], w, d)
+
+
+def hair_1(h):  # short crop: tight cap, short textured crown, fringe brushed to one side, locks over the temples
+    sc = Scalp(top=0.305)
+    hair_shell(h, sc, LINE, jag=0.03)
     for x in (-0.12, -0.01, 0.1):                                                       # fringe, brushed to one side
-        strand(h, sc, [(x * 0.8, 0.3, 0.1, -0.03), (x, 0.26, 0.24, 0.025), (x + 0.06, 0.19, 0.3, 0.025)], 0.14, 0.06)
+        strand(h, sc, [(x * 0.8, 0.3, 0.1, -0.03), (x, 0.25, 0.24, 0.022), (x + 0.06, 0.18, 0.3, 0.02)], 0.14, 0.055)
     for a in range(6):                                                                  # crown whorl
         t = a * PI / 3 + 0.3
         dx, dz = math.sin(t), math.cos(t)
-        strand(h, sc, [(0, 0.35, -0.05, -0.015), (dx * 0.1, 0.33, -0.05 + dz * 0.1, 0.022), (dx * 0.22, 0.28, -0.05 + dz * 0.22, 0.008)], 0.13, 0.05)
-    for t in (-2.2, -2.7, PI, 2.7, 2.2):                                                # nape
+        strand(h, sc, [(0, 0.35, -0.05, -0.015), (dx * 0.1, 0.33, -0.05 + dz * 0.1, 0.02), (dx * 0.22, 0.28, -0.05 + dz * 0.22, 0.008)], 0.13, 0.05)
+    for s in (-1, 1):
+        side_locks(h, sc, s, n=3, length=0.2)
+    for t in (-2.3, -2.75, PI, 2.75, 2.3):                                              # nape
         dx, dz = math.sin(t), math.cos(t)
-        strand(h, sc, [(dx * 0.25, 0.18, dz * 0.25, -0.02), (dx * 0.27, 0.02, dz * 0.27, 0.02), (dx * 0.25, -0.14, dz * 0.25, 0.01)], 0.14, 0.05)
+        strand(h, sc, [(dx * 0.25, 0.18, dz * 0.25, -0.02), (dx * 0.27, 0.02, dz * 0.27, 0.02), (dx * 0.25, -0.13, dz * 0.25, 0.01)], 0.14, 0.05)
 
 
 def hair_2(h):  # swept back: a tall front rising off the brow, every lock raking back to the nape
-    sc = Scalp(0.265, 0.28, 0.35, dz=-0.01)
-    hair_shell(h, sc, [(0, 0.17), (30, 0.15), (55, 0.1), (72, 0.02), (90, 0.07), (105, 0.03), (130, -0.04), (180, -0.1)])
+    sc = Scalp(top=0.34, dz=-0.01)
+    hair_shell(h, sc, LINE, jag=0.03)
     for x in (-0.16, -0.08, 0, 0.08, 0.16):
         strand(h, sc, [(x * 0.9, 0.2, 0.24, -0.03), (x, 0.3, 0.22, 0.07), (x * 1.05, 0.4, 0.02, 0.05),
                        (x * 1.15, 0.28, -0.2, 0.035), (x * 1.2, 0.08, -0.3, 0.03)], 0.14, 0.08)
     for s in (-1, 1):
         strand(h, sc, [(s * 0.24, 0.16, 0.14, -0.02), (s * 0.27, 0.16, 0.0, 0.035), (s * 0.26, 0.1, -0.2, 0.025),
-                       (s * 0.2, 0.02, -0.3, 0.01)], 0.12, 0.07)
+                       (s * 0.2, 0.02, -0.3, 0.01)], 0.13, 0.07)
+        strand(h, sc, [(s * 0.2, 0.24, 0.12, -0.02), (s * 0.27, 0.1, 0.1, 0.025), (s * 0.27, 0.0, -0.06, 0.015),
+                       (s * 0.25, -0.06, -0.2, 0.008)], 0.12, 0.06)                     # over the temple, back past the ear
     for x in (-0.12, 0, 0.12):                                                          # ducktail flicks at the nape
         strand(h, sc, [(x, 0.1, -0.25, -0.02), (x * 1.1, -0.05, -0.28, 0.03), (x * 1.3, -0.14, -0.3, 0.07)], 0.12, 0.06)
 
 
 def hair_3(h):  # long, parted and tied back: locks sweep from the part to a tail, side locks frame the face
-    sc = Scalp(0.262, 0.272, 0.32, dz=-0.005)
-    hair_shell(h, sc, [(0, 0.16), (30, 0.15), (55, 0.1), (72, 0.0), (90, 0.07), (105, 0.02), (130, -0.05), (180, -0.1)])
+    sc = Scalp(top=0.32)
+    hair_shell(h, sc, LINE, jag=0.03)
     for s in (-1, 1):
         for z in (0.2, 0.06, -0.08):                                                    # from the part to the tie
             strand(h, sc, [(s * 0.03, 0.33, z, -0.03), (s * 0.14, 0.3, z - 0.03, 0.015), (s * 0.24, 0.15, z - 0.12, 0.015),
                            (s * 0.12, 0.1, -0.28, 0.01)], 0.17, 0.05)
         strand(h, sc, [(s * 0.2, 0.22, 0.2, -0.02), (s * 0.27, 0.1, 0.16, 0.03), (s * 0.28, -0.08, 0.15, 0.03),
                        (s * 0.27, -0.24, 0.14, 0.02)], 0.12, 0.07)                      # side lock framing the face
-    box(h, (0.17, 0.15, 0.12), (0, 0.11, -0.28), H, bevel=0.04)                        # knot
-    box(h, (0.19, 0.05, 0.14), (0, 0.03, -0.3), BAND, bevel=0.012)                      # tie
-    lock(h, [(0, 0.06, -0.3), (0, -0.08, -0.33, 0.95), (0, -0.26, -0.34, 0.8), (0, -0.4, -0.33, 0.55), (0, -0.54, -0.3)],
+    box(h, (0.17, 0.15, 0.12), (0, 0.11, -0.29), H, bevel=0.04)                        # knot
+    box(h, (0.19, 0.05, 0.14), (0, 0.03, -0.31), BAND, bevel=0.012)                     # tie
+    lock(h, [(0, 0.06, -0.31), (0, -0.08, -0.34, 0.95), (0, -0.26, -0.35, 0.8), (0, -0.4, -0.34, 0.55), (0, -0.54, -0.31)],
          0.17, 0.12, (0, 0, -1))                                                        # tail
-    box(h, (0.12, 0.04, 0.1), (0, -0.37, -0.333), BAND, bevel=0.01)
+    box(h, (0.12, 0.04, 0.1), (0, -0.37, -0.343), BAND, bevel=0.01)
 
 
 def hair_4(h):  # wild: one mass of big chunky spikes growing out of the shell and sweeping back
-    sc = Scalp(0.265, 0.275, 0.33, dz=-0.01)
-    hair_shell(h, sc, [(0, 0.16), (30, 0.14), (55, 0.1), (72, 0.02), (90, 0.07), (105, 0.02), (130, -0.06), (180, -0.12)])
+    sc = Scalp(top=0.33, dz=-0.01)
+    hair_shell(h, sc, LINE, jag=0.035)
     for x, y, z, out, back, ln, w in ((0, 0.3, 0.18, 0.5, -0.3, 0.24, 0.2),              # over the brow
                                       (0, 0.35, 0.0, 0.2, 0.9, 0.27, 0.22),              # crown
                                       (0, 0.28, -0.2, 0.0, 0.6, 0.28, 0.2),
@@ -250,10 +309,11 @@ def build(name):
 
 if globals().get('DB_RUN', True):
     tris = {}
-    for name in BUILDERS:
+    for name in globals().get('DB_ONLY') or list(BUILDERS):   # e.g. DB_ONLY = ['hair_1'] to export only those
         scene = build(name)
         tris[name] = tri_count(scene)
         export(f'DB_{name}', f'{name}.glb')
         preview_auto(f'{name}.png')
         remove_preview_rig()
     result = {'ok': True, 'tris': tris}
+    print('HAIR', result)
