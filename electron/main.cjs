@@ -40,13 +40,20 @@ const saveDir = () => app.getPath('userData');
 const savePath = () => path.join(saveDir(), 'save.json');
 const backupPath = () => path.join(saveDir(), 'save.backup.json');
 
+function readGoodSave(file) {
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 ipcMain.handle('save:read', async () => {
   for (const p of [savePath(), backupPath()]) {
-    try {
-      const text = fs.readFileSync(p, 'utf8');
-      JSON.parse(text); // reject a corrupt file and fall through to the backup
-      return text;
-    } catch {}
+    const text = readGoodSave(p);
+    if (text) return text;
   }
   return null;
 });
@@ -54,7 +61,7 @@ ipcMain.handle('save:read', async () => {
 ipcMain.handle('save:write', async (_e, json) => {
   fs.mkdirSync(saveDir(), { recursive: true });
   // Keep the previous good save as a backup, then write atomically.
-  if (fs.existsSync(savePath())) fs.copyFileSync(savePath(), backupPath());
+  if (readGoodSave(savePath())) fs.copyFileSync(savePath(), backupPath());
   const tmp = savePath() + '.tmp';
   fs.writeFileSync(tmp, json, 'utf8');
   fs.renameSync(tmp, savePath());

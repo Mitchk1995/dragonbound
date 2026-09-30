@@ -32,7 +32,7 @@ describe('browser save recovery', () => {
     expect((await loadSave(getBackend()))?.character?.name).toBe('Current');
   });
 
-  it.each(['{"character":', ''])('recovers the character and progress when the primary is corrupt or empty (%j)', async (bad) => {
+  it.each(['{"character":', '', 'null', '[]', '42', 'true', '"invalid"'])('recovers the character and progress when the primary is corrupt or not an object (%j)', async (bad) => {
     stored.set(PRIMARY, bad);
     stored.set(BACKUP, characterSave('Recovered'));
     const recovered = await loadSave(getBackend());
@@ -52,13 +52,18 @@ describe('browser save recovery', () => {
     expect(await loadSave(getBackend())).toBeNull();
   });
 
-  it('keeps the last good backup when saving after recovery from corruption', async () => {
+  it.each(['{"character":', 'null', '[]', '42'])('keeps the last good backup when saving after recovery (%j)', async (bad) => {
     const lastGood = characterSave('Recovered');
-    stored.set(PRIMARY, '{"character":');
+    stored.set(PRIMARY, bad);
     stored.set(BACKUP, lastGood);
     await getBackend().write(characterSave('New progress'));
     expect(stored.get(BACKUP)).toBe(lastGood);
     expect((await loadSave(getBackend()))?.character?.name).toBe('New progress');
+  });
+
+  it.each(['null', '[]', '42', 'true', '"invalid"'])('rejects non-object data from an arbitrary backend (%j)', async (json) => {
+    const backend = { read: async () => json, write: async () => {}, describe: () => 'test' };
+    expect(await loadSave(backend)).toBeNull();
   });
 
   it('backs up a valid previous primary before writing new progress', async () => {
