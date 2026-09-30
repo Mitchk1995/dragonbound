@@ -315,11 +315,78 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     }
     return false;
   };
+  // Cave walls (mine): the foot of every wall is built from layered rock slabs, stacked in strata
+  // that step back as they rise, their heights varying along the wall, with the odd dark crevice.
+  // Walls on the camera side of the floor stay low. The terrain behind climbs on into darkness.
+  const strata: THREE.Matrix4[] = [], strataCols: THREE.Color[] = [];
+  const crevices: THREE.Matrix4[] = [];
+  const strataPal = [0x7a6650, 0x5c4a3a, 0x6c5a48, 0x4c3e32].map((c) => new THREE.Color(c));
+  const strataNoise = smoothNoise(seed + 17);
+  const addStrata = (x: number, z: number) => {
+    let nx = 0, nz = 0, open = 0;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && at(x + dx, z + dz) === Cell.Ground) {
+      nx += dx;
+      nz += dz;
+      open++;
+    }
+    const nl = Math.hypot(nx, nz);
+    // Rock pillars (floor on several sides) rise straight; only true walls step back as they climb.
+    const step = open >= 5 || nl < 1.2 ? 0.02 : 0.2;
+    if (nl < 0.01) [nx, nz] = [0, 1];
+    else [nx, nz] = [nx / nl, nz / nl];
+    const face = Math.atan2(nx, nz);
+    const camSide = nz < -0.5;
+    const hn = strataNoise(x * 0.16, z * 0.16);
+    const H = camSide ? 0.7 + hn * 0.7 : 1.3 + hn * 3.2 + rng() * 0.5;
+    if (!camSide && rng() < 0.1) {
+      // A crevice: a dark cleft recessed between the rock masses (lower than its neighbours, so it
+      // reads as a gap in the rock, not a post).
+      p.set(x + 0.5 - nx * 0.55, -0.1, z + 0.5 - nz * 0.55);
+      q.setFromEuler(e.set(0, face, 0));
+      crevices.push(m.compose(p, q, s.set(0.8, 0.9 + rng() * 0.6, 0.9)).clone());
+      return;
+    }
+    let y = -0.2, layer = 0;
+    while (y < H) {
+      const th = 0.42 + rng() * 0.4, inset = layer * step + rng() * 0.1;
+      p.set(x + 0.5 - nx * inset + (rng() - 0.5) * 0.14, y, z + 0.5 - nz * inset + (rng() - 0.5) * 0.14);
+      q.setFromEuler(e.set((rng() - 0.5) * 0.06, face + (rng() - 0.5) * 0.3, (rng() - 0.5) * 0.06));
+      strata.push(m.compose(p, q, s.set(1.2 + rng() * 0.45 - layer * 0.04, th, 1.25)).clone());
+      // Bands follow height (with a slow wander), so neighbouring stacks line up into strata.
+      const band = Math.floor((y + 0.2 + strataNoise(x * 0.05 + 3, z * 0.05) * 0.9) / 0.6);
+      strataCols.push(strataPal[((band % 4) + 4) % 4].clone().offsetHSL(0, 0, (rng() - 0.5) * 0.04));
+      y += th * 0.9;
+      layer++;
+    }
+  };
+  // Loose rock on cave and caldera floors: rubble heaped at the foot of the walls, pebbles between.
+  const debris: THREE.Matrix4[] = [], debrisCols: THREE.Color[] = [];
+  const debrisBase = new THREE.Color(theme.cliff?.[0] ?? 0x6e5c4a);
+  const debrisFloor = theme.wall === 'cave' && (!!theme.wallRise || !!theme.lava);
+  const nearRelief = (x: number, z: number) => {
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (isRelief(at(x + dx, z + dz), theme)) return true;
+    return false;
+  };
+  const addDebris = (x: number, z: number) => {
+    const wallFoot = nearRelief(x, z);
+    // Pebbles between the walls only underground; outdoors (the caldera) rubble stays at the wall foot.
+    const n = wallFoot ? (rng() < (theme.wallRise ? 0.5 : 0.3) ? 2 + Math.floor(rng() * 3) : 0) : theme.wallRise && rng() < 0.04 ? 3 + Math.floor(rng() * 3) : 0;
+    const cx = x + 0.2 + rng() * 0.6, cz = z + 0.2 + rng() * 0.6;
+    for (let k = 0; k < n; k++) {
+      const sc = wallFoot ? 0.16 + rng() * 0.36 : 0.07 + rng() * 0.12;
+      const spread = wallFoot ? 0.5 : 0.35;
+      p.set(cx + (rng() - 0.5) * spread * 2, heightAt(cx, cz) - sc * 0.15, cz + (rng() - 0.5) * spread * 2);
+      q.setFromEuler(e.set((rng() - 0.5) * 0.4, rng() * 6.3, (rng() - 0.5) * 0.4));
+      debris.push(m.compose(p, q, s.set(sc * (1 + rng() * 0.5), sc * (0.6 + rng() * 0.4), sc)).clone());
+      debrisCols.push(debrisBase.clone().offsetHSL(0, -0.02, (rng() - 0.5) * 0.12));
+    }
+  };
   for (let z = 0; z < h; z++) {
     for (let x = 0; x < w; x++) {
       const cell = at(x, z);
       const i = z * w + x;
       if (cell === Cell.Tree) addTree(x + 0.5, z + 0.5);
+      else if (cell === Cell.Wall && theme.wallRise && nearWalkable(x, z)) addStrata(x, z);
       else if (cell === Cell.Rock) {
         const sc = 0.6 + rng() * 0.7;
         p.set(x + 0.5, heightAt(x + 0.5, z + 0.5) - 0.12, z + 0.5);
@@ -378,8 +445,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       } else if (cell === Cell.Ground && !layout.fluid[i]) {
         const g = layout.ground[i];
         const green = g === Ground.Grass || g === Ground.Dirt;
-        // Reeds along shores, bushes where the forest thins out, flowers in open meadows.
-        if (nearFluid(x, z) && rng() < 0.5) {
+        if (debrisFloor) addDebris(x, z);
+        // Reeds along shores (water only, never lava), bushes where the forest thins out, flowers
+        // in open meadows.
+        if (nearFluid(x, z) && !theme.lava && !theme.wallRise && rng() < 0.5) {
           for (let k = 0; k < 3; k++) {
             p.set(x + rng(), heightAt(x + 0.5, z + 0.5), z + rng());
             q.setFromEuler(e.set((rng() - 0.5) * 0.3, rng() * 3, (rng() - 0.5) * 0.3));
@@ -420,6 +489,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   inst(rockBlock(7, 1.25, 1.0, 1.1), half(rocks, 0), half(rockCols, 0), 0, true, 'rock');
   inst(rockBlock(8, 1.1, 1.05, 1.2), half(rocks, 1), half(rockCols, 1), 0, true, 'rock');
   inst(rockBlock(9, 1.1, 1.0, 1.0), rims, rimCols, 0, false, 'rock');
+  inst(rockBlock(31, 1, 1, 1), half(strata, 0), half(strataCols, 0), 0, true, 'rock');
+  inst(rockBlock(32, 1, 1, 1), half(strata, 1), half(strataCols, 1), 0, true, 'rock');
+  inst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), crevices, null, 0x120e0b, true, undefined, false);
+  inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false);
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
   const masonry = mergeGeometries([
     new THREE.BoxGeometry(1, 0.45, 1).translate(0, -0.275, 0),

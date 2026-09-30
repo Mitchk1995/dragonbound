@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -71,6 +71,17 @@ ipcMain.handle('save:write', async (_e, json) => {
 
 ipcMain.handle('save:path', async () => savePath());
 
+/**
+ * Inspect window position: just past the left edge of the leftmost display, level with it. Close
+ * enough that Windows keeps that display's DPI (a window parked far away gets a different scale and
+ * the captures change size), yet nothing of it is visible.
+ */
+function offscreen() {
+  const ds = screen.getAllDisplays();
+  const left = ds.reduce((a, d) => (d.bounds.x < a.bounds.x ? d : a), ds[0]);
+  return [left.bounds.x - 1700, left.bounds.y];
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1600,
@@ -80,6 +91,12 @@ function createWindow() {
     autoHideMenuBar: true,
     // Inspect captures must be pixel-identical run to run: fixed content size, no DPI scaling.
     useContentSize: !!INSPECT,
+    // Inspect runs stay out of the owner's way: the window is shown without taking focus, has no
+    // taskbar button and sits just off-screen. It is still a real, shown window, so WebGL renders
+    // and capturePage returns full frames (background throttling is off below). Frameless with no
+    // thick frame, so the window is exactly 1600×900 of content (a hidden-then-shown framed window
+    // on Windows reports its outer size as content and the captures grow).
+    ...(INSPECT ? { show: false, frame: false, thickFrame: false, resizable: false, skipTaskbar: true, x: offscreen()[0], y: offscreen()[1] } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -89,6 +106,13 @@ function createWindow() {
     },
   });
   if (INSPECT) {
+    // Shown without activation (no focus steal), then parked off-screen again in case the OS
+    // clamped the initial position onto a display.
+    win.once('ready-to-show', () => {
+      win.showInactive();
+      win.setPosition(...offscreen());
+      win.setContentSize(1600, 900);
+    });
     win.webContents.on('console-message', (e) => {
       const { level, message } = e;
       if (level === 'error' || level === 'warning' || level === 3 || level === 2) console.log('[renderer]', message);

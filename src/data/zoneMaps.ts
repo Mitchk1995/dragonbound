@@ -1,6 +1,6 @@
 import type { Vec2 } from '../types';
 import { Gen, distToPoly } from '../world/gen';
-import { Cell, Fluid, Ground, type ZoneLayout } from '../world/layout';
+import { blockDisc, Cell, Fluid, Ground, type ZoneLayout } from '../world/layout';
 
 /**
  * Zone maps. Each is composed from big authored shapes (roads, rivers, lakes, clearings,
@@ -23,6 +23,18 @@ export const KEEP_STAGE: Vec2 = { x: 45.5, z: 50.5 };
 
 /** Camera offsets from KEEP_STAGE used by character creation and the pose tools (x/z only). */
 export const STAGE_CAMERAS: Vec2[] = [{ x: -1.4, z: 5.2 }, { x: 0, z: 4.2 }, { x: 4.2, z: 0 }, { x: -4.2, z: 0 }];
+
+/** Block a rotated rectangle (a building footprint): half-width hw along its X, half-depth hd along Z. */
+function blockRect(G: Gen, cx: number, cz: number, hw: number, hd: number, rot: number) {
+  const c = Math.cos(rot), s = Math.sin(rot), R = Math.ceil(Math.hypot(hw, hd)) + 1;
+  for (let z = Math.floor(cz - R); z <= cz + R; z++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
+    if (!G.inside(x, z)) continue;
+    const dx = x + 0.5 - cx, dz = z + 0.5 - cz;
+    // World offset back into the building's frame (the prop is rotated by `rot` about Y).
+    const lx = dx * c - dz * s, lz = dx * s + dz * c;
+    if (Math.abs(lx) <= hw && Math.abs(lz) <= hd) G.l.cells[G.idx(x, z)] = Cell.Blocked;
+  }
+}
 
 // ─── Dragonspire Keep: a floating island in the Veil ────────────────────────
 
@@ -72,7 +84,10 @@ export function buildKeep(seed: number): ZoneLayout {
     const x = plaza.x + Math.cos(rad) * 9.2, z = plaza.z + Math.sin(rad) * 9.2;
     G.station('portal', a.id, x, z, Math.atan2(plaza.x - x, plaza.z - z), 1.4);
   }
-  G.station('bank', 'bank', 64.5, 44, -Math.PI / 2, 2.2);
+  // The bank vault faces the camera (door, coin pediment) with a paved forecourt before its steps.
+  G.clearing(65, 46.6, 2.6, Ground.Stone, 0.4);
+  G.station('bank', 'bank', 65, 42.5, 0, 2.2);
+  blockRect(G, 65, 42.5, 2.9, 2.0, 0);
   G.station('furnace', 'furnace', 31.5, 40, Math.PI / 2, 1.5);
   G.station('anvil', 'anvil', 33.5, 47.5, Math.PI / 2, 0.9);
   G.station('restore', 'emberforge', 29.5, 47, Math.PI / 2, 1.3);
@@ -80,10 +95,11 @@ export function buildKeep(seed: number): ZoneLayout {
   G.station('npc', 'quartermaster', 60.2, 58.4, -Math.PI * 0.75, 0.5);
   G.station('npc', 'warden', 52, 56, Math.PI, 0.5);
   G.station('restore', 'board', 39.5, 59, Math.PI * 0.8, 0.8);
-  G.station('restore', 'vault_expanded', 68, 36, -Math.PI / 2, 1.8);
-  G.station('restore', 'alchemy_lab', 30, 24, Math.PI / 4, 2.6);
-  G.station('restore', 'rune_altar', 67, 24, -Math.PI / 4, 2.6);
-  G.station('restore', 'hatchery', 36, 73, Math.PI * 0.8, 2.4);
+  // Restoration sites turn their gable fronts (door, emblem, sign) toward the camera.
+  for (const [id, x, z, rot, r] of [['vault_expanded', 70.5, 34.5, -0.55, 1.8], ['alchemy_lab', 30, 24, 0.6, 2.6], ['rune_altar', 67, 24, -0.6, 2.6], ['hatchery', 36, 73, 0.75, 2.4]] as [string, number, number, number, number][]) {
+    G.station('restore', id, x, z, rot, r);
+    blockRect(G, x, z, 2.35, 1.8, rot);
+  }
   for (const [x, z] of [[40, 53], [56, 53], [40, 35], [56, 35], [44.5, 66], [51.5, 66], [44.5, 74], [51.5, 74]]) G.prop('lamp', x, z, 0, 1, 0.4);
   G.prop('signpost', 51, 64, 0.4, 1, 0.3);
   // The hero is staged here for character creation and the pose tools; keep every camera spot
@@ -138,19 +154,28 @@ export function buildMine(seed: number): ZoneLayout {
   G.l.entry = { x: 60, z: 103 };
   G.station('exit', 'keep', 60, 112, Math.PI, 1.4);
   G.station('chest', 'mine_chest', 53.5, 106, Math.PI / 2, 0.7);
-  // Ore sits against the cavern walls, never in a tunnel mouth.
+  // Open, dry floor within `r` of a point (no wall, fluid, prop or station cells).
+  const clear = (x: number, z: number, r: number) => {
+    for (let zz = Math.floor(z - r); zz <= z + r; zz++) for (let xx = Math.floor(x - r); xx <= x + r; xx++) {
+      if (Math.hypot(xx + 0.5 - x, zz + 0.5 - z) > r + 0.3) continue;
+      if (!G.inside(xx, zz)) return false;
+      const i = G.idx(xx, zz);
+      if (G.l.cells[i] !== Cell.Ground || G.l.fluid[i]) return false;
+    }
+    return true;
+  };
   const onRoute = (x: number, z: number) => tunnelPolys.some((p) => distToPoly(x, z, p).d < 3.5);
+  // Ore sits near the cavern walls but never inside them: the rock keeps a margin from the wall
+  // and the camera side (+z) stays open floor, so the hero never mines from inside a rock.
   const ring = (c: { x: number; z: number; r: number }, ores: string[], start: number) => {
     ores.forEach((ore, k) => {
       const a = start + (k / ores.length) * Math.PI * 2;
       for (let rr = c.r + 3; rr > 1.5; rr -= 0.5) {
         const x = c.x + Math.cos(a) * rr, z = c.z + Math.sin(a) * rr;
-        const i = G.idx(Math.floor(x), Math.floor(z));
-        if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i]) {
-          const xi = c.x + Math.cos(a) * (rr - 1), zi = c.z + Math.sin(a) * (rr - 1);
-          if (!onRoute(xi, zi) && G.l.cells[G.idx(Math.floor(xi), Math.floor(zi))] === Cell.Ground) G.ore(ore, xi, zi);
-          break;
-        }
+        if (!clear(x, z, 1.3) || !clear(x, z + 1.9, 0.8) || onRoute(x, z)) continue;
+        if (G.l.nodes.some((n) => Math.hypot(n.x - x, n.z - z) < 2.8)) continue;
+        G.ore(ore, x, z);
+        break;
       }
     });
   };
@@ -160,20 +185,115 @@ export function buildMine(seed: number): ZoneLayout {
   ring(caverns.east, ['iron', 'iron', 'iron', 'iron', 'iron', 'iron', 'iron'], 0.6);
   ring(caverns.east2, ['iron', 'coal', 'iron', 'coal', 'iron'], 0.2);
   ring(caverns.deep, ['coal', 'coal', 'iron', 'coal', 'coal', 'coal', 'iron', 'coal', 'coal', 'coal'], 0.2);
-  // Dressing: rails and carts along the main galleries, lanterns in every cavern, crystals.
+  const used: Vec2[] = [...G.l.nodes, ...G.l.stations];
+  const free = (x: number, z: number, r: number, gap = 2.6) => clear(x, z, r) && !used.some((u) => Math.hypot(u.x - x, u.z - z) < gap);
+  const put = (kind: string, x: number, z: number, rot = 0, s = 1, block = 0) => {
+    used.push({ x, z });
+    return G.prop(kind, x, z, rot, s, block);
+  };
+  // Timber support sets across the tunnels (every ~7 units where the passage is narrow), each
+  // with a hanging lantern; a few of them light the way.
+  let lit = 0;
+  tunnelPolys.forEach((poly, ti) => {
+    let last = -99, acc = 0;
+    for (let k = 1; k < poly.length - 1; k++) {
+      acc += Math.hypot(poly[k].x - poly[k - 1].x, poly[k].z - poly[k - 1].z);
+      if (acc - last < 7) continue;
+      const p = poly[k], dx = poly[k + 1].x - poly[k - 1].x, dz = poly[k + 1].z - poly[k - 1].z, dl = Math.hypot(dx, dz) || 1;
+      const ux = dx / dl, uz = dz / dl, px = uz, pz = -ux;
+      const reach = (sgn: number) => {
+        for (let s = 0; s < 6; s += 0.25) {
+          const x = Math.floor(p.x + px * s * sgn), z = Math.floor(p.z + pz * s * sgn);
+          if (!G.inside(x, z) || G.l.cells[G.idx(x, z)] !== Cell.Ground) return s;
+        }
+        return 6;
+      };
+      const sR = reach(1), sL = reach(-1), span = sR + sL;
+      if (span < 2.6 || span > 6.2) continue;
+      const cx = p.x + px * (sR - sL) / 2, cz = p.z + pz * (sR - sL) / 2;
+      if (!clear(cx, cz, 1.0) || used.some((u) => Math.hypot(u.x - cx, u.z - cz) < 3)) continue;
+      let nearFluid = false;
+      for (let zz = Math.floor(cz - 3); zz <= cz + 3; zz++) for (let xx = Math.floor(cx - 3); xx <= cx + 3; xx++) if (G.inside(xx, zz) && G.l.fluid[G.idx(xx, zz)]) nearFluid = true;
+      if (nearFluid) continue;
+      last = acc;
+      const litHere = lit < 5 && (ti + k) % 2 === 0;
+      if (litHere) lit++;
+      G.prop(litHere ? 'mine_frame_lit' : 'mine_frame', cx, cz, Math.atan2(ux, uz), 1).len = span - 0.3;
+      for (const sgn of [-1, 1]) blockDisc(G.l, cx + px * sgn * (span / 2 - 0.35), cz + pz * sgn * (span / 2 - 0.35), 0.45);
+      used.push({ x: cx, z: cz });
+    }
+  });
+  // Rails and carts along the main galleries, a tipped cart spilling ore in the iron workings.
   G.prop('rails', 58, 94, 0, 1).len = 12;
-  G.prop('minecart', 57, 90, 0.2, 1, 0.8);
+  put('minecart', 57, 90, 0.2, 1, 0.8);
   G.prop('rails', 36, 72, Math.PI / 2 + 0.2, 1).len = 10;
-  G.prop('minecart', 30, 74, 1.4, 1, 0.8);
-  for (const c of Object.values(caverns)) G.prop('lantern', c.x + 0.5, c.z - c.r + 2.5);
+  put('minecart', 30, 74, 1.4, 1, 0.8);
+  G.prop('rails', 80, 69, Math.PI / 2 - 0.45, 1).len = 9;
+  G.prop('rails', 60, 36, 0.1, 1).len = 7;
+  put('minecart', 59.6, 39.5, 0.1, 1, 0.8);
+  for (const [c, a] of [[caverns.east, 2.4], [caverns.deep, 0.9]] as [typeof caverns.east, number][]) {
+    for (let r = 3; r < c.r; r += 0.5) {
+      const x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+      if (free(x, z, 1.6, 3.2)) {
+        put('minecart_tipped', x, z, a + Math.PI / 2, 1, 0.9);
+        break;
+      }
+    }
+  }
+  // Miners' camp by the entry: crates and a lantern by the deposit chest.
+  put('crates', 51.5, 103.5, 0.4, 1, 0.6);
+  put('crates', 67.5, 104.5, -0.3, 1, 0.6);
+  // Lanterns in every cavern (on the far wall), shoring timbers against cavern walls.
+  for (const c of Object.values(caverns)) put('lantern', c.x + 0.5, c.z - c.r + 2.5);
+  for (const [name, c] of Object.entries(caverns)) {
+    if (name === 'grotto') continue;
+    for (const a0 of [-Math.PI / 2 - 0.7, -Math.PI / 2 + 0.8, Math.PI + 0.3, 0.2]) {
+      let wx = 0, wz = 0, hit = false;
+      for (let r = 2; r < c.r + 6; r += 0.25) {
+        wx = c.x + Math.cos(a0) * r;
+        wz = c.z + Math.sin(a0) * r;
+        const cell = G.l.cells[G.idx(Math.floor(wx), Math.floor(wz))];
+        if (cell !== Cell.Ground) {
+          // Only against rock (never a lake shore or another prop).
+          hit = cell === Cell.Wall;
+          break;
+        }
+      }
+      if (!hit) continue;
+      const x = wx - Math.cos(a0) * 0.9, z = wz - Math.sin(a0) * 0.9;
+      if (!free(x, z, 0.6, 3) || onRoute(x, z)) continue;
+      put('shoring', x, z, Math.atan2(-Math.cos(a0), -Math.sin(a0)), 1, 0.6);
+      break;
+    }
+  }
+  // Seep puddles and loose ore chips on the floors.
+  for (const [c, n] of [[caverns.hall, 3], [caverns.west, 1], [caverns.deep, 2], [caverns.east, 1], [caverns.entry, 1]] as [typeof caverns.hall, number][]) {
+    let placed = 0;
+    for (let t = 0; t < 40 && placed < n; t++) {
+      const a = G.rng() * Math.PI * 2, r = 2 + G.rng() * (c.r - 2);
+      const x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+      if (!free(x, z, 1.5, 3)) continue;
+      G.prop('puddle', x, z, G.rng() * 6, 0.65 + G.rng() * 0.35).len = placed++;
+      used.push({ x, z });
+    }
+  }
+  const chipKind: Record<string, number> = { copper: 0, tin: 1, iron: 2, coal: 3 };
+  G.l.nodes.forEach((n, i) => {
+    if (i % 2) return;
+    for (let t = 0; t < 8; t++) {
+      const a = G.rng() * Math.PI * 2, x = n.x + Math.cos(a) * 1.9, z = n.z + Math.sin(a) * 1.9;
+      if (!clear(x, z, 0.5)) continue;
+      G.prop('ore_chips', x, z, G.rng() * 6).len = chipKind[n.ore] ?? 0;
+      break;
+    }
+  });
   for (let k = 0; k < 6; k++) {
     const a = k * 1.05 + 0.3;
     G.prop('crystal_big', caverns.grotto.x + Math.cos(a) * 4.5, caverns.grotto.z + Math.sin(a) * 4.5, a, 0.8 + (k % 3) * 0.2, 0.7);
   }
   for (let k = 0; k < 40; k++) {
     const x = 4 + G.rng() * (w - 8), z = 4 + G.rng() * (h - 8);
-    const i = G.idx(Math.floor(x), Math.floor(z));
-    if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i] && !onRoute(x, z)) G.prop(G.rng() < 0.3 ? 'mushrooms' : 'crystal', x, z, G.rng() * 6, 0.6 + G.rng() * 0.6);
+    if (free(x, z, 0.5, 2.2) && !onRoute(x, z)) G.prop(G.rng() < 0.3 ? 'mushrooms' : 'crystal', x, z, G.rng() * 6, 0.6 + G.rng() * 0.6);
   }
   G.connect();
   return G.l;
@@ -365,8 +485,9 @@ export function buildRuin(seed: number): ZoneLayout {
 export function buildLair(seed: number): ZoneLayout {
   const w = 100, h = 132;
   const G = new Gen(w, h, seed, Cell.Ground, Ground.Scorch);
-  const A = { x: 50, z: 32, r: 15 };
-  const road = G.road([{ x: 50, z: 126 }, { x: 50, z: 116 }, { x: 40, z: 98 }, { x: 58, z: 80 }, { x: 46, z: 64 }, { x: 50, z: 50 }, { x: 50, z: 44 }], 3.6, Ground.Path);
+  // The den: a wide caldera floor (the boss logic scales with A.r).
+  const A = { x: 50, z: 33, r: 17 };
+  const road = G.road([{ x: 50, z: 126 }, { x: 50, z: 116 }, { x: 40, z: 98 }, { x: 58, z: 80 }, { x: 46, z: 64 }, { x: 50, z: 54 }, { x: 50, z: 48 }], 3.6, Ground.Path);
   G.road([{ x: 40, z: 98 }, { x: 26, z: 104 }], 2.6, Ground.Path);
   G.road([{ x: 58, z: 80 }, { x: 72, z: 80 }, { x: 86, z: 79 }], 2.6, Ground.Path);
   G.clearing(A.x, A.z, A.r, Ground.Arena, 1);
@@ -385,33 +506,60 @@ export function buildLair(seed: number): ZoneLayout {
       G.l.elev[i] = 5 + G.noise(x * 0.15, z * 0.15) * 3;
     }
   }
+  // Scorched floor: a blackened blast ring around the dragon's roost and a burnt band at the foot
+  // of the caldera wall; the fighting floor between stays the ruddier arena rock.
+  const home = { x: A.x, z: A.z - 2 };
+  G.blob(A.x, A.z, A.r + 1, 1, (i, x, z) => {
+    if (G.l.cells[i] !== Cell.Ground) return;
+    const dh = Math.hypot(x + 0.5 - home.x, z + 0.5 - home.z), da = Math.hypot(x + 0.5 - A.x, z + 0.5 - A.z);
+    const n = G.noise(x * 0.3 + 11, z * 0.3);
+    if (dh < 2.4 + n * 1.2 || (dh > 5.2 + n && dh < 7.0 + n * 1.4 && n > 0.32) || da > A.r - 2.6 + n * 1.5) G.l.ground[i] = Ground.Scorch;
+  });
+  // A lava pool seeps out of the north-west wall; fissures run from it across the floor's edge.
+  G.lake(39, 21, 3.6, Fluid.Lava, 1.2, true);
+  const seam = (x: number, z: number, dx: number, dz: number, v: number) => G.prop('lava_seam', x, z, Math.atan2(dx, dz), 1).len = v;
+  seam(41.2, 24.8, -0.15, 1, 0);
+  seam(42.6, 22.6, 1, 0.3, 1);
+  seam(55, 25.2, 0.3, 1, 2);
+  seam(36.5, 44.5, 1, -0.55, 3);
+  // The hoard: a raised basalt ledge against the north-east wall, heaped with gold.
+  G.prop('hoard_ledge', 58, 21.2, -0.25, 1, 3.4);
+  // Plates of cooled lava crust in the fighting ring (dark, so telegraphs read against them).
+  for (const [x, z, v] of [[42.4, 29.6, 0], [57.8, 32.6, 1], [46.8, 41.8, 2], [54.6, 44.2, 3], [39.2, 36.4, 4]]) G.prop('crust', x, z, Math.atan2(-(z - A.z), x - A.x), 1).len = v;
+  // Scorch marks where it has breathed fire; the biggest on the roost itself.
+  for (const [x, z, s, v] of [[home.x, home.z, 2.4, 0], [44.5, 38, 1.2, 1], [56.5, 39.5, 1.5, 2], [52.5, 24.8, 1.0, 3], [41, 31.5, 0.9, 4]]) G.prop('scorch', x, z, x, s).len = v;
+  // Blocky basalt columns frame the entrance and stand along the wall; ember crystals glow at the rim.
+  for (const [x, z, v] of [[34.2, 28.5, 0], [45.5, 16.8, 1], [43.6, 48.6, 2], [56.8, 48.6, 3], [66.4, 42.5, 4]]) G.prop('basalt_columns', x, z, v * 1.3, 1, 1.3).len = v;
+  for (const [x, z, v] of [[35.2, 39.8, 0], [61.2, 45.6, 1], [48.6, 16.2, 1]]) G.prop('ember_crystals', x, z, v * 2 + x, 1, 1.0).len = v;
+  // A cooled lava tongue along the west wall.
+  G.prop('basalt_ridge', 34.6, 34, 0.08, 1).len = 7;
+  for (let t = -3; t <= 3; t += 1) blockDisc(G.l, 34.6 + t * 0.08, 34 + t, 0.8);
+  // The bones of a dragon that lost, curled along the east wall; bone drifts where the dead fell.
+  G.prop('dragon_bones', 64.2, 31, 0.08, 0.72);
+  for (let t = -8; t <= 6; t += 1.5) blockDisc(G.l, 64.2 + t * 0.08, 31 + t, 0.7);
+  for (const [x, z, v] of [[52.8, 23.8, 1], [46.2, 21.2, 2], [38.6, 44.2, 3], [40.6, 46.2, 0], [60.4, 41.2, 2], [47.2, 19.2, 0], [62.2, 25.2, 1]]) G.prop('bones', x, z, x * 1.7, 1.2).len = v;
+  for (const [x, z, v] of [[39.6, 27.6, 10], [60.2, 36.8, 11], [47.2, 46.8, 12], [37.8, 36.6, 13]]) G.prop('rubble', x, z, x, 1).len = v;
   G.pack(26, 104, ['drakeling', 'drakeling'], 6);
   G.pack(88, 79, ['drakeling', 'drakeling', 'drakeling'], 6);
-  G.pack(44, 62, ['drakeling', 'kobold', 'kobold'], 6);
+  G.pack(44, 64, ['drakeling', 'kobold', 'kobold'], 6);
   G.l.entry = { x: 50, z: 118 };
   G.station('exit', 'keep', 50, 124, Math.PI, 1.4);
-  G.l.boss = { id: 'cinderwing', x: A.x, z: A.z - 2, r: A.r };
-  // Bone piles gather in drifts against the caldera wall, leaving the fighting floor open.
-  for (let c = 0; c < 5; c++) {
-    const a = c * 1.25 + 0.4 + G.rng() * 0.4;
-    for (let k = 0; k < 3; k++) {
-      const r = A.r - 2.5 - G.rng() * 2.5, aa = a + (G.rng() - 0.5) * 0.35;
-      G.prop('bones', A.x + Math.cos(aa) * r, A.z + Math.sin(aa) * r, G.rng() * 6, 1.1).len = c * 3 + k;
-    }
-  }
-  G.prop('hoard', A.x - 5, A.z - 9);
+  G.l.boss = { id: 'cinderwing', x: home.x, z: home.z, r: A.r };
+  // A second skeleton out in the badlands, on dry ground between the east lava lake and the river
+  // (reserved, so no spire or rock grows through it), lying along the river bank.
+  G.prop('dragon_bones', 69, 85.6, 1.45, 0.8);
+  for (let t = -9; t <= 7; t += 2) G.reserve(69 + t, 85.6 + t * 0.12, 2);
   // Obsidian spires and bone fields across the badlands.
   for (let k = 0; k < 26; k++) {
-    const x = 10 + G.rng() * (w - 20), z = 52 + G.rng() * 66;
+    const x = 10 + G.rng() * (w - 20), z = 56 + G.rng() * 62;
     const i = G.idx(Math.floor(x), Math.floor(z));
     if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i] && !G.reserved[i]) G.prop('obsidian', x, z, G.rng() * 6, 0.7 + G.rng() * 0.7, 1);
   }
   for (let k = 0; k < 30; k++) {
-    const x = 10 + G.rng() * (w - 20), z = 52 + G.rng() * 66;
+    const x = 10 + G.rng() * (w - 20), z = 56 + G.rng() * 62;
     const i = G.idx(Math.floor(x), Math.floor(z));
     if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i]) G.prop('bones', x, z, G.rng() * 6).len = k;
   }
-  G.prop('dragon_bones', 30, 60, -0.5, 0.8);
   G.scatter((x, z) => (G.noise(x * 0.08, z * 0.08) > 0.6 ? 0.1 : 0.02), 0.5);
   G.frame(9, Cell.Cliff, 6);
   G.connect();
