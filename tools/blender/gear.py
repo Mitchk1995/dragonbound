@@ -11,6 +11,7 @@ name with their local transform unchanged, so everything below is authored in so
   sock_handL / sock_gloveR   palm centre, unrotated; hand is a 0.26 cube, thumb forward
   sock_footL/R    ankle; shoe below (0.3 x 0.17 x 0.4, toe at +Z), ground at y -0.18
 
+Everything is modular blocks (docs/ART_CONTRACT.md, Style): chamfered boxes, stacked slabs, wedges.
 Tier gear uses ROLE_metal / ROLE_trim / ROLE_dark (+ ROLE_leather, ROLE_glow) so one file serves every
 palette. Uniques (u_*) use their own authored colours. Right side is -X.
 """
@@ -26,7 +27,7 @@ import importlib
 import _common
 importlib.reload(_common)
 from _common import *
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 PI = math.pi
 WOOD = 0x6B4426
@@ -43,8 +44,9 @@ SOCKET_POS = {
 }
 
 
-def rivet(p, pos, color=R.trim, r=0.024):
-    return gem(p, r, pos, color)
+def rivet(p, pos, color=R.trim, r=0.024, rot=(0, 0, PI / 4)):
+    """Square rivet head (a small chamfered block, turned 45 degrees by default)."""
+    return box(p, (r * 1.5, r * 1.5, r * 1.2), pos, color, rot=rot, bevel=r * 0.35)
 
 
 def limb_chain(p, pts, w, t, color, x=0.0):
@@ -56,36 +58,40 @@ def limb_chain(p, pts, w, t, color, x=0.0):
         w *= 0.88
 
 
+def grip(p, y0, y1, w, color, wraps=(), wrap_color=R.dark):
+    """Square grip from y0 to y1 along local Y with raised wrap bands at `wraps`."""
+    box(p, (w, y1 - y0, w), (0, (y0 + y1) / 2, 0), color, bevel=w * 0.2)
+    for y in wraps:
+        box(p, (w * 1.2, 0.03, w * 1.2), (0, y, 0), wrap_color, bevel=0.006)
+
+
 # ─── Weapons (sock_handR) ────────────────────────────────────────────────────
 
 def sword(S):
     h = S('sock_handR')
-    cyl(h, 0.045, 0.045, 0.3, (0, 0, 0), R.leather, seg=6)
-    for y in (-0.08, 0.06):
-        cyl(h, 0.053, 0.053, 0.03, (0, y, 0), R.dark, seg=6)                       # grip wraps
-    gem(h, 0.075, (0, -0.2, 0), R.trim)                                            # pommel
+    grip(h, -0.15, 0.15, 0.085, R.leather, (-0.08, 0.06))
+    box(h, (0.12, 0.08, 0.12), (0, -0.19, 0), R.trim, bevel=0.025)                 # pommel block
+    box(h, (0.08, 0.04, 0.08), (0, -0.245, 0), R.trim, bevel=0.012)
     box(h, (0.14, 0.13, 0.13), (0, 0.17, 0), R.dark, bevel=0.03)                   # guard block
     box(h, (0.46, 0.07, 0.11), (0, 0.18, 0), R.trim, bevel=0.025)                  # crossguard
     for s in (-1, 1):
         box(h, (0.08, 0.12, 0.13), (s * 0.24, 0.2, 0), R.trim, rot=(0, 0, s * -0.3), bevel=0.025)
-    gem(h, 0.035, (0, 0.17, 0.07), R.glow)
+    facet_gem(h, 0.035, (0, 0.17, 0.07), R.glow)
     prism(h, [(-0.075, 0.22), (0.075, 0.22), (0.065, 0.8), (0.0, 0.94), (-0.065, 0.8)], 0.05, (0, 0, 0), R.metal, bevel=0.012)
     box(h, (0.035, 0.5, 0.058), (0, 0.5, 0), R.dark, bevel=0)                     # fuller
 
 
 def longsword(S):
     h = S('sock_handR')
-    cyl(h, 0.048, 0.048, 0.42, (0, 0, 0), R.leather, seg=6)
-    for y in (-0.12, 0.0, 0.12):
-        cyl(h, 0.056, 0.056, 0.03, (0, y, 0), R.dark, seg=6)
-    cyl(h, 0.06, 0.08, 0.06, (0, -0.24, 0), R.trim, seg=6)
-    gem(h, 0.085, (0, -0.31, 0), R.trim)
+    grip(h, -0.21, 0.21, 0.09, R.leather, (-0.12, 0.0, 0.12))
+    box(h, (0.12, 0.06, 0.12), (0, -0.24, 0), R.trim, taper=(0.75, 0.75), bevel=0.015)
+    box(h, (0.14, 0.1, 0.14), (0, -0.31, 0), R.trim, bevel=0.03)                   # pommel block
     box(h, (0.17, 0.16, 0.15), (0, 0.24, 0), R.dark, bevel=0.035)
     box(h, (0.62, 0.08, 0.12), (0, 0.25, 0), R.trim, bevel=0.03)
     for s in (-1, 1):
         box(h, (0.09, 0.16, 0.13), (s * 0.33, 0.22, 0), R.trim, rot=(0, 0, s * 0.45), bevel=0.03)  # down-swept quillons
         rivet(h, (s * 0.2, 0.25, 0.065), R.dark, 0.02)
-    gem(h, 0.045, (0, 0.24, 0.08), R.glow)
+    facet_gem(h, 0.045, (0, 0.24, 0.08), R.glow)
     box(h, (0.16, 0.12, 0.07), (0, 0.35, 0), R.metal, bevel=0.02)                  # ricasso
     prism(h, [(-0.09, 0.3), (0.09, 0.3), (0.085, 1.02), (0.0, 1.22), (-0.085, 1.02)], 0.06, (0, 0, 0), R.metal, bevel=0.014)
     box(h, (0.045, 0.72, 0.068), (0, 0.68, 0), R.dark, bevel=0)
@@ -93,9 +99,9 @@ def longsword(S):
 
 def pickaxe(S):
     h = S('sock_handR')
-    cyl(h, 0.045, 0.05, 1.05, (0, 0.37, 0), WOOD, seg=6)
-    cyl(h, 0.058, 0.058, 0.26, (0, -0.02, 0), R.leather, seg=6)                    # grip wrap
-    cyl(h, 0.06, 0.07, 0.06, (0, -0.17, 0), R.dark, seg=6)
+    box(h, (0.1, 1.05, 0.1), (0, 0.37, 0), WOOD, taper=(0.85, 0.85), bevel=0.02)  # haft
+    box(h, (0.12, 0.26, 0.12), (0, -0.02, 0), R.leather, bevel=0.02)               # grip wrap
+    box(h, (0.13, 0.06, 0.13), (0, -0.17, 0), R.dark, bevel=0.015)
     box(h, (0.16, 0.2, 0.16), (0, 0.84, 0), R.dark, bevel=0.03)                    # head collar
     prism(h, [(-0.54, 0.74), (-0.3, 0.87), (-0.08, 0.93), (0.08, 0.93), (0.3, 0.87), (0.54, 0.74),
               (0.3, 0.8), (0.08, 0.83), (-0.08, 0.83), (-0.3, 0.8)], 0.1, (0, 0, 0), R.metal, bevel=0.015)
@@ -119,9 +125,9 @@ def bow(S):
         box(b, (0.11, 0.05, 0.13), (0, s * 0.14, BOW_Z), R.trim, bevel=0.015)
         limb_chain(b, [(s * y, z + BOW_Z) for y, z in BOW_LIMB], 0.09, 0.075, R.metal)
         box(b, (0.08, 0.06, 0.09), (0, s * 0.74, BOW_Z + 0.14), R.trim, bevel=0.015)  # nocks
-        cone(b, 0.04, 0.1, (0, s * 0.8, BOW_Z + 0.12), R.trim, rot=(0 if s > 0 else PI, 0, 0), seg=4)
+        beam(b, (0, s * 0.75, BOW_Z + 0.12), (0, s * 0.85, BOW_Z + 0.12), 0.07, R.trim, w1=0.015)
     box(b, (0.018, 1.24, 0.018), (0, 0, BOW_Z + 0.195), STRING, bevel=0)
-    rivet(b, (0, 0, BOW_Z - 0.065), R.glow, 0.03)
+    facet_gem(b, 0.03, (0, 0, BOW_Z - 0.065), R.glow)
 
 
 # Staffs run upright through the front of the fist (socket +Y), not down the forearm axis, with the top
@@ -133,222 +139,233 @@ STAFF_LEAN = (-PI / 2 + 0.2, 0, 0.05)
 def staff(S):
     h = S('sock_handR')
     b = pivot(h, 'staffbody', STAFF_GRIP, STAFF_LEAN)
-    cyl(b, 0.05, 0.062, 1.9, (0, 0.3, 0), R.metal, seg=6)
-    cyl(b, 0.068, 0.068, 0.24, (0, 0.0, 0), R.leather, seg=6)
+    box(b, (0.11, 1.9, 0.11), (0, 0.3, 0), R.metal, taper=(0.82, 0.82), bevel=0.02)
+    box(b, (0.13, 0.24, 0.13), (0, 0.0, 0), R.leather, bevel=0.02)
     for y in (-0.5, 0.72):
-        cyl(b, 0.072, 0.072, 0.05, (0, y, 0), R.trim, seg=6)
-    cone(b, 0.06, 0.16, (0, -0.72, 0), R.dark, rot=(PI, 0, 0), seg=5)
-    cyl(b, 0.1, 0.07, 0.12, (0, 1.28, 0), R.trim, seg=6)                           # head cup
+        box(b, (0.14, 0.05, 0.14), (0, y, 0), R.trim, bevel=0.012)
+    beam(b, (0, -0.64, 0), (0, -0.8, 0), 0.11, R.dark, w1=0.02)                    # iron butt
+    box(b, (0.14, 0.12, 0.14), (0, 1.28, 0), R.trim, taper=(1.4, 1.4), bevel=0.02)  # head cup
     for i in range(3):
         a = i * 2 * PI / 3
         x, z = math.cos(a) * 0.1, math.sin(a) * 0.1
         box(b, (0.05, 0.3, 0.05), (x * 1.3, 1.44, z * 1.3), R.dark, rot=(-math.sin(a) * -0.3, 0, math.cos(a) * -0.3), bevel=0.015)
-        cone(b, 0.03, 0.1, (x * 1.0, 1.62, z * 1.0), R.dark, rot=(-math.sin(a) * 0.5, 0, math.cos(a) * 0.5), seg=4)
-    gem(b, 0.14, (0, 1.46, 0), R.glow)
+        beam(b, (x * 1.15, 1.57, z * 1.15), (x * 0.8, 1.68, z * 0.8), 0.05, R.dark, w1=0.012)
+    facet_gem(b, 0.14, (0, 1.46, 0), R.glow, rot=corner_up(), depth=0.2)
 
 
-# ─── Plate shapes ────────────────────────────────────────────────────────────
-# Shared by the chainbody / med helm below, the plate sets (plate_variants.py) and the uniques built on them.
+# ─── Blocky plate kit ────────────────────────────────────────────────────────
+# Shared by the med helm and chainbody below, the plate sets (plate_variants.py) and the uniques.
 # sock_chest space: tunic 0.68 -> 0.73 wide, 0.42 deep, y -0.35..0.31; collar to 0.35 (= head bottom); sleeves
 # x 0.345..0.595 at y -0.11..0.21; arm pivot (+-0.47, 0.18); hero belt y -0.37 (+-0.36 x, +-0.23 z) with a pouch
 # on the left hip reaching z 0.24; skirt/hem to y -0.62 (+-0.36, +-0.23).
 # Shoulder socket space: arm pivot (+-0.01, -0.10), sleeve top y -0.07, x -0.115..0.135 (L), z +-0.135.
-# sock_head space: the head is a 0.46 cube centred here, ears out to x +-0.27, nose out to z 0.29.
-CHEST_IN = (0, 0.0, 0)
-HELM_IN = (0, 0.1, 0)
-# Cuirass: rounded barrel, soft centre ridge, a slight swell over the chest. Rows: (y, half width, half depth,
-# front ridge, back ridge).
-CUIRASS = [(-0.31, 0.39, 0.29, 0.03, 0.0), (-0.12, 0.395, 0.3, 0.045, 0.0), (0.08, 0.41, 0.325, 0.055, 0.01),
-           (0.22, 0.405, 0.315, 0.04, 0.01), (0.31, 0.375, 0.275, 0.0, 0.0), (0.35, 0.31, 0.25, 0, 0), (0.37, 0.27, 0.235, 0, 0)]
-CUIRASS_E = 3.0
-# Great helm: a rounded dome a little over the head.
-GREAT_HELM = [(-0.25, 0.32, 0.33, 0.02, 0), (0.0, 0.315, 0.33, 0.03, 0), (0.15, 0.305, 0.32, 0.03, 0), (0.245, 0.27, 0.285, 0.02, 0),
-              (0.3, 0.18, 0.19, 0.01, 0), (0.322, 0.0, 0.0, 0, 0)]
-HELM_E = 2.6
-# Pauldron dome (bell_fn, shoulder-socket space): centre, outward tilt, vertical and horizontal radius.
-PAULDRON = ((0.0, -0.1, 0), 0.3, 0.25, 0.25)
-PAULDRON_KW = dict(inner_scale=0.7, front_scale=1.1)
+# sock_head space: the head is a 0.46 cube centred here, ears out to x +-0.27, nose out to z 0.29, eyes y -0.03..0.08.
+
+def faces(p, half_w, half_d, y=0.0, sides=True):
+    """Frames on the front, back (and side) faces of a block centred on p: local +Z points out of the face,
+    local +X runs along it. Yields (frame, face half-width)."""
+    out = [(pivot(p, 'face', (0, y, half_d)), half_w), (pivot(p, 'face', (0, y, -half_d), (0, PI, 0)), half_w)]
+    if sides:
+        out += [(pivot(p, 'face', (half_w, y, 0), (0, PI / 2, 0)), half_d), (pivot(p, 'face', (-half_w, y, 0), (0, -PI / 2, 0)), half_d)]
+    return out
 
 
-def mp(p, s):
-    """Mirror a point to the -X side when s < 0."""
-    return (p[0] * s, p[1], p[2])
+# Chest block and the two abdominal lames below it: (centre y, width, height, depth).
+CHEST = (0.13, 0.82, 0.36, 0.58)
+LAMES = ((-0.1, 0.78, 0.12, 0.56), (-0.21, 0.75, 0.12, 0.54))
+BELT_Y = -0.315
 
 
-def row_v(rows, y):
-    """Loft parameter v of height y (rows ascend in y)."""
-    for i in range(len(rows) - 1):
-        if rows[i][0] <= y <= rows[i + 1][0]:
-            return (i + (y - rows[i][0]) / (rows[i + 1][0] - rows[i][0])) / (len(rows) - 1)
-    return 0.0 if y < rows[0][0] else 1.0
+def plate_torso(c, seam=R.dark, trim=R.trim, centre=True, back=True):
+    """Cuirass of stacked slabs: a broad chest block (raised centre plate), two stepped abdominal lames, belt,
+    tassets and a box gorget. `seam` fills the grooves between the slabs (a dark line on plate, ember glow on
+    Emberforged)."""
+    y, w, hgt, d = CHEST
+    box(c, (w, hgt, d), (0, y, 0), R.metal, bevel=0.05)
+    box(c, (w - 0.14, 0.05, d - 0.1), (0, y + hgt / 2 + 0.01, 0), R.metal, bevel=0.018)       # shoulder yoke step
+    if centre:
+        box(c, (0.36, 0.28, 0.05), (0, y + 0.01, d / 2 + 0.012), R.metal, taper=(1.4, 1), bevel=0.018)  # raised breastplate
+        box(c, (0.06, 0.3, 0.04), (0, y + 0.0, d / 2 + 0.034), R.metal, bevel=0.014)          # keel
+        box(c, (0.52, 0.035, 0.06), (0, y + 0.15, d / 2 + 0.014), trim, bevel=0.008)          # neckline edge
+    if back:
+        box(c, (0.46, 0.26, 0.04), (0, y + 0.01, -d / 2 - 0.008), R.metal, bevel=0.015)      # back plate
+    for s in (-1, 1):
+        rivet(c, (s * 0.3, y + 0.12, d / 2 + 0.004), trim, 0.02)
+        rivet(c, (s * 0.3, y - 0.12, d / 2 + 0.004), trim, 0.02)
+    prev = y - hgt / 2
+    for ly, lw, lh, ld in LAMES:
+        box(c, (lw, lh, ld), (0, ly, 0), R.metal, bevel=0.03)
+        if seam:
+            box(c, (lw - 0.02, 0.016, ld - 0.02), (0, prev, 0), seam, bevel=0)                  # groove line
+        prev = ly - lh / 2
+    if seam:
+        box(c, (0.74, 0.016, 0.53), (0, prev, 0), seam, bevel=0)
+    box(c, (0.8, 0.09, 0.57), (0, BELT_Y, 0), R.leather, bevel=0.02)                           # belt
+    box(c, (0.13, 0.1, 0.03), (0, BELT_Y, 0.29), trim, bevel=0.012)                            # buckle
+    gorget(c, trim)
+    plate_tassets(c, trim)
 
 
-def cuirass(c, color=R.metal, rows=CUIRASS, e=CUIRASS_E, nu=12, bevel=0.018, thick=0.03, nm='cuirass'):
-    fn = loft_fn(rows, e, rw=0.6)
-    surf(c, fn, nu, len(rows) - 1, thick, color, closed_u=True, inside=CHEST_IN, bevel=bevel, nm=nm, inner=False, walls=(0,))
-    return fn
+def gorget(c, trim=R.trim, color=R.metal):
+    box(c, (0.56, 0.09, 0.5), (0, 0.365, 0), color, bevel=0.028)
+    box(c, (0.58, 0.03, 0.52), (0, 0.41, 0), trim, bevel=0.008)
 
 
-def band_on(c, fn, v0, v1, color=R.trim, nu=12, lift=0.006, thick=0.03, nm=None, u0=0.0, u1=1.0, ins=CHEST_IN):
-    """Trim band laid on a lofted surface between rows v0..v1 (all the way round unless u0..u1 is narrower)."""
-    closed = abs(u1 - u0 - 1) < 1e-6
-    return surf(c, grow(sub(fn, u0, u1, v0, v1), lift, ins), nu, 1, thick, color, closed_u=closed, inside=ins, nm=nm, inner=False)
+def plate_tassets(c, trim=R.trim):
+    """Box tassets hanging from the belt: two front plates of two lames each, hip plates and a rear culet."""
+    for s in (-1, 1):
+        f = pivot(c, 'tasset', (s * 0.175, -0.36, 0.275), (-0.12, 0, s * 0.03))
+        box(f, (0.3, 0.19, 0.05), (0, -0.09, 0), R.metal, bevel=0.018)
+        box(f, (0.28, 0.12, 0.05), (0, -0.22, 0.012), R.metal, bevel=0.016)
+        box(f, (0.29, 0.03, 0.058), (0, -0.28, 0.012), trim, bevel=0.006)
+        rivet(f, (0, -0.05, 0.028), trim, 0.018)
+        hp = pivot(c, 'tasset', (s * 0.415, -0.36, 0), (0, 0, s * 0.12))
+        box(hp, (0.05, 0.24, 0.36), (0, -0.11, 0), R.metal, bevel=0.016)
+        box(hp, (0.058, 0.03, 0.37), (0, -0.225, 0), trim, bevel=0.006)
+    cul = pivot(c, 'tasset', (0, -0.36, -0.275), (0.12, 0, 0))
+    box(cul, (0.58, 0.2, 0.05), (0, -0.1, 0), R.metal, bevel=0.018)
+    box(cul, (0.59, 0.03, 0.058), (0, -0.2, 0), trim, bevel=0.006)
 
 
-def tasset(c, t0, t1, ya, yb, a, b, color=R.metal, rim=R.trim, nm='tasset', e=3.0, nu=3, flare=0.015):
-    """Hanging plate around the hips from ya (top) down to yb, angles t0..t1, with an optional rolled lower rim."""
-    tf = loft_fn([(yb, a + flare, b + flare, 0, 0), (ya, a, b, 0, 0)], e, t0=t0, t1=t1)
-    ins = (0, (ya + yb) / 2, 0)
-    surf(c, tf, nu, 1, 0.022, color, inside=ins, bevel=0.01, nm=nm, inner=False)
-    if rim:
-        surf(c, grow(sub(tf, 0, 1, 0, 0.2), 0.004, ins), nu, 1, 0.026, rim, inside=ins, inner=False, nm=nm + '_rim')
-    return tf
+# Pauldron: blocks stepping down the outside of the shoulder like shingles, each (size, centre (x, y), outward
+# tilt) for the left side; the top block overlaps the chest's top edge.
+PAULDRON_STEPS = (
+    ((0.38, 0.13, 0.47), (0.05, 0.07), 0.16),
+    ((0.3, 0.12, 0.45), (0.14, -0.02), 0.42),
+    ((0.22, 0.11, 0.42), (0.19, -0.11), 0.72),
+)
 
 
-def helm_shell(h, color=R.metal, rows=GREAT_HELM, nu=12, t0=0.0, t1=2 * PI, bevel=0.018, nm='helm_shell'):
-    """Rounded helm dome (sock_head space); t0..t1 short of a full turn leaves the face open."""
-    fn = loft_fn(rows, HELM_E, rw=0.6, t0=t0, t1=t1)
-    closed = abs(t1 - t0 - 2 * PI) < 1e-6
-    surf(h, fn, nu, len(rows) - 1, 0.03, color, closed_u=closed, inside=HELM_IN, bevel=bevel, nm=nm, inner=not closed, walls=(0,))
-    return fn
+def block_pauldron(sh, s, color=R.metal, top=R.metal, edge=R.trim, seam=None, steps=PAULDRON_STEPS):
+    """Stacked chamfered blocks stepping down the shoulder, a raised plate on the top block and a rim along
+    the lowest block's outer edge. Returns the step frames (local +X runs outward along each block)."""
+    frames = []
+    for i, (size, (x, y), tilt) in enumerate(steps):
+        f = pivot(sh, 'pauldron_step', (s * x, y, 0), (0, 0, -s * tilt))
+        box(f, size, (0, 0, 0), color, bevel=0.035 if i == 0 else 0.03)
+        if seam and i:
+            box(f, (size[0] - 0.04, size[1] + 0.006, size[2] - 0.03), (-s * 0.015, 0, 0), seam, bevel=0)
+        frames.append(f)
+    w, hgt, d = steps[0][0]
+    box(frames[0], (w * 0.55, 0.05, d * 0.66), (-s * 0.02, hgt / 2 + 0.012, 0), top, bevel=0.016)
+    w, hgt, d = steps[-1][0]
+    box(frames[-1], (0.035, hgt + 0.014, d + 0.014), (s * (w / 2 - 0.012), 0, 0), edge, bevel=0.008)
+    for z in (-0.13, 0.13):
+        rivet(frames[0], (s * 0.1, steps[0][0][1] / 2 + 0.002, z), edge, 0.018, rot=(PI / 2, 0, PI / 4))
+    return frames
 
 
-def pauldron_trim(sh, fn, s, ins, v0, v1, nu, color=R.trim, closed=False, lift=0.004, thick=0.03, nm=None):
-    return surf(sh, grow(mirror(sub(fn, 0, 1, v0, v1), s), lift, ins), nu, 1, thick, color, closed_u=closed, inside=ins, inner=False, nm=nm)
+def plate_gauntlet(g, s, cuff_rim=R.trim):
+    """Box gauntlet: fist block, stepped knuckle plate, back plate, square thumb and a flared square cuff."""
+    box(g, (0.31, 0.26, 0.31), (0, -0.01, 0), R.metal, bevel=0.05)
+    box(g, (0.33, 0.08, 0.33), (0, -0.1, 0.005), R.metal, bevel=0.014)                         # knuckle lame
+    box(g, (0.335, 0.025, 0.335), (0, -0.05, 0.005), R.dark, bevel=0)                          # knuckle gap
+    box(g, (0.04, 0.15, 0.22), (s * 0.165, 0.0, 0), R.metal, bevel=0.012)                      # back-of-hand plate
+    box(g, (0.125, 0.185, 0.135), (-s * 0.07, 0.03, 0.168), R.metal, rot=(0.3, 0, 0), bevel=0.03)  # thumb
+    box(g, (0.28, 0.2, 0.3), (0, 0.2, 0), R.metal, taper=(1.12, 1.1), bevel=0.028)            # cuff
+    box(g, (0.33, 0.04, 0.35), (0, 0.3, 0), cuff_rim, bevel=0.01)
 
 
-def pauldron(sh, s, color=R.metal, roll=R.trim, lame_edge=R.dark, lames=2, cap_th=1.2, nu=10):
-    """Rounded shoulder dome hugging the arm with a rolled rim and `lames` bands below it on the outer side.
-    Returns the (left-side) dome surface and its inside point."""
-    O, phi, Rv, Rh = PAULDRON
-    ins = mp((O[0], O[1] - 0.04, 0), s)
-    capf = bell_fn(O, phi, Rv, Rh, 0.0, cap_th, -PI, PI, drop=0.08, **PAULDRON_KW)
-    surf(sh, mirror(capf, s), nu, 3, 0.03, color, closed_u=True, inside=ins, bevel=0.014, nm='pauldron_cap', walls=(1,))
-    if roll:
-        pauldron_trim(sh, capf, s, ins, 0.84, 1.0, nu, color=roll, closed=True, thick=0.034, nm='cap_roll')
-    for i in range(lames):
-        th0, th1 = cap_th - 0.12 + 0.22 * i, cap_th + 0.2 + 0.22 * i
-        k = 1 + 0.05 * (i + 1)
-        lf = bell_fn(O, phi, Rv * k, Rh * k, th0, th1, -1.9 + 0.1 * i, 1.9 - 0.1 * i, **PAULDRON_KW)
-        surf(sh, mirror(lf, s), 6, 1, 0.022, color, inside=ins, nm=f'p_lame{i}', inner=True, walls=(1,))
-        if lame_edge:
-            pauldron_trim(sh, lf, s, ins, 0.75, 1.0, 6, color=lame_edge, thick=0.026, nm=f'p_lame_edge{i}')
-    return capf, ins
-
-
-def scale_row(p, fn, u_mid, n, width, v0, v1, color, inside, point=0.06, lift=0.012, flare=0.03, thick=0.022, nm='scale'):
-    """A row of `n` rounded-point scales laid on surface fn, centred on u_mid (turns), each `width` turns wide,
-    spanning v0 (bottom edge, before the point) to v1. The bottom edge bulges down into a rounded point and
-    stands off the surface (flare), so each row shingles over the row below."""
-    for i in range(n):
-        ua = u_mid + (i - n / 2) * width
-
-        def g(u, v, ua=ua):
-            k = 2 * u - 1
-            vv = v0 - point * (1 - k * k) + (v1 - v0 + point * (1 - k * k)) * v
-            uu = (ua + width * u) % 1.0
-            return tuple(V(fn(uu, vv)) + surf_normal(fn, uu, vv, inside) * (lift + flare * (1 - v)))
-        surf(p, g, 4, 1, thick, color, inside=inside, nm=nm, inner=False)
+def plate_sabaton(f, knee=True, rim=R.trim):
+    """Box sabaton and greave: foot block with a stepped instep plate and toe, square greave with a shin ridge,
+    rimmed top and a block knee cop."""
+    box(f, (0.34, 0.19, 0.44), (0, -0.075, 0.055), R.metal, bevel=0.045)
+    box(f, (0.3, 0.06, 0.22), (0, 0.035, 0.14), R.metal, bevel=0.018)                        # instep step
+    box(f, (0.32, 0.13, 0.1), (0, -0.09, 0.265), R.metal, taper=(0.92, 0.7), bevel=0.025)      # toe
+    box(f, (0.36, 0.035, 0.47), (0, -0.166, 0.06), R.dark, bevel=0)                          # sole
+    box(f, (0.32, 0.32, 0.33), (0, 0.2, 0), R.metal, taper=(1.06, 1.06), bevel=0.03)         # greave
+    box(f, (0.12, 0.28, 0.04), (0, 0.2, 0.175), R.metal, bevel=0.012)                        # shin ridge
+    box(f, (0.35, 0.04, 0.365), (0, 0.365, 0), rim, bevel=0.01)
+    if knee:
+        box(f, (0.27, 0.15, 0.08), (0, 0.45, 0.175), R.metal, bevel=0.025)                  # knee cop
+        box(f, (0.14, 0.07, 0.03), (0, 0.45, 0.22), rim, bevel=0.01)
 
 
 # ─── Helms (sock_head) ───────────────────────────────────────────────────────
 
-MED_HELM = [(0.05, 0.28, 0.29, 0.0, 0), (0.17, 0.275, 0.285, 0.015, 0.015), (0.27, 0.225, 0.235, 0.015, 0.015),
-            (0.33, 0.13, 0.14, 0.01, 0.01), (0.35, 0.0, 0.0, 0, 0)]
+def open_helm(h, shell=R.metal, rim=R.trim, nasal=R.trim, stud=R.dark):
+    """Boxy open-faced helm: a box bowl over the top of the head cube with a smaller block on top, a rim band
+    over the brow, cheek guards over the ears and a neck guard. The face stays clear."""
+    box(h, (0.56, 0.22, 0.58), (0, 0.2, -0.005), shell, bevel=0.04)                           # bowl
+    box(h, (0.44, 0.07, 0.46), (0, 0.33, -0.005), shell, bevel=0.022)                         # top block
+    box(h, (0.585, 0.065, 0.605), (0, 0.11, -0.005), rim, bevel=0.014)                        # rim band
+    box(h, (0.56, 0.24, 0.07), (0, -0.03, -0.265), shell, bevel=0.022)                        # neck guard
+    for s in (-1, 1):
+        box(h, (0.07, 0.23, 0.26), (s * 0.28, -0.015, -0.07), shell, bevel=0.022)             # cheek guard
+        rivet(h, (s * 0.2, 0.11, 0.304), stud, 0.018)
+        rivet(h, (s * 0.2935, 0.11, 0.12), stud, 0.018, rot=(PI / 4, PI / 2, 0))
+    if nasal:
+        box(h, (0.07, 0.21, 0.04), (0, 0.0, 0.312), nasal, taper=(1.3, 1), bevel=0.012)      # nasal bar
 
 
 def helm_open(S):
-    """Med helm: a rounded bowl with a soft centre ridge, one rim band and a nasal bar."""
-    h = S('sock_head')
-    fn = loft_fn(MED_HELM, HELM_E, rw=0.5)
-    surf(h, fn, 12, len(MED_HELM) - 1, 0.03, R.metal, closed_u=True, inside=HELM_IN, bevel=0.014, nm='bowl', inner=False, walls=(0,))
-    hoop(h, 0.03, 0.1, (0.3, 0.31), (0.297, 0.307), 0.03, R.trim, nu=12, e=HELM_E, nm='rim', bevel=0.008)
-    box(h, (0.075, 0.2, 0.04), (0, -0.02, 0.318), R.trim, taper=(1.3, 1), bevel=0.014)        # nasal bar
-    for s in (-1, 1):
-        rivet(h, (s * 0.2, 0.065, 0.268), R.dark, 0.02)
-        rivet(h, (s * 0.302, 0.065, 0.0), R.dark, 0.02)
+    """Med helm."""
+    open_helm(S('sock_head'))
 
 
 def helm_full(S):
+    """Full helm, cube over cube: a box shell over the head cube with a smaller block on top, a brow band and
+    a visor of two face plates; the eye slit and the breath slit are the gaps between the blocks."""
     h = S('sock_head')
-    box(h, (0.59, 0.5, 0.59), (0, 0.03, 0), R.metal, bevel=0.06)                             # bucket
-    box(h, (0.52, 0.13, 0.52), (0, 0.33, 0), R.metal, taper=(0.72, 0.72), bevel=0.05)        # dome
-    box(h, (0.61, 0.06, 0.61), (0, 0.22, 0), R.trim, bevel=0.02)                             # crown rim
-    prism(h, [(-0.18, 0.0), (0.2, 0.0), (0.12, 0.13), (-0.1, 0.1)], 0.07, (0, 0.37, 0), R.trim, rot=(0, PI / 2, 0), bevel=0.012)  # crest fin
-    box(h, (0.44, 0.34, 0.05), (0, -0.02, 0.305), R.metal, taper=(0.9, 1), bevel=0.02)        # face plate
-    box(h, (0.46, 0.05, 0.02), (0, 0.06, 0.332), SLIT, bevel=0)                              # visor slit
-    box(h, (0.06, 0.26, 0.04), (0, -0.08, 0.34), R.trim, bevel=0.012)                        # face ridge
+    box(h, (0.58, 0.5, 0.6), (0, 0.02, 0.01), R.metal, bevel=0.04)                           # shell
+    box(h, (0.46, 0.08, 0.48), (0, 0.3, 0.01), R.metal, bevel=0.024)                          # top block
+    box(h, (0.2, 0.035, 0.4), (0, 0.353, 0.0), R.trim, bevel=0.01)                            # top ridge
+    box(h, (0.6, 0.065, 0.62), (0, 0.145, 0.01), R.trim, bevel=0.014)                         # brow band
+    box(h, (0.6, 0.05, 0.62), (0, -0.205, 0.01), R.trim, bevel=0.012)                         # lower rim
+    box(h, (0.5, 0.3, 0.02), (0, -0.03, 0.31), SLIT, bevel=0)                                 # slit backing
     for s in (-1, 1):
-        for i in range(2):
-            for j in range(2):
-                box(h, (0.03, 0.03, 0.02), (s * (0.08 + j * 0.06), -0.06 - i * 0.07, 0.334), SLIT, bevel=0)  # breaths
-        box(h, (0.05, 0.4, 0.3), (s * 0.3, -0.02, 0.1), R.metal, taper=(1, 0.85), bevel=0.015)  # cheek flares
-        rivet(h, (s * 0.31, 0.22, 0.2), R.dark, 0.022)
-        rivet(h, (s * 0.31, 0.22, -0.12), R.dark, 0.022)
-    box(h, (0.52, 0.1, 0.5), (0, -0.27, 0), R.dark, bevel=0.03)                              # gorget
+        box(h, (0.242, 0.27, 0.045), (s * 0.133, -0.07, 0.325), R.metal, bevel=0.014)         # face plate
+        rivet(h, (s * 0.2, 0.145, 0.323), R.dark, 0.018)
+        for z in (-0.16, 0.16):
+            rivet(h, (s * 0.303, 0.145, z), R.dark, 0.018, rot=(PI / 4, PI / 2, 0))
 
 
 # ─── Body armour (sock_chest + shoulders) ────────────────────────────────────
 
-# Mail shirt: a close rounded hauberk from the collar to a short skirt below the belt.
-HAUBERK = [(-0.62, 0.415, 0.305, 0.0, 0.0), (-0.5, 0.405, 0.3, 0.0, 0.0), (-0.36, 0.395, 0.295, 0.0, 0.0), (-0.1, 0.395, 0.295, 0.015, 0.0),
-           (0.12, 0.405, 0.31, 0.02, 0.0), (0.25, 0.4, 0.3, 0.015, 0.0), (0.315, 0.365, 0.27, 0, 0), (0.35, 0.29, 0.24, 0, 0)]
+def hauberk(c, mail=R.metal, dark=R.dark, belt=R.leather, buckle=R.trim, collar=None, studs=True):
+    """Box mail shirt from the collar to a short skirt block, with a belt, hem and collar. Staggered square
+    studs read as mail on the metal tiers and as studded leather on the leather set."""
+    box(c, (0.78, 0.66, 0.52), (0, -0.01, 0), mail, bevel=0.045)
+    box(c, (0.8, 0.26, 0.54), (0, -0.47, 0), mail, taper=(0.96, 0.96), bevel=0.035)          # skirt block
+    box(c, (0.82, 0.04, 0.56), (0, -0.585, 0), dark, bevel=0.01)                             # hem
+    box(c, (0.5, 0.07, 0.44), (0, 0.345, 0), collar or dark, bevel=0.02)                     # collar
+    box(c, (0.82, 0.085, 0.56), (0, -0.37, 0), belt, bevel=0.02)
+    box(c, (0.13, 0.1, 0.03), (0, -0.37, 0.285), buckle, bevel=0.012)
+    if not studs:
+        return
+    for f, hw in faces(c, 0.39, 0.26):
+        cols = int(hw / 0.05)
+        for j, y in enumerate((0.25, 0.15, 0.05, -0.05, -0.15, -0.25)):
+            for i in range(-cols, cols + 1):
+                x = i * 0.05
+                if (i + j) % 2 == 0 and abs(x) < hw - 0.04:
+                    box(f, (0.028, 0.028, 0.02), (x, y, 0.004), dark, rot=(0, 0, PI / 4), bevel=0)
+        for j, y in enumerate((-0.44, -0.52)):
+            for i in range(-cols, cols + 1):
+                x = i * 0.05
+                if (i + j) % 2 == 0 and abs(x) < hw - 0.04:
+                    box(f, (0.028, 0.028, 0.02), (x, y, 0.012), dark, rot=(0, 0, PI / 4), bevel=0)
+
+
+MAIL_SHOULDER = (((0.3, 0.12, 0.36), (0.05, 0.02), 0.25), ((0.24, 0.12, 0.34), (0.15, -0.07), 0.62))
 
 
 def body_chain(S):
-    """Mail shirt: rounded hauberk with a short skirt, belt, collar and small rounded mail shoulders. Staggered
-    ring studs read as mail on the metal tiers and as studded leather on the leather set."""
-    c = S('sock_chest')
-    fn = loft_fn(HAUBERK, CUIRASS_E, rw=0.6)
-    surf(c, fn, 12, len(HAUBERK) - 1, 0.03, R.metal, closed_u=True, inside=CHEST_IN, bevel=0.012, nm='hauberk', inner=False, walls=(0,))
-    band_on(c, fn, 0.0, 0.03, color=R.dark, nm='hem')
-    band_on(c, fn, 0.96, 1.0, color=R.dark, nm='collar')
-    hoop(c, -0.42, -0.33, (0.415, 0.315), (0.415, 0.315), 0.025, R.leather, nu=12, e=CUIRASS_E, nm='belt')
-    box(c, (0.13, 0.11, 0.03), (0, -0.375, 0.33), R.trim, bevel=0.012)
-    for j, y in enumerate((-0.54, -0.22, -0.06, 0.1, 0.24)):
-        v = row_v(HAUBERK, y)
-        for i in range(16):
-            stud_on(c, fn, (i + 0.5 * (j % 2)) / 16, v, CHEST_IN, R.dark, r=0.02)
-    for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):     # short mail sleeves capping the shoulder
+    """Mail shirt: box hauberk with a short skirt block and small block shoulders."""
+    hauberk(S('sock_chest'))
+    for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
         sh = S(name)
-        cf = bell_fn((0.0, -0.13, 0), 0.25, 0.2, 0.19, 0.0, 1.65, -PI, PI, inner_scale=0.8)
-        ins = mp((0.0, -0.16, 0), s)
-        surf(sh, mirror(cf, s), 8, 3, 0.025, R.metal, closed_u=True, inside=ins, bevel=0.01, nm='mail_cap', walls=(1,))
-        pauldron_trim(sh, cf, s, ins, 0.88, 1.0, 8, color=R.dark, closed=True, nm='mail_hem')
+        for i, (size, (x, y), tilt) in enumerate(MAIL_SHOULDER):
+            f = pivot(sh, 'mail_shoulder', (s * x, y, 0), (0, 0, -s * tilt))
+            box(f, size, (0, 0, 0), R.metal, bevel=0.03)
+        box(f, (0.035, size[1] + 0.012, size[2] + 0.012), (s * (size[0] / 2 - 0.012), 0, 0), R.dark, bevel=0.008)  # hem
 
 
 def body_plate(S):
-    c = S('sock_chest')
-    box(c, (0.8, 0.66, 0.56), (0, 0.02, 0), R.metal, taper=(1.1, 1.04), bevel=0.06)       # cuirass
-    box(c, (0.52, 0.38, 0.07), (0, 0.1, 0.275), R.metal, taper=(1.2, 1), bevel=0.03)       # pectoral plate
-    box(c, (0.06, 0.46, 0.05), (0, 0.06, 0.315), R.trim, bevel=0.015)                      # keel
-    box(c, (0.56, 0.07, 0.1), (0, 0.33, 0.24), R.trim, bevel=0.02)                         # neckline rim
-    box(c, (0.5, 0.13, 0.44), (0, 0.37, -0.01), R.dark, bevel=0.035)                       # gorget
-    for s in (-1, 1):
-        rivet(c, (s * 0.26, 0.26, 0.3), R.trim)
-        rivet(c, (s * 0.24, -0.08, 0.3), R.trim)
-    for i, y in enumerate((-0.28, -0.38)):
-        box(c, (0.8 - i * 0.02, 0.09, 0.57 - i * 0.02), (0, y, 0.005), R.metal, bevel=0.02)  # abdomen lames
-    box(c, (0.84, 0.08, 0.6), (0, -0.46, 0), R.leather, bevel=0.02)                        # belt
-    box(c, (0.14, 0.12, 0.05), (0, -0.46, 0.305), R.trim, bevel=0.015)
-    for x in (-0.15, 0.15):                                                              # front tassets
-        box(c, (0.27, 0.22, 0.05), (x, -0.6, 0.29), R.metal, rot=(-0.14, 0, 0), bevel=0.02)
-        box(c, (0.28, 0.04, 0.06), (x, -0.7, 0.305), R.trim, rot=(-0.14, 0, 0), bevel=0)
-        rivet(c, (x, -0.53, 0.32), R.trim, 0.02)
-    box(c, (0.56, 0.22, 0.05), (0, -0.6, -0.29), R.metal, rot=(0.14, 0, 0), bevel=0.02)      # rear tasset
-    for s in (-1, 1):
-        box(c, (0.05, 0.22, 0.34), (s * 0.43, -0.6, 0), R.metal, rot=(0, 0, s * 0.14), bevel=0.02)  # hip tassets
-        box(c, (0.06, 0.04, 0.35), (s * 0.445, -0.7, 0), R.trim, rot=(0, 0, s * 0.14), bevel=0)
+    """Platebody (the plate sets in plate_variants.py build on this: set P is exactly it)."""
+    plate_torso(S('sock_chest'))
     for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
-        sh = S(name)
-        box(sh, (0.46, 0.26, 0.6), (s * 0.06, 0.07, 0), R.metal, rot=(0, 0, s * -0.3), bevel=0.08)   # dome
-        box(sh, (0.48, 0.05, 0.62), (s * 0.08, 0.0, 0), R.trim, rot=(0, 0, s * -0.3), bevel=0.015)  # rim
-        box(sh, (0.36, 0.1, 0.54), (s * 0.16, -0.08, 0), R.metal, rot=(0, 0, s * -0.55), bevel=0.03)  # lame 1
-        box(sh, (0.28, 0.09, 0.48), (s * 0.22, -0.16, 0), R.metal, rot=(0, 0, s * -0.7), bevel=0.03)  # lame 2
-        box(sh, (0.07, 0.1, 0.46), (s * 0.02, 0.22, 0), R.trim, rot=(0, 0, s * -0.3), bevel=0.02)    # ridge
-        for z in (-0.2, 0.2):
-            rivet(sh, (s * 0.2, 0.02, z), R.dark, 0.024)
-        cone(sh, 0.06, 0.18, (s * 0.12, 0.28, 0), R.trim, rot=(0, 0, s * -0.5), seg=4)              # spike
+        block_pauldron(S(name), s)
 
 
 # ─── Gloves & boots ──────────────────────────────────────────────────────────
@@ -362,7 +379,7 @@ def gloves(S):
         box(g, (0.11, 0.16, 0.12), (-s * 0.07, 0.03, 0.155), R.metal, rot=(0.3, 0, 0), bevel=0.03)  # thumb
         box(g, (0.27, 0.19, 0.29), (0, 0.2, 0), R.metal, taper=(1.18, 1.14), bevel=0.035) # flared cuff
         box(g, (0.33, 0.045, 0.35), (0, 0.3, 0), R.trim, bevel=0.012)
-        rivet(g, (s * 0.17, 0.2, 0), R.trim, 0.022)
+        rivet(g, (s * 0.17, 0.2, 0), R.trim, 0.022, rot=(PI / 4, PI / 2, 0))
 
 
 def boots(S):
@@ -391,21 +408,20 @@ MAIL = 0x5A5E66
 BONE = 0xEEE4CC
 SCALE = 0xB42A1E
 SCALE_DK = 0x6E1812
+SCALE_MID = 0x9A2218
 
 
 def u_cinderfang(S):
     h = S('sock_handR')
-    cyl(h, 0.05, 0.05, 0.42, (0, 0, 0), 0x4A1614, seg=6)                           # blood-red grip
-    for y in (-0.13, -0.01, 0.11):
-        cyl(h, 0.058, 0.058, 0.03, (0, y, 0), metallic(CHAR), seg=6)
-    cone(h, 0.08, 0.16, (0, -0.3, 0), metallic(CHAR2), rot=(PI, 0, 0), seg=4)       # claw pommel
-    gem(h, 0.065, (0, -0.25, 0), EMBER, emissive=EMBER, strength=4)
+    grip(h, -0.21, 0.21, 0.1, 0x4A1614, (-0.13, -0.01, 0.11), metallic(CHAR))       # blood-red grip
+    beam(h, (0, -0.22, 0), (0, -0.38, 0), 0.13, metallic(CHAR2), w1=0.02)             # claw pommel
+    facet_gem(h, 0.06, (0, -0.25, 0), EMBER, emissive=EMBER, strength=4, rot=corner_up(), depth=0.087)
     box(h, (0.2, 0.17, 0.16), (0, 0.24, 0), metallic(CHAR), bevel=0.04)            # jaw guard
     for s in (-1, 1):
         prism(h, [(0, -0.05), (0.34, 0.04), (0.42, 0.2), (0.3, 0.1), (0, 0.07)], 0.1, (s * 0.06, 0.24, 0), metallic(CHAR2),
               rot=(0, 0 if s > 0 else PI, 0), bevel=0.012)                           # horn quillons
-        cone(h, 0.03, 0.09, (s * 0.07, 0.35, 0.07), BONE, seg=3)                    # fangs
-    gem(h, 0.05, (0, 0.24, 0.085), EMBER, emissive=EMBER, strength=5)
+        beam(h, (s * 0.07, 0.31, 0.07), (s * 0.07, 0.4, 0.07), 0.05, BONE, w1=0.01)     # fangs
+    facet_gem(h, 0.05, (0, 0.24, 0.085), EMBER, emissive=EMBER, strength=5)
     blade = [(-0.1, 0.3), (0.1, 0.3), (0.13, 0.52), (0.1, 0.56), (0.13, 0.78), (0.09, 0.82), (0.11, 1.02),
              (0.06, 1.2), (-0.02, 1.38), (-0.1, 1.46), (-0.07, 1.3), (-0.09, 1.1), (-0.12, 0.9), (-0.09, 0.86),
              (-0.12, 0.66), (-0.09, 0.62), (-0.12, 0.42)]
@@ -420,103 +436,97 @@ def u_emberstring(S):
     b = pivot(h, 'bowbody', (0, 0, 0), (-PI / 2, 0, 0))
     z0 = BOW_Z
     box(b, (0.11, 0.26, 0.13), (0, 0, z0), 0x4A1614, bevel=0.03)
-    gem(b, 0.05, (0, 0, z0 - 0.07), EMBER, emissive=EMBER, strength=5)
+    facet_gem(b, 0.05, (0, 0, z0 - 0.07), EMBER, emissive=EMBER, strength=5, rot=(0, PI / 4, 0))
     for s in (-1, 1):
         box(b, (0.12, 0.05, 0.14), (0, s * 0.14, z0), metallic(GOLD), bevel=0.015)
         limb_chain(b, [(s * y, z + z0) for y, z in BOW_LIMB], 0.1, 0.08, CHAR2)
         for (y, z) in BOW_LIMB[1:4]:
-            cone(b, 0.035, 0.14, (0, s * y, z + z0 - 0.07), metallic(GOLD), rot=(-1.17 if s > 0 else -PI + 1.17, 0, 0), seg=3)  # back barbs
-        cone(b, 0.055, 0.2, (0, s * 0.84, z0 + 0.08), EMBER, rot=(-0.5 if s > 0 else PI + 0.5, 0, 0), seg=4, emissive=EMBER, strength=4)  # flame tips
+            beam(b, (0, s * y, z + z0 - 0.02), (0, s * (y + 0.05), z + z0 - 0.15), 0.06, metallic(GOLD), w1=0.012)  # back barbs
+        beam(b, (0, s * 0.74, z0 + 0.12), (0, s * 0.92, z0 + 0.04), 0.09, EMBER, w1=0.02, emissive=EMBER, strength=4)  # flame tips
         box(b, (0.09, 0.07, 0.1), (0, s * 0.74, z0 + 0.14), metallic(GOLD), bevel=0.015)
     box(b, (0.026, 1.24, 0.026), (0, 0, z0 + 0.195), EMBER_HOT, emissive=EMBER, strength=6, bevel=0)  # burning string
 
 
 def u_kindled_ash(S):
-    """Pale ash staff; four blackened claws rise from a collar and curl in around a dragon's ember heart."""
+    """Pale ash staff; four blackened block claws rise from a collar and bend in around a dragon's ember heart."""
     h = S('sock_handR')
     b = pivot(h, 'staffbody', STAFF_GRIP, STAFF_LEAN)
-    cyl(b, 0.05, 0.064, 1.72, (0, 0.21, 0), 0x9A9088, seg=6)                       # pale ash wood
+    box(b, (0.12, 1.72, 0.12), (0, 0.21, 0), 0x9A9088, taper=(0.8, 0.8), bevel=0.02)  # pale ash wood
     for y in (-0.45, 0.35, 0.8):
-        cyl(b, 0.07, 0.07, 0.05, (0, y, 0), metallic(CHAR), seg=6)
-    cyl(b, 0.07, 0.07, 0.24, (0, 0.0, 0), 0x4A1614, seg=6)
-    cone(b, 0.06, 0.18, (0, -0.74, 0), metallic(CHAR), rot=(PI, 0, 0), seg=4)
-    cyl(b, 0.11, 0.07, 0.14, (0, 1.12, 0), metallic(CHAR), seg=8)                  # claw collar
-    ring(b, 0.12, 0.08, 0.04, (0, 1.19, 0), metallic(BRONZE), seg=8)
+        box(b, (0.14, 0.05, 0.14), (0, y, 0), metallic(CHAR), bevel=0.012)
+    box(b, (0.14, 0.24, 0.14), (0, 0.0, 0), 0x4A1614, bevel=0.02)
+    beam(b, (0, -0.66, 0), (0, -0.84, 0), 0.12, metallic(CHAR), w1=0.02)
+    box(b, (0.18, 0.14, 0.18), (0, 1.12, 0), metallic(CHAR), taper=(1.3, 1.3), bevel=0.02)  # claw collar
+    box(b, (0.26, 0.04, 0.26), (0, 1.2, 0), metallic(BRONZE), bevel=0.01)
     for i in range(4):
         a = i * PI / 2 + PI / 4
         d = Vector((math.cos(a), 0, math.sin(a)))
-        pts = [d * 0.08 + Vector((0, 1.16, 0)), d * 0.17 + Vector((0, 1.3, 0)), d * 0.19 + Vector((0, 1.46, 0)),
-               d * 0.13 + Vector((0, 1.6, 0)), d * 0.05 + Vector((0, 1.66, 0))]
-        horn(b, [tuple(p) for p in pts], (0.042, 0.04, 0.034, 0.022, 0.006), metallic(CHAR), seg=5)
-    gem(b, 0.13, (0, 1.42, 0), EMBER, emissive=EMBER, strength=5)                  # ember heart
-    gem(b, 0.07, (0, 1.45, 0.07), EMBER_HOT, emissive=EMBER_HOT, strength=6)
-    cone(b, 0.06, 0.2, (0, 1.62, 0), EMBER_HOT, seg=4, emissive=EMBER, strength=5)  # flame tongue
+        pts = [d * 0.08 + Vector((0, 1.18, 0)), d * 0.18 + Vector((0, 1.32, 0)), d * 0.19 + Vector((0, 1.48, 0)), d * 0.07 + Vector((0, 1.64, 0))]
+        for k, (p0, p1, w0, w1) in enumerate(zip(pts, pts[1:], (0.075, 0.065, 0.05), (0.065, 0.05, 0.012))):
+            beam(b, tuple(p0 - (p1 - p0).normalized() * 0.02), tuple(p1), w0, metallic(CHAR), w1=w1)
+    facet_gem(b, 0.13, (0, 1.42, 0), EMBER, emissive=EMBER, strength=5, rot=corner_up(), depth=0.19)  # ember heart
+    facet_gem(b, 0.06, (0, 1.45, 0.1), EMBER_HOT, emissive=EMBER_HOT, strength=6)
+    beam(b, (0, 1.5, 0), (0, 1.7, 0), 0.09, EMBER_HOT, w1=0.015, emissive=EMBER, strength=5)  # flame tongue
 
 
-ASHEN_CAP = [(0.1, 0.305, 0.315, 0.02, 0.0), (0.18, 0.29, 0.3, 0.02, 0.0), (0.26, 0.24, 0.255, 0.015, 0.0), (0.315, 0.14, 0.15, 0.0, 0.0),
-             (0.335, 0.0, 0.0, 0, 0)]
-ASHEN_SIDES = [(-0.24, 0.31, 0.3, 0, 0), (-0.05, 0.315, 0.315, 0, 0), (0.12, 0.305, 0.315, 0, 0)]
+def flame_tine(f, k, lean):
+    """Stepped block flame on a crown band (frame local: +Y up the flame, +Z out of the band)."""
+    t = pivot(f, 'tine', (0, 0, 0), (lean, 0, 0))
+    box(t, (0.08 * k, 0.1 * k, 0.03), (0, 0.05 * k, 0), metallic(BRONZE), bevel=0.01)
+    box(t, (0.058 * k, 0.08 * k, 0.028), (0.012 * k, 0.13 * k, 0), metallic(BRONZE), rot=(0, 0, -0.12), bevel=0.009)
+    beam(t, (0.014 * k, 0.16 * k, 0), (-0.012 * k, 0.25 * k, 0), 0.045 * k, metallic(BRONZE), d=0.026, w1=0.008, d1=0.02)
+    box(t, (0.032 * k, 0.13 * k, 0.036), (0.004 * k, 0.09 * k, 0), EMBER, emissive=EMBER, strength=2, bevel=0)
 
 
 def u_ashen_crown(S):
-    """Open-faced charred helm: a rounded cap, cheek guards and nape down the sides, a bronze circlet crowned
-    with flame tines leaning outward and an ember gem over the brow."""
+    """Open-faced charred helm with a bronze band crowned by stepped block flame tines (the tallest pair either
+    side of an ember brow gem), embers glowing through the charred top."""
     h = S('sock_head')
-    cap = loft_fn(ASHEN_CAP, HELM_E, rw=0.6)
-    surf(h, cap, 12, len(ASHEN_CAP) - 1, 0.03, metallic(CHAR), closed_u=True, inside=HELM_IN, bevel=0.014, nm='cap', inner=False, walls=(0,))
-    sides = loft_fn(ASHEN_SIDES, HELM_E, t0=0.78, t1=2 * PI - 0.78)
-    surf(h, sides, 10, len(ASHEN_SIDES) - 1, 0.03, metallic(CHAR), inside=HELM_IN, bevel=0.012, nm='cheeks')
-    for u0, u1 in ((0.0, 0.05), (0.95, 1.0)):                                      # bronze edge round the face opening
-        surf(h, grow(sub(sides, u0, u1, 0, 0.9), 0.006, HELM_IN), 1, 2, 0.02, metallic(BRONZE), inside=HELM_IN, nm='face_edge')
-    band = loft_fn([(0.1, 0.32, 0.33, 0.02, 0), (0.18, 0.305, 0.315, 0.02, 0)], HELM_E, rw=0.6)
-    surf(h, band, 14, 1, 0.03, metallic(BRONZE), closed_u=True, inside=HELM_IN, bevel=0.008, nm='circlet', inner=False)
-    flame = [(-0.055, 0.0), (0.055, 0.0), (0.04, 0.07), (0.065, 0.12), (0.02, 0.2), (0.022, 0.12), (-0.02, 0.16), (-0.03, 0.08)]
-    inner = [(-0.03, 0.0), (0.03, 0.0), (0.018, 0.07), (0.03, 0.11), (0.005, 0.15), (-0.012, 0.09)]
-    for i in range(6):                                                             # tallest pair either side of the brow gem
-        t = (i - 2.5) * 2 * PI / 6
-        k = 1.2 if i in (2, 3) else (0.95 if i in (1, 4) else 0.8)
-        n = Vector((math.sin(t), 0, math.cos(t)))
-        pos = V(band(((t / (2 * PI)) % 1.0), 0.5)) + n * 0.01
-        rot = rot_of(('X', 0.3), ('Y', t))
-        prism(h, [(x * k, y * k) for x, y in flame], 0.03, tuple(pos), metallic(BRONZE), rot=rot, bevel=0.006)
-        prism(h, [(x * k, y * k) for x, y in inner], 0.034, tuple(pos + n * 0.006), EMBER, rot=rot, emissive=EMBER, strength=2)
-    fz = V(band(0.0, 0.5))
-    box(h, (0.12, 0.1, 0.03), tuple(fz + Vector((0, 0, 0.012))), metallic(BRONZE), rot=(0, 0, PI / 4), bevel=0.01)   # gem setting
-    gem(h, 0.05, tuple(fz + Vector((0, 0, 0.035))), EMBER_HOT, emissive=EMBER, strength=5)                             # brow gem
-    for s in (-1, 1):                                                              # embers glowing through the charred cap
-        box(h, (0.018, 0.012, 0.14), (s * 0.12, 0.29, -0.06), EMBER, rot=(0.45, s * 0.5, 0), emissive=EMBER, strength=3, bevel=0)
+    open_helm(h, shell=metallic(CHAR), rim=metallic(BRONZE), nasal=None, stud=metallic(BRONZE))
+    band = pivot(h, 'band', (0, 0.143, -0.005))   # top of the rim band
+    fr, bk, sl, sr = faces(band, 0.2925, 0.3025)
+    for x, k in ((-0.2, 0.8), (-0.085, 1.15), (0.085, 1.15), (0.2, 0.8)):
+        flame_tine(pivot(fr[0], 'tine_at', (x, 0, 0)), k, 0.22)
+    for x in (-0.12, 0.12):
+        flame_tine(pivot(bk[0], 'tine_at', (x, 0, 0)), 0.7, 0.22)
+    for f, _ in (sl, sr):
+        for x in (-0.12, 0.12):
+            flame_tine(pivot(f, 'tine_at', (x, 0, 0)), 0.75, 0.22)
+    box(h, (0.1, 0.1, 0.024), (0, 0.11, 0.31), metallic(BRONZE), rot=(0, 0, PI / 4), bevel=0.01)   # gem setting
+    facet_gem(h, 0.048, (0, 0.11, 0.327), EMBER_HOT, emissive=EMBER, strength=5)                    # brow gem
+    for x, z, ln in ((-0.1, 0.06, 0.14), (0.02, -0.02, 0.1), (0.11, -0.1, 0.12)):     # a crack of embers across the charred top
+        box(h, (0.02, 0.012, ln), (x, 0.366, z), EMBER, rot=(0, 2.0 + x, 0), emissive=EMBER, strength=3, bevel=0)
 
 
-def rot_of(*steps):
-    """Compose rotations applied in order (parent frame) into the ZYX Euler that _link uses."""
-    m = Matrix.Identity(3)
-    for axis, ang in steps:
-        m = Matrix.Rotation(ang, 3, axis) @ m
-    e = m.to_euler('ZYX')
-    return (e.x, e.y, e.z)
+def scale_plate(f, x, y, color, w=0.11, hgt=0.12, tilt=-0.28):
+    """Pointed dragon scale laid on a face frame (local +Z out), its lower point standing off the surface."""
+    pts = [(-w / 2, hgt * 0.42), (w / 2, hgt * 0.42), (w / 2, -hgt * 0.04), (0, -hgt * 0.62), (-w / 2, -hgt * 0.04)]
+    return prism(f, pts, 0.024, (x, y, 0.016), color, rot=(tilt, 0, 0))
 
 
 def u_scaleguard(S):
-    """Hauberk of shed dragon scales: overlapping rows of red scales all round a dark mail cuirass, a longer row
-    over the mail skirt, gold collar and buckle, scale pauldrons with swept-back horns."""
+    """Hauberk of shed dragon scales: staggered rows of pointed red scales all round a dark mail box cuirass, a
+    longer row over the mail skirt, gold collar and buckle, stacked scale pauldrons with swept-back bone horns."""
     c = S('sock_chest')
-    fn = cuirass(c, color=metallic(MAIL))
-    hoop(c, -0.62, -0.3, (0.415, 0.31), (0.395, 0.295), 0.025, metallic(MAIL), nu=12, e=CUIRASS_E, nm='skirt', walls=(0,))
-    for j, (ya, yb) in enumerate(((0.16, 0.33), (0.04, 0.21), (-0.08, 0.09), (-0.2, -0.03))):
-        scale_row(c, fn, 0.5 / 12 * (j % 2), 12, 1 / 12, row_v(CUIRASS, ya), row_v(CUIRASS, yb), SCALE, CHEST_IN,
-                  point=0.05, lift=0.006 + 0.004 * (3 - j), flare=0.03, nm='scale')
-    skirt = loft_fn([(-0.62, 0.415, 0.31, 0, 0), (-0.3, 0.395, 0.295, 0, 0)], CUIRASS_E)
-    scale_row(c, skirt, 0.0, 12, 1 / 12, 0.2, 0.95, SCALE, (0, -0.46, 0), point=0.12, lift=0.01, flare=0.03, nm='skirt_scale')
-    hoop(c, -0.4, -0.31, (0.43, 0.325), (0.43, 0.325), 0.025, 0x3A2A22, nu=12, e=CUIRASS_E, nm='belt')
-    box(c, (0.14, 0.12, 0.04), (0, -0.355, 0.345), metallic(GOLD), bevel=0.015)
-    hoop(c, 0.34, 0.41, (0.3, 0.29), (0.285, 0.275), 0.03, metallic(GOLD), nu=10, e=2.6, bevel=0.01, nm='collar')
+    hauberk(c, mail=metallic(MAIL), dark=metallic(CHAR), belt=0x3A2A22, buckle=metallic(GOLD), collar=metallic(GOLD), studs=False)
+    for f, hw in faces(c, 0.39, 0.26):
+        n = int((hw * 2) / 0.11)
+        for j, y in enumerate((0.25, 0.15, 0.05, -0.05, -0.15)):
+            off = 0.055 * (j % 2)
+            for i in range(n + 1):
+                x = -hw + 0.05 + off + i * 0.11
+                if x < hw - 0.04:
+                    scale_plate(f, x, y, SCALE if j % 2 == 0 else SCALE_MID)
+        for i in range(n + 1 if hw > 0.3 else 0):   # long skirt scales front and back
+            x = -hw + 0.06 + i * 0.11
+            if x < hw - 0.04:
+                scale_plate(f, x, -0.47, SCALE, hgt=0.2, tilt=-0.18)
     for name, s in (('sock_shoulderL', 1), ('sock_shoulderR', -1)):
         sh = S(name)
-        pauldron(sh, s, color=SCALE, roll=metallic(GOLD), lame_edge=SCALE_DK, lames=2)
-        O, phi, Rv, Rh = PAULDRON
-        top = Vector(O) + Vector((math.sin(phi), math.cos(phi), 0)) * Rv
-        horn(sh, [mp(tuple(top + Vector(d)), s) for d in ((0.0, -0.03, 0.02), (0.04, 0.08, -0.1), (0.07, 0.12, -0.26))],
-             (0.05, 0.03, 0.004), BONE, seg=5)
+        fr = block_pauldron(sh, s, color=SCALE, top=SCALE_DK, edge=metallic(GOLD))
+        top = fr[0]
+        beam(top, (-s * 0.04, 0.07, -0.08), (s * 0.02, 0.16, -0.24), 0.06, BONE, w1=0.03)
+        beam(top, (s * 0.02, 0.155, -0.235), (s * 0.05, 0.17, -0.36), 0.035, BONE, w1=0.008)
 
 
 GEAR = {

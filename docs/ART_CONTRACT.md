@@ -8,8 +8,15 @@ above the script, else `D:\gameplanning`), so set it when working in a worktree.
 Scripts author inside a root rotated +90° about X, so **all coordinates are three.js: Y up, +Z forward**.
 Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 
-Style: chunky stylized fantasy low-poly (Warcraft 3 / Torchlight). Chamfered boxes (`box(... bevel=)`), flat shading,
-bold silhouettes, oversized hands/weapons/pauldrons, 1–2 accent colours. Keep each model under ~3k triangles.
+Style: chunky stylized fantasy low-poly (Warcraft 3 / Torchlight). Flat shading, bold silhouettes, oversized
+hands/weapons/pauldrons, 1–2 accent colours. Keep each model under ~3k triangles.
+Characters and gear are modular and blocky: build them from chamfered boxes (`box(... bevel=)`), stacked slabs,
+wedges and tapered blocks (`beam`), cut gems (`facet_gem`) — a helm is a cube over the head cube, plate is stacked
+chamfered slabs, pauldrons are blocks stepping down the shoulder. Use blocks wherever scripted geometry shines
+(armour, helms, weapons, NPC/enemy bodies and clothing, belts, trims), and one or two angled facets where that reads
+better than a pure box; keep organic shapes only where they are made of many simple facets so small imperfections
+disappear (hair and beards, flames and glows, trees). Avoid smooth lofted domes, superellipse shells and fine curved
+detail on characters: they look wrong when slightly off.
 
 ## Names are the interface
 Blender forces unique object names per file, so exports may carry `.001` suffixes; the game strips `.NNN`.
@@ -49,10 +56,10 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `pickaxe` | `sock_handR` | head at +Y end |
 | `bow` | `sock_handR` | vertical bow in hand (counter-rotate −90° X inside the socket) |
 | `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
-| `helm_open` | `sock_head` | open-faced helm; face visible; hides hair |
-| `helm_full` | `sock_head` | full helm with visor slit; hides hair and beard |
-| `body_chain` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | rounded mail shirt, short mail sleeves; ring studs, no bands |
-| `body_plate` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | chunky breastplate + big pauldrons |
+| `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
+| `helm_full` | `sock_head` | cube-over-cube full helm with visor slit; hides hair and beard |
+| `body_chain` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | box mail shirt with a skirt block and small block shoulders; square studs, no bands |
+| `body_plate` | `sock_chest`, `sock_shoulderL`, `sock_shoulderR` | stacked-slab cuirass + stepped block pauldrons (same as plate set `p`) |
 | `gloves` | `sock_handL`, `sock_gloveR` | gauntlet cuffs, slightly bigger than bare hands |
 | `boots` | `sock_footL`, `sock_footR` | covers shoe, cuff at shin |
 | `u_<unique id>` | as its base | hand-built unique look (own colours allowed; metal parts use `_common.metallic()` so they get the forged-metal finish) |
