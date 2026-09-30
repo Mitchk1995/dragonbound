@@ -234,7 +234,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
           // Cave rock: one continuous mass climbing in broad terraces (wide ledges, short steep
           // risers) whose edges wander slowly, so the walls read as layered strata in a single
           // body of rock. Only slow noise: fine per-vertex noise made the tops lumpy.
-          y = top * (0.9 + noise(x * 0.18 + 9, z * 0.18) * 0.2) + (noise(x * 0.16 + 20, z * 0.16) - 0.5) * 3.0 + (noise(x * 0.4 + 40, z * 0.4) - 0.5) * 1.2 + rise[k];
+          y = top * (0.9 + noise(x * 0.18 + 9, z * 0.18) * 0.2) + (noise(x * 0.16 + 20, z * 0.16) - 0.5) * 3.0 + (noise(x * 0.4 + 40, z * 0.4) - 0.5) * 0.5 + rise[k];
           // Narrow risers (steep, short faces) between wide flat ledges: with the faceted shading
           // below, each terrace reads as a slab with a crisp lip, like the stacked slabs at the foot.
           // (The cave relief mesh is rebuilt finer below from the raw height; the grid keeps the
@@ -330,7 +330,8 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const up = sstep(0.9, 1.6, r);
       const y = r < 0.9 ? r : terrace(r);
       const px = x + u, pz = z + v;
-      const jx = (noise(px * 0.61 + 11, pz * 0.61) - 0.5) * 0.36 * up, jz = (noise(px * 0.61 + 29, pz * 0.61 + 7) - 0.5) * 0.36 * up;
+      // Only a slight nudge off the grid (a stronger one pulled the facets into spikes).
+      const jx = (noise(px * 0.61 + 11, pz * 0.61) - 0.5) * 0.12 * up, jz = (noise(px * 0.61 + 29, pz * 0.61 + 7) - 0.5) * 0.12 * up;
       const b = Math.floor(y / CAVE_TERRACE + 0.3 + (noise(px * 0.05 + 3, pz * 0.05) - 0.5) * 0.3);
       const f = 1 + (band[((b % 4) + 4) % 4] * (0.95 + noise(px * 0.3 + 60, pz * 0.3) * 0.1) - 1) * up;
       return { p: [px + jx, y, pz + jz], c: [bil(col, 3, 0) * f * (1 + 0.03 * up), bil(col, 3, 1) * f, bil(col, 3, 2) * f * (1 - 0.04 * up)], a: [0, 1, 2, 3].map((j) => bil(splat, 4, j)) };
@@ -414,7 +415,9 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
     fg.setAttribute('aDepth', new THREE.Float32BufferAttribute(depth, 1));
     fg.computeVertexNormals();
-    const { mesh, tick } = fluidSurface(fg, kind, theme);
+    // The drowned city's still water mirrors the ruins and the sky (a planar reflection); open
+    // rivers and lakes elsewhere keep the cheaper painted sky.
+    const { mesh, tick } = fluidSurface(fg, kind, theme, kind === Fluid.Water && theme.wall === 'ruin');
     meshes.push(mesh);
     ticks.push(tick);
   }
@@ -438,8 +441,82 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
  *   hot, deep middle; open molten patches churn in the deepest spots. Emission stays moderate so
  *   bloom shows seams, not a blown-out disc.
  */
-function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) {
+/**
+ * A mirror of the scene about the water plane, rendered into a half-resolution HDR target just
+ * before the water draws (three.js Reflector's oblique-clip method, so nothing under the surface
+ * is mirrored). Only for perspective cameras; the water hides itself while the mirror renders.
+ */
+function planarReflection(y: number) {
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  const texMat = new THREE.Matrix4(), vcam = new THREE.PerspectiveCamera();
+  const normal = new THREE.Vector3(0, 1, 0), onPlane = new THREE.Vector3(0, y, 0);
+  const camPos = new THREE.Vector3(), view = new THREE.Vector3(), look = new THREE.Vector3(), target = new THREE.Vector3();
+  const rot = new THREE.Matrix4(), plane = new THREE.Plane(), clip = new THREE.Vector4(), qv = new THREE.Vector4();
+  const size = new THREE.Vector2(), clearC = new THREE.Color();
+  const on = { value: 0 };
+  let busy = false;
+  const render = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, self: THREE.Object3D) => {
+    on.value = 0;
+    if (busy || !(camera as THREE.PerspectiveCamera).isPerspectiveCamera) return;
+    camPos.setFromMatrixPosition(camera.matrixWorld);
+    view.subVectors(onPlane.set(camPos.x, y, camPos.z), camPos);
+    if (view.dot(normal) > 0) return;
+    view.reflect(normal).negate().add(onPlane);
+    rot.extractRotation(camera.matrixWorld);
+    look.set(0, 0, -1).applyMatrix4(rot).add(camPos);
+    target.subVectors(onPlane, look).reflect(normal).negate().add(onPlane);
+    vcam.position.copy(view);
+    vcam.up.set(0, 1, 0).applyMatrix4(rot).reflect(normal);
+    vcam.lookAt(target);
+    vcam.far = (camera as THREE.PerspectiveCamera).far;
+    vcam.updateMatrixWorld();
+    vcam.projectionMatrix.copy(camera.projectionMatrix);
+    texMat.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(vcam.projectionMatrix).multiply(vcam.matrixWorldInverse);
+    // Oblique near plane on the water surface: nothing below it reaches the mirror.
+    plane.setFromNormalAndCoplanarPoint(normal, onPlane).applyMatrix4(vcam.matrixWorldInverse);
+    clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+    const pm = vcam.projectionMatrix.elements;
+    qv.set((Math.sign(clip.x) + pm[8]) / pm[0], (Math.sign(clip.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
+    clip.multiplyScalar(2 / clip.dot(qv));
+    pm[2] = clip.x;
+    pm[6] = clip.y;
+    pm[10] = clip.z + 1 - 0.003;
+    pm[14] = clip.w;
+    renderer.getDrawingBufferSize(size);
+    const W = Math.max(64, Math.round(size.x / 2)), H = Math.max(64, Math.round(size.y / 2));
+    if (rt.width !== W || rt.height !== H) rt.setSize(W, H);
+    busy = true;
+    self.visible = false;
+    const prevTarget = renderer.getRenderTarget(), prevShadow = renderer.shadowMap.autoUpdate, prevXr = renderer.xr.enabled;
+    // No background in the mirror: its alpha then marks where something was reflected, and the
+    // painted sky gradient fills the rest.
+    const bg = scene.background, prevAlpha = renderer.getClearAlpha();
+    renderer.getClearColor(clearC);
+    scene.background = null;
+    renderer.setClearColor(clearC, 0);
+    renderer.xr.enabled = false;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.setRenderTarget(rt);
+    renderer.state.buffers.depth.setMask(true);
+    if (renderer.autoClear === false) renderer.clear();
+    renderer.render(scene, vcam);
+    scene.background = bg;
+    renderer.setClearColor(clearC, prevAlpha);
+    renderer.xr.enabled = prevXr;
+    renderer.shadowMap.autoUpdate = prevShadow;
+    renderer.setRenderTarget(prevTarget);
+    const vp = (camera as THREE.Camera & { viewport?: THREE.Vector4 }).viewport;
+    if (vp) renderer.state.viewport(vp);
+    self.visible = true;
+    busy = false;
+    on.value = 1;
+  };
+  return { texture: rt.texture, texMat, on, render };
+}
+
+function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, mirror = false) {
   const lava = kind === Fluid.Lava;
+  const refl = mirror ? planarReflection(WATER_Y) : null;
   const skyHigh = new THREE.Color(theme.hemi[0]).multiplyScalar(0.75);
   const skyLow = new THREE.Color(theme.bg).lerp(new THREE.Color(theme.hemi[0]), 0.25);
   const uniforms = {
@@ -449,6 +526,9 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
     uDeep: { value: new THREE.Color(lava ? 0x5a0c02 : (theme.water?.[1] ?? 0x123a52)) },
     uSkyHigh: { value: skyHigh },
     uSkyLow: { value: skyLow },
+    uRefl: { value: refl?.texture ?? null },
+    uReflMat: { value: refl?.texMat ?? new THREE.Matrix4() },
+    uReflOn: refl?.on ?? { value: 0 },
   };
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff, roughness: lava ? 0.55 : 0.1, metalness: 0,
@@ -461,6 +541,9 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
     uniform vec3 uDeep;
     uniform vec3 uSkyHigh;
     uniform vec3 uSkyLow;
+    uniform float uReflOn;
+    uniform mat4 uReflMat;
+    ${refl ? 'uniform sampler2D uRefl;' : ''}
     varying float vDepth;
     varying vec3 vFluidPos;
     float fluidN(vec2 p) { return texture2D(uNoise, p).r; }
@@ -508,7 +591,12 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
           : `// Depth colour: clear turquoise shallows (the bed shows through, see the ground's wet
              // patch) deepening to opaque blue-green.
              float deep = smoothstep(0.03, 0.72, vDepth + (ripple - 0.5) * 0.1);
-             diffuseColor.rgb = mix(uShallow, uDeep, deep);
+             // The deep is not one flat colour: broad, slowly drifting patches of a greener and a
+             // bluer deep, darkest where it is deepest.
+             float patchN = fluidN(fp * 0.016 + vec2(uTime * 0.0015, -uTime * 0.001));
+             vec3 deepC = mix(uDeep * vec3(0.8, 1.1, 0.95), uDeep * vec3(1.05, 0.9, 1.18), smoothstep(0.3, 0.7, patchN));
+             deepC *= 1.0 - 0.28 * smoothstep(0.45, 0.72, vDepth);
+             diffuseColor.rgb = mix(uShallow, deepC, deep);
              // Foam: a broken rim where the bank meets the water, and a second line that laps
              // in and out a little way offshore.
              float n3 = fluidN(fp * 0.61 + vec2(uTime * 0.05, -uTime * 0.04));
@@ -524,7 +612,12 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
         `#include <normal_fragment_maps>
         {
           // Water: long swells, a cross-chop and fine wind ripples; lava: a slow heave.
-          vec2 g = fluidGrad(q1, 0.01) * ${lava ? '0.0' : '0.007'} + fluidGrad(q2, 0.01) * ${lava ? '0.002' : '0.005'}${lava ? '' : ' + fluidGrad(fp * 0.7 + vec2(uTime * 0.06, uTime * 0.045), 0.01) * 0.0025'};
+          vec2 g = fluidGrad(q1, 0.01) * ${lava ? '0.0' : '0.006'} + fluidGrad(q2, 0.01) * ${lava ? '0.002' : '0.004'};
+          ${lava ? '' : `// Gentle swells rolling across the surface (their crests wander with the noise), under
+          // a faint wind chop.
+          vec2 swD = vec2(0.8, 0.6);
+          float swPh = dot(fp, swD) * 0.7 - uTime * 0.85 + n1 * 4.0;
+          g += swD * cos(swPh) * 0.045 * (0.55 + 0.45 * n2) + fluidGrad(fp * 0.7 + vec2(uTime * 0.06, uTime * 0.045), 0.01) * 0.0015;`}
           vec3 gv = (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz;
           normal = normalize(normal - gv + dot(gv, normal) * normal);
         }`,
@@ -547,18 +640,30 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
              float cloud = smoothstep(0.35, 0.75, fluidN(rw.xz / max(0.25, rw.y) * 0.05 + fp * 0.012 + vec2(uTime * 0.004, 0.0)));
              sky *= 0.8 + 0.35 * cloud;
              float fres = 0.1 + 0.9 * pow(1.0 - ndv, 4.0);
-             totalEmissiveRadiance += sky * fres * (0.55 + 0.45 * smoothstep(0.0, 0.5, vDepth));
+             vec3 envC = sky * fres;
+             ${refl ? `// The mirrored scene (ruins, columns, the far shore) where there is one, rippled by the
+             // swells; the painted sky everywhere else. Solid reflections read stronger than the
+             // sky's, so the ruins show in the water even from the high camera.
+             vec4 rc = uReflMat * vec4(vFluidPos, 1.0);
+             vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+             vec2 ruv = rc.xy / rc.w + (normal.xy - flatN.xy) * 0.45;
+             vec4 mir = texture2D(uRefl, ruv);
+             float cover = clamp(mir.a, 0.0, 1.0) * uReflOn;
+             envC = mix(envC, mir.rgb * (0.75 + 0.25 * pow(1.0 - ndv, 2.0)), cover);
+             diffuseColor.rgb *= 1.0 - cover * 0.6;` : ''}
+             totalEmissiveRadiance += envC * (0.55 + 0.45 * smoothstep(0.0, 0.5, vDepth));
              // Sun glints: a sun low ahead of the camera, reflected by the ripple normals, so a
              // path of sparkles flickers on the crests (HDR: they bloom).
              vec3 sunDir = normalize(vec3(0.25, 0.5, -0.83));
              float spec = pow(max(dot(normalize(rw), sunDir), 0.0), 400.0);
              // Two samples at unrelated scales and angles multiplied, so the sparkles never line up on the noise lattice.
              float twinkle = smoothstep(0.42, 0.62, fluidN(fp * 1.13 + vec2(uTime * 0.11, -uTime * 0.07)) * fluidN(mat2(0.8, 0.6, -0.6, 0.8) * fp * 1.71 - vec2(uTime * 0.05, uTime * 0.09)));
-             totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * (spec * twinkle * 2.2 + pow(max(dot(normalize(rw), sunDir), 0.0), 18.0) * 0.06);`}`,
+             totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * (spec * twinkle * 1.3 + pow(max(dot(normalize(rw), sunDir), 0.0), 18.0) * 0.06);`}`,
       );
   };
-  mat.customProgramCacheKey = () => (lava ? 'fluid3-lava' : 'fluid3-water');
+  mat.customProgramCacheKey = () => (lava ? 'fluid4-lava' : refl ? 'fluid4-mirror' : 'fluid4-water');
   const mesh = new THREE.Mesh(geo, mat);
+  if (refl) mesh.onBeforeRender = (renderer, scene, camera) => refl.render(renderer, scene, camera, mesh);
   mesh.name = lava ? 'lava' : 'water';
   mesh.receiveShadow = !lava;
   mesh.renderOrder = 1;

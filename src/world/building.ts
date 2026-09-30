@@ -19,6 +19,20 @@ export interface Window {
   side: Side;
   /** Window centre along the wall, in cells from its low end. */
   at: number;
+  /** Storey: 0 = ground floor (default), 1 = the upper floor of a building with `storeyH`. */
+  floor?: number;
+}
+
+/**
+ * An interior wall on the grid: a straight line of cells, `axis` 'x' runs along x at local z = `at`
+ * (cells `from`..`to`-1), 'z' runs along z at local x = `at`. Doorways are [first cell, width] along it.
+ */
+export interface Partition {
+  axis: 'x' | 'z';
+  at: number;
+  from: number;
+  to: number;
+  doors?: [number, number][];
 }
 
 /** A piece of furniture or fitting inside (tables, pillars, shelves, the hearth…). */
@@ -35,10 +49,10 @@ export interface Fit {
   block?: [number, number];
 }
 
-export type BuildingStyle = 'hall' | 'stone' | 'timber';
+export type BuildingStyle = 'hall' | 'stone' | 'timber' | 'keep';
 
 /** What furnishes the inside (and, for plots, what the restored building is for). */
-export type Interior = 'hall' | 'smelter' | 'bank' | 'vault' | 'shop' | 'alchemy' | 'rune' | 'hatchery';
+export type Interior = 'keep' | 'hall' | 'smelter' | 'bank' | 'vault' | 'shop' | 'alchemy' | 'rune' | 'hatchery';
 
 export interface BuildingSpec {
   id: string;
@@ -61,6 +75,12 @@ export interface BuildingSpec {
   roofKind?: 'gable' | 'flat';
   /** Restoration id: ruined foundations until restored. */
   restore?: string;
+  /** Interior walls dividing the floor into rooms. */
+  partitions?: Partition[];
+  /** Height of the ground storey of a multi-storey building (upper-floor windows sit above it). */
+  storeyH?: number;
+  /** Corner towers: square, `towers` cells a side, clasping each outer corner from outside. */
+  towers?: number;
 }
 
 /** Wall length in cells along a side. */
@@ -91,7 +111,10 @@ export function cellRole(b: BuildingSpec, cx: number, cz: number): CellRole {
   const lx = cx - b.x, lz = cz - b.z;
   if (lx < 0 || lz < 0 || lx >= b.w || lz >= b.d) return 'out';
   const edgeX = lx === 0 || lx === b.w - 1, edgeZ = lz === 0 || lz === b.d - 1;
-  if (!edgeX && !edgeZ) return 'floor';
+  if (!edgeX && !edgeZ) {
+    const p = partitionAt(b, lx, lz);
+    return !p ? 'floor' : p.door ? 'door' : 'wall';
+  }
   // Corners are always wall; doorways sit along the straight runs.
   if (edgeX && edgeZ) return 'wall';
   const side: Side = lz === 0 ? 'n' : lz === b.d - 1 ? 's' : lx === 0 ? 'w' : 'e';
@@ -104,6 +127,36 @@ export function cellRole(b: BuildingSpec, cx: number, cz: number): CellRole {
  */
 export function inRoom(b: BuildingSpec, x: number, z: number, margin = 0.9) {
   return x > b.x + 1 - margin && x < b.x + b.w - 1 + margin && z > b.z + 1 - margin && z < b.z + b.d - 1 + margin;
+}
+
+/** The interior wall on local cell (lx, lz), if any, and whether that cell is one of its doorways. */
+export function partitionAt(b: BuildingSpec, lx: number, lz: number) {
+  for (const p of b.partitions ?? []) {
+    const [across, along] = p.axis === 'x' ? [lz, lx] : [lx, lz];
+    if (across !== p.at || along < p.from || along >= p.to) continue;
+    return { p, door: (p.doors ?? []).some(([a, w]) => along >= a && along < a + w) };
+  }
+  return null;
+}
+
+/** Solid runs of an interior wall between its doorways: [start, end) in cells along it. */
+export function partitionRuns(p: Partition): [number, number][] {
+  const runs: [number, number][] = [];
+  let s = p.from;
+  for (const [a, w] of [...(p.doors ?? [])].sort((x, y) => x[0] - y[0])) {
+    if (a > s) runs.push([s, a]);
+    s = Math.max(s, a + w);
+  }
+  if (p.to > s) runs.push([s, p.to]);
+  return runs;
+}
+
+/** World cell rectangles [x0, z0, x1, z1) of the corner towers (outside the wall ring, sharing only its corner cell). */
+export function towerRects(b: BuildingSpec): [number, number, number, number][] {
+  const S = b.towers ?? 0;
+  if (!S) return [];
+  const xs = [b.x + 1 - S, b.x + b.w - 1], zs = [b.z + 1 - S, b.z + b.d - 1];
+  return zs.flatMap((z) => xs.map((x) => [x, z, x + S, z + S] as [number, number, number, number]));
 }
 
 /** Solid wall runs along a side, between doorways: [start, end) in cells from the low end. */

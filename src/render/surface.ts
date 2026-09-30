@@ -224,6 +224,36 @@ export function applyGrade(mat: THREE.Material, grade: Grade, space: GradeSpace)
   });
 }
 
+/**
+ * World-height shade for scenery that climbs cave walls (instanced rock slabs): the higher a
+ * fragment sits in the world, the darker (down to `low` at `to`), eased like the cave relief's
+ * own falloff, so the slabs and the rock mass behind them fade into the dark together.
+ */
+export function applyHeightShade(mat: THREE.Material, low: number, from: number, to: number) {
+  if (!(mat instanceof THREE.MeshStandardMaterial)) return;
+  const uniforms = { uHsLow: { value: low }, uHsRange: { value: new THREE.Vector2(from, to) } };
+  addPatch(mat, {
+    key: 'hshade',
+    apply(shader) {
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying float vHsY;')
+        .replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>
+          #ifdef USE_INSTANCING
+            vHsY = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).y;
+          #else
+            vHsY = (modelMatrix * vec4(transformed, 1.0)).y;
+          #endif`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uHsLow;\nuniform vec2 uHsRange;\nvarying float vHsY;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(1.0, uHsLow, sqrt(smoothstep(uHsRange.x, uHsRange.y, vHsY)));');
+    },
+  });
+}
+
 const gradeInv = new THREE.Matrix4();
 
 /**

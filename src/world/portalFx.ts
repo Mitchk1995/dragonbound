@@ -89,8 +89,26 @@ export function titleLines(name: string, maxChars = 11): string[] {
 
 /** The oval's size (world units) and how far the quad extends past it for the outer halo. */
 const PORTAL_W = 2.2, PORTAL_H = 3.0, HALO = 1.14;
-/** The window leans back toward the high gameplay camera, so it reads as an upright oval, not a squashed ring. */
+/**
+ * Resting lean (before the first render): the window tips back toward the high gameplay camera.
+ * Every render then turns it to face the camera exactly (see `portalFacing`), so the oval keeps its
+ * proportions wherever the portal sits on screen: a fixed lean read as a circle near the bottom
+ * edge, where the view ray is steeper.
+ */
 const LEAN = 0.4;
+/** How far the title floats above the oval's top, along the window's own up axis. */
+const TITLE_GAP = 0.6;
+
+/**
+ * Yaw (about world Y, 0 = facing +Z) and lean (tilt back from upright) that turn a window standing
+ * at `foot` to face a camera at `cam`, aimed at the window's middle. The lean follows the view
+ * ray's elevation, so the oval is always seen face-on (never foreshortened into a circle).
+ */
+export function portalFacing(foot: { x: number; y: number; z: number }, cam: { x: number; y: number; z: number }) {
+  const dx = cam.x - foot.x, dy = cam.y - (foot.y + PORTAL_H / 2), dz = cam.z - foot.z;
+  const flat = Math.hypot(dx, dz);
+  return { yaw: flat > 1e-4 ? Math.atan2(dx, dz) : 0, lean: Math.max(0, Math.min(1.5, Math.atan2(dy, Math.max(flat, 1e-4)))) };
+}
 
 const WINDOW_VERT = `
   varying vec2 vUv;
@@ -371,7 +389,7 @@ const MOTE_FRAG = `
   }`;
 
 const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending } as const;
-const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
+const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpFoot = new THREE.Vector3(), tmpCam = new THREE.Vector3();
 
 // ─── Title ──────────────────────────────────────────────────────────────────
 
@@ -621,20 +639,35 @@ export function makePortal(spec: PortalSpec, baseY: number): PortalFx | null {
     obj.add(motes);
   }
   const title = spec.name ? buildTitle(spec.name, spec.color ?? 0x888890, open, spec.hint ?? 'Sealed') : null;
-  const titleY = baseY + 0.3 + PORTAL_H * Math.cos(LEAN) + 0.85;
-  if (title) {
-    title.position.set(0, titleY, -PORTAL_H * Math.sin(LEAN));
-    facing.add(title);
-  }
+  if (title) facing.add(title);
+  let bob = 0;
+  // The title rides just above the oval's top, along the window's up axis (so it keeps the same
+  // gap on screen however far the window leans), bobbing gently.
+  const lean = (a: number) => {
+    win.rotation.x = -a;
+    if (title) title.position.set(0, baseY + 0.3 + (PORTAL_H + TITLE_GAP) * Math.cos(a) + bob, -(PORTAL_H + TITLE_GAP) * Math.sin(a));
+  };
+  lean(LEAN);
+  const objYaw = () => tmpE.setFromQuaternion(obj.getWorldQuaternion(tmpQ), 'YXZ').y;
+  // Every render (each camera: gameplay, map, previews) turns the window to face that camera, so
+  // the oval never foreshortens into a circle. This runs before three.js builds the window's
+  // model-view matrix, so the new pose shows in the same frame.
+  win.onBeforeRender = (_r, _s, cam) => {
+    facing.localToWorld(tmpFoot.set(0, baseY + 0.3, 0));
+    const f = portalFacing(tmpFoot, cam.getWorldPosition(tmpCam));
+    facing.rotation.y = f.yaw - objYaw();
+    lean(f.lean);
+    facing.updateMatrixWorld(true);
+  };
   return {
     obj,
     tick: (t) => {
       time.value = t;
-      // The window turns to face the fixed gameplay camera (which always looks along -Z): a
-      // platform on the side of an arc would otherwise show its portal edge-on.
-      obj.getWorldQuaternion(tmpQ);
-      facing.rotation.y = -tmpE.setFromQuaternion(tmpQ, 'YXZ').y;
-      if (title) title.position.y = titleY + Math.sin(t * 1.3) * (open ? 0.07 : 0.03);
+      // Before any render: face the fixed gameplay camera (which always looks along -Z), so a
+      // platform on the side of an arc never shows its portal edge-on.
+      // (The next render refines this to face the real camera.)
+      facing.rotation.y = -objYaw();
+      bob = Math.sin(t * 1.3) * (open ? 0.07 : 0.03);
     },
   };
 }
