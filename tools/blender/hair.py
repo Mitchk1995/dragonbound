@@ -2,6 +2,8 @@
 
 Each file is one `sock_head` empty whose children are ROLE_hair meshes, authored relative to the
 head centre (the base head is a 0.46 cube centred on sock_head; face at +Z, ears at +-0.245 X).
+Every hairstyle is one rounded shell over the scalp (hair_shell) with chunky locks rooted in it (strand),
+so it reads as a single mass of hair from the gameplay camera above.
 """
 import math
 import os
@@ -15,71 +17,185 @@ import importlib
 import _common
 importlib.reload(_common)
 from _common import *
-from mathutils import Euler, Vector
+from _common import _mesh_obj
+import bmesh
+from mathutils import Vector
+
+# The curved-surface kit (surf / ssin / scos) still lives in plate_variants.py; borrow it for the shells.
+_p = os.path.join(_ROOT, 'tools', 'blender', 'plate_variants.py')
+_pv = {'__name__': 'db_pv', '__file__': _p}
+exec(open(_p, encoding='utf-8').read(), _pv)
+surf, ssin, scos = _pv['surf'], _pv['ssin'], _pv['scos']
 
 PI = math.pi
 H = R.hair
 BAND = 0x5A3A22   # leather hair tie (authored colour)
 BEAD = 0xD9A640   # braid beads (authored colour)
 
-
-def spike(parent, r, h, pos, rot, seg=4):
-    """Hair tuft: cone whose base sits at `pos` and points along the rotated +Y."""
-    off = Euler(rot, 'ZYX').to_matrix() @ Vector((0, h / 2, 0))
-    return cone(parent, r, h, (pos[0] + off.x, pos[1] + off.y, pos[2] + off.z), H, rot=rot, seg=seg)
+# Lock cross-sections (side, up) in half-width units: a flat hexagon with ridged edges, or a diamond for spikes.
+SECTION = {6: ((-1, 0), (-0.5, -1), (0.5, -1), (1, 0), (0.5, 1), (-0.5, 1)), 4: ((-1, 0), (0, -1), (1, 0), (0, 1))}
 
 
-def base_cap(h, top=0.2, height=0.13, width=0.5):
-    box(h, (width, height, width), (0, top, -0.01), H, bevel=0.04)
+class Scalp:
+    """Superellipsoid the hair is shaped on: centre (0, yc, dz), half-widths a (x) and b (z), crown at y = top.
+    `e` squares off the plan view, `ev` the profile. Angles t run round from the forehead (0) to +X (pi/2)."""
+
+    def __init__(self, a, b, top, yc=0.0, dz=0.0, e=3.0, ev=2.4):
+        self.a, self.b, self.hgt, self.e, self.ev = a, b, top - yc, e, ev
+        self.c = Vector((0, yc, dz))
+
+    def gauge(self, d):
+        """1 on the surface, growing linearly with distance from the centre (d is centre-relative)."""
+        flat = (abs(d.x / self.a) ** self.e + abs(d.z / self.b) ** self.e) ** (self.ev / self.e)
+        return (flat + abs(d.y / self.hgt) ** self.ev) ** (1 / self.ev)
+
+    def at(self, t, phi):
+        """Surface point at angle t and elevation phi (-pi/2 bottom .. pi/2 crown)."""
+        r = scos(phi, self.ev)
+        return self.c + Vector((self.a * r * ssin(t, self.e), self.hgt * ssin(phi, self.ev), self.b * r * scos(t, self.e)))
+
+    def elevation(self, y):
+        s = max(-0.99, min(0.99, (y - self.c.y) / self.hgt))
+        return math.copysign(math.asin(abs(s) ** (self.ev / 2)), s)
+
+    def normal(self, q):
+        d, k = q - self.c, 1e-4
+        g = Vector([self.gauge(d + ax * k) - self.gauge(d - ax * k) for ax in (Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))])
+        return g.normalized()
+
+    def on(self, p, lift=0.0):
+        """The surface point straight out from the centre through p, pushed `lift` along the normal."""
+        d = Vector(p) - self.c
+        q = self.c + d / self.gauge(d)
+        return q + self.normal(q) * lift
 
 
-def hair_1(h):  # short crop
-    base_cap(h)
+def hairline(keys):
+    """Hairline height at angle t from (degrees from the forehead, y) keys, mirrored left/right, eased between keys."""
+    def y(t):
+        deg = abs(math.degrees(math.atan2(math.sin(t), math.cos(t))))
+        for (d0, y0), (d1, y1) in zip(keys, keys[1:]):
+            if deg <= d1:
+                s = (deg - d0) / (d1 - d0)
+                return y0 + (y1 - y0) * s * s * (3 - 2 * s)
+        return keys[-1][1]
+    return y
+
+
+def hair_shell(h, sc, line, nu=24, nv=5, thick=0.045):
+    """Rounded cap of hair: the scalp `sc` from the crown down to `line`, a (degrees, y) hairline that sits
+    high at the forehead, dips into a sideburn in front of the ear, clears the ear and runs low at the nape."""
+    lo = hairline(line)
+
+    def fn(u, v):
+        t = 2 * PI * u
+        p0 = sc.elevation(lo(t))
+        return tuple(sc.at(t, p0 + (PI / 2 - p0) * v))
+    return surf(h, fn, nu, nv, thick, H, closed_u=True, inside=tuple(sc.c), bevel=0.012, inner=False, walls=(0,))
+
+
+def lock(h, spine, w, d, n, sides=6, color=H):
+    """Chunky lock along `spine` (root first): w wide and d thick at the root, thickness facing `n`, tapering
+    to a point at the last spine point. A spine point may carry a 4th value, the width scale there."""
+    pts = [Vector(p[:3]) for p in spine]
+    k = len(pts)
+    side = (pts[-1] - pts[0]).cross(Vector(n))
+    side = side.normalized() if side.length > 1e-6 else Vector((1, 0, 0))
+    bm = bmesh.new()
+    rings = []
+    for i, p in enumerate(pts[:-1]):
+        tan = (pts[i + 1] - pts[max(i - 1, 0)]).normalized()
+        up = tan.cross(side).normalized()
+        sd = up.cross(tan)
+        f = spine[i][3] if len(spine[i]) > 3 else 1 - (i / (k - 1)) ** 1.6
+        rings.append([bm.verts.new(p + sd * (sx * w / 2 * f) + up * (sy * d / 2 * f)) for sx, sy in SECTION[sides]])
+    tip = bm.verts.new(pts[-1])
+    bm.faces.new(rings[0])
+    for a, b in zip(rings, rings[1:]):
+        for j in range(sides):
+            bm.faces.new((a[j], a[(j + 1) % sides], b[(j + 1) % sides], b[j]))
+    for j in range(sides):
+        bm.faces.new((rings[-1][j], rings[-1][(j + 1) % sides], tip))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _mesh_obj(bm, h, (0, 0, 0), (0, 0, 0), color)
+
+
+def strand(h, sc, guides, w, d, sides=6):
+    """Lock laid over the scalp: guides are (x, y, z, lift[, width scale]); each is projected onto `sc` and raised
+    `lift` off it. Give the first (the root) a negative lift so it grows out of the shell."""
+    spine = [tuple(sc.on(g[:3], g[3])) + tuple(g[4:]) for g in guides]
+    return lock(h, spine, w, d, sc.normal(sc.on(guides[0][:3])), sides)
+
+
+def spike(h, sc, root, out, back, length, w, sides=4):
+    """Big spike growing out of the shell at `root`: points along the scalp normal tipped `out` more up (+) and
+    `back` more rearward (+), with a buried base as wide as the spike so neighbours merge into one mass."""
+    base = sc.on(root, 0.02)
+    n = sc.normal(base)
+    dirn = (n + Vector((0, out, -back))).normalized()
+    spine = [(*sc.on(root, -0.05), 1.0), (*base, 1.0), (*(base + dirn * length * 0.45 + n * 0.02), 0.62), tuple(base + dirn * length)]
+    return lock(h, spine, w, w * 0.7, n, sides)
+
+
+def hair_1(h):  # short crop: tight rounded cap, short textured crown, small fringe
+    sc = Scalp(0.262, 0.27, 0.31, dz=-0.005)
+    hair_shell(h, sc, [(0, 0.15), (30, 0.14), (55, 0.09), (72, 0.02), (90, 0.07), (105, 0.03), (130, -0.06), (180, -0.13)])
+    for x in (-0.12, -0.01, 0.1):                                                       # fringe, brushed to one side
+        strand(h, sc, [(x * 0.8, 0.3, 0.1, -0.03), (x, 0.26, 0.24, 0.025), (x + 0.06, 0.19, 0.3, 0.025)], 0.14, 0.06)
+    for a in range(6):                                                                  # crown whorl
+        t = a * PI / 3 + 0.3
+        dx, dz = math.sin(t), math.cos(t)
+        strand(h, sc, [(0, 0.35, -0.05, -0.015), (dx * 0.1, 0.33, -0.05 + dz * 0.1, 0.022), (dx * 0.22, 0.28, -0.05 + dz * 0.22, 0.008)], 0.13, 0.05)
+    for t in (-2.2, -2.7, PI, 2.7, 2.2):                                                # nape
+        dx, dz = math.sin(t), math.cos(t)
+        strand(h, sc, [(dx * 0.25, 0.18, dz * 0.25, -0.02), (dx * 0.27, 0.02, dz * 0.27, 0.02), (dx * 0.25, -0.14, dz * 0.25, 0.01)], 0.14, 0.05)
+
+
+def hair_2(h):  # swept back: a tall front rising off the brow, every lock raking back to the nape
+    sc = Scalp(0.265, 0.28, 0.35, dz=-0.01)
+    hair_shell(h, sc, [(0, 0.17), (30, 0.15), (55, 0.1), (72, 0.02), (90, 0.07), (105, 0.03), (130, -0.04), (180, -0.1)])
+    for x in (-0.16, -0.08, 0, 0.08, 0.16):
+        strand(h, sc, [(x * 0.9, 0.2, 0.24, -0.03), (x, 0.3, 0.22, 0.07), (x * 1.05, 0.4, 0.02, 0.05),
+                       (x * 1.15, 0.28, -0.2, 0.035), (x * 1.2, 0.08, -0.3, 0.03)], 0.14, 0.08)
     for s in (-1, 1):
-        box(h, (0.04, 0.14, 0.34), (s * 0.244, 0.13, -0.06), H, bevel=0.012)       # sides above the ears
-    box(h, (0.5, 0.25, 0.05), (0, 0.085, -0.243), H, bevel=0.015)                  # back
-    for i, x in enumerate((-0.14, 0, 0.14)):
-        box(h, (0.15, 0.07, 0.07), (x, 0.17 + (i % 2) * 0.012, 0.236), H, rot=(0.25, 0, (i - 1) * 0.2), bevel=0.02)  # fringe
+        strand(h, sc, [(s * 0.24, 0.16, 0.14, -0.02), (s * 0.27, 0.16, 0.0, 0.035), (s * 0.26, 0.1, -0.2, 0.025),
+                       (s * 0.2, 0.02, -0.3, 0.01)], 0.12, 0.07)
+    for x in (-0.12, 0, 0.12):                                                          # ducktail flicks at the nape
+        strand(h, sc, [(x, 0.1, -0.25, -0.02), (x * 1.1, -0.05, -0.28, 0.03), (x * 1.3, -0.14, -0.3, 0.07)], 0.12, 0.06)
 
 
-def hair_2(h):  # swept back
-    base_cap(h, top=0.21, height=0.15)
-    box(h, (0.46, 0.14, 0.2), (0, 0.29, 0.15), H, rot=(-0.4, 0, 0), bevel=0.04)    # raised quiff
-    box(h, (0.47, 0.13, 0.36), (0, 0.3, -0.06), H, rot=(0.22, 0, 0), bevel=0.04)   # swept top
-    box(h, (0.5, 0.32, 0.08), (0, 0.06, -0.25), H, taper=(1.04, 1), bevel=0.02)    # back
+def hair_3(h):  # long, parted and tied back: locks sweep from the part to a tail, side locks frame the face
+    sc = Scalp(0.262, 0.272, 0.32, dz=-0.005)
+    hair_shell(h, sc, [(0, 0.16), (30, 0.15), (55, 0.1), (72, 0.0), (90, 0.07), (105, 0.02), (130, -0.05), (180, -0.1)])
     for s in (-1, 1):
-        box(h, (0.045, 0.16, 0.36), (s * 0.245, 0.14, -0.05), H, rot=(0.2, 0, 0), bevel=0.012)
-        spike(h, 0.06, 0.2, (s * 0.2, 0.3, -0.12), (-2.1, 0, s * 0.25))            # side flicks
-    for x in (-0.13, 0, 0.13):
-        spike(h, 0.07, 0.2, (x, -0.06, -0.26), (2.6, 0, x * 1.2))                  # nape points
+        for z in (0.2, 0.06, -0.08):                                                    # from the part to the tie
+            strand(h, sc, [(s * 0.03, 0.33, z, -0.03), (s * 0.14, 0.3, z - 0.03, 0.015), (s * 0.24, 0.15, z - 0.12, 0.015),
+                           (s * 0.12, 0.1, -0.28, 0.01)], 0.17, 0.05)
+        strand(h, sc, [(s * 0.2, 0.22, 0.2, -0.02), (s * 0.27, 0.1, 0.16, 0.03), (s * 0.28, -0.08, 0.15, 0.03),
+                       (s * 0.27, -0.24, 0.14, 0.02)], 0.12, 0.07)                      # side lock framing the face
+    box(h, (0.17, 0.15, 0.12), (0, 0.11, -0.28), H, bevel=0.04)                        # knot
+    box(h, (0.19, 0.05, 0.14), (0, 0.03, -0.3), BAND, bevel=0.012)                      # tie
+    lock(h, [(0, 0.06, -0.3), (0, -0.08, -0.33, 0.95), (0, -0.26, -0.34, 0.8), (0, -0.4, -0.33, 0.55), (0, -0.54, -0.3)],
+         0.17, 0.12, (0, 0, -1))                                                        # tail
+    box(h, (0.12, 0.04, 0.1), (0, -0.37, -0.333), BAND, bevel=0.01)
 
 
-def hair_3(h):  # long & tied back
-    base_cap(h, top=0.21, height=0.14)
-    box(h, (0.5, 0.34, 0.06), (0, 0.05, -0.245), H, bevel=0.02)                    # back
+def hair_4(h):  # wild: one mass of big chunky spikes growing out of the shell and sweeping back
+    sc = Scalp(0.265, 0.275, 0.33, dz=-0.01)
+    hair_shell(h, sc, [(0, 0.16), (30, 0.14), (55, 0.1), (72, 0.02), (90, 0.07), (105, 0.02), (130, -0.06), (180, -0.12)])
+    for x, y, z, out, back, ln, w in ((0, 0.3, 0.18, 0.5, -0.3, 0.24, 0.2),              # over the brow
+                                      (0, 0.35, 0.0, 0.2, 0.9, 0.27, 0.22),              # crown
+                                      (0, 0.28, -0.2, 0.0, 0.6, 0.28, 0.2),
+                                      (0, 0.05, -0.3, -0.5, 0.2, 0.24, 0.2)):             # nape
+        spike(h, sc, (x, y, z), out, back, ln, w)
     for s in (-1, 1):
-        box(h, (0.05, 0.3, 0.2), (s * 0.248, 0.02, 0.09), H, taper=(1, 0.8), bevel=0.015)  # side locks framing the face
-        box(h, (0.045, 0.14, 0.24), (s * 0.244, 0.13, -0.1), H, bevel=0.012)
-    box(h, (0.17, 0.15, 0.12), (0, 0.13, -0.29), H, bevel=0.04)                   # bun knot
-    box(h, (0.19, 0.05, 0.14), (0, 0.04, -0.3), BAND, bevel=0.012)                # tie
-    box(h, (0.15, 0.22, 0.11), (0, -0.07, -0.31), H, rot=(-0.12, 0, 0), bevel=0.035)
-    box(h, (0.13, 0.2, 0.1), (0, -0.26, -0.33), H, bevel=0.03)
-    box(h, (0.15, 0.04, 0.12), (0, -0.37, -0.33), BAND, bevel=0.01)
-    cone(h, 0.08, 0.18, (0, -0.46, -0.33), H, rot=(PI, 0, 0), seg=4)
-
-
-def hair_4(h):  # wild mane
-    box(h, (0.54, 0.17, 0.54), (0, 0.21, -0.02), H, bevel=0.05)
-    box(h, (0.58, 0.46, 0.14), (0, -0.01, -0.25), H, taper=(0.92, 1), bevel=0.04)  # heavy back mane
-    for s in (-1, 1):
-        box(h, (0.07, 0.26, 0.34), (s * 0.255, 0.1, -0.06), H, bevel=0.02)
-        spike(h, 0.08, 0.26, (s * 0.26, 0.02, -0.08), (0, 0, s * -2.2))             # side flares
-        spike(h, 0.09, 0.3, (s * 0.24, -0.16, -0.24), (0.4, 0, s * -2.5))
-    for x, z, rx, rz in ((-0.14, 0.14, 0.9, 0.5), (0.02, 0.18, 1.0, -0.1), (0.16, 0.12, 0.8, -0.6),
-                         (-0.12, -0.06, -0.3, 0.5), (0.12, -0.04, -0.3, -0.5), (0, -0.1, -0.7, 0)):
-        spike(h, 0.1, 0.3, (x, 0.26, z), (rx, 0, rz))                               # top spikes
-    for x in (-0.2, -0.07, 0.07, 0.2):
-        spike(h, 0.08, 0.26, (x, -0.2, -0.28), (2.75, 0, x * 1.3))                  # mane points down the back
+        for x, y, z, out, back, ln, w in ((0.15, 0.27, 0.17, 0.5, -0.2, 0.22, 0.18),
+                                          (0.13, 0.35, 0.02, 0.3, 0.8, 0.26, 0.2),
+                                          (0.24, 0.22, 0.06, 0.2, 0.5, 0.24, 0.18),
+                                          (0.2, 0.26, -0.15, 0.1, 0.7, 0.26, 0.2),
+                                          (0.25, 0.08, -0.12, -0.3, 0.6, 0.18, 0.17),
+                                          (0.15, 0.02, -0.28, -0.4, 0.4, 0.22, 0.18)):
+            spike(h, sc, (s * x, y, z), out, back, ln, w)
 
 
 def beard_1(h):  # stubble
