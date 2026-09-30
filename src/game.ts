@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import type { PlayerStats } from './combat/stats';
 import type { AbilityKey } from './data/abilities';
 import { ZONES } from './data/zones';
@@ -29,6 +33,9 @@ export type Mode = 'title' | 'create' | 'play';
 
 export class Game {
   readonly renderer: THREE.WebGLRenderer;
+  /** Scene → bloom (HDR, only values above ~1 glow: emissives, fire, lava, portals) → tone map. */
+  private composer!: EffectComposer;
+  private bloom!: UnrealBloomPass;
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(42, 1, 0.5, 400);
   readonly sun = new THREE.DirectionalLight(0xffe2b8, 2.6);
@@ -54,7 +61,8 @@ export class Game {
   zoneOrNull: ZoneRuntime | null = null;
   pet: Pet | null = null;
 
-  mouse = { x: 0, y: 0, down: false, shift: false, holdT: 0, heldOnGround: false };
+  /** Screen position; NaN until the pointer is over the window (nothing is hovered before that). */
+  mouse = { x: NaN, y: NaN, down: false, shift: false, holdT: 0, heldOnGround: false };
   ground = new THREE.Vector3();
   hovered: Enemy | null = null;
   hoveredItem: GroundItem | null = null;
@@ -71,7 +79,11 @@ export class Game {
   deathT = 0;
   recallT = -1;
   traveling = false;
-  debug = { god: false, dropMult: 1, timeScale: 1, oneShot: false, poseView: false };
+  debug: {
+    god: boolean; dropMult: number; timeScale: number; oneShot: boolean; poseView: boolean;
+    /** Dev tooling takes over the frame: called instead of update; return true if it rendered itself. */
+    hold: (() => boolean) | null;
+  } = { god: false, dropMult: 1, timeScale: 1, oneShot: false, poseView: false, hold: null };
 
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
@@ -86,6 +98,12 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+    this.composer = new EffectComposer(this.renderer, rt);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.5, 0.95);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
     this.scene.fog = new THREE.Fog(0x2c2630, 38, 85);
     this.scene.add(this.hemi);
     this.sun.castShadow = true;
@@ -206,6 +224,8 @@ export class Game {
   private enterZone(id: string) {
     if (this.zoneOrNull) this.zoneOrNull.dispose();
     this.fx.clear();
+    this.particles.clear();
+    this.glow.clear();
     this.text.clear();
     const seed = id === 'keep' || id === 'foothills' || id === 'mine' || id === 'ruin' || id === 'lair' ? 1000 + id.length * 97 : Math.floor(Math.random() * 1e6);
     const z = new ZoneRuntime(this, id, seed);
@@ -343,8 +363,13 @@ export class Game {
       this.hitstopT -= raw;
       dt *= 0.08;
     }
-    this.update(dt, raw);
-    this.renderer.render(this.scene, this.camera);
+    const hold = this.debug.hold;
+    if (hold) {
+      if (!hold()) this.draw();
+    } else {
+      this.update(dt, raw);
+      this.draw();
+    }
     requestAnimationFrame(this.frame);
   };
 
@@ -399,9 +424,18 @@ export class Game {
     if (this.saveT <= 0 || (this.dirty && this.saveT < 17)) this.persist();
   }
 
+  /** Render the current view through the post chain. */
+  draw() {
+    this.composer.render();
+  }
+
   private resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(w, h);
+    // Bloom is soft by nature: half resolution looks the same and costs a quarter.
+    this.bloom.setSize(Math.round((w * this.renderer.getPixelRatio()) / 2), Math.round((h * this.renderer.getPixelRatio()) / 2));
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -526,6 +560,9 @@ export class Game {
       this.mouse.holdT = 0;
       this.onClick(e.shiftKey);
     });
+    document.addEventListener('mouseleave', () => {
+      this.mouse.x = this.mouse.y = NaN;
+    });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouse.down = false;
     });
@@ -574,6 +611,12 @@ export class Game {
   }
 
   private updateHover() {
+    if (!Number.isFinite(this.mouse.x)) {
+      this.hovered = null;
+      this.hoveredThing = null;
+      if (!this.text.labelHovered) this.hoveredItem = null;
+      return;
+    }
     const w = window.innerWidth, h = window.innerHeight;
     this.ndc.set((this.mouse.x / w) * 2 - 1, -(this.mouse.y / h) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, this.camera);

@@ -106,6 +106,25 @@ function voidSky(group: THREE.Group, rng: () => number) {
   group.add(stars);
 }
 
+/** Smooth 2D value noise in 0..1 (bilinear-smoothstep over a hashed lattice). */
+function smoothNoise(seed: number) {
+  const hash = (x: number, z: number) => {
+    let hh = (x * 374761393 + z * 668265263 + seed * 2246822519) | 0;
+    hh = Math.imul(hh ^ (hh >>> 13), 1274126177);
+    return ((hh ^ (hh >>> 16)) >>> 0) / 4294967296;
+  };
+  const sm = (t: number) => t * t * (3 - 2 * t);
+  return (x: number, z: number) => {
+    const x0 = Math.floor(x), z0 = Math.floor(z);
+    const fx = sm(x - x0), fz = sm(z - z0);
+    const a = hash(x0, z0), b = hash(x0 + 1, z0), c = hash(x0, z0 + 1), d = hash(x0 + 1, z0 + 1);
+    return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz;
+  };
+}
+
+/** World instancing tile size in cells (see inst()). */
+const CHUNK = 16;
+
 // ─── Builder ────────────────────────────────────────────────────────────────
 
 export interface WorldView {
@@ -122,24 +141,18 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const { w, h } = layout;
   const at = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= h ? Cell.Void : layout.cells[z * w + x]);
 
-  // Ground: per-cell quads (void cells skipped) with slightly jittered heights.
-  const heights = new Float32Array((w + 1) * (h + 1));
-  for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) heights[z * (w + 1) + x] = (rng() - 0.5) * 0.1;
-  const pos: number[] = [];
-  const col: number[] = [];
-  const splat: number[] = [];
-  // Ground-texture weights per grid vertex: the average of the (up to four) cells touching it,
-  // so dirt, grass, flagstone and cave rock blend across cell borders.
+  // Ground: one continuous indexed grid (no cracks), heights from smooth noise, colours and
+  // texture weights averaged per vertex so cell borders blend instead of forming a checkerboard.
+  const VW = w + 1;
+  const vi = (x: number, z: number) => z * VW + x;
+  const noise = smoothNoise(seed + 3);
   const SPLAT: Record<number, number> = {
     [Ground.Dirt]: 0, [Ground.Path]: 0, [Ground.Camp]: 0, [Ground.Grass]: 1,
     [Ground.Arena]: 2, [Ground.Stone]: 2, [Ground.Cave]: 3, [Ground.Scorch]: 3,
   };
-  const vSplat = new Float32Array((w + 1) * (h + 1) * 4);
-  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
-    if (at(x, z) === Cell.Void) continue;
-    const ch = SPLAT[layout.ground[z * w + x]] ?? 0;
-    for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) vSplat[(zz * (w + 1) + xx) * 4 + ch] += 1;
-  }
+  const nV = VW * (h + 1);
+  const vPos = new Float32Array(nV * 3), vCol = new Float32Array(nV * 3), vSplat = new Float32Array(nV * 4);
+  const vN = new Float32Array(nV), vRaise = new Float32Array(nV);
   const c = new THREE.Color(), c2 = new THREE.Color();
   for (let z = 0; z < h; z++) {
     for (let x = 0; x < w; x++) {
@@ -147,26 +160,51 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       if (cell === Cell.Void) continue;
       const g = layout.ground[z * w + x] as Ground;
       const shades = theme.ground[g] ?? theme.ground[Ground.Dirt] ?? [0x6e6048, 0x5a5040];
-      c.setHex(shades[0]).lerp(c2.setHex(shades[1]), 0.5 + Math.sin(x * 0.35) * Math.cos(z * 0.27) * 0.5);
-      c.offsetHSL(0, 0, (rng() - 0.5) * 0.05);
-      const y = (xx: number, zz: number) => (cell === Cell.Cliff || cell === Cell.Wall ? 0.2 : heights[zz * (w + 1) + xx]);
-      const v = [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]].map(([xx, zz]) => [xx, y(xx, zz), zz]);
-      const corners = [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]];
-      for (const i of [0, 2, 1, 0, 3, 2]) {
-        pos.push(...v[i]);
-        col.push(c.r, c.g, c.b);
-        const o = (corners[i][1] * (w + 1) + corners[i][0]) * 4;
-        splat.push(vSplat[o], vSplat[o + 1], vSplat[o + 2], vSplat[o + 3]);
+      // Large-scale colour drift (no per-cell randomness: that read as pixels).
+      c.setHex(shades[0]).lerp(c2.setHex(shades[1]), noise(x * 0.09, z * 0.09));
+      const ch = theme.splat?.[g] ?? SPLAT[g] ?? 0;
+      const raised = cell === Cell.Cliff || cell === Cell.Wall ? 1 : 0;
+      for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) {
+        const k = vi(xx, zz);
+        vCol[k * 3] += c.r;
+        vCol[k * 3 + 1] += c.g;
+        vCol[k * 3 + 2] += c.b;
+        vSplat[k * 4 + ch] += 1;
+        vRaise[k] += raised;
+        vN[k]++;
       }
     }
   }
+  for (let z = 0; z <= h; z++) {
+    for (let x = 0; x <= w; x++) {
+      const k = vi(x, z);
+      const n = vN[k] || 1;
+      for (let j = 0; j < 3; j++) vCol[k * 3 + j] /= n;
+      // Barely-there undulation (units and props stand at y = 0); rises only fully inside cliffs/walls.
+      const undulate = (noise(x * 0.15, z * 0.15) - 0.5) * 0.06 + (noise(x * 0.5 + 40, z * 0.5) - 0.5) * 0.03;
+      vPos[k * 3] = x;
+      vPos[k * 3 + 1] = undulate + (vRaise[k] === n && vN[k] ? 0.25 : 0);
+      vPos[k * 3 + 2] = z;
+    }
+  }
+  const idx: number[] = [];
+  for (let z = 0; z < h; z++) {
+    for (let x = 0; x < w; x++) {
+      if (at(x, z) === Cell.Void) continue;
+      const a = vi(x, z), b = vi(x + 1, z), cc = vi(x + 1, z + 1), d = vi(x, z + 1);
+      // Alternate the diagonal so shading has no directional grain.
+      if ((x + z) & 1) idx.push(a, d, b, b, d, cc);
+      else idx.push(a, d, cc, a, cc, b);
+    }
+  }
   const groundGeo = new THREE.BufferGeometry();
-  groundGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  groundGeo.setAttribute('aSplat', new THREE.Float32BufferAttribute(splat, 4));
+  groundGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3));
+  groundGeo.setAttribute('color', new THREE.BufferAttribute(vCol, 3));
+  groundGeo.setAttribute('aSplat', new THREE.BufferAttribute(vSplat, 4));
+  groundGeo.setIndex(idx);
   groundGeo.computeVertexNormals();
-  const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
-  applyGround(groundMat);
+  const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+  applyGround(groundMat, theme.lava ?? 0);
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
   ground.name = 'ground';
@@ -179,14 +217,28 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const mat = new THREE.MeshStandardMaterial({ color: cols ? 0xffffff : color, flatShading: true, roughness: 0.9 });
     if (surface) applySurface(mat, surface, 'world');
     if (occlude) makeOccludable(mat);
-    const mesh = new THREE.InstancedMesh(geo, mat, mats.length);
+    // Bucket instances into CHUNK×CHUNK-cell tiles so off-screen tiles are frustum-culled
+    // (one map-wide InstancedMesh is always drawn in full, shadows included).
+    const buckets = new Map<string, number[]>();
+    const tp = new THREE.Vector3();
     mats.forEach((mm, i) => {
-      mesh.setMatrixAt(i, mm);
-      if (cols) mesh.setColorAt(i, cols[i]);
+      tp.setFromMatrixPosition(mm);
+      const key = `${Math.floor(tp.x / CHUNK)},${Math.floor(tp.z / CHUNK)}`;
+      const b = buckets.get(key) ?? [];
+      b.push(i);
+      buckets.set(key, b);
     });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
+    for (const ids of buckets.values()) {
+      const mesh = new THREE.InstancedMesh(geo, mat, ids.length);
+      ids.forEach((id, i) => {
+        mesh.setMatrixAt(i, mats[id]);
+        if (cols) mesh.setColorAt(i, cols[id]);
+      });
+      mesh.computeBoundingSphere();
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
   };
 
   // Trees

@@ -163,15 +163,16 @@ export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: Surf
  * Ground: a four-channel atlas (dirt, grass, flagstone, cave rock) projected top-down in world
  * space and blended per vertex by the `aSplat` attribute.
  */
-export function applyGround(mat: THREE.MeshStandardMaterial) {
+export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0) {
   const uniforms = {
+    uLava: { value: lava },
     uGroundTex: { value: groundTexture() },
     uSurfScale: { value: 0.25 },
     uSurfAlbedo: { value: 0.42 },
     uSurfBump: { value: 1.1 },
   };
   addPatch(mat, {
-    key: 'ground',
+    key: lava > 0 ? 'ground:lava' : 'ground',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
       commonInject(
@@ -181,6 +182,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial) {
         uniform float uSurfScale;
         uniform float uSurfAlbedo;
         uniform float uSurfBump;
+        uniform float uLava;
         varying vec4 vSplat;
         float surfSample(out vec3 grad) {
           vec4 k = vSplat / max(0.001, dot(vSplat, vec4(1.0)));
@@ -196,6 +198,20 @@ export function applyGround(mat: THREE.MeshStandardMaterial) {
         .replace('#include <common>', '#include <common>\nattribute vec4 aSplat;\nvarying vec4 vSplat;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvSplat = aSplat;');
       heightInject(shader);
+      if (lava > 0) {
+        // Lava pools in the rock channel's deepest crevices, pulsing slowly. Emissive, so it glows
+        // regardless of lighting (and feeds bloom).
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          {
+            float rockW = vSplat.w / max(0.001, dot(vSplat, vec4(1.0)));
+            float crev = smoothstep(0.34, 0.16, surfH) * rockW;
+            float pulse = 0.75 + 0.25 * sin(vSurfPos.x * 0.7 + vSurfPos.z * 0.5);
+            totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * crev * pulse * 2.2 * uLava;
+          }`,
+        );
+      }
     },
   });
 }
@@ -218,35 +234,36 @@ function isSkinTone(c: THREE.Color) {
   return hsl.h > 0.04 && hsl.h < 0.1 && hsl.s > 0.4 && hsl.l > 0.65 && hsl.l < 0.85;
 }
 
-/** Surface for a colour with no other information: grey → stone, brown → wood, dark bluish grey → metal. */
+/** Surface for a colour with no other information: grey → stone, brown → wood, dark bluish grey → metal, saturated → cloth. */
 export function guessSurface(c: THREE.Color): SurfaceKind {
   const hsl = c.getHSL({ h: 0, s: 0, l: 0 });
   if (hsl.l > 0.85) return 'generic';
   if (hsl.s < 0.12) return hsl.h > 0.55 && hsl.h < 0.75 && hsl.l < 0.35 ? 'metal' : 'stone';
   if (hsl.h > 0.03 && hsl.h < 0.14 && hsl.l < 0.45) return 'wood';
+  // Strongly coloured props are banners, awnings and tents.
+  if (hsl.s > 0.35) return 'cloth';
   return 'generic';
 }
 
 /**
- * Pick and apply a surface for a cloned model material: gear files are metal/leather by role,
- * characters by role or by the model's default, emissive bits stay plain.
+ * The surface a model material should get: gear by role (metal/leather), characters by role or
+ * the model's default, emissive bits none. Merged vertex-coloured materials carry their kind.
  */
-export function surfaceForModelMaterial(model: string, mat: THREE.Material) {
-  if (!(mat instanceof THREE.MeshStandardMaterial)) return;
-  if (mat.emissive.getHex() !== 0 && mat.emissiveIntensity > 0) return;
+export function pickSurface(model: string, mat: THREE.Material): SurfaceKind | null {
+  if (!(mat instanceof THREE.MeshStandardMaterial)) return null;
+  if (mat.userData.surfaceKind !== undefined) return mat.userData.surfaceKind;
+  if (mat.emissive.getHex() !== 0 && mat.emissiveIntensity > 0) return null;
   const role = /^ROLE_(\w+?)(\.\d{3})?$/.exec(mat.name)?.[1];
-  let kind: SurfaceKind | null;
-  if (role) {
-    kind = ROLE_SURFACE[role] ?? null;
-    if (role === 'dark' && model.startsWith('gear_')) kind = 'metal';
-  } else if (isSkinTone(mat.color)) {
-    kind = 'skin';
-  } else if (mat.color.getHSL({ h: 0, s: 0, l: 0 }).l > 0.8) {
-    kind = 'generic';
-  } else if (model.startsWith('gear_u_')) {
-    kind = mat.metalness > 0.5 || mat.color.getHSL({ h: 0, s: 0, l: 0 }).s < 0.2 ? 'metal' : 'leather';
-  } else {
-    kind = MODEL_SURFACE[model] ?? (model.startsWith('gear_') ? 'metal' : 'generic');
-  }
+  if (role) return role === 'dark' && model.startsWith('gear_') ? 'metal' : (ROLE_SURFACE[role] ?? null);
+  const l = mat.color.getHSL({ h: 0, s: 0, l: 0 });
+  if (isSkinTone(mat.color)) return 'skin';
+  if (l.l > 0.8) return 'generic';
+  if (model.startsWith('gear_u_')) return mat.metalness > 0.5 || l.s < 0.2 ? 'metal' : 'leather';
+  return MODEL_SURFACE[model] ?? (model.startsWith('gear_') ? 'metal' : 'generic');
+}
+
+/** Apply the picked surface to a cloned model material. */
+export function surfaceForModelMaterial(model: string, mat: THREE.Material) {
+  const kind = pickSurface(model, mat);
   if (kind) applySurface(mat, kind, 'object');
 }

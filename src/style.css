@@ -137,10 +137,22 @@ svg { display: block; }
 .vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(170, 0, 0, 0.55) 100%); }
 .topleft { position: absolute; left: 16px; top: 12px; }
 .plaque {
-  font-family: var(--serif); font-weight: 600; font-size: 20px; letter-spacing: 1px; color: var(--gold-hi);
-  padding: 4px 16px; background: var(--tex-plate); border: 1px solid #0c0804; border-radius: 3px;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,220,150,0.2); text-shadow: 0 2px 2px #000;
+  position: relative; display: inline-block;
+  font-family: var(--serif); font-weight: 600; font-size: 20px; letter-spacing: 1.5px; line-height: 1.2; color: var(--gold-hi);
+  padding: 6px 30px 7px; border-radius: 4px;
+  background: var(--tex-plate) center / 100% 100% no-repeat;
+  border: 1px solid #b08a44;
+  box-shadow: 0 0 0 2px #1a1208, 0 4px 10px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,225,160,0.35), inset 0 -2px 3px rgba(0,0,0,0.45);
+  text-shadow: 0 1px 0 #1a1006, 0 2px 3px rgba(0,0,0,0.8);
 }
+/* Rivets pinning the plate at each end. */
+.plaque::before, .plaque::after {
+  content: ''; position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f0d08a, #9a7432 55%, #3a2a12 100%);
+  box-shadow: 0 1px 1px rgba(0,0,0,0.7);
+}
+.plaque::before { left: 10px; }
+.plaque::after { right: 10px; }
 .goldline { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; color: #ffd860; text-shadow: 0 1px 2px #000; }
 .weak { color: #ff8a6a; font-size: 13px; text-shadow: 0 1px 2px #000; }
 .objective { position: absolute; left: 16px; top: 92px; max-width: 320px; padding: 8px 12px; background: linear-gradient(90deg, rgba(10,8,6,0.8), rgba(10,8,6,0)); border-left: 3px solid var(--gold); pointer-events: auto; }

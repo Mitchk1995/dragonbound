@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CLOTH_COLORS, HAIR_COLORS, SKIN_TONES } from '../data/appearance';
 import { BASES, UNIQUES, type Palette } from '../data/items';
 import type { Appearance } from '../save/save';
 import type { Item, Slot } from '../types';
 import type { Model } from './kit';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
-import { surfaceForModelMaterial } from './surface';
+import { pickSurface, surfaceForModelMaterial } from './surface';
 
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
@@ -57,10 +58,87 @@ function normalizeAuthoredFrame(scene: THREE.Object3D) {
   }
 }
 
+/** Authored primitive parts are exported as p<N>; anything else is a named part code may look up. */
+const ANON_PART = /^p\d+$/;
+
+/**
+ * Merge a model's anonymous rigid leaf meshes under each rig node into as few meshes as possible,
+ * in the node's space so they still move with it:
+ * - fixed-colour materials are baked into vertex colours and grouped by surface kind (a goblin's
+ *   arm is one mesh, not one per colour);
+ * - recolourable ROLE_ materials and glowing (emissive) materials keep their own material.
+ * A creature drops from ~30-100 draw calls to a handful, and shadows with it. Named meshes,
+ * meshes with children and gear (whose parts are identified by shape) are left alone.
+ */
+export function mergeRigidParts(root: THREE.Object3D, model: string) {
+  const parents = new Set<THREE.Object3D>();
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh && !o.children.length && ANON_PART.test(o.name) && o.parent) parents.add(o.parent);
+  });
+  const vcMats = new Map<string, THREE.MeshStandardMaterial>();
+  const keyOf = (m: THREE.Material): string | THREE.Material => {
+    if (!(m instanceof THREE.MeshStandardMaterial) || roleOf(m) || (m.emissive.getHex() !== 0 && m.emissiveIntensity > 0) || m.transparent || m.map) return m;
+    return `vc|${pickSurface(model, m)}|${m.roughness.toFixed(2)}|${m.metalness.toFixed(2)}|${m.side}`;
+  };
+  let before = 0, after = 0;
+  for (const parent of parents) {
+    const groups = new Map<string | THREE.Material, THREE.Mesh[]>();
+    for (const c of parent.children) {
+      if (!(c instanceof THREE.Mesh) || c.children.length || !ANON_PART.test(c.name) || Array.isArray(c.material)) continue;
+      const k = keyOf(c.material);
+      const list = groups.get(k) ?? [];
+      list.push(c);
+      groups.set(k, list);
+    }
+    for (const [key, meshes] of groups) {
+      before += meshes.length;
+      after++;
+      const baked = typeof key === 'string';
+      if (meshes.length < 2 && !baked) continue;
+      const geos = meshes.map((m) => {
+        m.updateMatrix();
+        let g = m.geometry.clone().applyMatrix4(m.matrix);
+        for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+        if (g.index) g = g.toNonIndexed();
+        if (baked) {
+          const c = (m.material as THREE.MeshStandardMaterial).color;
+          const n = g.attributes.position.count;
+          const col = new Float32Array(n * 3);
+          for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+          g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        }
+        return g;
+      });
+      const merged = geos.length > 1 ? mergeGeometries(geos) : geos[0];
+      if (!merged) continue;
+      let mat = meshes[0].material as THREE.Material;
+      if (baked) {
+        let vc = vcMats.get(key);
+        if (!vc) {
+          vc = (mat as THREE.MeshStandardMaterial).clone();
+          vc.color.set(0xffffff);
+          vc.vertexColors = true;
+          vc.name = `VC_${key}`;
+          vc.userData.surfaceKind = pickSurface(model, mat);
+          vcMats.set(key, vc);
+        }
+        mat = vc;
+      }
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.name = meshes[0].name;
+      mesh.castShadow = mesh.receiveShadow = meshes.some((m) => m.castShadow);
+      for (const m of meshes) m.removeFromParent();
+      parent.add(mesh);
+    }
+  }
+  return { before, after };
+}
+
 /** Register a parsed glTF scene under a model name (used by the browser loader and by tests). */
 export function registerModelScene(name: string, scene: THREE.Group) {
   cleanNames(scene);
   normalizeAuthoredFrame(scene);
+  if (!name.startsWith('gear_')) mergeRigidParts(scene, name);
   const box = new THREE.Box3().setFromObject(scene);
   loaded.set(name, { scene, height: box.max.y - box.min.y });
 }

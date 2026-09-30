@@ -5,3 +5,5 @@ release/
 tools/blender/previews/
 tools/blender/__pycache__/
 .claude/settings.local.json
+inspect/
+public/models/variants/

@@ -14,7 +14,8 @@
     "play": "vite build && electron .",
     "dist": "npm run build && electron-builder --win portable",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "inspect": "node tools/inspect.mjs"
   },
   "build": {
     "appId": "com.dragonbound.game",
