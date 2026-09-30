@@ -96,7 +96,7 @@ export const ZONES: Record<string, ZoneDef> = {
       ground: { [Ground.Stone]: [0x6a7070, 0x5a6060], [Ground.Grass]: [0x3a5a3a, 0x4a6a44] },
       forest: { grove: 0.7, ash: 0.3 },
       cliff: [0x4a5456, 0x3a4244],
-      water: [0x3a7a78, 0x0e2a30],
+      water: [0x2c5c5c, 0x0e2a30],
     },
   },
   lair: {

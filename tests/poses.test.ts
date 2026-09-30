@@ -13,6 +13,7 @@ import { BowDraw } from '../src/render/bowDraw';
 import { HeroDresser, MODEL_FILES, hasModel, makeModel, registerModelScene } from '../src/render/registry';
 import { bowFacts, partCenter, partForward, shoulderCap, weaponFacts } from '../src/render/poseMetrics';
 import { makeItem } from '../src/loot/itemGen';
+import { BASES as BASES_FOR_TEST } from '../src/data/items';
 import type { Slot } from '../src/types';
 
 beforeAll(async () => {
@@ -110,6 +111,37 @@ describe('pose audit: one-handed melee weapons', () => {
       });
     });
   }
+});
+
+describe('pose audit: mining (pickaxe tool override, as Player.dress uses it)', () => {
+  it('the pick head never goes below the ground through the whole swing', () => {
+    const model = makeModel('hero');
+    const holder = new THREE.Group();
+    holder.add(model.root);
+    const dresser = new HeroDresser(model);
+    const pick = BASES_FOR_TEST.steel_pickaxe;
+    dresser.dress(null, {}, { weaponModel: pick.model!, weaponPalette: pick.palette });
+    const rig = new Rig(model.root);
+    const v = new THREE.Vector3();
+    let lowest = Infinity, at = -1;
+    for (let k = 0; k <= 40; k++) {
+      const t = k / 40;
+      rig.update(0, { ...newAnimState(), attackKind: 'swing', attack: t });
+      holder.updateMatrixWorld(true);
+      model.root.getObjectByName('gear:sock_handR')!.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const pos = o.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const y = v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).y;
+          if (y < lowest) {
+            lowest = y;
+            at = t;
+          }
+        }
+      });
+    }
+    expect(lowest, `lowest point (at t=${at})`).toBeGreaterThan(0.02);
+  });
 });
 
 describe('pose audit: staff', () => {

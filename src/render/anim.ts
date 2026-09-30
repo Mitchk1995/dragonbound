@@ -190,8 +190,9 @@ export class Rig {
         // Wind up overhead, whip down through the target, recover.
         let x: number;
         if (a < 0.4) x = -3.2 * ease(a / 0.4);
-        else if (a < 0.6) x = -3.2 + 3.0 * ease((a - 0.4) / 0.2);
-        else x = -0.2 * (1 - ease((a - 0.6) / 0.4));
+        else if (a < 0.6) x = -3.2 + 2.85 * ease((a - 0.4) / 0.2);
+        // The strike ends with the arm still a little forward so long tools (pickaxe) clear the ground.
+        else x = -0.35 * (1 - ease((a - 0.6) / 0.4));
         this.rot('armR', x, 0, 0.1);
         // Wrist: cock the blade back over the head in the windup, keep it through the strike, relax after.
         const wrist = a < 0.55 ? SWING_WRIST * ease(Math.min(1, a / 0.4)) : SWING_WRIST * (1 - ease((a - 0.55) / 0.45));

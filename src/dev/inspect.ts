@@ -81,7 +81,18 @@ export async function runInspect(g: Game, suites: string) {
   g.prog.refreshLevels();
   g.prog.recomputeStats();
   g.debug.god = true;
-  const fill = ['steel_longsword', 'worn_bow', 'apprentice_staff', 'iron_platebody', 'bronze_fullhelm', 'copper_ore', 'iron_bar', 'steel_pickaxe'];
+  const fill = ['steel_longsword', 'worn_bow', 'apprentice_staff', 'iron_platebody', 'bronze_fullhelm', 'steel_pickaxe'];
+  // Materials so crafting menus show enabled recipes (a stack each).
+  for (const [id, n] of [['copper_ore', 6], ['tin_ore', 6], ['iron_ore', 4], ['coal', 8], ['bronze_bar', 5], ['iron_bar', 3]] as [string, number][]) {
+    if (BASES[id]) g.items.add({ ...makeItem(id), qty: n } as any);
+  }
+  // A stocked bank and a collection log with finds in it.
+  for (const id of ['steel_bar', 'iron_bar', 'coal', 'copper_ore', 'tin_ore', 'bronze_sword', 'iron_medhelm', 'bronze_platebody', 'sapphire', 'ruby'])
+    if (BASES[id]) g.save.bank.push({ ...makeItem(id), qty: 1 + (id.length % 7) } as any);
+  for (const u of Object.values(UNIQUES).slice(0, 2)) g.save.collection[u.id] = 1;
+  g.save.collection.ember_whelp = 1;
+  g.save.kc.goblin = 212;
+  g.save.kc.drakeling = 37;
   for (const id of fill) if (BASES[id]) g.items.add(makeItem(id));
   equip(g, { weapon: 'steel_longsword', helm: 'steel_fullhelm', body: 'steel_platebody', gloves: 'steel_gauntlets', boots: 'steel_boots' });
   await frames(10);
@@ -229,7 +240,7 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>) {
       for (const s of L.stations.slice(0, 8)) pois.push([`${s.kind}-${s.id}`, s.x, s.z + 2.2]);
       for (const n of L.nodes.filter((n, i, a) => a.findIndex((m) => m.ore === n.ore) === i)) pois.push([`ore-${n.ore}`, n.x, n.z + 1.6]);
       L.packs.slice(0, 10).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
-      if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 10]);
+      if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 6]);
       let i = 1;
       for (const [label, x, zz] of pois) {
         const p = g.player;
@@ -471,6 +482,7 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   }
   ui.toggle('inventory', false);
   ui.levelBanner('smithing', 42);
+  await frames(45); // the banner animates in
   ui.xpDrop('smithing', 37.5);
   await shot(`ui-${String(i++).padStart(2, '0')}-level-banner`);
   // Title and creation screens.

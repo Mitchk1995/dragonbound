@@ -83,7 +83,10 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         const top = theme.ground[theme.mesaTop!] ?? shades;
         c.setHex(top[0]).lerp(c2.setHex(top[1]), noise(x * 0.09, z * 0.09));
       } else if (relief) c.copy(cliffC.setHex(cliffShades[0]).lerp(c2.setHex(cliffShades[1]), noise(x * 0.21 + 50, z * 0.21)));
-      const ch = mesaTop ? (theme.splat?.[theme.mesaTop!] ?? SPLAT[theme.mesaTop!] ?? 1) : relief ? 3 : (theme.splat?.[g] ?? SPLAT[g] ?? 0);
+      const bed = layout.fluid[i] !== Fluid.None && cell !== Cell.Ground;
+      // Under water the bed is dark silt/rock, never the paving or grass of the land around it.
+      if (bed) c.multiplyScalar(0.5);
+      const ch = bed ? 3 : mesaTop ? (theme.splat?.[theme.mesaTop!] ?? SPLAT[theme.mesaTop!] ?? 1) : relief ? 3 : (theme.splat?.[g] ?? SPLAT[g] ?? 0);
       const elev = relief ? (layout.elev[i] || (cell === Cell.Wall ? CAVE_WALL_H : CLIFF_H)) : 0;
       const fluid = layout.fluid[i] !== Fluid.None;
       for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) {
@@ -286,7 +289,7 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
         float n1 = fluidN(fp * 0.08 + vec2(uTime * 0.012, uTime * 0.007));
         float n2 = fluidN(fp * 0.19 - vec2(uTime * 0.017, -uTime * 0.011));
         float ripple = n1 * 0.6 + n2 * 0.4;
-        float deep = smoothstep(0.05, 0.75, vDepth + (ripple - 0.5) * 0.15);
+        float deep = smoothstep(0.03, 0.45, vDepth + (ripple - 0.5) * 0.15);
         ${lava
           ? `vec3 lavaCol = mix(uShallow, uDeep, smoothstep(0.35, 0.65, ripple));
              // Cooled black crust toward the banks hides the mesh edge.
@@ -294,8 +297,8 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme) 
              diffuseColor.rgb = mix(vec3(0.05, 0.03, 0.03), lavaCol * 0.25, lavaEdge);`
           : `diffuseColor.rgb = mix(uShallow, uDeep, deep);
              float foam = smoothstep(0.08, 0.0, vDepth + (n2 - 0.5) * 0.06) * (0.55 + 0.45 * n1);
-             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.88, 0.9), foam * 0.6);
-             diffuseColor.a = mix(0.72, 0.95, deep) + foam * 0.2;`}`,
+             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.86, 0.88), foam * 0.42);
+             diffuseColor.a = mix(0.8, 0.97, deep) + foam * 0.15;`}`,
       )
       .replace(
         '#include <normal_fragment_maps>',
