@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { RESTORATION_BY_ID } from '../src/data/keep';
 import { KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
-import { cellRole, inRoom, sideLen, wallCell, wallRuns, type BuildingSpec } from '../src/world/building';
+import { cellRole, fitBlocks, inRoom, partitionRuns, sideLen, towerRects, wallCell, wallRuns, type BuildingSpec } from '../src/world/building';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
 import { Cell, Ground } from '../src/world/layout';
 import { buildProp } from '../src/world/props';
@@ -29,6 +29,29 @@ describe('building specs (pure)', () => {
   it('wall runs stop at doorways', () => {
     expect(wallRuns(b, 's')).toEqual([[0, 3], [5, 8]]);
     expect(wallRuns(b, 'n')).toEqual([[0, 8]]);
+  });
+  it('interior walls block, their doorways open, and they split into runs round the doors', () => {
+    const r: BuildingSpec = { ...b, w: 10, d: 8, partitions: [{ axis: 'z', at: 4, from: 1, to: 7, doors: [[3, 2]] }] };
+    expect(cellRole(r, 14, 21)).toBe('wall');
+    expect(cellRole(r, 14, 23)).toBe('door');
+    expect(cellRole(r, 14, 24)).toBe('door');
+    expect(cellRole(r, 14, 25)).toBe('wall');
+    expect(cellRole(r, 13, 23)).toBe('floor');
+    expect(partitionRuns(r.partitions![0])).toEqual([[1, 3], [5, 7]]);
+  });
+  it('corner towers sit outside the wall ring, sharing only its corner cells', () => {
+    const t: BuildingSpec = { ...b, towers: 3 };
+    const rects = towerRects(t);
+    expect(rects).toHaveLength(4);
+    for (const [x0, z0, x1, z1] of rects) {
+      let shared = 0;
+      for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
+        const role = cellRole(t, x, z);
+        expect(role === 'out' || role === 'wall').toBe(true);
+        if (role === 'wall') shared++;
+      }
+      expect(shared).toBe(1);
+    }
   });
   it('a room counts the floor and the doorway, not the street outside', () => {
     expect(inRoom(b, 14, 22)).toBe(true);
@@ -63,6 +86,69 @@ describe('Dragonspire Keep', () => {
       expect(d.at + d.w, b.id).toBeLessThanOrEqual(sideLen(b, d.side) - 2);
     }
   });
+  it('the keep is a castle: two storeys, four towers standing in the grid, battlements and upper windows', () => {
+    const k = B.keep;
+    expect(k.storeyH).toBeLessThan(k.wallH - 3);
+    expect(k.windows.some((w) => w.floor === 1)).toBe(true);
+    for (const [x0, z0, x1, z1] of towerRects(k)) {
+      for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) expect(L.cells[z * L.w + x], `tower ${x},${z}`).toBe(Cell.Blocked);
+    }
+    const p = buildBuilding(k), box = new THREE.Box3().setFromObject(p.obj);
+    expect(box.max.y).toBeGreaterThan(k.wallH + 5);
+  });
+  it('the keep has several rooms with a purpose, and you can walk into every one of them', () => {
+    const k = B.keep;
+    // Flood the ground floor, never crossing an interior doorway: each region is a room.
+    const seen = new Set<string>(), rooms: [number, number][][] = [];
+    for (let z = k.z + 1; z < k.z + k.d - 1; z++) for (let x = k.x + 1; x < k.x + k.w - 1; x++) {
+      if (seen.has(`${x},${z}`) || cellRole(k, x, z) !== 'floor') continue;
+      const room: [number, number][] = [], stack = [[x, z]];
+      seen.add(`${x},${z}`);
+      while (stack.length) {
+        const [cx, cz] = stack.pop()!;
+        room.push([cx, cz]);
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, nz = cz + dz, key = `${nx},${nz}`;
+          if (!seen.has(key) && cellRole(k, nx, nz) === 'floor') {
+            seen.add(key);
+            stack.push([nx, nz]);
+          }
+        }
+      }
+      rooms.push(room);
+    }
+    expect(rooms.length).toBeGreaterThanOrEqual(5);
+    for (const room of rooms) {
+      const open = room.find(([x, z]) => !fitBlocks(k, x, z) && L.cells[z * L.w + x] === Cell.Ground)!;
+      expect(open).toBeDefined();
+      const path = nav.findPath(L.entry.x, L.entry.z, open[0] + 0.5, open[1] + 0.5);
+      expect(path, `room at ${open}`).not.toBeNull();
+      const end = path![path!.length - 1];
+      expect(Math.hypot(end.x - open[0] - 0.5, end.z - open[1] - 0.5)).toBeLessThan(1);
+    }
+    // The great hall has the throne and feast tables; the other rooms their own furnishings.
+    const kinds = new Set((k.fits ?? []).map((f) => f.kind));
+    for (const kind of ['throne', 'feast_table', 'stair', 'gallery', 'hearth_oven', 'bunk', 'chapel_altar', 'weapon_rack']) expect(kinds, kind).toContain(kind);
+  });
+  it('the smelter is laid out as the work flows: ore in from the east, furnace, casting to the west, bars by the south door', () => {
+    const s = B.smelter, at = (kind: string) => s.fits!.find((f) => f.kind === kind)!;
+    const furnace = at('furnace_spot');
+    expect(at('ore_bin').x).toBeGreaterThan(furnace.x);
+    expect(at('ore_cart').x).toBeGreaterThan(furnace.x);
+    expect(at('crucibles').x).toBeLessThan(furnace.x);
+    expect(at('bars').z).toBeGreaterThan(s.d / 2);
+    expect(s.doors.some((d) => d.side === 'e')).toBe(true);
+  });
+  it('no two furnishings in a building stand in each other', () => {
+    for (const b of KEEP_BUILDINGS) {
+      const fits = (b.fits ?? []).filter((f) => f.block);
+      for (let i = 0; i < fits.length; i++) for (let j = i + 1; j < fits.length; j++) {
+        const p = fits[i], q = fits[j];
+        const overlap = Math.abs(p.x - q.x) < p.block![0] + q.block![0] - 0.05 && Math.abs(p.z - q.z) < p.block![1] + q.block![1] - 0.05;
+        expect(overlap, `${b.id}: ${p.kind} @${p.x},${p.z} / ${q.kind} @${q.x},${q.z}`).toBe(false);
+      }
+    }
+  });
   it('the side vault opens into the bank through the wall they share', () => {
     const bank = B.bank, vault = B.vault;
     expect(vault.shared).toContain('w');
@@ -76,7 +162,7 @@ describe('Dragonspire Keep', () => {
     expect(inRoom(B.smelter, station('furnace', 'furnace').x, station('furnace', 'furnace').z, 0)).toBe(true);
     expect(inRoom(B.shop, station('shop', 'shop').x, station('shop', 'shop').z, 0)).toBe(true);
     expect(inRoom(B.shop, station('npc', 'quartermaster').x, station('npc', 'quartermaster').z, 0)).toBe(true);
-    expect(inRoom(B.great_hall, station('restore', 'board').x, station('restore', 'board').z, 0)).toBe(true);
+    expect(inRoom(B.keep, station('restore', 'board').x, station('restore', 'board').z, 0)).toBe(true);
   });
   it('every station is reachable from the arrival dais within the player\'s A* budget', () => {
     for (const s of L.stations) {
@@ -163,6 +249,25 @@ describe('building models', () => {
     const p = buildBuilding(B.shop);
     const box = new THREE.Box3().setFromObject(lifted(p));
     expect(box.min.y).toBeGreaterThan(1.0);
+  });
+  it('windows are real openings: you see through the glass, past the wall, into the room', () => {
+    for (const b of [B.smelter, B.keep, B.bank]) {
+      const p = buildBuilding(b);
+      p.obj.updateMatrixWorld(true);
+      const meshes: THREE.Mesh[] = [];
+      p.obj.traverse((o) => { if (o instanceof THREE.Mesh) meshes.push(o); });
+      const wi = b.windows.find((w) => w.side === 'n' && !w.floor)!;
+      const dims = b.style === 'timber' ? { ww: 1.0, wh: 1.3, wy: 1.55 } : b.style === 'stone' ? { ww: 1.0, wh: 1.3, wy: 1.55 } : { ww: 1.3, wh: 2.3, wy: 1.9 };
+      // Aim through one pane (clear of the mullion and transom), from outside the north wall.
+      const from = new THREE.Vector3(b.x + wi.at + dims.ww / 4, dims.wy + dims.wh * 0.3, b.z - 3);
+      const hits = new THREE.Raycaster(from, new THREE.Vector3(0, 0, 1)).intersectObjects(meshes, false);
+      const glass = hits.find((h) => (h.object as THREE.Mesh).material instanceof THREE.Material && ((h.object as THREE.Mesh).material as THREE.Material).transparent);
+      expect(glass, `${b.id} has glass in the opening`).toBeDefined();
+      expect(((glass!.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.5);
+      const solid = hits.find((h) => !((h.object as THREE.Mesh).material as THREE.Material).transparent);
+      // The first solid thing the ray meets is inside the room, not the wall around the window.
+      expect(solid ? solid.point.z : Infinity, b.id).toBeGreaterThan(b.z + 1.1);
+    }
   });
   it('restorable plots show ruins until restored', () => {
     const p = buildBuilding(B.alchemy_plot);

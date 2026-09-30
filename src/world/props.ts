@@ -765,6 +765,18 @@ const BUILDERS: Record<string, Builder> = {
     k.box(g, [P, 0.12, 0.12], [0, 3.9, 0.9], IRON);
     k.box(g, [P - 0.1, 0.04, D], [0, 0.02, 0], STONE_D);
   },
+  wall_stair: (k, g, arg) => {
+    // A masonry stair up to the curtain's wall walk, built against the wall's inner face (on its
+    // +Z side), climbing toward +X (arg = -1 climbs toward -X). Solid stepped courses, the top
+    // step level with the walk.
+    const dir = arg === -1 ? -1 : 1, L = 6.6, H = 4.3, n = 12, t = L / n, D = 1.3;
+    for (let i = 0; i < n; i++) {
+      const y = ((i + 1) * H) / n, x = dir * (-L / 2 + (i + 0.5) * t);
+      cb(k, g, [t + 0.01, y, D], [x, y / 2, 0.05], i % 2 ? STONE : STONE_L, undefined, 0.02);
+      cb(k, g, [t + 0.03, 0.08, D + 0.04], [x, y - 0.03, 0.05], STONE_D, undefined, 0.02);
+    }
+    cb(k, g, [L + 0.2, 0.3, D + 0.2], [0, 0.15, 0.05], STONE_DD, undefined, 0.04);
+  },
   stall: (k, g, v) => {
     // A market stall: counter, four posts and a striped awning (colours vary).
     const [a, b] = [[0xe8dcc0, 0xa03030], [0xe8dcc0, 0x3a6a9a], [0xe8dcc0, 0x4a7a3a]][(v ?? 0) % 3];
@@ -1607,7 +1619,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['curtain', 'wall_tower', 'gatehouse']);
+export const OCCLUDING_PROPS = new Set(['curtain', 'wall_tower', 'gatehouse', 'wall_stair']);
 
 /** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
 export const PROP_KINDS = Object.keys(BUILDERS);
