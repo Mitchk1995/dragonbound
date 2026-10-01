@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL, type V3 } from '../render/kit';
 import { hasModel, makeModel } from '../render/registry';
@@ -640,6 +641,25 @@ function mineFrame(k: ModelKit, g: THREE.Group, span: number, lit: boolean): Pro
  * lip and churning to white at the foot. Unlit-ish (a little emission) so it reads in any light;
  * never casts a shadow. `time` is shared by every sheet of one waterfall.
  */
+/**
+ * A tapered beam from `a` to `b`: `size` is [width, depth] at `a` then at `b`. Limbs, horns, wing
+ * bones and tails on statues.
+ */
+function limb(k: ModelKit, g: THREE.Object3D, a: V3, b: V3, size: [number, number, number, number], color: number) {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  const L = d.length();
+  const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+  return k.mesh(g, taper(size[0], size[1], size[2], size[3], L), color, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], [e.x, e.y, e.z]);
+}
+
+/** A thin plate stretched over three points (a wing membrane panel), 0.04 thick. */
+function sail(k: ModelKit, g: THREE.Object3D, pts: [V3, V3, V3], color: number) {
+  const v = pts.map((p) => new THREE.Vector3(...p));
+  const n = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize().multiplyScalar(0.02);
+  const geo = new ConvexGeometry([...v.map((p) => p.clone().add(n)), ...v.map((p) => p.clone().sub(n))]);
+  return k.mesh(g, geo, color, [0, 0, 0]);
+}
+
 function fallingWater(w: number, h: number, time: { value: number }, seed: number) {
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, transparent: true, depthWrite: false, emissive: 0x1e4a52 });
   mat.onBeforeCompile = (shader) => {
@@ -1045,17 +1065,11 @@ const BUILDERS: Record<string, Builder> = {
   },
   // ─── Castle v2 (docs/blueprints/castle-v2): curtain, towers, gates ─────────────
   // Every wall piece is built along local X with its outer face toward -Z (the inner face, the wall
-  // walk's rail side, toward +Z). The camera-side walls are drawn cut down to a clean course at 1.2
-  // (`low`), so the wards stay in view; their towers and gates stand full height.
-  /** A curtain (or the cross wall): `len` long; `v` = 1 low (camera side), + 2 the thinner cross wall. */
+  // walk's rail side, toward +Z). They stand full height and fade round the hero like any tall wall.
+  /** A curtain wall `len` long (`v` = 1: the thinner cross wall). */
   castle_wall: (k, g, arg) => {
-    const L = lenOf(arg) ?? 10, v = vOf(arg), low = (v & 1) === 1, T = v & 2 ? 1.8 : 2.2, H = 7;
+    const L = lenOf(arg) ?? 10, T = vOf(arg) === 1 ? 1.8 : 2.2, H = 7;
     cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
-    if (low) {
-      cb(k, g, [L, 0.5, T], [0, 1.05 - 0.25, 0], STONE, undefined, 0.03);
-      cb(k, g, [L + 0.04, 0.16, T + 0.12], [0, 1.2, 0], STONE_L, undefined, 0.03);
-      return;
-    }
     cb(k, g, [L, H - 0.8, T], [0, 0.8 + (H - 0.8) / 2, 0], STONE, undefined, 0.04);
     cb(k, g, [L, 0.2, T + 0.16], [0, 3.6, 0], STONE_D, undefined, 0.03);
     // The wall walk: the deck, the outer parapet with its merlons, the inner rail.
@@ -1390,6 +1404,212 @@ const BUILDERS: Record<string, Builder> = {
       k.mesh(g, octagon(r, 0.04), c, [0, 1.15, 0.17 + i * 0.03], [0, Math.PI / 2, 0]);
     });
     for (const [x, y] of [[0.12, 1.25], [-0.2, 1.05]]) cb(k, g, [0.03, 0.03, 0.5], [x, y, 0.45], WOOD_L, [0.1, 0.1, 0], 0.01);
+  },
+  // ─── Castle gardens ───────────────────────────────────────────────────────────
+  /**
+   * A tiered fountain: an octagonal basin with a moulded kerb round a clear pool, a fluted column
+   * carrying a wide bowl and a small top bowl. Water pours from each bowl's rim in streams (the
+   * waterfall's moving water) and foams where it lands.
+   */
+  fountain: (k, g) => {
+    const R = 2.6, time = { value: 0 };
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      cb(k, g, [2.25, 0.6, 0.5], [Math.sin(a) * R, 0.3, Math.cos(a) * R], i % 2 ? STONE_L : STONE, [0, a, 0], 0.06);
+      cb(k, g, [2.35, 0.12, 0.66], [Math.sin(a) * R, 0.64, Math.cos(a) * R], STONE_L, [0, a, 0], 0.03);
+    }
+    // The basin floor, dark under the water so the pool has depth.
+    k.cyl(g, R - 0.2, R - 0.2, 0.1, [0, 0.12, 0], 0x1e3c42, [0, Math.PI / 8, 0], 8);
+    k.cyl(g, 0.5, 0.65, 1.6, [0, 0.9, 0], STONE, undefined, 8);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      k.box(g, [0.12, 1.3, 0.08], [Math.sin(a) * 0.6, 0.85, Math.cos(a) * 0.6], STONE_L, [0, a, 0]);
+    }
+    k.cyl(g, 1.35, 0.5, 0.4, [0, 1.85, 0], STONE_L, undefined, 8);
+    k.cyl(g, 1.38, 1.38, 0.08, [0, 2.06, 0], STONE, undefined, 8);
+    k.cyl(g, 0.22, 0.3, 0.8, [0, 2.4, 0], STONE, undefined, 8);
+    k.cyl(g, 0.6, 0.25, 0.26, [0, 2.9, 0], STONE_L, undefined, 8);
+    k.cone(g, 0.18, 0.5, [0, 3.3, 0], STONE_L, undefined, 6);
+    const pool = new THREE.MeshStandardMaterial({ color: 0x3a8a9a, roughness: 0.15, emissive: 0x0e2a30, transparent: true, opacity: 0.82 });
+    pool.userData.decal = true;
+    for (const [r, y] of [[R - 0.2, 0.46], [1.24, 2.11], [0.52, 3.04]]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.02, 8), pool);
+      w.position.set(0, y, 0);
+      w.rotation.y = r > 2 ? Math.PI / 8 : 0;
+      w.name = 'fountain-pool';
+      g.add(w);
+    }
+    // Streams pouring from the rims: eight from the wide bowl into the pool, four from the top bowl.
+    for (const [n, r, top, bot, w, seed] of [[8, 1.4, 2.06, 0.4, 0.5, 31], [4, 0.64, 3.0, 2.04, 0.36, 37]]) {
+      for (let i = 0; i < n; i++) {
+        const a = ((i + 0.5) / n) * Math.PI * 2;
+        const sheet = fallingWater(w, top - bot, time, seed);
+        sheet.position.set(Math.sin(a) * r, (top + bot) / 2, Math.cos(a) * r);
+        sheet.rotation.y = a;
+        g.add(sheet);
+      }
+    }
+    // Foam where the streams strike the pool.
+    const foamMat = new THREE.MeshStandardMaterial({ color: 0xe8f4f4, roughness: 0.6, emissive: 0x3a5a60, flatShading: true });
+    const foam: THREE.Mesh[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = ((i + 0.5) / 8) * Math.PI * 2;
+      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), foamMat);
+      f.position.set(Math.sin(a) * 1.45, 0.46, Math.cos(a) * 1.45);
+      f.name = 'foam';
+      g.add(f);
+      foam.push(f);
+    }
+    return {
+      obj: g,
+      tick: (t) => {
+        time.value = t;
+        foam.forEach((f, i) => {
+          const s = 0.8 + 0.3 * Math.sin(t * 3.1 + i * 1.7);
+          f.scale.set(s * 1.2, s * 0.6, s * 1.2);
+        });
+      },
+    };
+  },
+  /** A flower bed `len` long: a low stone kerb round dark soil, rows of flowers (`v` picks the colours). */
+  flower_bed: (k, g, arg) => {
+    const L = lenOf(arg) ?? 3.2, v = vOf(arg), W = 1.3;
+    const sets = [[0xd84a6a, 0xf0c848, 0xf4ece0], [0x8a5ac8, 0xe86aa8, 0xf4ece0], [0xe85a3a, 0xf0a030, 0xf0d860], [0x5a8ad8, 0xf4ece0, 0xd8a0e0]];
+    const cols = sets[v % sets.length];
+    cb(k, g, [L, 0.24, W], [0, 0.12, 0], STONE_L, undefined, 0.04);
+    k.box(g, [L - 0.24, 0.06, W - 0.24], [0, 0.25, 0], 0x3a2a1e);
+    const n = Math.max(2, Math.round((L - 0.4) / 0.42));
+    for (let r = 0; r < 2; r++) for (let i = 0; i < n; i++) {
+      const x = -L / 2 + 0.32 + (i * (L - 0.64)) / (n - 1), z = r ? 0.26 : -0.26;
+      cb(k, g, [0.34, 0.24, 0.34], [x, 0.38, z], hash01(i, r, v) > 0.5 ? 0x4a7a34 : 0x3e6e2e, [0, i + r, 0], 0.1);
+      cb(k, g, [0.18, 0.12, 0.18], [x + 0.03, 0.55, z], cols[(i + r * 2) % cols.length], [0, i, 0], 0.04);
+    }
+  },
+  /** Clipped topiary in a square stone planter (`len`: 0 a ball, 1 a cone). */
+  topiary: (k, g, arg) => {
+    const cone = (lenOf(arg) ?? 0) === 1;
+    cb(k, g, [0.95, 0.7, 0.95], [0, 0.35, 0], STONE_L, undefined, 0.05);
+    cb(k, g, [1.05, 0.12, 1.05], [0, 0.72, 0], STONE, undefined, 0.03);
+    k.box(g, [0.75, 0.05, 0.75], [0, 0.76, 0], 0x3a2a1e);
+    if (cone) {
+      k.mesh(g, taper(0.95, 0.95, 0.12, 0.12, 1.9), 0x3e6e2e, [0, 0.78 + 0.95, 0]);
+      cb(k, g, [0.7, 0.5, 0.7], [0, 1.05, 0], 0x4a7a34, [0, 0.4, 0], 0.2);
+    } else {
+      cb(k, g, [0.18, 0.5, 0.18], [0, 1.0, 0], WOOD_D, undefined, 0.02);
+      cb(k, g, [1.05, 1.0, 1.05], [0, 1.65, 0], 0x4a7a34, [0, 0.4, 0], 0.32);
+      cb(k, g, [0.9, 0.9, 0.9], [0, 1.68, 0], 0x3e6e2e, [0, 1.2, 0], 0.3);
+    }
+  },
+  /**
+   * A bronze dragon on a stepped plinth (facing +Z), sitting up on its haunches like a heraldic
+   * beast: chest out, head raised and looking ahead with glowing eyes, wings half spread and raised
+   * so it reads from above, the tail curled round the plinth. Green with age; the claws, horns and
+   * tail spade are worn bright gold where hands touch them.
+   */
+  dragon_statue: (k, g) => {
+    const B = 0x4f8a78, BD = 0x3a6a5c, BL = 0x6aa892, GOLD = 0xb8944a;
+    cb(k, g, [2.8, 0.5, 2.8], [0, 0.25, 0], STONE_D, undefined, 0.06);
+    cb(k, g, [2.3, 0.7, 2.3], [0, 0.85, 0], STONE, undefined, 0.06);
+    cb(k, g, [1.3, 0.36, 0.05], [0, 0.85, 1.16], STONE_L, undefined, 0.02);
+    cb(k, g, [2.45, 0.14, 2.45], [0, 1.25, 0], STONE_L, undefined, 0.03);
+    const y = 1.32;
+    // Haunches and hind feet.
+    for (const s of [-1, 1]) {
+      cb(k, g, [0.52, 0.66, 1.0], [s * 0.42, y + 0.33, -0.28], BD, [0, s * 0.12, 0], 0.16);
+      cb(k, g, [0.3, 0.14, 0.46], [s * 0.46, y + 0.07, 0.24], B, undefined, 0.04);
+      for (const c of [-1, 0, 1]) k.box(g, [0.07, 0.07, 0.14], [s * 0.46 + c * 0.09, y + 0.05, 0.5], GOLD);
+    }
+    // The body rising from the hips to the chest, the paler breast forward of it.
+    limb(k, g, [0, y + 0.42, -0.42], [0, y + 1.6, 0.26], [0.92, 0.8, 0.7, 0.62], B);
+    limb(k, g, [0, y + 0.55, -0.05], [0, y + 1.5, 0.4], [0.6, 0.4, 0.5, 0.34], BL);
+    // Forelegs braced on the plinth's front edge, gold claws over the edge.
+    for (const s of [-1, 1]) {
+      limb(k, g, [s * 0.34, y + 1.25, 0.3], [s * 0.3, y + 0.6, 0.48], [0.26, 0.28, 0.22, 0.24], B);
+      limb(k, g, [s * 0.3, y + 0.62, 0.48], [s * 0.3, y + 0.08, 0.6], [0.2, 0.22, 0.18, 0.2], B);
+      cb(k, g, [0.3, 0.14, 0.36], [s * 0.3, y + 0.07, 0.68], B, undefined, 0.04);
+      for (const c of [-1, 0, 1]) k.box(g, [0.07, 0.07, 0.14], [s * 0.3 + c * 0.09, y + 0.05, 0.9], GOLD);
+    }
+    // The neck in an S up from the chest, spines down its back.
+    limb(k, g, [0, y + 1.5, 0.28], [0, y + 2.2, 0.42], [0.5, 0.46, 0.4, 0.38], B);
+    limb(k, g, [0, y + 2.15, 0.42], [0, y + 2.72, 0.6], [0.4, 0.38, 0.34, 0.32], B);
+    for (const [py, pz] of [[1.75, 0.16], [2.15, 0.22], [2.55, 0.36]]) k.mesh(g, prism(0.12, 0.3, 0.6), GOLD, [0, y + py, pz], [-0.9, 0, 0]);
+    // The head: skull, a long snout, the jaw, glowing eyes and swept-back horns.
+    cb(k, g, [0.5, 0.42, 0.52], [0, y + 2.86, 0.72], B, undefined, 0.1);
+    limb(k, g, [0, y + 2.84, 0.92], [0, y + 2.72, 1.38], [0.38, 0.3, 0.26, 0.2], BL);
+    limb(k, g, [0, y + 2.64, 0.82], [0, y + 2.56, 1.26], [0.32, 0.1, 0.22, 0.08], BD);
+    for (const s of [-1, 1]) {
+      k.box(g, [0.06, 0.07, 0.1], [s * 0.22, y + 2.93, 0.96], 0xffd070, undefined, 0xffa040, 1.4);
+      limb(k, g, [s * 0.17, y + 3.0, 0.62], [s * 0.32, y + 3.36, 0.1], [0.14, 0.14, 0.02, 0.02], GOLD);
+      limb(k, g, [s * 0.24, y + 2.8, 0.6], [s * 0.4, y + 2.9, 0.3], [0.08, 0.08, 0.02, 0.02], GOLD);
+    }
+    // Wings, half spread and raised: the arm bone to the wrist, three fingers fanning back and down,
+    // membranes stretched between them with a scalloped trailing edge.
+    for (const s of [-1, 1]) {
+      const sh: V3 = [s * 0.36, y + 1.45, 0.02], wr: V3 = [s * 1.25, y + 2.65, -0.2], root: V3 = [s * 0.36, y + 0.95, -0.5];
+      const tips: V3[] = [[s * 2.0, y + 2.25, -0.8], [s * 1.8, y + 1.45, -1.05], [s * 1.2, y + 0.95, -0.95]];
+      limb(k, g, sh, wr, [0.16, 0.16, 0.12, 0.12], BL);
+      limb(k, g, wr, [s * 1.3, y + 2.85, -0.05], [0.08, 0.08, 0.01, 0.01], GOLD);
+      for (const t of tips) limb(k, g, wr, t, [0.08, 0.08, 0.05, 0.05], BL);
+      sail(k, g, [sh, wr, root], BD);
+      for (let i = 0; i < tips.length; i++) {
+        const a = i === 0 ? root : tips[tips.length - i];
+        const b = tips[tips.length - 1 - i];
+        const m: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+        const notch: V3 = [m[0] + (wr[0] - m[0]) * 0.22, m[1] + (wr[1] - m[1]) * 0.22, m[2] + (wr[2] - m[2]) * 0.22];
+        sail(k, g, [wr, a, notch], BD);
+        sail(k, g, [wr, notch, b], BD);
+      }
+    }
+    // The tail curling round the plinth, ending in a gold spade.
+    const tail: V3[] = [[0, y + 0.32, -0.8], [0.55, y + 0.24, -1.02], [0.98, y + 0.18, -0.72], [1.08, y + 0.13, -0.15], [0.9, y + 0.1, 0.3]];
+    const tr = [0.42, 0.32, 0.24, 0.16];
+    for (let i = 0; i < 4; i++) limb(k, g, tail[i], tail[i + 1], [tr[i], tr[i] * 0.8, (tr[i + 1] ?? 0.1), (tr[i + 1] ?? 0.1) * 0.8], i % 2 ? BD : B);
+    k.mesh(g, wedge(0.34, 0.06, 0.34), GOLD, [0.86, y + 0.1, 0.48], [0, 0.4, 0]);
+  },
+  /**
+   * A knight in stone on a stepped plinth (facing +Z), the lord's champion: plate armour and a
+   * crested helm, a cloak down the back, hands folded on the pommel of a sword planted point down
+   * before him, a kite shield leaning at his side.
+   */
+  champion: (k, g) => {
+    const S = 0x8e8a80, SD = 0x76726a, SL = 0xa29e94;
+    cb(k, g, [2.0, 0.45, 2.0], [0, 0.225, 0], STONE_D, undefined, 0.06);
+    cb(k, g, [1.6, 0.9, 1.6], [0, 0.9, 0], STONE, undefined, 0.06);
+    cb(k, g, [0.9, 0.4, 0.05], [0, 0.9, 0.81], STONE_L, undefined, 0.02);
+    cb(k, g, [1.75, 0.14, 1.75], [0, 1.42, 0], STONE_L, undefined, 0.03);
+    const y = 1.49;
+    // Legs, knee cops and sabatons.
+    for (const s of [-1, 1]) {
+      cb(k, g, [0.26, 0.98, 0.3], [s * 0.17, y + 0.5, 0], S, undefined, 0.06);
+      cb(k, g, [0.22, 0.16, 0.12], [s * 0.17, y + 0.62, 0.16], SL, undefined, 0.04);
+      cb(k, g, [0.28, 0.14, 0.44], [s * 0.17, y + 0.07, 0.07], SD, undefined, 0.04);
+    }
+    // The tasset skirt, belt and breastplate with its ridge.
+    k.mesh(g, taper(0.8, 0.52, 0.62, 0.44, 0.46), S, [0, y + 1.1, 0]);
+    cb(k, g, [0.68, 0.1, 0.48], [0, y + 1.34, 0], SD, undefined, 0.03);
+    k.mesh(g, taper(0.62, 0.44, 0.84, 0.5, 0.78), S, [0, y + 1.78, 0]);
+    k.mesh(g, wedge(0.08, 0.06, 0.7), SL, [0, y + 1.78, 0.25], [Math.PI / 2, 0, 0]);
+    // The cloak hanging down the back from the shoulders.
+    k.mesh(g, taper(1.0, 0.1, 0.82, 0.1, 1.9), SD, [0, y + 1.12, -0.3], [-0.06, 0, 0]);
+    // Pauldrons, arms bent to the hands on the pommel.
+    for (const s of [-1, 1]) {
+      cb(k, g, [0.38, 0.26, 0.52], [s * 0.5, y + 2.1, 0], SL, [0, 0, s * -0.3], 0.1);
+      limb(k, g, [s * 0.48, y + 2.02, 0.02], [s * 0.4, y + 1.56, 0.24], [0.2, 0.22, 0.18, 0.2], S);
+      limb(k, g, [s * 0.4, y + 1.56, 0.24], [s * 0.1, y + 1.42, 0.44], [0.18, 0.2, 0.17, 0.19], S);
+    }
+    cb(k, g, [0.34, 0.2, 0.22], [0, y + 1.44, 0.46], SD, undefined, 0.05);
+    // The sword planted before him: pommel, grip, crossguard, the blade to the plinth.
+    cb(k, g, [0.13, 0.13, 0.13], [0, y + 1.62, 0.46], SL, [0, Math.PI / 4, 0], 0.03);
+    cb(k, g, [0.66, 0.08, 0.1], [0, y + 1.26, 0.46], SL, undefined, 0.02);
+    k.mesh(g, taper(0.05, 0.04, 0.16, 0.05, 1.18), SL, [0, y + 0.64, 0.46]);
+    // The helm: great helm with a visor slit and a crest.
+    cb(k, g, [0.2, 0.14, 0.2], [0, y + 2.24, 0], SD, undefined, 0.03);
+    cb(k, g, [0.38, 0.44, 0.42], [0, y + 2.5, 0.01], S, undefined, 0.1);
+    k.box(g, [0.28, 0.04, 0.02], [0, y + 2.54, 0.22], 0x2e2c28);
+    cb(k, g, [0.07, 0.24, 0.46], [0, y + 2.78, -0.02], SL, undefined, 0.03);
+    // A kite shield leaning against his side.
+    k.mesh(g, taper(0.1, 0.07, 0.56, 0.07, 0.86), SD, [-0.56, y + 0.46, 0.12], [-0.08, 0.35, 0.1]);
+    cb(k, g, [0.18, 0.18, 0.04], [-0.57, y + 0.62, 0.17], SL, [0, 0.35, Math.PI / 4], 0.02);
   },
   /** A stone planter box of flowers. */
   planter: (k, g) => {

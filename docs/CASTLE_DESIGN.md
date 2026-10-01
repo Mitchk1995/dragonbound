@@ -4,20 +4,24 @@ The castle on the island's crown follows the castle-v2 blueprint in [blueprints/
 
 ## The outer works
 
-- **Curtain:** an eight-sided wall following the rock, 2.2 thick with a wall walk at +7. Its camera-side faces (south-east, south and south-west) are drawn cut down to a 1.2 course so the wards stay in view; the north, east and west faces stand full height.
+- **Curtain:** an eight-sided wall following the rock, 2.2 thick with a wall walk at +7, full height all round. Where it stands between the camera and the hero it dissolves around them, like every tall thing on the island.
 - **Towers:** seven round towers, open-topped at +7 with crenellations to 9 or 10. The west corner at blueprint `(8, 30)` has none.
 - **Outer gatehouse:** two round towers standing out from the south-east face either side of a vaulted, portcullised passage 3 wide. The approach ramp climbs to it from the portal court.
-- **Cross wall:** a diagonal wall (cut down on the camera side) splitting the castle into the lower ward and the inner court, with the inner gatehouse at its middle.
+- **Cross wall:** a full-height diagonal wall splitting the castle into the lower ward and the inner court, with the inner gatehouse at its middle.
 - **Postern:** a narrow gate in the west wall, out to a path along the crown.
 - **Wall stairs:** solid stone flights to the wall walk, one along the cross wall, one along the south-east curtain. The wall walk itself is not playable yet.
 - **Donjon:** the round tower at the north-west high corner, radius 7 and 13 high. Stage 1 builds it solid; stage 2 opens it (guard hall, map room, spiral stair).
 
 ## The wards
 
-- **Lower ward:** the outer gate's road crosses it to the inner gate. Barracks along the south wall, stables and smithy on the east side, the training lists with their tilting rails, and the flagged muster yard with pells and a weapon rack.
-- **Inner court:** the road runs on to the feast court before the great door. The well, the kitchen yard by the kitchen door, the herb garden in the south-west, benches in the feast court.
+Both wards are lawn, with paved roads and yards; there are no barrels, crates or carts lying about.
+
+- **Lower ward:** the outer gate's road crosses it to the inner gate. A bronze dragon on a plinth greets you inside the outer gate. Barracks along the south wall, stables and smithy on the east side, the lists (a lawn with one tilt barrier down the middle and archery butts), and the flagged muster yard with pells and a weapon rack.
+- **Inner court:** a garden. The road runs on to the flagged forecourt along the keep (the feast court and the kitchen yard, with the well by the kitchen door). Two stone champions flank the great door. A tiered fountain stands at the court's heart on a round plaza, walks running out from it, flower beds and clipped topiary round it and benches by its north walk. The privy garden in the south-west corner is hedged, with flower beds round a third champion.
 
 ## Buildings
+
+Every castle building has a flat roof with a crenellated parapet (no pitched roofs); chimneys rise above the parapet and a stone lantern lets the hall's hearth smoke out. Windows are tall lancets with hood moulds, few and placed symmetrically: the hall's south front has three on each floor.
 
 | Building | Rooms | Notes |
 |---|---|---|

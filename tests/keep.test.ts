@@ -326,7 +326,7 @@ describe('building models', () => {
       const meshes: THREE.Mesh[] = [];
       p.obj.traverse((o) => { if (o instanceof THREE.Mesh) meshes.push(o); });
       const wi = b.windows.find((w) => w.side === 'n' && !w.floor)!;
-      const dims = b.style === 'timber' ? { ww: 1.0, wh: 1.3, wy: 1.55 } : b.style === 'stone' ? { ww: 1.0, wh: 1.3, wy: 1.55 } : { ww: 1.3, wh: 2.3, wy: 1.9 };
+      const dims = b.style === 'timber' ? { ww: 1.0, wh: 1.3, wy: 1.55 } : b.style === 'stone' ? { ww: 1.0, wh: 1.3, wy: 1.55 } : { ww: 0.8, wh: 2.4, wy: 1.7 };
       // Aim through one pane (clear of the mullion and transom), from outside the north wall.
       const from = new THREE.Vector3(b.x + wi.at + dims.ww / 4, dims.wy + dims.wh * 0.3, b.z - 3);
       const hits = new THREE.Raycaster(from, new THREE.Vector3(0, 0, 1)).intersectObjects(meshes, false);
