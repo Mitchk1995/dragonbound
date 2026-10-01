@@ -140,7 +140,8 @@ export function bowFacts(root: THREE.Object3D, drawHand: THREE.Object3D): BowFac
   const mid = strings.length === 2 ? new THREE.Box3().setFromObject(strings[0]).union(new THREE.Box3().setFromObject(strings[1])).getCenter(new THREE.Vector3()) : null;
   const hand = drawHand.getWorldPosition(new THREE.Vector3());
   return {
-    upright: size.y > 1.2 && size.y > size.x * 3 && size.y > size.z * 3,
+    // A deep D bow (the Worn Shortbow) is about a third as deep as it is tall.
+    upright: size.y > 1.2 && size.y > size.x * 3 && size.y > size.z * 2.5,
     stringBehindGrip: mid ? mid.z - gripC.z : NaN,
     arrowVisible: !!arrow?.visible,
     arrowForward: arrow?.visible ? new THREE.Vector3(0, 1, 0).transformDirection(arrow.matrixWorld).z : null,

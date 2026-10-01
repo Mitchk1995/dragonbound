@@ -64,6 +64,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
 - **Home island v1 at its built size is OK.**
 - **Props are single solid pieces**, not stacks of blocks: the Great Anvil is one forged piece on a plain stump. Nothing stands on a slab or platform that serves no purpose, and nothing passes through anything else.
 - **The forge yard was rebuilt from Codex concepts** (`docs/concepts/`): the anvil and the Emberforge hearth, whose chimney and bellows are part of it.
+- **The four bows were rebuilt from Codex turnarounds of their approved icons** (`docs/concepts/bow-*.jpg`): each bow's limbs are one smooth piece with the icon's curve and depth, with pointed tips. Awaiting Mitchell's approval against the icons.
 
 ### Already done before Round 5
 
