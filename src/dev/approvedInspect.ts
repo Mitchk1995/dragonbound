@@ -47,9 +47,9 @@ const JEWELLERY = BASE_LIST.filter((b) => b.slot === 'amulet' || b.slot === 'rin
 const GENERATED = ['bronze_bar', 'copper_ore', 'uncut_ruby', 'cinder_key'];
 /** Every unique, each with its own approved artwork (by unique id, never its base's). */
 const UNIQUE_IDS = Object.keys(UNIQUES);
-/** The supplied size of each file: 1254×1254 but for the leather gloves and boots. */
-const SIZE: Record<string, [number, number]> = { 'leather_gloves-icon-v1.png': [1536, 1024], 'leather_boots-icon-v1.png': [1536, 1024] };
-const sizeOf = (file: string): [number, number] => SIZE[file] ?? [1254, 1254];
+/** The shipped size of each file: 256×256 but for the leather gloves and boots. */
+const SIZE: Record<string, [number, number]> = { 'leather_gloves-icon-v1.png': [256, 171], 'leather_boots-icon-v1.png': [256, 171] };
+const sizeOf = (file: string): [number, number] => SIZE[file] ?? [256, 256];
 /** A few approved items in other rarities, so their bevels show under the artwork. */
 const RARITY: Record<string, Rarity> = { bronze_boots: 'rare', iron_longsword: 'magic', steel_platebody: 'rare', ember_fullhelm: 'magic', recurve_bow: 'magic', drakebone_bow: 'rare', apprentice_staff: 'magic', leather_boots: 'magic', silver_ring: 'rare' };
 
@@ -175,7 +175,7 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
     // Three inventories (28 slots each) between them hold every piece of equipment and every unique: bronze + iron
     // with the four bows, the Ashen Crown and Emberstring beside their approved bases, and a bronze bar; steel +
     // Emberforged with the four staves, Cinderfang, the Wyrmbone Harness and Kindled Ash beside theirs; then leather
-    // and jewellery beside every tier's gauntlets and boots (the 1536×1024 leather pair among square pairs), with
+    // and jewellery beside every tier's gauntlets and boots (the 256×171 leather pair among square pairs), with
     // generated fallbacks. Checked in the order A, C, B, so B stays for the captures and drags that follow.
     const INV_A = [
       ...[...tier('bronze'), ...tier('iron'), ...BOWS_STAVES.filter((id) => id.endsWith('_bow'))].map(make),
@@ -329,7 +329,7 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
       await hover(`equipment ${id}`, `.sidepanel [data-eq="${slot}"]`);
       ui.hideTooltip();
     }
-    // Leather head to foot (the gloves and boots at 1536×1024) with the first amulet and ring, then the second pair.
+    // Leather head to foot (the gloves and boots at 256×171) with the first amulet and ring, then the second pair.
     const worn = async (label: string, ids: string[]) => {
       const gear: Partial<Record<Slot, Item>> = {};
       for (const id of ids) gear[BASES[id].slot!] = make(id);
@@ -546,10 +546,10 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
         return [`${it.name} (unique on ${BASES[it.base].name})`, it];
       }),
     ], true);
-    // Leather (the gloves and boots 1536×1024, fitted whole) and jewellery, then materials and a quest item on their
+    // Leather (the gloves and boots 256×171, fitted whole) and jewellery, then materials and a quest item on their
     // rendered icons.
     closeup.leatherJewellery = await sheetOf('leather-jewellery-fallbacks', 4, [
-      ...[...LEATHER, ...JEWELLERY].map((id): [string, Item] => [`${BASES[id].name}${SIZE[fileOf(itemArtUrl(makeItem(id)))!] ? ' (1536×1024)' : ''}`, makeItem(id)]),
+      ...[...LEATHER, ...JEWELLERY].map((id): [string, Item] => [`${BASES[id].name}${SIZE[fileOf(itemArtUrl(makeItem(id)))!] ? ' (256×171)' : ''}`, makeItem(id)]),
       ...GENERATED.map((id): [string, Item] => [`${BASES[id].name} (generated)`, makeItem(id)]),
     ], true);
     checks.closeup = closeup;

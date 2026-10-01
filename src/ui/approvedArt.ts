@@ -4,8 +4,8 @@ import type { Item } from '../types';
  * Painted artwork the owner approved (public/icons/approved), shown exactly as supplied in place of a generated
  * icon; the game draws the slot or tile behind it. Matched by exact id only: a unique by its own unique id (never its
  * base's), anything else by its base id. Every piece of equipment and every known unique is listed; whatever is not
- * (materials, quest items, an unknown unique) keeps its rendered icon. Most files are 1254×1254; the leather gloves
- * and boots are 1536×1024 and are fitted whole, at their own aspect, by style.css.
+ * (materials, quest items, an unknown unique) keeps its rendered icon. Files are 256 px on the long side: 256×256, but
+ * the leather gloves and boots are 256×171 and are fitted whole, at their own aspect, by style.css.
  */
 export const APPROVED_DIR = 'icons/approved';
 
@@ -56,7 +56,7 @@ const ITEM_ART = new Map<string, string>([
   ['apprentice_staff', 'apprentice_staff-redesign-v5.png'],
   ['runed_staff', 'runed_staff-redesign-v5.png'],
   ['ember_staff', 'ember_staff-redesign-v6.png'],
-  // Leather (the gloves and boots are the two 1536×1024 files) and jewellery.
+  // Leather (the gloves and boots are the two 256×171 files) and jewellery.
   ['leather_cap', 'leather_cap-icon-v1.png'],
   ['leather_body', 'leather_body-icon-v2.png'],
   ['leather_gloves', 'leather_gloves-icon-v1.png'],

@@ -3,8 +3,8 @@
  * the four staves, leather and jewellery) routes to its file by base; all five uniques (the Wyrmbone Harness by its
  * save id `scaleguard`) by their own unique id, ahead of their approved bases; Cleave to its tile. Everything else
  * (materials, quest items, any unknown unique, the other abilities and the basic attacks) keeps its generated icon.
- * The files are the exact supplied bytes: intact RGBA PNGs, 1254×1254 but for the 1536×1024 leather gloves and
- * boots, whose alpha tops out at 254.
+ * The files are the approved art scaled to 256 px on the long side (256×256, the leather gloves and boots 256×171),
+ * which stays sharp at every size the game shows; the full-size originals are kept outside the repo.
  */
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -97,68 +97,67 @@ const UNIQUE_ART: Record<string, [file: string, base: string]> = {
 const GENERATED = ['bronze_bar', 'copper_ore', 'uncut_ruby', 'cinder_key'];
 
 /**
- * Every approved file as supplied (inspect/approved-icons/final-approved-assets.json and
- * final-fifty-eight/new-twenty-three-assets-verified.json): SHA-256, width, height and alpha range.
+ * Every approved file as shipped: SHA-256, width, height and alpha range.
  */
 const META: Record<string, [sha256: string, w: number, h: number, alphaMin: number, alphaMax: number]> = {
-  'cleave-straight-hilt-v5.png': ['5acc2426d3371020ac915fc0e183ec27d0b4df1e0279525839c7ecb2de8d3142', 1254, 1254, 0, 255],
-  'bronze-sword-icon-v1.png': ['5cc413fcd8062302ccc0a6d768423e7f138a0a3e132e27f94f0ebab24a29395a', 1254, 1254, 0, 255],
-  'bronze-longsword-icon-v1.png': ['04a1491aed5d4cfd57278005dbdb3ec5b488c5761e8aff340384048b5b008a1a', 1254, 1254, 0, 255],
-  'bronze-medhelm-faceted-icon-v1.png': ['3b5c86d464ffe92b5d710efcdb6e9092c07d0f7a0297562e506e518d9c9a84be', 1254, 1254, 0, 255],
-  'bronze-fullhelm-faceted-icon-v1.png': ['f77257d115ba387f70c7c4c2aaf16cb09884b9f16fc958aadb80ea4fc87cbdf6', 1254, 1254, 0, 255],
-  'bronze-chainbody-icon-v1.png': ['356b8965d84de697b473c120465d0b4abeeff3d24823def907247b1d90aeb496', 1254, 1254, 0, 255],
-  'bronze-platebody-clearance-icon-v1.png': ['2e96e4d6bc4e34b5b6f92dd62f3ae6a1470a92e3920a23e5d269f9cfbede4ae0', 1254, 1254, 0, 255],
-  'bronze-gauntlets-thumbless-icon-v2.png': ['17b498746b86e6b2d0f4e12a86358d3275013c7fd95ae84deb533d838a8d78c9', 1254, 1254, 0, 255],
-  'bronze-boots-icon-v1.png': ['d4e877bb3d531c64fbae5f398c0a466a5a5a5af3c0d24ec1080687357befde8e', 1254, 1254, 0, 255],
-  'bronze-pickaxe-icon-v1.png': ['b4494fa4bceb9297cb251782e2275461dc988974521a80c73dda0e173887e34e', 1254, 1254, 0, 255],
-  'iron-sword-icon-v1.png': ['e5c47f55d3cccbd7d6cda077fd05bf93d33ca0cba0d541aae0bbf211adefb61b', 1254, 1254, 0, 255],
-  'iron-longsword-icon-v1.png': ['2f0f51c8a9087eced0ea961dc810a87f7eda710adc5d4f575f18de6d7632dc94', 1254, 1254, 0, 255],
-  'iron-medhelm-icon-v1.png': ['6d331507c0fcb050aa6cd65601cae21a3c5161f986d53d53966e1f469528420f', 1254, 1254, 0, 255],
-  'iron-fullhelm-icon-v1.png': ['12159aa284c64d3800818a824645551228d68301bcc9fe7546e5e8b21de390c2', 1254, 1254, 0, 255],
-  'iron-chainbody-icon-v1.png': ['0f29d00dbf40a165e8b4f78b75c1037fe5fc10401d687e6ba561fa031268beac', 1254, 1254, 0, 255],
-  'iron-platebody-icon-v1.png': ['a1e3b93404c365e93eb2818d09dabd402b218335d60bb078324aedf6530f5123', 1254, 1254, 0, 255],
-  'iron-gauntlets-icon-v1.png': ['402bbfc218978268a3e99b8bf70b70d053c9e70ab78c82fbea023ec8ebd8869f', 1254, 1254, 0, 255],
-  'iron-boots-icon-v1.png': ['23f82b39bb2e18e269af0c468d82f20a07c1134c587399b74007a41aab8ddc39', 1254, 1254, 0, 255],
-  'iron-pickaxe-clear-margin-icon-v2.png': ['6f6977afe228b349e67abe8745968fb333d3823988e791b8246309052c3bdbb3', 1254, 1254, 0, 255],
-  'steel-sword-icon-v1.png': ['970fcb452149dbc6dbb1adc68e3240f7a4a19bd372685aa223af4929286a4fc7', 1254, 1254, 0, 255],
-  'steel-longsword-icon-v1.png': ['d79281938afe9610e317b62d655b100bf1d99c63936a2d5f2a3aa3c11f79900e', 1254, 1254, 0, 255],
-  'steel-medhelm-icon-v1.png': ['5655ed0bc1c8379cc034a525f39ae679e21ab1eb63746d19f4934ec7850a5fc1', 1254, 1254, 0, 255],
-  'steel-full-helm-icon-v1.png': ['36d6ceb4209b5d32e56e212754fa31c454c77ab31be5e6344949b12ddd144206', 1254, 1254, 0, 255],
-  'steel_chainbody.png': ['cfab8feb26fa5b1edce0251f1c3fc7a79be8ab55caaeb0da6517536cb236a1c7', 1254, 1254, 0, 255],
-  'steel-platebody-clearance-v3.png': ['18a55256c8dd0e75e6766af84792a459000c8a7d2f3bb86baa8ae0309ab9c14f', 1254, 1254, 0, 255],
-  'steel_gauntlets-v2.png': ['1818b95f40cd2835cdbf5ff30323f2c9314697cdd5b0731615a853e74dc5d268', 1254, 1254, 0, 255],
-  'steel_boots.png': ['06883b693148fb8108bb49e6679ad87cf574294b766088e04b4808d0ded8d97d', 1254, 1254, 0, 255],
-  'steel-pickaxe-icon-v2.png': ['b45cc4d92e5a32a02e7ce055053d6db55a3597440b3ee17500a26120b2e1e122', 1254, 1254, 0, 255],
-  'ember_sword-icon-v3.png': ['3c073879bd42acf8cdc7e0943c6b00b9ded58b544e21c0e46515151b6ad68628', 1254, 1254, 0, 255],
-  'ember_longsword-icon-v2.png': ['c37440658b77b6670846ff04f02d6c4075252879d218791893048223fabbbbb9', 1254, 1254, 0, 255],
-  'ember_medhelm-icon-v1.png': ['a5100ba1e1e86cbc6d00fe00c7e8dba3718df86e1d21fd56ecfd9f39f83af4b4', 1254, 1254, 0, 255],
-  'ember_fullhelm-icon-v1.png': ['ee95c59fd70717204a9fb310ecba7473f9c6fbed20de2923ec3a000519cc6195', 1254, 1254, 0, 255],
-  'ember_chainbody-icon-v1.png': ['dc57702c3eea61645281a8cb8709af36356b92ec50bf1efdfadcf5ebc6f60b21', 1254, 1254, 0, 255],
-  'ember_platebody-icon-v1.png': ['aa4121d9ff874508c5ee470afc82f3db03b02b284d84dec2848eb5d76cfc1370', 1254, 1254, 0, 255],
-  'ember_gauntlets-icon-v1.png': ['cc74b7c11b60761d2658acb5ddf85a96e1bb04e7a6376e01e995e7c13a68ce21', 1254, 1254, 0, 255],
-  'ember_boots-icon-v1.png': ['a2717c6c757d00d1b707c0092f4047ab34cf115494b5933c795668d3c80f5559', 1254, 1254, 0, 255],
-  'ember_pickaxe-icon-v1.png': ['c1d6064e1af5ab1cde23613e67d1a2d156e8fb2309c57e934fef17ac6e11de2c', 1254, 1254, 0, 255],
-  'worn-bow-redesign-v2.png': ['0ebfc3744c9f495235dfdc720199035f27d3a59f8365bc17365d0598ebcb9a74', 1254, 1254, 0, 255],
-  'hunter-bow-redesign-v2.png': ['2787da31d85b1216155cf719bf0e229dae8074f2b286ee9da9f67f5369e57a08', 1254, 1254, 0, 255],
-  'recurve-bow-redesign-v2.png': ['b2e488cb8f2e9f445079af07f91940ff241f33d7c703fb02dfd38f77815e5c55', 1254, 1254, 0, 255],
-  'drakebone-bow-redesign-v2.png': ['cc206451fa061fbd8065d1e30e9b39ebd79a1acfe850c428d30376299ca54b91', 1254, 1254, 0, 255],
-  'oak_staff-redesign-v3.png': ['20451688b72a0c41ef4bceb4dffdbb611121df8844d4cce1d7ed830e163ffa7e', 1254, 1254, 0, 255],
-  'apprentice_staff-redesign-v5.png': ['e4539bd9f61a1d0c0473bf1bd010653eb15e3a23395f5ac52c69ee28196675e6', 1254, 1254, 0, 255],
-  'runed_staff-redesign-v5.png': ['2dd35f392a47383701ac5f7dfc848e570f9abc8f2a79e095f4390bd545512f9b', 1254, 1254, 0, 255],
-  'ember_staff-redesign-v6.png': ['0e21631029d13fe67c09b1d5f6497871fc705d9ee86eedc219062efaec28b814', 1254, 1254, 0, 255],
-  'leather_cap-icon-v1.png': ['8f118686d856c7cc1bda156b84f43626dc9f49337b601ef042aff15f39b48edc', 1254, 1254, 0, 255],
-  'leather_body-icon-v2.png': ['903cf9e71915bedf74ff3d2512c212d6f210bb9324282fc3bac4aefdd8481955', 1254, 1254, 0, 255],
-  'leather_gloves-icon-v1.png': ['d4e98e249f7580ac0bd1d4d8c822b516d697ceeba299a2701261d852f88e0dc0', 1536, 1024, 0, 254],
-  'leather_boots-icon-v1.png': ['593b4fe93d90cc64351a115908f7b5e8f0a1c91d30c2622cb7dbdd0f3087312f', 1536, 1024, 0, 254],
-  'bone_amulet-icon-v1.png': ['06bea1b01c1b0283efbb0734353195da759169dbfb427580f99b904f0a523a79', 1254, 1254, 0, 255],
-  'jade_amulet-icon-v1.png': ['bf6a401064f7b850741c5a782ad32d2fb576718b60da2e15a67709f178190411', 1254, 1254, 0, 255],
-  'copper_ring-icon-v1.png': ['fe97a199fef12348c504a7dbe45287782b75c3729283a0592f500d2e65f39218', 1254, 1254, 0, 255],
-  'silver_ring-icon-v1.png': ['c10c484cc99f82bfc6e21af51d01612daad2e190b6d21ff75b790bdc611733bc', 1254, 1254, 0, 255],
-  'cinderfang-redesign-v1.png': ['8263f21d7b2e323e5501829f9c8f7d2f84e857576f694199a5ca564eb7d56a6f', 1254, 1254, 0, 255],
-  'ashen-crown-redesign-v1.png': ['841c89225cde9c8ed2c394d94eefcfe5ec9ee7784bb5386cf6cffc3086702846', 1254, 1254, 0, 255],
-  'wyrmbone-harness-redesign-v1.png': ['4f44bf17e915d27526d7882fdb16fc6c2ad679035fbefa2bb7b52bc145749862', 1254, 1254, 0, 255],
-  'emberstring-aligned-v2.png': ['328b937435c9753650ecb63e2d26886f8eef4a1a07704aac2d3a048d14b5a7a1', 1254, 1254, 0, 255],
-  'kindled-ash-aligned-v2.png': ['86d48d2d5d13d5948f00de8fca68f6bb3a2472e0f2f9652f0f894b92bbb6207a', 1254, 1254, 0, 255],
+  'apprentice_staff-redesign-v5.png': ['25cb95819b61a37b9b29f020540a279ad357e45932b9fca4e1617b9463adc93b', 256, 256, 0, 255],
+  'ashen-crown-redesign-v1.png': ['4a144f18c03888157fc20296b1907c2274f066fdde6182ff667a5005a932152c', 256, 256, 0, 255],
+  'bone_amulet-icon-v1.png': ['e9917c5d0a6ac3935219cec14c05d430cca5fed87ea3e021f7b4c58fe400b149', 256, 256, 0, 255],
+  'bronze-boots-icon-v1.png': ['98831f0fbf6b29f3d1607e996a32580c0212c0dee5c723070ca577dbcebc2c6a', 256, 256, 0, 255],
+  'bronze-chainbody-icon-v1.png': ['b01713776c40bd045ccf425d62dc863b636dcec9819916dda536f64a9e742bfa', 256, 256, 0, 255],
+  'bronze-fullhelm-faceted-icon-v1.png': ['b7771191279a50afdc3e856cb896be6c572a00fed710bfcd1dc28296d48e21e0', 256, 256, 0, 255],
+  'bronze-gauntlets-thumbless-icon-v2.png': ['ddb09990efaad287e781698520d9721b9a95c13367683ff7b397201228b193d5', 256, 256, 0, 255],
+  'bronze-longsword-icon-v1.png': ['d9bb9c182d8592473d57aad52d7133f46fcb72a72888bcb9eae0841406b8fee1', 256, 256, 0, 255],
+  'bronze-medhelm-faceted-icon-v1.png': ['d65ad32779728941590699520bbdc86a99ee1477d379f5f4df8ae4639f6ef73a', 256, 256, 0, 255],
+  'bronze-pickaxe-icon-v1.png': ['e77e0cb997a1e4eb6b1ab3cee352976197def044e11976cbf473966b44158bec', 256, 256, 0, 255],
+  'bronze-platebody-clearance-icon-v1.png': ['04ae0c97e880a0f9ac460ad13981893a20342427d4533c81c713b5dd2de4db73', 256, 256, 0, 255],
+  'bronze-sword-icon-v1.png': ['9e7f9a8ad37ed085370bcc7d15f688fd40a50f44d965804edb438acb13f40b4f', 256, 256, 0, 255],
+  'cinderfang-redesign-v1.png': ['8dae251e133f23dd5b4c69a6a0177ef7227b1418cb5febab7efe4f2d0de5dde3', 256, 256, 0, 255],
+  'cleave-straight-hilt-v5.png': ['8fa4171348781f7fbca191e6aeb25747f5bfa10eb36ae827dafc0144d4449295', 256, 256, 0, 255],
+  'copper_ring-icon-v1.png': ['b7b78f62c238f077dff004f15a8a3dec06b13fa3c0ee8c7f6b943f618fea444e', 256, 256, 0, 255],
+  'drakebone-bow-redesign-v2.png': ['2c56465ee15608f3074a04ec51b4ffc589a5cbd64d17eeecb5fa83bab7448c36', 256, 256, 0, 255],
+  'ember_boots-icon-v1.png': ['e4d5d9d72f765b5273723973bbce751ceb3dbf1f77fc53bfe3eb5e1ca5bb207e', 256, 256, 0, 255],
+  'ember_chainbody-icon-v1.png': ['5d6f714ea647269ad6cc0080f870e12af834b990d6de797d09222ee2d973be59', 256, 256, 0, 255],
+  'ember_fullhelm-icon-v1.png': ['80b53c8658ad5153e2dd3ffdd9b2857c17a86d2d0a16cf3336919ca6acb74506', 256, 256, 0, 255],
+  'ember_gauntlets-icon-v1.png': ['4ea1258c5cf1697296481471af968812538c4bb9d970b5bd09d0345774780165', 256, 256, 0, 255],
+  'ember_longsword-icon-v2.png': ['91a6b5241730e2fda7b095ad1dca61168d0850f410173068cf8c177a5d673631', 256, 256, 0, 255],
+  'ember_medhelm-icon-v1.png': ['fe15e0cbc61e65b98f80ef658d3e9e96fc8128a6fa3fc69c0706a856fa3cbdc0', 256, 256, 0, 255],
+  'ember_pickaxe-icon-v1.png': ['42924a4a3cd11e3828da12f52f00355919be8188d4040e383491d0b31f593fff', 256, 256, 0, 255],
+  'ember_platebody-icon-v1.png': ['4176972246ba4701f3da691079d1ebfa55f5482e068a58e251fdd09bcb859404', 256, 256, 0, 255],
+  'ember_staff-redesign-v6.png': ['88c1761243d776fc4019c2793ee62e6b818d8ad5158333ea9d928efd7f26e7be', 256, 256, 0, 255],
+  'ember_sword-icon-v3.png': ['3c3c3ff3110a93ae38ec67266b9d14108fd9e832e6f3a11d55fe2ccf17f9fbb1', 256, 256, 0, 255],
+  'emberstring-aligned-v2.png': ['eadbe200e65b8d7c45229f9b9af40605816851665a7ac6c315c1dda199a34cc1', 256, 256, 0, 255],
+  'hunter-bow-redesign-v2.png': ['a2d17d5e1ec4df221d3e83cd1a10a2baad426fc1c2e723dfbd7c17aed1723809', 256, 256, 0, 255],
+  'iron-boots-icon-v1.png': ['c70257c93946e7d66490b1d10b3bce8eca46ad477ef005fd9d7f73312f3208d4', 256, 256, 0, 255],
+  'iron-chainbody-icon-v1.png': ['0c6b0071792420daae8dce2224a3c19078a490c6f1a26be7b34bca56ba5a5148', 256, 256, 0, 255],
+  'iron-fullhelm-icon-v1.png': ['05c788bbb4d427a0cfc2183f067034c71ecd26bf80b459895749dcb799817e73', 256, 256, 0, 255],
+  'iron-gauntlets-icon-v1.png': ['6aa38a2aa6d0333bd4388dc28ccfb90cba3c6ea8c7760ac0889be06941f0b203', 256, 256, 0, 255],
+  'iron-longsword-icon-v1.png': ['11e0dfb9ee676aa0a85800a52c38045e656877246546e4d32dfdfba8312f5a2e', 256, 256, 0, 255],
+  'iron-medhelm-icon-v1.png': ['1ffa5d13d697551aedabae5bc5d59e5138968bd40069d54c11e99de227eb3722', 256, 256, 0, 255],
+  'iron-pickaxe-clear-margin-icon-v2.png': ['30a5565ec7be3e36ebdb834a357735bb3ceb4dd774017e1351cbab1994bd2d51', 256, 256, 0, 255],
+  'iron-platebody-icon-v1.png': ['ae71eb915de60c8d797b941ea7e3330c210b7d5b05803165c75af3c15e2ef131', 256, 256, 0, 255],
+  'iron-sword-icon-v1.png': ['30ea3272642c934448c777c2c139b4b9f8111184d86701d077b4529b0c57f422', 256, 256, 0, 255],
+  'jade_amulet-icon-v1.png': ['8683f9b16795f70bd7382efeb5a87213e9c4739d18c6394bae962ee0ef600987', 256, 256, 0, 255],
+  'kindled-ash-aligned-v2.png': ['e3af296a9fd367f91438665ce23cdbb5c99b897271ed9a1416f92dc55339bf54', 256, 256, 0, 255],
+  'leather_body-icon-v2.png': ['24b7d0931b05394fe7450f78e88289469dde4ad874341668008701443919a866', 256, 256, 0, 255],
+  'leather_boots-icon-v1.png': ['de0b91831d3fd373f5c42b36e7a82347d1025738a3e61e9f6bddba248484f8b3', 256, 171, 0, 255],
+  'leather_cap-icon-v1.png': ['c4a0dcb00179dee862caca93b4c624775e77fa73d15f229029f91eecf30cefd9', 256, 256, 0, 255],
+  'leather_gloves-icon-v1.png': ['3f35018d1dfcc6f8424fa851c10c222af55621b3eaa04add39f83f30e00ca00c', 256, 171, 0, 255],
+  'oak_staff-redesign-v3.png': ['7ca28e816c0672150a80868d3829c5c1900ce309bb01bf1f1a11d9d2eafdea7b', 256, 256, 0, 255],
+  'recurve-bow-redesign-v2.png': ['d7b55b9e18543a97b9d2ae1a948559a1caaf35588641f5289e7274e1c1339887', 256, 256, 0, 255],
+  'runed_staff-redesign-v5.png': ['a788ada3ac972a22464b4932293eaf49dc863622a93468b7b089f872890e251e', 256, 256, 0, 255],
+  'silver_ring-icon-v1.png': ['11e827a9ddc074ea19de09fa585f31a17c393f68668ce427858c15f2c193b638', 256, 256, 0, 255],
+  'steel-full-helm-icon-v1.png': ['64e8caa890fadb53621a940ad79321d28087b580453b60cae8b2b59c50aab128', 256, 256, 0, 255],
+  'steel-longsword-icon-v1.png': ['5c3e2403e95684544686afc3190bbc043f34996207b46691095caf6adce673ff', 256, 256, 0, 255],
+  'steel-medhelm-icon-v1.png': ['2cd2ac075e48690f34d5dd4b1f5a7b422ad0834954a130046935353a623c1a28', 256, 256, 0, 255],
+  'steel-pickaxe-icon-v2.png': ['58f1163c918defe4652d0309da8d6fbcb5e5851fe4a628a1b368a90233c0e249', 256, 256, 0, 255],
+  'steel-platebody-clearance-v3.png': ['29780a17f836a7a06fb5627c6598a47e6ff738140a04d3326f55d3bf90bb3d78', 256, 256, 0, 255],
+  'steel-sword-icon-v1.png': ['fbddaec509382aa710edbcb5bd1a7f8650061629d960dda6669a5a74f9bbc66c', 256, 256, 0, 255],
+  'steel_boots.png': ['c4cd3d1f5373e8863e6bf44a1d537af265f848c6c0fd7fff48083041376b17bf', 256, 256, 0, 255],
+  'steel_chainbody.png': ['d7b717cd532ff2d74c91c63a8812ed8051a8517a9859a3b17e9a8889f8786dc1', 256, 256, 0, 255],
+  'steel_gauntlets-v2.png': ['9d200508b9824bcd194d8950118908e6ad025650fae6813992f5b5e5bf5fa97a', 256, 256, 0, 255],
+  'worn-bow-redesign-v2.png': ['d200c7efd1418f38addd7a9c06924bab07704a90f3cf83b27b23675ac93279a2', 256, 256, 0, 255],
+  'wyrmbone-harness-redesign-v1.png': ['6e4d69519b696e65d30d84ef228f16e8d9b81303b367c7a88d01f0014fb8ba5e', 256, 256, 0, 255],
 };
 
 const art = (file: string) => `./${APPROVED_DIR}/${file}`;
@@ -317,22 +316,22 @@ describe('approved files', () => {
     expect(readdirSync(join('public', APPROVED_DIR)).sort()).toEqual([...APPROVED_FILES].sort());
   });
 
-  it('are the exact supplied bytes', () => {
+  it('are the exact shipped bytes', () => {
     for (const file of APPROVED_FILES) expect(createHash('sha256').update(read(file)).digest('hex'), file).toBe(META[file][0]);
   });
 
-  it('are PNGs at their supplied sizes: 1254×1254, the leather gloves and boots 1536×1024', () => {
+  it('are PNGs at 256 px: 256×256, the leather gloves and boots 256×171', () => {
     for (const file of APPROVED_FILES) {
       const png = read(file);
       expect(png.subarray(0, 8).toString('hex'), file).toBe('89504e470d0a1a0a');
       expect(png.subarray(12, 16).toString('ascii'), file).toBe('IHDR');
       expect([png.readUInt32BE(16), png.readUInt32BE(20)], `${file} size`).toEqual([META[file][1], META[file][2]]);
     }
-    const wide = APPROVED_FILES.filter((f) => META[f][1] !== 1254 || META[f][2] !== 1254);
+    const wide = APPROVED_FILES.filter((f) => META[f][1] !== 256 || META[f][2] !== 256);
     expect(wide.sort()).toEqual(['leather_boots-icon-v1.png', 'leather_gloves-icon-v1.png']);
   });
 
-  it('keep their supplied alpha, decoded pixel by pixel: 0-255, the leather gloves and boots 0-254', () => {
+  it('keep their transparency, decoded pixel by pixel: alpha 0-255', () => {
     for (const file of APPROVED_FILES) {
       const png = read(file);
       // Colour type 6 (truecolour + alpha) or 4 (greyscale + alpha): transparency is in every pixel.

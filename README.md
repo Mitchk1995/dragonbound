@@ -57,4 +57,4 @@ npm test          # logic tests (XP, drops, recipes, saves, zone pathing, data i
 
 ## Contributing
 
-GitHub flow: branch → PR → CI (typecheck, tests, build, encoding) → review → squash-merge. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Rules for anyone (or any agent) working on the game are in [AGENTS.md](AGENTS.md).

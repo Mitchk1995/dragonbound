@@ -128,4 +128,4 @@ No game upload, hosting, deployment, rebuild or new heavy job occurs for this pl
 
 Cleaned 2026-10-01. Every branch with work had already merged as PRs #1-#43. The 35 stale agent worktrees were removed and 76 merged or scratch branches deleted; each is bookmarked first as `refs/archive/2026-10-01/branches/<name>` (restore with `git branch <name> refs/archive/2026-10-01/branches/<name>`). The recovery snapshot and the blueprint agents' run logs moved to `D:\dragonbound-archive`.
 
-Working rules from here: one agent writes to `D:\gameplanning` at a time; each piece of work goes on its own branch and lands through a PR; nothing is left uncommitted on `main`. Keep decisions in this plan; the review trail is in [history/CODEX-CLAUDE.md](history/CODEX-CLAUDE.md).
+Working rules live in [AGENTS.md](../AGENTS.md). The review trail is in [history/CODEX-CLAUDE.md](history/CODEX-CLAUDE.md).
