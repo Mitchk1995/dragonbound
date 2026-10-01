@@ -87,16 +87,10 @@ svg { display: block; }
   display: grid; place-items: center; pointer-events: auto; cursor: pointer;
 }
 .slot img { width: 100%; height: 100%; image-rendering: auto; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.7)); }
-/* Approved painted artwork (approvedArt.ts) leaves a wider margin round its subject than the rendered icons fill to
-   (94%): shown a little larger so it carries the same weight in a slot. The file itself is drawn whole and untouched,
-   at its own aspect: the leather gloves and boots are 256×171, letterboxed across the slot's width. */
-.slot img.art, .dragghost img.art { object-fit: contain; transform: scale(1.1); }
-/* The steel gauntlets' subject spans ~71% of its canvas against ~92% for the other three tiers' gauntlets: drawn
-   larger so the pair is as wide in its slot as theirs. */
-.slot img.art[src$="/steel_gauntlets-v2.png"], .dragghost img.art[src$="/steel_gauntlets-v2.png"] { transform: scale(1.4); }
-/* The bows, staves, Emberforged Longsword, the five uniques and the two amulets fill ~93-97% of their canvas, tip to
-   tip: at full size they already carry the others' weight, and enlarged their tips would cross the slot's rim. */
-:is(.slot, .dragghost) img.art:is([src$="/ember_longsword-icon-v2.png"], [src$="/worn-bow-redesign-v2.png"], [src$="/hunter-bow-redesign-v2.png"], [src$="/recurve-bow-redesign-v2.png"], [src$="/drakebone-bow-redesign-v2.png"], [src$="/oak_staff-redesign-v3.png"], [src$="/apprentice_staff-redesign-v5.png"], [src$="/runed_staff-redesign-v5.png"], [src$="/ember_staff-redesign-v6.png"], [src$="/cinderfang-redesign-v1.png"], [src$="/ashen-crown-redesign-v1.png"], [src$="/wyrmbone-harness-redesign-v1.png"], [src$="/emberstring-aligned-v2.png"], [src$="/kindled-ash-aligned-v2.png"], [src$="/bone_amulet-icon-v1.png"], [src$="/jade_amulet-icon-v1.png"]) { transform: none; }
+/* Approved painted artwork (approvedArt.ts) is drawn whole, at its own aspect (the leather gloves and boots are 256×171,
+   letterboxed). The files fill their canvas by different amounts, so dom.ts fits each one: its subject fills the same
+   share of the slot, centred, and never crosses the rim. */
+.slot img.art, .dragghost img.art { object-fit: contain; }
 .slot.empty { cursor: default; }
 .slot.empty svg { opacity: 0.9; }
 .slot .qty { position: absolute; left: 3px; top: 1px; font-size: 12px; font-weight: 700; color: #ffe86a; text-shadow: 0 1px 1px #000, 0 0 2px #000; }
@@ -379,20 +373,24 @@ svg { display: block; }
   box-shadow: 0 0 0 1px #0a0705, inset 0 0 0 1px #0d0a07, inset 0 0 0 2px rgba(216,178,90,0.1), 0 14px 40px rgba(0,0,0,0.7);
 }
 .stitle { font-family: 'Palatino Linotype', Georgia, serif; font-size: 17px; line-height: 18px; color: #ecd7a4; text-shadow: 0 1px 2px #000; margin: 0 0 5px 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The tabs stand on top of the case like folder tabs, spanning its full width (flush with its rim): the open one is\n   taller, lit, and opens into the case below. */
+/* The tabs stand on top of the case like folder tabs, spanning its full width, cut from the same stone with the same
+   bronze rim: the closed ones sit behind the case's rim, darker; the open one is taller and runs on into the case. */
 .stabs { position: absolute; left: -1px; right: -1px; bottom: calc(100% - 1px); display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; align-items: end; }
 .stab {
-  position: relative; height: 42px; padding: 0; display: grid; place-items: center; border-radius: 7px 7px 0 0;
-  background: linear-gradient(#2e2924, #1a1612); border: 1px solid #6a5434; border-bottom: none;
-  box-shadow: inset 0 1px 0 rgba(255,235,200,0.1), inset 0 -4px 6px rgba(0,0,0,0.5), 0 -2px 8px rgba(0,0,0,0.45);
+  position: relative; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 7px 7px 0 0;
+  background: linear-gradient(rgba(16,13,10,0.94), rgba(10,8,6,0.96)), var(--tex-stone) repeat;
+  border: 1px solid #6e5730; border-bottom: none;
+  box-shadow: inset 0 0 0 1px #0d0a07, inset 0 1px 0 1px rgba(216,178,90,0.08), inset 0 -6px 8px rgba(0,0,0,0.5);
 }
-.stab svg, .stab img { width: 32px; height: 32px; filter: saturate(0.55) brightness(0.78); transition: filter 0.1s; }
-.stab:hover { border-color: #a8864a; }
-.stab:hover svg, .stab:hover img { filter: none; }
-.stab.on { height: 48px; background: linear-gradient(#74401c, rgb(26,21,16)); border-color: #c89a48; box-shadow: inset 0 1px 0 rgba(255,220,150,0.35), inset 0 6px 10px rgba(255,160,60,0.25), 0 -2px 10px rgba(216,178,90,0.3); }
-.stab.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -2px; height: 3px; background: rgb(26,21,16); }
-.stab.on svg, .stab.on img { width: 34px; height: 34px; filter: drop-shadow(0 0 3px rgba(255,200,120,0.5)); }
-.sbody { height: calc(7 * var(--slot) + 6 * var(--inv-gap) + var(--inv-foot)); padding: 0 1px; overflow-x: hidden; }
+.stab svg, .stab img { width: 32px; height: 32px; filter: saturate(0.5) brightness(0.62); transition: filter 0.1s; }
+.stab:hover { border-color: #94743f; }
+.stab:hover svg, .stab:hover img { filter: saturate(0.85) brightness(0.9); }
+.stab.on {
+  z-index: 1; height: 47px; top: 2px; border-color: #94743f;
+  background: linear-gradient(rgba(26,21,16,0.9), rgba(26,21,16,0.9)), var(--tex-stone) repeat;
+  box-shadow: inset 0 0 0 1px #0d0a07, inset 0 1px 0 1px rgba(216,178,90,0.22), 0 -3px 10px rgba(0,0,0,0.5);
+}
+.stab.on svg, .stab.on img { width: 34px; height: 34px; filter: drop-shadow(0 0 3px rgba(255,200,120,0.35)); }.sbody { height: calc(7 * var(--slot) + 6 * var(--inv-gap) + var(--inv-foot)); padding: 0 1px; overflow-x: hidden; }
 /* The inventory never scrolls, so the selected slot's glow may spill past its edge rather than be cut off. */
 .sidepanel[data-view="inventory"] .sbody { overflow: visible; }
 .sidepanel.collapsed .sbody { display: none; }
@@ -400,7 +398,7 @@ svg { display: block; }
   .sidepanel { --inv-gap: 5px; --inv-foot: 42px; }
   .stitle { font-size: 15px; line-height: 16px; margin-bottom: 4px; }
   .stab { height: 38px; }
-  .stab.on { height: 43px; }
+  .stab.on { height: 44px; }
   .stab svg, .stab img { width: 28px; height: 28px; }
   .stab.on svg, .stab.on img { width: 30px; height: 30px; }
 }

@@ -48,8 +48,8 @@ const ITEM_ART = new Map<string, string>([
   ['ember_boots', 'ember_boots-icon-v1.png'],
   ['ember_pickaxe', 'ember_pickaxe-icon-v1.png'],
   // The four bows and four staves.
-  ['worn_bow', 'worn-bow-redesign-v2.png'],
-  ['hunter_bow', 'hunter-bow-redesign-v2.png'],
+  ['worn_bow', 'worn-bow-tilted-v3.png'],
+  ['hunter_bow', 'hunter-bow-tilted-v3.png'],
   ['recurve_bow', 'recurve-bow-redesign-v2.png'],
   ['drakebone_bow', 'drakebone-bow-redesign-v2.png'],
   ['oak_staff', 'oak_staff-redesign-v3.png'],
@@ -87,7 +87,7 @@ const UNIQUE_ART = new Map<string, string>([
   ['cinderfang', 'cinderfang-redesign-v1.png'],
   ['ashen_crown', 'ashen-crown-redesign-v1.png'],
   ['scaleguard', 'wyrmbone-harness-redesign-v1.png'],
-  ['emberstring', 'emberstring-aligned-v2.png'],
+  ['emberstring', 'emberstring-tilted-v3.png'],
   ['kindled_ash', 'kindled-ash-aligned-v2.png'],
 ]);
 
