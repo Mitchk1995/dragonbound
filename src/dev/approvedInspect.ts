@@ -40,7 +40,7 @@ import { Studio, equip, fit } from './inspect';
 const tier = (t: TierId) => PIECES.map((p) => pieceId(t, p.key));
 const ROUTED = (id: string) => !!itemArtUrl(makeItem(id));
 const EQUIPMENT = BASE_LIST.filter((b) => b.kind === 'gear' || b.kind === 'tool').map((b) => b.id);
-const BOWS_STAVES = BASE_LIST.filter((b) => b.model === 'bow' || b.model === 'staff').map((b) => b.id);
+const BOWS_STAVES = BASE_LIST.filter((b) => b.model?.startsWith('bow_') || b.model?.startsWith('staff_')).map((b) => b.id);
 const LEATHER = ['leather_cap', 'leather_body', 'leather_gloves', 'leather_boots'];
 const JEWELLERY = BASE_LIST.filter((b) => b.slot === 'amulet' || b.slot === 'ring').map((b) => b.id);
 /** Not equipment: these keep their rendered icons. */

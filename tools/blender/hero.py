@@ -67,7 +67,7 @@ def build_hero(scene_name='DB_hero'):
     box(head, (0.12, 0.025, 0.02), (0, 0.11, 0.232), MOUTH, bevel=0)                 # mouth
     pivot(head, 'sock_head', (0, 0.24, 0))
 
-    # Arms: short sleeve, bare forearm, big hands with thumbs. armL on +X, armR on -X.
+    # Arms: short sleeve, bare forearm, big thumbless block hands. armL on +X, armR on -X.
     for name, x in (('armL', 0.47), ('armR', -0.47)):
         s = 1 if x > 0 else -1
         a = pivot(body, name, (x, 0.62, 0))
@@ -76,7 +76,6 @@ def build_hero(scene_name='DB_hero'):
         box(a, (0.19, 0.26, 0.21), (0, -0.41, 0), R.skin, bevel=0.03)               # forearm
         box(a, (0.2, 0.05, 0.22), (0, -0.5, 0), R.leather, bevel=0.012)             # wrist wrap
         box(a, (0.26, 0.24, 0.26), (0, -0.64, 0), R.skin, bevel=0.06)               # hand
-        box(a, (0.08, 0.13, 0.09), (-s * 0.07, -0.6, 0.14), R.skin, rot=(0.3, 0, 0), bevel=0.025)  # thumb
         if s > 0:
             pivot(a, 'sock_handL', (0, -0.63, 0))
         else:

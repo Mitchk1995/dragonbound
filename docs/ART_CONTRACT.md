@@ -4,12 +4,17 @@ Every model is a Python script in `tools/blender/` using `_common.py`, exported 
 Scripts read and write the checkout named by the `DRAGONBOUND_ROOT` environment variable (else the one two folders
 above the script, else `D:\gameplanning`), so set it when working in a worktree. Headless re-export, e.g.:
 `blender -b --python-expr "exec(open(r'<root>\tools\blender\minions.py').read())"`; for gear, set
-`DB_ONLY = ['staff']` before the `exec` to export only those models.
+`DB_ONLY = ['staff_oak']` before the `exec` to export only those models.
 Scripts author inside a root rotated +90° about X, so **all coordinates are three.js: Y up, +Z forward**.
 Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 
 Style: chunky stylized fantasy low-poly (Warcraft 3 / Torchlight). Flat shading, bold silhouettes, oversized
 hands/weapons/pauldrons, 1–2 accent colours. Keep each model under ~3k triangles.
+
+**Every item model matches its approved icon** (`public/icons/approved`, owner's rule): same silhouette, parts and
+colours. Collars, cuffs and boot tops are open (`open_box`: closed walls round a dark sunk floor). Characters have no
+thumbs, so gloves and gauntlets are thumbless mitten blocks. Each bow and staff tier has its own model.
+
 Mostly blocky and modular, not dogmatically: use organic shapes where they look better (e.g. bat wings, hair,
 trees, flames). Blocks are the default where scripted geometry shines (armour, helms, weapons, NPC/enemy bodies,
 belts, trims): chamfered boxes (`box(... bevel=)`), stacked slabs, wedges and tapered blocks (`beam`), cut gems

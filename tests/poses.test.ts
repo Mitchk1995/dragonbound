@@ -66,7 +66,7 @@ const deg = (v: number) => (Math.asin(Math.max(-1, Math.min(1, v))) * 180) / Mat
 
 describe('pose audit: models loaded', () => {
   it('uses the exported hero, gear and dragons (not placeholders)', () => {
-    for (const n of ['hero', 'gear_sword', 'gear_longsword', 'gear_bow', 'gear_staff', 'gear_body_plate', 'cinderwing', 'drakeling', 'whelp']) expect(hasModel(n), n).toBe(true);
+    for (const n of ['hero', 'gear_sword', 'gear_longsword', 'gear_bow_worn', 'gear_staff_apprentice', 'gear_body_plate', 'cinderwing', 'drakeling', 'whelp']) expect(hasModel(n), n).toBe(true);
   });
   it('merges anonymous rigid parts per rig node and material (draw calls)', () => {
     const count = (name: string) => {

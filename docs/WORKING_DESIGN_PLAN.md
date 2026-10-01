@@ -11,6 +11,7 @@ Updated 2026-10-01. This is the single current plan: a decision record for brain
 - Dependable crafted base gear; loot provides rarity, bonuses and eventually skill-changing excitement. **Both crafted and dropped gear can be upgraded.** The endorsed example is a mythic bronze helmet much better than plain crafted bronze and still upgradeable. “Mythic” is an example, not a rarity category already implemented.
 - Optional absurdist, overly silly long quest chains: escalating difficult tasks, large rewards, characters, hidden discoveries and a funny/mysterious mix. No quest prose is being settled now.
 - Preserve the current portal visuals: the user likes them, and they can be a visual anchor.
+- **3D item models match their approved icons.** Characters have no thumbs. Done 2026-10-01 for every piece of equipment and every unique (open collars, cuffs and boot tops; thumbless hands and gauntlets; the Ashen Crown as an open circlet over the hair; one model per bow and staff tier). New items get an approved icon first and a model that matches it.
 - A larger, organic/irregular home island and settlement is the confirmed preference, rather than a large circular island. Its exact outline, scale and district layout remain unchosen.
 - Make the castle functional and believable first: rooms need clear purposes rather than duplicate/scattered filler. A king and further story are planned later; this pass does not invent them.
 - **Blueprint first, builder follows the plan.** Set floor plans, room functions, circulation and connections before facade/detail or object placement; the builder should not invent a random layout while constructing it. The user is open to nonrectangular castle shapes, towers and wings, but no alternative outline is selected.
@@ -123,7 +124,6 @@ No game upload, hosting, deployment, rebuild or new heavy job occurs for this pl
 ## Still open from earlier plans
 
 - Blender-made world props with ruined/restored states (the last open item of the [art fix plan](history/ART_FIX_PLAN.md), phase 3).
-- **Armour models to match the approved icons (awaiting owner):** an open collar on the plate bodies instead of the solid neck cap, and thumbless mitten gauntlets like the approved gauntlet icons. Both are worked out but not built; they affect the bronze, iron, steel and Emberforged sets.
 
 ## Repository hygiene
 
