@@ -9,17 +9,59 @@ This reference brings the agreed direction, working ideas and open choices toget
 
 **This is the single design plan.** Any agent (Claude or Codex) that hears a decision from Mitchell records it here, in the same session; decisions that only live in a chat get lost. Newer direct decisions take precedence over older text, so record what changed, in the section below or in place.
 
-## Updates since this document
+## Latest decisions (Round 5, October 1 evening)
 
-Afternoon of October 1, 2026, after Dot's document was written.
+Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9tn49GokkaidH3zQhe). They take precedence over anything older in this document; sections below that they change are marked.
 
-- **3D item models match their approved icons.** Done in the game for every piece of equipment and every unique: open collars, cuffs and boot tops with a dark inside; thumbless gloves and gauntlets; one model per bow tier and per staff tier; bone horns on the Emberforged helm. New items get an approved icon first, then a model that matches it ([art contract](ART_CONTRACT.md)).
-- **Hands: needs Mitchell's confirmation.** Mitchell said "our characters have no thumbs", so the hero's and the cultist's thumbs were removed. This document says thumbless gauntlets "do not change the base hero's anatomy". Confirm which stands; restoring the thumbs is a small change.
-- **Ashen Crown: redesign.** The open circlet built to match its icon looked too big and weird in the game. It has been shrunk as a stand-in. Next: a new crown design generated with Codex (concept, then icon), reviewed by Mitchell, then a matching model.
-- **Bow draw fixed.** The string now stays in the drawing hand through the whole draw. Before, it floated between the bow and the hand until the moment of release.
-- **Image generation.** Use Codex image generation for design work when it helps (concepts, icons, mockups). Mitchell reviews images in batches before anything is integrated (see "Generated icons tied to the equipment").
-- **Already in the game:** the approved cleaner HUD, the approved inventory panel and all 58 approved equipment icons; combat with no stance selector; the current two-floor keep. The castle-v2 and home-island-v1 blueprints exist as proposals only ([blueprints](blueprints/)).
-- **Still open from earlier plans:** world props built in Blender with ruined and restored states.
+### The game's scale and shape
+
+- **A thousands-of-hours game that keeps growing.** Levelling should be a real grind: as long as OSRS or longer. Most games make levelling too easy; this one must not.
+- **The levels 1–10 region takes about 40 hours**, not 8–12: a big area with lots to do. Its route uses three bands (1–3 near the portal with a miniboss, 4–6 in the open middle with the mine entrance, 7–10 in the deep end with the region boss). "Levels 1–10" means combat level (weapon style, Hitpoints and Defence together); the region is complete when its final boss and core quests are done, not when a number is reached.
+- **Main area plus rift dungeons.** The main region is where you progress through the story and quests. Alongside it, **procedural rift dungeons** can be ground for levels and loot: you tear open a temporary dimension to train in (like the Hyperbolic Time Chamber), so slow early levels stay fun because you're also grinding for cooler gear. Procedural areas must still feel purposeful, not random filler. Optional absurd quest chains still apply on top.
+- **A main story.** Claude drafts it and evolves it as the game grows; Mitchell is creative director. The dimensional rupture stays the working premise; how it connects to dragons stays open.
+
+### Classes, builds and controls (new)
+
+- **Classes.** You choose a class at character creation, and more advanced classes can be picked up later. This replaces "every style gets early gear somehow": your class decides your starting kit.
+- **Builds are the heart of replay.** Skill trees inside each class, elements and elemental combinations, mixed classes and elements, many viable builds (Chronomancer-style variety). Every new character should feel like a different game. Balance needs a good way to test builds.
+- **A summoner class later**, built around dragon whelplings and summons.
+- **Controls:** Space is a dodge roll toward the cursor (shared by every class; it replaces "shared dodge vs per-style escapes"), Q drinks a health potion, number keys fire abilities, with a limited number of abilities on the bar. Movement must feel nice.
+- **Combat looks flashy:** strong hit effects and good damage numbers.
+- **Flinch:** solid hits flinch ordinary enemies; heavy enemies build a stagger meter; bosses stagger at set moments. Don't add flinch resistance by default: in Diablo II you can keep a zombie flinching as long as you keep hitting it, and resistance could break fast attack speeds. Revisit only if playtesting shows a problem.
+- **Unique and exceptional items carry extra effects:** cool combos, elemental effects, unique abilities. A fully reinforced mythic bronze item can match a plain iron one, not a plain steel one.
+- **Skill-icon colours** wait until classes and elements are designed.
+
+### Loot and upgrades
+
+- Rarity: Normal, Magic, Rare, Unique, Mythic. Reinforce +1 to +10 with bars of the item's own metal, rising in cost; no transfer between items.
+
+### World, island and castle
+
+- **Home island v1 and castle v2 are approved to build**, island first, then the castle on its spur. Before building the island, check its proportions against the castle, the camera and walking distances, and adjust until it makes sense.
+- **Mine:** the region's mine is a real entrance in the middle band; you come back out where you went in; enemies respawn on a timer and ore regrows per rock. Ore goes into the walls as veins, one ore per vein, with a better look: no single ore in two distinct colours, no chunky multi-coloured lumps. Fix the anvil and the smithy yard as part of the island rebuild.
+- **Keep what makes sense, not by habit:** banquet tables only where a room needs them; the red-and-gold banners are not required; the portals stay (liked a lot) but can be moved wherever makes sense. Doors open on click and close behind you; interactive stations are the bank, furnace, anvil, shop and portal circle.
+
+### Art pipeline and approval
+
+- **New pipeline:** image generation (with examples of our art as reference) produces the item concept, the 3D model is built from that image, then the icon is made from the model. Mitchell reviews images in batches.
+- **No 3D model is approved yet.** Before approving a model, Mitchell needs proof: in-game, textured renders shown at the same angle as the approved image. Flat untextured previews don't count.
+- **Current model problems to fix:** the bows don't match their images at all; the staves can't be judged without textures; gauntlet shapes and textures aren't good enough; Emberforged armour and the uniques don't look as good as their image-gen versions; helmets were missing from the review; the leather body's front strap should be removed; the Ashen Crown needs a real redesign (its approved icon image exists as a starting point).
+- **Characters have no thumbs**, which suits the art style. Real hands may come later when characters are improved.
+- **Icons are needed for materials and quest items too**; the ore icons don't look right in the inventory.
+- **The inventory must match its approved mockup more closely:** the panel outline, and the icon size and layout (they look small).
+- **Bow draw:** the draw must pull one string from its middle, with the arrow level and pointing at the target.
+
+### Order of work
+
+1. Build the home island, then the castle.
+2. Blueprint the levels 1–10 region.
+3. Combat feel pass.
+
+Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
+
+### Already done before Round 5
+
+Equipment models were rebuilt toward their icons (open collars, cuffs and boot tops; thumbless hands; one model per bow and staff tier), the bow string was kept in the hand, the crown shrunk as a stand-in, the approved HUD, inventory panel and 58 icons are in the game, and combat has no stance selector. Still open from earlier plans: world props built in Blender with ruined and restored states.
 
 ## Levels 1 to 10
 
@@ -307,21 +349,15 @@ The preferred tree option recorded as B is part of the existing visual reference
 
 ## Decisions still to make
 
-The following choices remain open. They should be resolved as connected parts of the first region and its home settlement rather than silently filled in during construction.
-1. What does levels 1–10 measure, and what marks completion of the region beyond reaching a number?
-1. What is the connected route through encounters, gathering, equipment, quests and discoveries, and how long should the full adventure take?
-1. Which early enemies, minibosses, quests and rewards belong in each part of the region? The level 1–2 example still needs a concrete design.
-1. Where are mine entrances and return points, and what persists or resets during travel?
-1. What flinch triggers, recovery times and repeat-interruption rules create fair kiting? How do heavy enemies and bosses respond?
-1. Does every style receive a shared limited dodge, or do distinct escape tools provide the answer? How do warnings and attack commitment fit?
-1. What are the final rarity names, reinforcement materials, costs, scaling and limits? Do upgrades transfer or refund?
-1. How strong can an exceptional early-material item become relative to equally invested later gear, and how do affixes scale?
-1. How does each combat style reliably obtain early equipment, especially ranged and magic?
-1. Which quests form the core route, which chains remain optional, and which secrets continue into future regions?
-1. What island footprint and castle blueprint are selected? Confirm the revised training-yard clearance and wall-walk stairs, courtyard circulation, door destinations and room functions.
-1. Can castle doors also close, and which workstations or furnishings are interactive?
-1. What final skill-icon background colors and tier-specific equipment shapes should be used?
-1. How does the dimensional rupture connect to dragons and increasing difficulty? This can remain open while the first region develops.
+Answered in Round 5 (see "Latest decisions"): the meaning of levels 1–10 and region completion, the route and its length, the levels 1–2 area as the first concrete design, mine entrances and resets, flinch, dodge, rarity and reinforcement, early-item strength, starting gear (by class), core and optional content (main area plus rift dungeons), island and castle selection, doors and stations.
+
+Still open:
+1. The class roster, each class's skill tree, the element system and how classes and elements mix.
+2. How rift dungeons are generated, rewarded and kept purposeful.
+3. The levels 1–2 area in full: its miniboss, quests and secret.
+4. The XP curve and numbers that make the region take about 40 hours.
+5. Skill-icon colours, once classes and elements exist.
+6. How the dimensional rupture connects to dragons and difficulty (can stay open).
 
 ## Existing item reference
 

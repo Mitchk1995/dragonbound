@@ -104,6 +104,18 @@ export interface BowFacts {
   arrowForward: number | null;
   /** Distance from the nock (end of the string halves) to the draw hand. */
   nockToHand: number | null;
+  /** How far the nock sits above the middle of the string, along the bow (0 = pulled from the centre). */
+  nockAboveMiddle: number | null;
+  /** Vertical component of the arrow's direction (0 = level). */
+  arrowRise: number | null;
+}
+
+/** Along-the-bow offset of the nock from the middle of the two string halves (each starts at a bow tip). */
+function nockHeight(strings: THREE.Mesh[]) {
+  const top = strings[0].getWorldPosition(new THREE.Vector3()), bottom = strings[1].getWorldPosition(new THREE.Vector3());
+  const nock = strings[0].localToWorld(new THREE.Vector3(0, 1, 0));
+  const axis = top.clone().sub(bottom).normalize();
+  return nock.sub(top.add(bottom).multiplyScalar(0.5)).dot(axis);
 }
 
 export function bowFacts(root: THREE.Object3D, drawHand: THREE.Object3D): BowFacts | null {
@@ -133,5 +145,7 @@ export function bowFacts(root: THREE.Object3D, drawHand: THREE.Object3D): BowFac
     arrowVisible: !!arrow?.visible,
     arrowForward: arrow?.visible ? new THREE.Vector3(0, 1, 0).transformDirection(arrow.matrixWorld).z : null,
     nockToHand: strings.length ? strings[0].localToWorld(new THREE.Vector3(0, 1, 0)).distanceTo(hand) : null,
+    nockAboveMiddle: strings.length === 2 ? nockHeight(strings) : null,
+    arrowRise: arrow?.visible ? new THREE.Vector3(0, 1, 0).transformDirection(arrow.matrixWorld).y : null,
   };
 }
