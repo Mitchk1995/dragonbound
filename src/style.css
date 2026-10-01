@@ -372,7 +372,7 @@ svg { display: block; }
   background: linear-gradient(rgba(26,21,16,0.9), rgba(15,12,9,0.95)), var(--tex-stone) repeat;
   box-shadow: 0 0 0 1px #0a0705, inset 0 0 0 1px #0d0a07, inset 0 0 0 2px rgba(216,178,90,0.1), 0 14px 40px rgba(0,0,0,0.7);
 }
-.stitle { font-family: 'Palatino Linotype', Georgia, serif; font-size: 17px; line-height: 18px; color: #ecd7a4; text-shadow: 0 1px 2px #000; margin: 0 0 5px 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stitle { font-family: 'Palatino Linotype', Georgia, serif; font-size: 17px; line-height: 22px; color: #ecd7a4; text-shadow: 0 1px 2px #000; margin: 0 0 1px 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The tabs stand on top of the case like folder tabs, spanning its full width, cut from the same stone with the same
    bronze rim: the closed ones sit behind the case's rim, darker; the open one is taller and runs on into the case. */
 .stabs { position: absolute; left: -1px; right: -1px; bottom: calc(100% - 1px); display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; align-items: end; }
@@ -388,7 +388,8 @@ svg { display: block; }
 .stab.on {
   z-index: 1; height: 47px; top: 2px; border-color: #94743f;
   background: linear-gradient(rgba(26,21,16,0.9), rgba(26,21,16,0.9)), var(--tex-stone) repeat;
-  box-shadow: inset 0 0 0 1px #0d0a07, inset 0 1px 0 1px rgba(216,178,90,0.22), 0 -3px 10px rgba(0,0,0,0.5);
+  /* Dark edge and gold hairline on the top and sides only: nothing along the bottom, where it opens into the case. */
+  box-shadow: inset 1px 0 0 #0d0a07, inset -1px 0 0 #0d0a07, inset 0 1px 0 #0d0a07, inset 0 2px 0 rgba(216,178,90,0.22), 0 -3px 10px rgba(0,0,0,0.5);
 }
 .stab.on svg, .stab.on img { width: 34px; height: 34px; filter: drop-shadow(0 0 3px rgba(255,200,120,0.35)); }.sbody { height: calc(7 * var(--slot) + 6 * var(--inv-gap) + var(--inv-foot)); padding: 0 1px; overflow-x: hidden; }
 /* The inventory never scrolls, so the selected slot's glow may spill past its edge rather than be cut off. */
@@ -396,7 +397,7 @@ svg { display: block; }
 .sidepanel.collapsed .sbody { display: none; }
 @media (max-height: 820px), (max-width: 1440px) {
   .sidepanel { --inv-gap: 5px; --inv-foot: 42px; }
-  .stitle { font-size: 15px; line-height: 16px; margin-bottom: 4px; }
+  .stitle { font-size: 15px; line-height: 20px; margin-bottom: 0; }
   .stab { height: 38px; }
   .stab.on { height: 44px; }
   .stab svg, .stab img { width: 28px; height: 28px; }
