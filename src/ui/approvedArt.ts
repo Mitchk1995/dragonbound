@@ -3,9 +3,9 @@ import type { Item } from '../types';
 /**
  * Painted artwork the owner approved (public/icons/approved), shown exactly as supplied in place of a generated
  * icon; the game draws the slot or tile behind it. Matched by exact id only: a unique by its own unique id (never its
- * base's), anything else by its base id. Every piece of equipment and every known unique is listed; whatever is not
- * (materials, quest items, an unknown unique) keeps its rendered icon. Files are 256 px on the long side: 256×256, but
- * the leather gloves and boots are 256×171 and are fitted whole, at their own aspect, by style.css.
+ * base's), anything else by its base id. Every item (equipment, materials, quest items) and every known unique is
+ * listed; an unknown unique keeps its rendered icon. Files are 256 px on the long side: 256×256, but the leather gloves
+ * and boots are 256×171 and are fitted whole, at their own aspect, by style.css.
  */
 export const APPROVED_DIR = 'icons/approved';
 
@@ -65,6 +65,21 @@ const ITEM_ART = new Map<string, string>([
   ['jade_amulet', 'jade_amulet-icon-v1.png'],
   ['copper_ring', 'copper_ring-icon-v1.png'],
   ['silver_ring', 'silver_ring-icon-v1.png'],
+  // Materials (ores, bars, uncut gems) and quest items.
+  ['copper_ore', 'copper_ore-icon-v1.png'],
+  ['tin_ore', 'tin_ore-icon-v1.png'],
+  ['iron_ore', 'iron_ore-icon-v1.png'],
+  ['coal', 'coal-icon-v1.png'],
+  ['emberite_ore', 'emberite_ore-icon-v1.png'],
+  ['bronze_bar', 'bronze_bar-icon-v1.png'],
+  ['iron_bar', 'iron_bar-icon-v1.png'],
+  ['steel_bar', 'steel_bar-icon-v1.png'],
+  ['ember_bar', 'ember_bar-icon-v1.png'],
+  ['uncut_sapphire', 'uncut_sapphire-icon-v1.png'],
+  ['uncut_emerald', 'uncut_emerald-icon-v1.png'],
+  ['uncut_ruby', 'uncut_ruby-icon-v1.png'],
+  ['seal_fragment', 'seal_fragment-icon-v1.png'],
+  ['cinder_key', 'cinder_key-icon-v1.png'],
 ]);
 
 /** By unique id. `scaleguard` is the Wyrmbone Harness's save id. */

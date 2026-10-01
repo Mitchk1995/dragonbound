@@ -64,11 +64,12 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
 - **Home island v1 at its built size is OK.**
 - **Props are single solid pieces**, not stacks of blocks: the Great Anvil is one forged piece on a plain stump. Nothing stands on a slab or platform that serves no purpose, and nothing passes through anything else.
 - **The forge yard was rebuilt from Codex concepts** (`docs/concepts/`): the anvil and the Emberforge hearth, whose chimney and bellows are part of it.
-- **The four bows were rebuilt from Codex turnarounds of their approved icons** (`docs/concepts/bow-*.jpg`): each bow's limbs are one smooth piece with the icon's curve and depth, with pointed tips. Awaiting Mitchell's approval against the icons.
+- **The four bows were rebuilt from Codex turnarounds of their approved icons** (`docs/concepts/bow-*.jpg`): each bow's limbs are one smooth piece with the icon's curve and depth, with pointed tips. Mitchell liked the Worn Shortbow and the Hunter's Bow; the Recurve and the Drakebone needed better shape and detail, so they were remade from limb shapes traced off their icons (true recurves: the limbs swing toward the string and the tips curl away).
+- **The 14 material and quest item icons are approved** (ores, bars, uncut gems, the Cinder Seal Fragment and the Cinder Key) and are in the game. Every item now has painted artwork.
 
 ### Already done before Round 5
 
-Equipment models were rebuilt toward their icons (open collars, cuffs and boot tops; thumbless hands; one model per bow and staff tier), the bow string was kept in the hand, the crown shrunk as a stand-in, the approved HUD, inventory panel and 58 icons are in the game, and combat has no stance selector. Still open from earlier plans: world props built in Blender with ruined and restored states.
+Equipment models were rebuilt toward their icons (open collars, cuffs and boot tops; thumbless hands; one model per bow and staff tier), the bow string was kept in the hand, the crown shrunk as a stand-in, the approved HUD, inventory panel and 58 icons are in the game (72 since the materials batch), and combat has no stance selector. Still open from earlier plans: world props built in Blender with ruined and restored states.
 
 ## Levels 1 to 10
 

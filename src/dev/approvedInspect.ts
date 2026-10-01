@@ -16,13 +16,13 @@ import { swapSlots } from '../ui/hudLayout';
 import { Studio, equip, fit } from './inspect';
 
 /**
- * `npm run inspect -- approved`: the approved artwork (58 files: all 52 pieces of equipment, the five uniques,
- * Cleave) in every real consumer, beside materials and quest items on their rendered icons. `approved:ui` captures
+ * `npm run inspect -- approved`: the approved artwork (72 files: all 52 pieces of equipment, 14 materials and quest
+ * items, the five uniques, Cleave) in every real consumer. `approved:ui` captures
  * the consumers (approved-01…): two inventories, equipment in each tier, item tooltips (the equipment one worn with
  * Cinderfang and the Ashen Crown), bank, shop sell mode, the anvil's four tier groups, the collection log, drag
  * ghost, the Cleave console tile (ready / cooling / no mana / hover / 720p), bank, equipment and anvil again at
- * 1280×720, then a close-up sheet per tier, one of the bows, staves and uniques, one of leather and jewellery with the
- * generated fallbacks, a third inventory of leather and jewellery (31), and last the approved inventory panel with a
+ * 1280×720, then a close-up sheet per tier, one of the bows, staves and uniques, one of leather and jewellery with
+ * materials and a quest item, a third inventory of leather and jewellery (31), and last the approved inventory panel with a
  * pressed item selected (32) and carried to its new slot by Sort (33). `approved:fit` captures the Steel Platebody's
  * fit as worn and dropped and the bare hand beside the gauntlets (approved-31…, unchanged: in a full run its first
  * captures share the numbers 31-33 with the last ui captures, under their own names). Captures are
@@ -43,8 +43,8 @@ const EQUIPMENT = BASE_LIST.filter((b) => b.kind === 'gear' || b.kind === 'tool'
 const BOWS_STAVES = BASE_LIST.filter((b) => b.model?.startsWith('bow_') || b.model?.startsWith('staff_')).map((b) => b.id);
 const LEATHER = ['leather_cap', 'leather_body', 'leather_gloves', 'leather_boots'];
 const JEWELLERY = BASE_LIST.filter((b) => b.slot === 'amulet' || b.slot === 'ring').map((b) => b.id);
-/** Not equipment: these keep their rendered icons. */
-const GENERATED = ['bronze_bar', 'copper_ore', 'uncut_ruby', 'cinder_key'];
+/** Materials and a quest item, carried beside the equipment. */
+const MATERIAL_SAMPLE = ['bronze_bar', 'copper_ore', 'uncut_ruby', 'cinder_key'];
 /** Every unique, each with its own approved artwork (by unique id, never its base's). */
 const UNIQUE_IDS = Object.keys(UNIQUES);
 /** The shipped size of each file: 256×256 but for the leather gloves and boots. */
@@ -176,7 +176,7 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
     // with the four bows, the Ashen Crown and Emberstring beside their approved bases, and a bronze bar; steel +
     // Emberforged with the four staves, Cinderfang, the Wyrmbone Harness and Kindled Ash beside theirs; then leather
     // and jewellery beside every tier's gauntlets and boots (the 256×171 leather pair among square pairs), with
-    // generated fallbacks. Checked in the order A, C, B, so B stays for the captures and drags that follow.
+    // materials and a quest item. Checked in the order A, C, B, so B stays for the captures and drags that follow.
     const INV_A = [
       ...[...tier('bronze'), ...tier('iron'), ...BOWS_STAVES.filter((id) => id.endsWith('_bow'))].map(make),
       ...['ashen_crown', 'emberstring'].map(unique),
@@ -192,9 +192,9 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
       ...['uncut_ruby', 'cinder_key'].map(make),
     ];
     {
-      // Between them: every piece of equipment, every unique, and the generated fallbacks.
+      // Between them: every piece of equipment, every unique, and the materials and quest item.
       const held = new Set([...INV_A, ...INV_B, ...INV_C].map((it) => it.unique ?? it.base));
-      for (const id of [...EQUIPMENT, ...UNIQUE_IDS, ...GENERATED]) if (!held.has(id)) problems.push(`fixture: ${id} in no inventory`);
+      for (const id of [...EQUIPMENT, ...UNIQUE_IDS, ...MATERIAL_SAMPLE]) if (!held.has(id)) problems.push(`fixture: ${id} in no inventory`);
     }
     const setInv = (list: Item[]) => {
       if (list.length > g.save.inventory.length) problems.push(`fixture: ${list.length} items for ${g.save.inventory.length} slots`);
@@ -343,7 +343,7 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
     await worn('jade_amulet + silver_ring', ['jade_amulet', 'silver_ring']);
     equip(g, { ...loadout('steel', true), amulet: null, ring: null });
 
-    // Bank: every piece of equipment, every unique and a fallback (58 of 120; the audit reads every slot, scrolled
+    // Bank: every piece of equipment, every unique and a bar (58 of 120; the audit reads every slot, scrolled
     // into view or not), inventory B beside.
     g.save.bank.length = 0;
     g.save.bank.push(
@@ -377,11 +377,10 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
       ui.closeCraftMenu();
     } else problems.push('anvil: none in the keep');
 
-    // The collection log draws uniques and gems only: all five uniques show their own artwork, the gems their
-    // rendered icons.
+    // The collection log draws uniques and gems only, each with its own artwork.
     ui.openBook('collection');
     await frames(3);
-    checks.collection = await audit('collection', document.querySelector('#panel-book'), UNIQUE_IDS.map((id) => fileOf(itemArtUrl(unique(id)))!));
+    checks.collection = await audit('collection', document.querySelector('#panel-book'), [...UNIQUE_IDS.map((id) => fileOf(itemArtUrl(unique(id)))!), ...['uncut_sapphire', 'uncut_emerald', 'uncut_ruby'].map((id) => fileOf(itemArtUrl(makeItem(id)))!)]);
     {
       // Entry by entry (the log's slots carry no item data): each unique's own picture, by its name.
       const shown = Object.fromEntries([...document.querySelectorAll<HTMLElement>('#panel-book .clog')].map((e) => [e.title.replace(/ \(.*\)$/, ''), fileOf(e.querySelector('img.art')?.getAttribute('src'))]));
@@ -499,7 +498,7 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
 
     // ─── Close-ups: real slot markup at 1× and 2.5×, beside the rendered icon each approved image replaces ───────
     // One sheet per tier (Cleave's tile with bronze), one of the bows, staves and uniques, then one of leather and
-    // jewellery with the generated fallbacks.
+    // jewellery with materials and a quest item.
     document.body.classList.add('inspect-clean');
     const rendered = (it: Item) => `<div class="slot r-${it.rarity} k-${BASES[it.base]?.kind ?? 'gear'}"><img src="${itemIconUrl(it)}" alt="" draggable="false"></div>`;
     const sheetOf = async (name: string, cols: number, rows: [string, Item][], withRendered: boolean, tile?: HTMLElement) => {
@@ -546,11 +545,10 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
         return [`${it.name} (unique on ${BASES[it.base].name})`, it];
       }),
     ], true);
-    // Leather (the gloves and boots 256×171, fitted whole) and jewellery, then materials and a quest item on their
-    // rendered icons.
-    closeup.leatherJewellery = await sheetOf('leather-jewellery-fallbacks', 4, [
+    // Leather (the gloves and boots 256×171, fitted whole) and jewellery, then materials and a quest item.
+    closeup.leatherJewellery = await sheetOf('leather-jewellery-materials', 4, [
       ...[...LEATHER, ...JEWELLERY].map((id): [string, Item] => [`${BASES[id].name}${SIZE[fileOf(itemArtUrl(makeItem(id)))!] ? ' (256×171)' : ''}`, makeItem(id)]),
-      ...GENERATED.map((id): [string, Item] => [`${BASES[id].name} (generated)`, makeItem(id)]),
+      ...MATERIAL_SAMPLE.map((id): [string, Item] => [BASES[id].name, makeItem(id)]),
     ], true);
     checks.closeup = closeup;
     document.body.classList.remove('inspect-clean');
