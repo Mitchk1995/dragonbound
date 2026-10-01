@@ -320,7 +320,7 @@ const inB = (id: string, x: number, z: number) => ({ x: BUILDING[id].x + x, z: B
  * The forge yard south of the smelter: the lean-to against its south wall (west of the door), the
  * hearth (the Emberforge) under it and the anvil out in front.
  */
-export const FORGE = { canopy: { x: 109.2, z: 140.5 }, hearth: { x: 108.9, z: 141.6 }, anvil: { x: 109.4, z: 145.8 } };
+export const FORGE = { canopy: { x: 109.2, z: 140.5 }, hearth: { x: 108.9, z: 140.1 }, anvil: { x: 109.4, z: 145.8 } };
 
 /**
  * Inspect views of the island's districts and landmarks outside the castle (label, centre, zoom).
@@ -618,14 +618,13 @@ export function buildKeep(seed: number): ZoneLayout {
   for (const [x, z] of [[court.x - 12.5, court.z + 0.5], [court.x + 12.5, court.z + 0.5], [gate.x - 4, gate.z + 4], [gate.x + 4, gate.z + 4], [inB('bank', 6, 17).x, inB('bank', 6, 17).z], [inB('shop', 4.5, 15.2).x, inB('shop', 4.5, 15.2).z]]) G.prop('lamp', x, z, 0, 1, 0.4);
   for (const p of [cas(71.2, 44.2), cas(78.8, 44.2), { x: 126, z: 140 }, { x: 140.6, z: 129 }, { x: 160.4, z: 146 }, { x: 132, z: 154 }, { x: 147.6, z: 160 }, { x: 170, z: 128 }, { x: 128, z: 104 }]) G.prop('lamp_post', p.x, p.z, 0, 1, 0.4);
   // The forge yard, as the work flows from west to east (see FORGE): under the lean-to against the
-  // smelter's south wall the bellows, the hearth with its stack, the coal bin; the bars come out of
+  // smelter's south wall the Emberforge (its bellows and chimney built on) and the coal bin; the bars come out of
   // the smelter door onto their pallet. Out in front of the fire: the anvil, the quench trough at the
   // smith's right hand, the grindstone, and the finished work on show where the road comes in.
   G.prop('forge_canopy', FORGE.canopy.x, FORGE.canopy.z);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) blockDisc(G.l, FORGE.canopy.x + sx * 3.3, FORGE.canopy.z + sz * 1.3, 0.3);
   const fit = (kind: string, p: Vec2, rot: number, s: number, block: number) => G.prop(kind, p.x, p.z, rot, s, block);
-  fit('fit_bellows', inB('smelter', 0.5, 15.4), Math.PI / 2, 1, 0.7);
-  fit('fit_coal_bin', inB('smelter', 5.4, 15.4), 0, 1, 0.75);
+  fit('fit_coal_bin', inB('smelter', 5.3, 13.75), 0, 1, 0.75);
   fit('fit_bar_stack', inB('smelter', 10.4, 14.6), 0.1, 1, 0.7);
   fit('fit_trough', inB('smelter', 6.3, 20.0), Math.PI / 2, 1, 0.75);
   fit('fit_grindstone', inB('smelter', 8.9, 21.6), 0.25, 1, 0.6);

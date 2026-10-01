@@ -32,6 +32,8 @@ const BONE = 0xcbbd9c, BONE_D = 0xa8997a;
 export const COAL = 0x161517, OBSIDIAN = 0x1a1418;
 /** Old iron gone to rust (the cracked anvil): dull brown iron with a paler pitted face, rust streaks. */
 const RUSTY = 0x5a4842, RUSTY_L = 0x6e5a50, RUST = 0x8a4a2a;
+/** The Emberforge's stone: warm dressed sandstone, or soot-blackened while it lies cold. */
+const SAND = [0xa89478, 0xb4a084, 0x9a876c], SOOT = [0x6a645c, 0x5a554f, 0x4c4742], BRICK_SOOT = [0x5a3a30, 0x4a3028, 0x6a4436];
 /** Basalt (lair): cooled black rock with slightly lighter weathered tops. */
 const BASALT = 0x2e2626, BASALT_L = 0x453a36, BASALT_D = 0x201a1a;
 /** Standing water on a cave floor: dark and glossy (reflects like coal and obsidian). */
@@ -51,6 +53,8 @@ paintAs('masonry', [STONE, STONE_L, STONE_D, STONE_DD, 0x7e776c, 0x7a7870, 0x6a6
 paintAs('rock', [RUSTY, RUSTY_L, RUST, ...BLOCKS, BASALT, BASALT_L, BASALT_D, 0x3a2e24, 0x241e1a, 0x1a1311, 0x0f0b0a, 0x2a1d17, BRICK, BRICK_L, BRICK_D, 0x4a4240, 0x3e3634, 0x554c48, 0x3a3230, 0x3a3232, 0x2a2424, 0x6a6258, 0x6e6a66, 0x3c3834, 0x2e2624, 0x7a7068, 0x6a6058, 0x4a4440, 0x6a5a40, 0x5a4a34, 0x2e2828, 0x241e1e, 0x1e1818]);
 paintAs('wood', [WOOD, WOOD_D, WOOD_L, 0x7a5636, 0x94704a, 0x5a3a22, 0x3a2618, 0x5a3a20, 0x4a2e18, 0x8a6a44, 0x5a4a3a, 0x3a2a1e, 0xa08058]);
 paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438, 0x3e6a6a, 0x7a4a34]);
+paintAs('masonry', [...SAND, ...SOOT]);
+paintAs('rock', BRICK_SOOT);
 paintAs('soft', [0x4b3122]);
 paintAs('bone', [BONE, BONE_D, PAL.bone]);
 paintAs('plaster', [PLASTER, 0xe8dcc0, 0xc8b070]);
@@ -262,6 +266,125 @@ function crustPlates(seed: number) {
 function decal(m: THREE.Mesh) {
   (m.material as THREE.Material).userData.decal = true;
   return m;
+}
+
+// ─── The Great Anvil ────────────────────────────────────────────────────────
+
+/** Height of the anvil's face above its feet. */
+const ANVIL_FACE = 0.6;
+
+/**
+ * A closed solid lofted through rings of points (every ring the same length, each listed in the
+ * same turning order around the axis), capped at both ends: flat-shaded and wound outward.
+ */
+function loft(rings: V3[][]) {
+  const pos: number[] = [];
+  const tri = (a: V3, b: V3, c: V3) => pos.push(...a, ...b, ...c);
+  const mid = (r: V3[]): V3 => [0, 1, 2].map((i) => r.reduce((s, p) => s + p[i], 0) / r.length) as V3;
+  const n = rings[0].length;
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const p = rings[i], q = rings[i + 1];
+    for (let j = 0; j < n; j++) {
+      const k = (j + 1) % n;
+      tri(p[j], p[k], q[k]);
+      tri(p[j], q[k], q[j]);
+    }
+  }
+  const a = rings[0], b = rings[rings.length - 1], ca = mid(a), cz = mid(b);
+  for (let j = 0; j < n; j++) {
+    const k = (j + 1) % n;
+    tri(ca, a[k], a[j]);
+    tri(cz, b[j], b[k]);
+  }
+  // Wind outward: flip every triangle if the enclosed volume came out negative.
+  let vol = 0;
+  for (let i = 0; i < pos.length; i += 9) {
+    const [ax, ay, az, bx, by, bz, cx, cy, cz2] = pos.slice(i, i + 9);
+    vol += ax * (by * cz2 - bz * cy) - ay * (bx * cz2 - bz * cx) + az * (bx * cy - by * cx);
+  }
+  if (vol < 0) for (let i = 0; i < pos.length; i += 9) for (let c = 0; c < 3; c++) [pos[i + 3 + c], pos[i + 6 + c]] = [pos[i + 6 + c], pos[i + 3 + c]];
+  return pos;
+}
+
+function geoOf(pos: number[]) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** A chamfered rectangle ring (8 points) through `at(u, v)`, half sizes hu × hv, chamfer c. */
+function rectRing(hu: number, hv: number, c: number, at: (u: number, v: number) => V3): V3[] {
+  return [[hu, -hv + c], [hu, hv - c], [hu - c, hv], [-hu + c, hv], [-hu, hv - c], [-hu, -hv + c], [-hu + c, -hv], [hu - c, -hv]].map(([u, v]) => at(u, v));
+}
+
+/**
+ * The anvil's iron, feet on y = 0, horn toward +X, front +Z: [the iron, its flat face, the marks on
+ * it (the hardy hole, and the crack when `cracked`)]. The stand (lofted up through its feet, waist
+ * and throat) and the body (lofted from the heel to the horn's point) are welded into one mesh.
+ */
+const anvilCache = new Map<boolean, THREE.BufferGeometry[]>();
+function anvilIron(cracked: boolean) {
+  const hit = anvilCache.get(cracked);
+  if (hit) return hit;
+  const F = ANVIL_FACE, X0 = -0.04;
+  // The stand, bottom to top: [y, half length, half width]. Its top ring is buried in the body.
+  const stand: [number, number, number][] = [[0, 0.38, 0.2], [0.06, 0.38, 0.2], [0.085, 0.31, 0.16], [0.2, 0.21, 0.075], [0.3, 0.22, 0.08], [0.4, 0.35, 0.11], [0.5, 0.48, 0.13]];
+  const iron = loft(stand.map(([y, hx, hz]) => rectRing(hx, hz, Math.min(hx, hz) * 0.35, (u, v) => [X0 + u, y, v])));
+  // The body, heel to horn: [x, underside, top, half width]. Square in section along the face; from
+  // the horn's root on, a flat top over a keel narrowing to the point.
+  const body: [number, number, number, number][] = [[-0.62, 0.46, F - 0.01, 0.13], [-0.6, 0.44, F, 0.14], [0.4, 0.44, F, 0.14], [0.42, 0.44, F, 0.14], [0.42, 0.44, F - 0.035, 0.14]];
+  const horn: [number, number, number, number][] = cracked
+    ? [[0.47, 0.42, F - 0.035, 0.13], [0.6, 0.45, F - 0.04, 0.105]]
+    : [[0.47, 0.42, F - 0.035, 0.13], [0.62, 0.45, F - 0.04, 0.1], [0.78, 0.49, F - 0.045, 0.06], [0.92, 0.525, F - 0.05, 0.022], [0.98, 0.54, F - 0.055, 0.004]];
+  const rings: V3[][] = body.map(([x, yb, yt, hz]) => rectRing(hz, (yt - yb) / 2, 0.025, (u, v) => [x, (yt + yb) / 2 + v, u]));
+  for (const [x, yb, yt, hz] of horn) {
+    const h = yt - yb, c = Math.min(0.025, hz * 0.3);
+    rings.push([[x, yt - c, hz], [x, yt - h * 0.6, hz * 0.7], [x, yb, hz * 0.06], [x, yb, -hz * 0.06], [x, yt - h * 0.6, -hz * 0.7], [x, yt - c, -hz], [x, yt, -hz + c], [x, yt, hz - c]]);
+  }
+  // Snapped off: the break is ragged, each point of the last ring torn to its own length.
+  if (cracked) rings.push(rings[rings.length - 1].map(([x, y, z], i) => [x + 0.02 + hash01(41, i) * 0.06, y, z * 0.9]));
+  const bodyPos = loft(rings);
+  // The face: the body's level top, split off to take its own colour.
+  const face: number[] = [], rest: number[] = [];
+  for (let i = 0; i < bodyPos.length; i += 9) {
+    const t = bodyPos.slice(i, i + 9);
+    const level = Math.abs(t[1] - F) < 1e-4 && Math.abs(t[4] - F) < 1e-4 && Math.abs(t[7] - F) < 1e-4;
+    (level ? face : rest).push(...t);
+  }
+  // The marks, a hair above the iron: the hardy hole by the heel, and on the old anvil a crack
+  // across the face and down the front flank.
+  const marks: number[] = [];
+  const quad = (a: V3, b: V3, c: V3, d: V3) => marks.push(...a, ...b, ...c, ...a, ...c, ...d);
+  const y = F + 0.004;
+  quad([-0.54, y, -0.04], [-0.54, y, 0.04], [-0.46, y, 0.04], [-0.46, y, -0.04]);
+  if (cracked) {
+    const w = 0.012;
+    const across: [number, number][] = [[-0.06, -0.14], [-0.03, -0.07], [-0.07, 0], [-0.04, 0.07], [-0.08, 0.144]];
+    for (let i = 0; i + 1 < across.length; i++) {
+      const [x0, z0] = across[i], [x1, z1] = across[i + 1];
+      quad([x0 - w, y, z0], [x1 - w, y, z1], [x1 + w, y, z1], [x0 + w, y, z0]);
+    }
+    const z = 0.144;
+    const down: [number, number][] = [[-0.08, F], [-0.05, F - 0.06], [-0.09, F - 0.11], [-0.06, 0.45]];
+    for (let i = 0; i + 1 < down.length; i++) {
+      const [x0, y0] = down[i], [x1, y1] = down[i + 1];
+      quad([x0 - w, y0, z], [x0 + w, y0, z], [x1 + w, y1, z], [x1 - w, y1, z]);
+    }
+  }
+  const out = [geoOf([...iron, ...rest]), geoOf(face), geoOf(marks)];
+  anvilCache.set(cracked, out);
+  return out;
+}
+
+/** A tree stump, `h` tall, its base flaring into roots and its bark in ridges. */
+function anvilStump(seed: number, h: number) {
+  const ring = (y: number, r: number): V3[] =>
+    Array.from({ length: 14 }, (_, j) => {
+      const a = (j / 14) * Math.PI * 2, rr = r * (j % 2 ? 0.95 : 1) * (0.98 + hash01(seed, j) * 0.05);
+      return [Math.cos(a) * rr, y, -Math.sin(a) * rr];
+    });
+  return geoOf(loft([ring(0, 0.58), ring(0.08, 0.52), ring(h * 0.45, 0.49), ring(h, 0.48)]));
 }
 
 export interface WallSpec {
@@ -1061,59 +1184,34 @@ const BUILDERS: Record<string, Builder> = {
     })();
   },
   anvil: (k, g) => {
-    // The Great Anvil on its stump, read as a classic London anvil in blocks: a wide stepped base
-    // (the feet), a narrow waist, a throat flaring up into the body and one long flat face from
-    // the square heel to the horn. Past the face a short step down (the table), then the horn: a
-    // beak that tapers to a point with its top level just under the face line and its underside
-    // sweeping up, never a cone poking out above the face. Before 'Reforge the Great Anvil' it is
-    // rust-brown and cracked across the face, the horn snapped off short (the tip lies in the
-    // soot), the old stump bound with rope. Reforged: a bright steel face on dark iron, an ember
-    // rune on the flank, a bar at working heat across the face and the hammer ready against a new
-    // iron-banded stump.
-    const a = new THREE.Group();
-    a.scale.setScalar(1.2);
-    g.add(a);
+    // The Great Anvil (concept: docs/concepts/anvil.jpg): one forged solid on a single tree stump, nothing under the
+    // stump. The iron is one mesh (anvilIron): wide feet, a narrow waist, the body flaring out of it
+    // with a square heel and the hardy hole, one long flat face, a small step down and the horn, flat
+    // on top and keeled beneath, tapering to its point. Before 'Reforge the Great Anvil' it is
+    // rust-brown, cracked across the face and down the flank, the horn snapped off short, on an old
+    // grey stump. Reforged: dark iron with a polished face and a bar at working heat on it, on a new
+    // stump bound with an iron band, the hammer leaning against it.
     const cracked = new THREE.Group(), reforged = new THREE.Group();
-    a.add(cracked, reforged);
+    g.add(cracked, reforged);
     reforged.visible = false;
-    cb(k, a, [1.7, 0.1, 1.25], [0.1, 0.05, 0], STONE_D, undefined, 0.04);
-    const body = (p: Obj, iron: number, face: number, hornLen: number, hornTip: number) => {
-      cb(k, p, [0.92, 0.14, 0.58], [-0.05, 0.63, 0], iron, undefined, 0.04);
-      cb(k, p, [0.7, 0.1, 0.46], [-0.05, 0.75, 0], iron, undefined, 0.03);
-      k.mesh(p, taper(0.5, 0.38, 0.34, 0.26, 0.2), iron, [-0.05, 0.9, 0]);
-      k.mesh(p, taper(0.34, 0.26, 0.86, 0.36, 0.12), iron, [-0.09, 1.06, 0]);
-      cb(k, p, [1.0, 0.16, 0.37], [-0.1, 1.2, 0], iron, undefined, 0.03);
-      k.box(p, [0.98, 0.03, 0.35], [-0.1, 1.29, 0], face);
-      // The table: a step a little below the face, then the beak (top flat, underside rising).
-      cb(k, p, [0.14, 0.13, 0.33], [0.47, 1.195, 0], iron, undefined, 0.02);
-      const rootH = 0.2;
-      k.mesh(p, taper(rootH, 0.3, hornTip, hornTip * 1.3, hornLen, (hornTip - rootH) / 2, 0), iron, [0.54 + hornLen / 2, 1.16, 0], [0, 0, -Math.PI / 2]);
-      // Hardy and pritchel holes near the heel.
-      k.box(p, [0.08, 0.012, 0.08], [-0.48, 1.31, 0], DARK);
-      k.box(p, [0.045, 0.012, 0.045], [-0.34, 1.31, 0], DARK);
-    };
-    // ── Cracked ──
-    cb(k, cracked, [0.84, 0.56, 0.84], [0, 0.28, 0], 0x4a3020, [0, 0.1, 0], 0.2);
-    for (const y of [0.14, 0.44]) cb(k, cracked, [0.87, 0.05, 0.87], [0, y, 0], RUSTY, [0, 0.1, 0], 0.2);
-    cb(k, cracked, [0.88, 0.06, 0.88], [0, 0.3, 0], 0xb09a70, [0, 0.4, 0.04], 0.2);
-    body(cracked, RUSTY, RUSTY_L, 0.24, 0.11);
-    // A crack clean across the face and down the flank; rust weeping from it.
-    k.box(cracked, [0.035, 0.2, 0.39], [-0.14, 1.21, 0], DARK);
-    for (const [x, y, sy] of [[-0.12, 1.08, 0.22], [-0.44, 1.12, 0.14], [0.24, 1.13, 0.12]] as [number, number, number][]) k.box(cracked, [0.05, sy, 0.02], [x, y, 0.19], RUST);
-    // The snapped horn tip lying in the soot.
-    k.mesh(cracked, taper(0.11, 0.14, 0.03, 0.04, 0.3, -0.04, 0), RUSTY, [0.72, 0.07, 0.5], [0.1, 0.7, -Math.PI / 2 + 0.15]);
-    decal(k.mesh(cracked, raggedDisc(88, 12, 0.7, 0.95, 0.3), 0x3a3430, [0.1, 0.105, 0.05]));
-    // ── Reforged ──
-    cb(k, reforged, [0.86, 0.56, 0.86], [0, 0.28, 0], WOOD_D, undefined, 0.2);
-    for (const y of [0.12, 0.3, 0.48]) cb(k, reforged, [0.89, 0.05, 0.89], [0, y, 0], IRON, undefined, 0.2);
-    body(reforged, IRON, PAL.steel, 0.46, 0.05);
-    // An ember rune on the flank, facing the smith (+Z).
-    k.mesh(reforged, octagon(0.06, 0.02), 0xffa040, [-0.1, 1.2, 0.19], [0, Math.PI / 2, 0], PAL.fire, 1.8);
-    for (const e of [-1, 1]) k.box(reforged, [0.12, 0.022, 0.02], [-0.1 + e * 0.13, 1.2, 0.19], 0xffa040, undefined, PAL.fire, 1.4);
+    const top = 0.64; // the stump's top: the anvil's feet stand here
+    k.mesh(cracked, anvilStump(3, top), 0x5a4a3a, [0, 0, 0]);
+    k.mesh(reforged, anvilStump(7, top), WOOD_L, [0, 0, 0]);
+    const [cIron, cFace, cMarks] = anvilIron(true);
+    k.mesh(cracked, cIron, RUSTY, [0, top, 0]);
+    k.mesh(cracked, cFace, RUSTY_L, [0, top, 0]);
+    k.mesh(cracked, cMarks, DARK, [0, top, 0]);
+    const [rIron, rFace, rMarks] = anvilIron(false);
+    k.mesh(reforged, rIron, IRON, [0, top, 0]);
+    k.mesh(reforged, rFace, IRON_L, [0, top, 0]);
+    k.mesh(reforged, rMarks, DARK, [0, top, 0]);
+    // The new stump's iron band, with two rivets facing the smith.
+    k.cyl(reforged, 0.53, 0.53, 0.09, [0, 0.32, 0], IRON, undefined, 14);
+    for (const a of [-0.45, 0.45]) cb(k, reforged, [0.06, 0.06, 0.04], [Math.sin(a) * 0.54, 0.32, Math.cos(a) * 0.54], IRON, [0, a, Math.PI / 4], 0.01);
     // A bar at working heat on the face; the hammer leaning on the stump, ready.
-    cb(k, reforged, [0.5, 0.05, 0.08], [-0.05, 1.33, 0.04], 0xffb050, [0, 0.12, 0], 0.01, PAL.fire, 2.4);
-    cb(k, reforged, [0.06, 0.62, 0.06], [-0.42, 0.33, 0.47], WOOD_L, [0.25, 0, 0.12], 0.01);
-    cb(k, reforged, [0.24, 0.13, 0.13], [-0.46, 0.66, 0.55], IRON, [0.25, 0, 0.12], 0.02);
+    cb(k, reforged, [0.42, 0.06, 0.1], [0.02, top + ANVIL_FACE + 0.03, 0.02], 0xffb050, [0, 0.12, 0], 0.01, PAL.fire, 2.4);
+    cb(k, reforged, [0.06, 0.66, 0.06], [0.52, 0.34, 0.3], WOOD_L, [0, 0, 0.35], 0.01);
+    cb(k, reforged, [0.14, 0.14, 0.26], [0.63, 0.08, 0.3], IRON, [0, 0, 0.35], 0.02);
     return {
       obj: g,
       setState: (s) => {
@@ -1141,15 +1239,11 @@ const BUILDERS: Record<string, Builder> = {
   /**
    * The forge yard's lean-to: a shingled roof on four squared posts on stone pads, built to stand
    * against a wall on its back (-Z) side, sloping down toward the front (+Z), with a deep front
-   * beam, knee braces and the forge's brick stack rising through it at the back. Kept high and
-   * shallow so the hearth under its front edge stays in view of the high camera.
+   * beam and knee braces; the Emberforge's chimney rises through it at the back. Kept high and
+   * shallow so the hearth under it stays in view of the high camera.
    */
   forge_canopy: (k, g) => {
     const W = 7.0, D = 3.0, back = 3.6, front = 3.2;
-    // The forge's brick stack rises behind the hearth, through the roof, against the wall.
-    cb(k, g, [0.95, 5.2, 0.85], [-0.3, 2.6, -D / 2 + 0.45], BRICK, undefined, 0.04);
-    cb(k, g, [1.15, 0.26, 1.05], [-0.3, 5.3, -D / 2 + 0.45], STONE_D, undefined, 0.04);
-    k.box(g, [0.6, 0.05, 0.5], [-0.3, 5.45, -D / 2 + 0.45], 0x2a0c04, undefined, 0xff5a1a, 0.9);
     for (const x of [-W / 2 + 0.2, W / 2 - 0.2]) for (const z of [-D / 2 + 0.2, D / 2 - 0.2]) {
       const h = z < 0 ? back : front;
       cb(k, g, [0.5, 0.2, 0.5], [x, 0.1, z], STONE_D, undefined, 0.04);
@@ -1276,19 +1370,69 @@ const BUILDERS: Record<string, Builder> = {
     k.mesh(g, wedge(2.3, 0.4, 0.6), SLATE, [0, 2.25, 0]);
   },
   forgeheart: (k, g) => {
-    // The Emberforge: a stepped basalt hearth with corner horns; cold, or roaring once restored.
-    const cold = new THREE.Group();
-    const hot = new THREE.Group();
+    // The Emberforge (concept: docs/concepts/emberforge.jpg): a waist-high hearth of dressed stone with a brick-arched ash
+    // pit behind an iron door, a fire pot of coals inside a stone rim, brick cheeks and a back wall
+    // carrying a stone hood that narrows into the forge's own brick chimney (it rises through the
+    // lean-to's roof), and the great bellows hung on its west side, its nozzle over the rim into the
+    // fire. Nothing stands under it. Cold: soot-black stone, dead grey coals, the bellows sagging,
+    // bricks fallen at its foot. Restored: warm stone, the pot full of glowing coals and flame.
+    const cold = new THREE.Group(), hot = new THREE.Group();
     g.add(cold, hot);
-    cb(k, g, [2.2, 0.4, 2.2], [0, 0.2, 0], STONE_DD, undefined, 0.06);
-    cb(k, g, [1.7, 0.5, 1.7], [0, 0.65, 0], 0x3a3232, undefined, 0.06);
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) k.mesh(g, taper(0.34, 0.34, 0.06, 0.06, 0.9, -sx * 0.12, -sz * 0.12), 0x2a2424, [sx * 0.72, 1.3, sz * 0.72]);
-    k.box(cold, [1.2, 0.08, 1.2], [0, 0.94, 0], 0x241e1c);
-    k.mesh(cold, prism(0.4, 0.8, 0.35), 0x3a3030, [0, 0.9, 0], [0, 0.6, 0]);
-    k.box(hot, [1.2, 0.08, 1.2], [0, 0.94, 0], 0x3a1206, undefined, PAL.fire, 0.7);
-    k.mesh(hot, prism(0.42, 0.9, 0.35), PAL.fire, [0, 0.9, 0], [0, 0.6, 0], PAL.fire, 1.4);
-    const f = flame(k, hot, 0, 1.0, 0, 1.2);
-    return { obj: g, tick: f, setState: (s) => { cold.visible = s !== 'restored'; hot.visible = s === 'restored'; } };
+    hot.visible = false;
+    const W = 1.7, D = 1.3, T = 0.24, RIM = 0.75, TOP = 1.55;
+    const build = (p: Obj, stone: number[], brick: number[], leather: number, seed: number, ruined: boolean) => {
+      const wall = (s: Omit<WallSpec, 'seed' | 'unit'>, sd: number) => masonry(k, p, { ...s, seed: seed + sd, unit: 0.42 });
+      // The body: four stone walls three courses high, the front opened for the ash pit.
+      wall({ x: 0, z: D / 2 - T / 2, rot: 0, len: W, y0: 0, rows: 3, rowH: 0.25, thick: T, shades: stone, hole: { u: 0, w: 0.62, h: RIM } }, 0);
+      wall({ x: 0, z: -D / 2 + T / 2, rot: 0, len: W, y0: 0, rows: 3, rowH: 0.25, thick: T, shades: stone }, 1);
+      for (const sx of [-1, 1]) wall({ x: sx * (W / 2 - T / 2), z: 0, rot: Math.PI / 2, len: D - 2 * T, y0: 0, rows: 3, rowH: 0.25, thick: T, shades: stone }, 2 + sx);
+      cb(k, p, [W - 2 * T, RIM - 0.05, D - 2 * T], [0, (RIM - 0.05) / 2, 0], stone[2], undefined, 0.02);
+      // The ash pit: an iron door under a round brick arch.
+      k.box(p, [0.44, 0.36, 0.04], [0, 0.2, D / 2 - T + 0.02], IRON);
+      k.box(p, [0.22, 0.04, 0.02], [0, 0.26, D / 2 - T + 0.045], DARK);
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 6) * Math.PI;
+        cb(k, p, [0.15, 0.1, T - 0.02], [Math.cos(a) * 0.25, 0.42 + Math.sin(a) * 0.2, D / 2 - T / 2], brick[i % 2], [0, 0, a - Math.PI / 2], 0.02);
+      }
+      // The fire pot's rim: a course of stone across the front and down both sides.
+      wall({ x: 0, z: D / 2 - 0.15, rot: 0, len: W, y0: RIM, rows: 1, rowH: 0.15, thick: 0.3, shades: stone }, 5);
+      for (const sx of [-1, 1]) wall({ x: sx * (W / 2 - 0.15), z: -0.03, rot: Math.PI / 2, len: 0.76, y0: RIM, rows: 1, rowH: 0.15, thick: 0.3, shades: stone }, 6 + sx);
+      // Brick back wall and cheeks round the fire, the stone hood on them, the chimney out of it.
+      wall({ x: 0, z: -D / 2 + T / 2, rot: 0, len: W, y0: RIM, rows: 4, rowH: (TOP - RIM) / 4, thick: T, shades: brick }, 10);
+      for (const sx of [-1, 1]) wall({ x: sx * (W / 2 - T / 2), z: -0.155, rot: Math.PI / 2, len: 0.51, y0: RIM + 0.15, rows: 3, rowH: (TOP - RIM - 0.15) / 3, thick: T, shades: brick }, 11 + sx);
+      k.mesh(p, taper(W + 0.1, 0.85, 0.72, 0.56, 0.55, 0, -0.1), stone[0], [0, TOP + 0.275, -0.225]);
+      cb(k, p, [0.6, 2.4, 0.48], [0, 3.2, -0.325], brick[0], undefined, 0.03);
+      cb(k, p, [0.74, 0.16, 0.62], [0, 4.48, -0.325], stone[1], undefined, 0.03);
+      // The bellows: a leather bag between its nozzle and an outer board, hung from a post.
+      const droop = ruined ? 0.18 : 0;
+      k.mesh(p, taper(0.75, 0.6, 0.18, 0.18, 0.55), leather, [-1.2, 1.05 - droop / 2, 0.3], [droop, 0, -Math.PI / 2]);
+      cb(k, p, [0.06, 0.8, 0.62], [-1.5, 1.05 - droop, 0.3], WOOD_D, [droop, 0, 0], 0.02);
+      cb(k, p, [0.12, 1.45, 0.12], [-1.6, 0.725, 0.3], WOOD_D, undefined, 0.02);
+      k.mesh(p, taper(0.09, 0.09, 0.06, 0.06, 0.5), IRON, [-0.73, 0.97, 0.3], [0, 0, -Math.PI / 2]);
+      if (ruined) for (const [x, z, r] of [[1.0, 0.75, 0.4], [1.12, 0.45, 1.3], [0.7, 0.86, 2.2]]) cb(k, p, [0.22, 0.1, 0.12], [x, 0.05, z], brick[1], [0, r, 0], 0.02);
+    };
+    build(cold, SOOT, BRICK_SOOT, 0x5a4230, 31, true);
+    build(hot, SAND, [BRICK, BRICK_L, BRICK_D], PAL.leather, 31, false);
+    // The coals: dead and grey, or banked high and glowing with a flame on them.
+    for (let i = 0; i < 9; i++) chunk(k, cold, 900 + i, [0.24, 0.12, 0.22], [-0.42 + (i % 3) * 0.42, RIM, -0.3 + Math.floor(i / 3) * 0.28], 0x4a4644, i);
+    k.box(hot, [W - 0.62, 0.05, 0.74], [0, RIM + 0.03, -0.03], 0x3a1206, undefined, PAL.fire, 0.9);
+    for (let i = 0; i < 9; i++) chunk(k, hot, 900 + i, [0.24, 0.12, 0.22], [-0.42 + (i % 3) * 0.42, RIM, -0.3 + Math.floor(i / 3) * 0.28], i % 3 ? COAL : 0xff8a30, i, i % 3 ? 0 : PAL.fire, 1.6);
+    k.box(hot, [0.38, 0.03, 0.28], [0, 4.57, -0.325], 0x2a0c04, undefined, 0xff5a1a, 0.9);
+    const f = flame(k, hot, 0, RIM + 0.05, -0.1, 0.55);
+    const l = light(hot, 0xff7a30, 8, 7, 1.2);
+    l.position.z = 0.6;
+    return {
+      obj: g,
+      light: l,
+      tick: (t: number) => {
+        f(t);
+        l.intensity = 7 + Math.sin(t * 11) * 1.2;
+      },
+      setState: (s) => {
+        cold.visible = s !== 'restored';
+        hot.visible = s === 'restored';
+      },
+    };
   },
   tent: (k, g, v) => {
     // A goblin hide tent: an A-frame of stitched hides with crossed poles at each end.

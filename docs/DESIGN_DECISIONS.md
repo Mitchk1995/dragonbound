@@ -59,6 +59,12 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 
+### Follow-up (October 1, late)
+
+- **Home island v1 at its built size is OK.**
+- **Props are single solid pieces**, not stacks of blocks: the Great Anvil is one forged piece on a plain stump. Nothing stands on a slab or platform that serves no purpose, and nothing passes through anything else.
+- **The forge yard was rebuilt from Codex concepts** (`docs/concepts/`): the anvil and the Emberforge hearth, whose chimney and bellows are part of it.
+
 ### Already done before Round 5
 
 Equipment models were rebuilt toward their icons (open collars, cuffs and boot tops; thumbless hands; one model per bow and staff tier), the bow string was kept in the hand, the crown shrunk as a stand-in, the approved HUD, inventory panel and 58 icons are in the game, and combat has no stance selector. Still open from earlier plans: world props built in Blender with ruined and restored states.
