@@ -11,8 +11,10 @@ Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 Style: chunky stylized fantasy low-poly (Warcraft 3 / Torchlight). Flat shading, bold silhouettes, oversized
 hands/weapons/pauldrons, 1–2 accent colours. Keep each model under ~3k triangles.
 
-**Every item model matches its approved icon** (`public/icons/approved`, owner's rule): same silhouette, parts and
-colours. Collars, cuffs and boot tops are open (`open_box`: closed walls round a dark sunk floor). Characters have no
+**Pipeline (owner's rule):** an image-generated concept (with examples of our art as reference) comes first, the 3D model
+is built from that image, then the icon is made from the model. **Every item model matches its approved image**
+(`public/icons/approved` until concepts replace them): same silhouette, parts and colours. A model is approved only
+from textured, in-game renders shown at the same angle as its image; flat previews don't count. Collars, cuffs and boot tops are open (`open_box`: closed walls round a dark sunk floor). Characters have no
 thumbs, so gloves and gauntlets are thumbless mitten blocks. Each bow and staff tier has its own model.
 
 Mostly blocky and modular, not dogmatically: use organic shapes where they look better (e.g. bat wings, hair,

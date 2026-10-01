@@ -30,6 +30,8 @@ export class BowDraw {
   private bottom = new THREE.Vector3();
   private rest = new THREE.Vector3();
   private grip = new THREE.Vector3();
+  /** Unit direction from the grip back through the string's middle: the arrow line, toward the archer. */
+  private back = new THREE.Vector3();
   private strings: THREE.Mesh[] = [];
   private arrow: THREE.Group | null = null;
   private tmp = new THREE.Vector3();
@@ -83,6 +85,7 @@ export class BowDraw {
     const bc = all.getCenter(new THREE.Vector3());
     this.grip.copy(bc);
     this.grip[axis] = c[axis];
+    this.back.subVectors(this.rest, this.grip).normalize();
     sm.visible = false;
     this.bow = group;
 
@@ -113,15 +116,17 @@ export class BowDraw {
     if (!this.bow) return;
     const drawing = anim.attackKind === 'bow' && anim.attack >= 0;
     const pull = drawing ? bowDrawAmount(anim.attack) : 0;
-    // Nock point, in the bow's local space. The hand takes the string in the first moments of the draw
-    // (GRAB of the pull) and holds it from then until release, so the string never floats between bow and hand.
+    // Nock point, in the bow's local space. It always stays on the arrow line through the middle of the string,
+    // so the string is one string pulled from its centre and the arrow flies level. The hand takes the string in
+    // the first moments of the draw (GRAB of the pull) and holds it at the anchor until release.
     const nock = this.tmp.copy(this.rest);
     if (pull > 0 && drawHand) {
       this.root.updateMatrixWorld(true);
       const hand = drawHand.getWorldPosition(new THREE.Vector3());
       this.m.copy(this.bow.matrixWorld).invert();
       hand.applyMatrix4(this.m);
-      nock.lerp(hand, Math.min(1, pull / GRAB));
+      const behind = Math.max(0, hand.sub(this.rest).dot(this.back));
+      nock.addScaledVector(this.back, behind * Math.min(1, pull / GRAB));
     }
     this.span(this.strings[0], this.top, nock);
     this.span(this.strings[1], this.bottom, nock);

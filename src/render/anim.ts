@@ -45,6 +45,13 @@ export const SHOULDER_FOLLOW = 0.75;
 // nock on the draw hand, string behind the grip both drawn and at rest (brace toward the archer).
 export const BOW_SOCKET: [number, number, number] = [0, Math.PI / 2, Math.PI / 2];
 
+/**
+ * Draw-arm rotation at the anchor: the hand level with the middle of the string, on the arrow line behind the grip.
+ * Found by searching the arm's reach in the pose test. The arms have no elbow, so this is the only point on the
+ * arrow line the hand can reach; it gets there while the bow comes up, takes the string and holds it to release.
+ */
+export const BOW_ANCHOR: [number, number] = [-1.58, -1.51];
+
 /** Procedural animation over named rigid parts. */
 export class Rig {
   private parts = new Map<string, THREE.Object3D>();
@@ -225,8 +232,8 @@ export class Rig {
         this.root.rotation.y = (Math.PI / 2) * raise;
         this.rot('armR', 0, 0, (-Math.PI / 2) * raise);
         this.rot('sock_handR', BOW_SOCKET[0] * raise, BOW_SOCKET[1] * raise, BOW_SOCKET[2] * raise);
-        // Draw arm: from the chest at nocking to the chin anchor at full draw (rigid arm from the left shoulder).
-        this.rot('armL', (-1.6 - 1.16 * draw) * raise, 0, (-0.4 - 0.51 * draw) * raise);
+        // Draw arm: up to the anchor on the arrow line while the bow rises; it holds the string there to release.
+        this.rot('armL', BOW_ANCHOR[0] * raise, 0, BOW_ANCHOR[1] * raise);
         this.rot('head', 0, (-Math.PI / 2) * 0.85 * raise);
         break;
       }
