@@ -1,0 +1,70 @@
+{
+ "status": "PROPOSAL - NOT IMPLEMENTED / OPUS-AUTHORED",
+ "author": "Claude Opus (claude-opus-5-5[1m]); bounded wall-walk circulation detail pass on its own castle-v2 proposal",
+ "date": "2026-10-01",
+ "trigger": "Parent/user direction: resolve the W2 0.6 gap and the unmodelled +7 wall walk, W1/W2 top landings and wall/tower connections before review.",
+ "diagnosis": {
+  "W2_gap": "baseline-before-wallwalk W2 was a freestanding 2.8 x 2.8 square at (78,62). Its nearest corner stood 0.512 off the SE curtain's inner face (exact, validate.py C7). It touched no wall, so its top could not reach the walk.",
+  "W1": "W1 was a 2.8 square abutting the cross wall (0.089 gap). Nothing was drawn at +7: no landing, no opening in any parapet.",
+  "impossible_rise": "Both squares claimed a +0 to +7 climb inside a 2.8 run, a 68.2 degree pitch. No stair can fit there, so the footprints themselves had to change.",
+  "missing_model": "design.json had no wall-walk geometry: no deck, parapet, tower platform, doorway or landing. The prior validator listed the wall walk as untested. Its absence was never a measured pass.",
+  "charitable_reconstruction": "The old squares were read as +7 tops beside today's decks, with no rail openings (none were drawn), and flooded at r 0.45. Neither top connects to the wall walk: W1 is false, W2 is false."
+ },
+ "design_decision": "Each wall stair becomes a solid masonry straight flight built against its host wall. Each has 25 risers x 0.28 = 7.0 and 24 goings x 0.35 = 8.4, a 38.7 degree pitch, a 1.4 clear tread and a 0.2 outer guard. W1 ends on a 1.4 x 1.4 +7 landing that joins the cross-wall deck through a 1.4 opening in its west rail. W2 runs up the SE curtain face. Its head passes through a 1.4 open-topped gap in the SE tower shell onto the tower's +7 platform. All towers are open +7 platforms that the decks pass through, so no tower changes level. Gates and the postern are crossed on vaults.",
+ "changes": [
+  {"what": "W1 wall stair", "old": "2.8 square (37.9..40.7, 58.1..60.9); ground landing (36.4,58.1)-(37.9,60.9); nothing at +7",
+   "new": "flight against the cross wall's inner-court face, cross-wall s 57.0 to 65.4, offsets 0.9 to 2.5 (incl. guard). Footprint corners (41.51,59.85) (36.84,66.82) (35.67,66.04) (40.35,59.07). Ground landing at s 55.3 to 57.0 (corners (42.42,58.41) (41.47,59.82) (39.98,58.82) (40.92,57.40)). +7 landing at s 65.4 to 66.8, with a 1.4 rail opening to the cross-wall deck",
+   "why": "A 2.8 run cannot rise 7. The new flight keeps W1 against the same wall in the same corner of the inner court. Its foot is about 2 cells from the old centre."},
+  {"what": "W2 wall stair (the 0.6 gap)", "old": "freestanding 2.8 square at (78,62), 0.512 off the curtain face; ground landing (75.0,60.6)-(76.6,63.4); nothing at +7",
+   "new": "flight against the SE curtain's inner face (curtain4 s 19.1 to 27.5, offsets 1.1 to 2.7), touching the face (gap 0) and tangent to the S gate tower. Footprint corners (81.05,61.69) (76.65,68.84) (75.46,68.11) (79.86,60.96). Four masonry wedge pieces carry the head to the SE tower face; they bond 0.016 into it, within the 0.02 tolerance. Ground landing at s 17.4 to 19.1 (corners (81.90,60.22) (81.01,61.66) (79.48,60.72) (80.37,59.27)). +7 threshold through a 1.4 shell gap into the SE tower platform",
+   "why": "This closes the gap and gives a real 7-unit climb. It uses the only clear 9.9-cell run of curtain face between the outer gate's leaf sweep (s <= 16.77) and the SE tower (s >= 27.53)."},
+  {"what": "Guard route end", "old": "(75.4, 62) at the old W2 landing", "new": "(79.7, 59.8) beside the new W2 ground landing", "why": "It follows the moved landing. The 2.0 reserve margin is +0.052, re-checked."},
+  {"what": "+7 wall walk (new architecture, no envelope change)", "old": "not modelled",
+   "new": "Curtain 2.2: 0.6 outer parapet (top +8.2), 1.3 clear deck, 0.3 inner rail (top +7.9). Cross wall 1.8: 0.4 east parapet, 1.2 clear deck, 0.2 west rail. Strips are mitered at the towerless (8,30) corner. Tower shells are 0.6 thick, with deck-width open-topped gaps where a deck or stair top passes. The inner gatehouse is a +7 platform in a 0.4 shell with 1.2 gaps for the cross deck. The curtain inner rail is opened where the cross deck meets it at both junctions. Parapets run through the shells up to each platform.",
+   "why": "Gives explicit, physically continuous circulation. render.walk_model() builds it, the sheets draw it and validate.py floods it."},
+  {"what": "Renderer/sheets", "old": "W stairs drawn as squares; upper sheet said only 'reached by W1/W2'",
+   "new": "draw_walk() and draw_flights() draw the shared model on the overview, ground and upper sheets. A supplemental castle-v2-wallwalk sheet carries the full +7 plan, 17 numbered destinations, inset details A (W2) and B (W1), section C along W2, and the level schedule.",
+   "why": "The upper sheet's +5 window (x 6 to 70) cannot show W2 or the lower-ward walk."}
+ ],
+ "preserved": {
+  "envelope": "The curtain polygon, cross wall, all 9 tower circles (incl. gate towers), gate and postern positions and widths are unchanged. Every +7 floor cell lies on wall/tower/gatehouse masonry (55,514 cells) or on a W flight/landing inside a ward (261 cells). There are 0 unsupported cells.",
+  "rooms": "No room, door, furniture, void, window, hearth or upper-floor geometry changed. Part A passes; +7 floor vs building/+5 room footprints: 0 overlaps.",
+  "yard": "Courtyard Part B: 0 findings. Reachability at r 0.45 is still 24/24 (22/24 at 0.9, with the same two documented narrow exemptions: the postern exterior and the gaps between herb beds). Approach +0.217, service +0.186 and postern +0.195 are unchanged. Guard is +0.052, re-checked at the new end. Lists 1.09 and gate axes 1.5/1.5/1.0 are unchanged.",
+  "moved_landings": "Both ground landings moved to the feet of the new flights. Both are reached at r 0.45 and 0.9."
+ },
+ "levels": {"+0": "yards, ground landings, gate passages (soffits +4.5 outer/inner, +3.0 postern)", "+5": "residence upper floors only; NOT connected to +7 by design",
+            "+7": "curtain and cross-wall decks, all 9 tower platforms, inner-gatehouse platform, W1 landing, W2 threshold", "+7.9 / +8.2": "rails and guards / outer parapets", "+9 / +10": "tower merlons only (no floor)"},
+ "destinations_+7": ["1 W1 top", "2 S junction (34,72.67)", "3 South tower", "4 SE tower", "5 W2 top", "6 S gate tower", "7 over G_outer", "8 N gate tower", "9 East tower",
+                     "10 NE tower", "11 N junction (74,13)", "12 inner gatehouse G_inner", "13 North tower", "14 NW tower", "15 corner (8,30)", "16 over G_postern", "17 Postern tower"],
+ "patrol": "W1 -> S junction -> South -> SE (W2 arrives) -> S gate tower -> over outer gate -> N gate tower -> East -> NE -> N junction -> North -> NW -> corner (8,30) -> over postern -> Postern tower -> S junction. The inner-wall spur runs N junction -> inner gatehouse -> W1, and W2 top -> SE tower.",
+ "transitions": [
+  "W1: +0 ground landing -> 25 risers -> +7 landing -> level through the 1.4 west-rail opening -> cross deck",
+  "W2: +0 ground landing -> 25 risers -> +7 threshold -> level through the 1.4 open-topped SE-tower shell gap -> tower platform -> curtain decks",
+  "Towers, gatehouse and junctions: all level +7 to +7 through deck-width openings; no tower level change",
+  "Gates and postern: the deck is continuous on a vault above the passage (vault depth 2.5 / 2.5 / 4.0)"],
+ "validation": {
+  "command": "'python render.py' then 'python validate.py': RESULT PASS, exit 0. Courtyard findings 0, wall-walk findings 0, both baseline defects detected.",
+  "destinations": "17/17 +7 destinations stand on free floor (avatar r 0.45) in one connected component",
+  "legs": "18/18 patrol legs and spurs connected, with no detour. Widest-path bottleneck clearances: curtain legs 0.582 to 0.596 (deck half-width 0.65); cross-wall legs 0.531 to 0.538 (half-width 0.6); W2 top -> SE tower 0.639. Minimum margin over 0.45 is 0.081.",
+  "edges_and_support": "6,043 floor-edge cells, 0 unguarded (each within 0.2 of a parapet/rail/shell/guard, except declared stair heads). 0 unsupported cells. 0 building/+5 overlaps.",
+  "stairs": "W1 and W2: rise 7.0 = deck level; riser 0.28 <= 0.30; going 0.35 >= 0.30; pitch 38.7 <= 40; measured run 8.4 = 24 x 0.35; clear width 1.4 >= 1.2 (0.25 avatar margin each side); top landing/threshold >= 1.2; ground landing meets the first riser and the top floor meets the last riser (gap 0); stair head opens onto free connected +7 floor; no roofed shape over a flight (closest: W2 touches the S gate tower and the curtain at 0.0).",
+  "soffits": "G_outer and G_inner +4.5, G_postern +3.0, all >= 2.6 headroom rule, with >= 2.5 vault under the +7 deck"
+ },
+ "sheets_changed": {
+  "castle-v2-overview.png/.svg": "W1/W2 flights (solid, treads, up arrows), their landings, labels 'W1/W2 stair up +7', guard-route endpoint and route text",
+  "castle-v2-ground.png/.svg": "W1 flight and landing replace the square; W1 label; stair schedule rows for W1/W2",
+  "castle-v2-upper.png/.svg": "+7 decks, parapets, tower platforms and green openings over the shared walls; W1 flight with +0/+7 badges; legend line; new LEVELS / WALL WALK panel; label pointing to the wall-walk sheet",
+  "castle-v2-wallwalk.png/.svg (NEW, supplemental)": "full +7 plan with patrol line and 17 numbered destinations; Detail A (W2); Detail B (W1); Section C along W2. The insets are embedded as 2x PNG renders of their own vector sub-sheets, because the PDF/PNG rasteriser does not clip nested viewports.",
+  "design.json": "regenerated; adds wallwalk params, W1/W2 footprints, landings and tops, and wallwalk_derived destinations/legs",
+  "validate.py": "adds Part C and wallwalk-validation.json; Part B now uses the model's stair solids and landings"
+ },
+ "remaining_limits": [
+  "2D plan sampling on a 0.1 grid; clearances are exact only at cell centres. This is not a navmesh or a continuous 3D test.",
+  "All heights (riser, going, parapets, soffits) are proposed values checked arithmetically. Avatar radius 0.45 comes from the run context. The 2.15 mesh height is in current-hero.py authored units; its runtime scale is unmeasured.",
+  "Flights are checked by width, rules and connected head/foot, not by simulated sloped movement. No runtime stair mechanic is proposed.",
+  "In game, the camera cutaway (south faces cut to 1.2) would hide the walk on south-facing walls. Unresolved; listed as an open question.",
+  "Tower roofs above +7 are merlons only. Closed gates, portcullis or doors on the walk, combat and structure are not modelled.",
+  "The courtyard guard-route margin at the W2 landing is tight (+0.052) by design.",
+  "Site, orientation and landscape approach remain provisional. The island is not designed here."
+ ]
+}

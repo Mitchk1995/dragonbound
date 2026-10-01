@@ -1,0 +1,21 @@
+You are the local Claude Opus model under the user's existing opus[1m] configuration. Opus is the sole author of the castle-v2 geometry, illustrations, renderer and PNGs already in this working directory. Codex only orchestrates, performs nonvisual transport/integrity checks and saves Library files. Complete a SHORT final reference and pixel check of your own work; do not start another redesign or extended research.
+
+The first Opus pass produced castle-v2-overview.svg/png, castle-v2-ground.svg/png, castle-v2-upper.svg/png, render.py, validate.py, design.json and provenance.json. It passed its geometry checks after fixing a blocked barracks door. Its read log includes the actual exterior screenshot, but it did not read the current interior reference screenshots or working plan. Its last overview/upper image inspection preceded a few small edits. Finish these specific missing checks yourself.
+
+In your first tool turn, Read:
+references/WORKING_DESIGN_PLAN.md (especially confirmed castle direction and current screenshot feedback),
+references/04-castle-downstairs-great-hall.png,
+references/05-castle-upstairs-map-room.png,
+castle-v2-overview.png,
+castle-v2-ground.png,
+castle-v2-upper.png,
+provenance.json.
+These are current local byte copies; exact screenshot Library identities are in reference-transport.json. Do not read archived conversations. No new web research is needed; keep the two already-inspected castle references and their honest plan-image limitations.
+
+Check retained banquet/food appeal, warm chunky Dragonbound stone/wood/slate and red/gold visual identity; purposeful rooms, doors and stair destinations; service and guard circulation; absence of duplicate filler/random throne triangles; comprehensible final labels/connection markers. The user requires a completely new castle, courtyard and defensive enclosure. Keep the already-authored new footprint unless your own inspection finds a material problem. Do not invent mechanics, lore, king/story, or an additional room program.
+
+If no material problem remains, write reference-check.json documenting the exact inspected inputs and final PNGs, limits and outcome, and update your provenance.json with the additional actual reference/final-pixel checks. No renderer or validation rerun is needed when geometry is unchanged. If you find a material visual or geometry problem, YOU own the necessary edit to your existing render.py, rendering and inspection. After your last render, inspect all THREE final PNGs. Revalidate only if you changed geometry. Do not leave Codex commands or visual fixes to perform.
+
+Available built-ins are Read/Glob/Grep/Write/Edit/Bash/WebSearch/WebFetch. Writes are limited to your own authored files under D:/gameplanning/docs/blueprints/castle-v2. Do not modify reference source copies, transport files, assignments, the orchestration runner, game files or user settings/permissions. No agents, custom hooks, MCP, installs, downloads, builds, npm, git, auth or configuration changes. The ONLY allowed Bash command strings are exactly 'python render.py' and 'python validate.py', in this working directory. Do not use shell for placeholder commands or file editing. Read/Write/Edit are already authorized; no deny-all rules exist.
+
+Finish in a few tool turns. Return a concise factual outcome and which authored files changed. All final sheets must remain PROPOSAL - NOT IMPLEMENTED / OPUS-AUTHORED. This is reviewable plans only; no implementation.

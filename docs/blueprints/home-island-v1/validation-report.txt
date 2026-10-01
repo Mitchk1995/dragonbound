@@ -1,0 +1,138 @@
+PASS outline is a simple polygon
+PASS patch east_shelf simple
+PASS patch east_shelf inside parent island
+PASS patch shoulder simple
+PASS patch shoulder inside parent island
+PASS patch ne_upland simple
+PASS patch ne_upland inside parent island
+PASS patch crown simple
+PASS patch crown inside parent shoulder
+PASS reserved east_shelf inside land
+PASS reserved ne_upland inside land
+PASS reserved sw_terrace inside land
+PASS castle source hash matches design.json record
+PASS castle curtain pairwise distances preserved (rigid, no scaling)  [max error 0.00000]
+PASS castle import uses current source wall thickness (curtain 2.2, cross 1.8)
+PASS castle transform is one rotation + translation
+PASS castle curtain+towers inside crown spur with >= 3.0 clearance  [min 3.87]
+PASS building smelter on land, edge clearance >= 4.0  [58.9]
+PASS building smelter on one terrace level  [{0}]
+PASS building smelter clear of castle
+PASS building smelter clear of stream/pond
+PASS building bank on land, edge clearance >= 4.0  [62.1]
+PASS building bank on one terrace level  [{0}]
+PASS building bank clear of castle
+PASS building bank clear of stream/pond
+PASS building vault on land, edge clearance >= 4.0  [62.1]
+PASS building vault on one terrace level  [{0}]
+PASS building vault clear of castle
+PASS building vault clear of stream/pond
+PASS building shop on land, edge clearance >= 4.0  [41.1]
+PASS building shop on one terrace level  [{0}]
+PASS building shop clear of castle
+PASS building shop clear of stream/pond
+PASS building alchemy_plot on land, edge clearance >= 4.0  [16.4]
+PASS building alchemy_plot on one terrace level  [{0}]
+PASS building alchemy_plot clear of castle
+PASS building alchemy_plot clear of stream/pond
+PASS building rune_plot on land, edge clearance >= 4.0  [19.0]
+PASS building rune_plot on one terrace level  [{0}]
+PASS building rune_plot clear of castle
+PASS building rune_plot clear of stream/pond
+PASS building hatch_plot on land, edge clearance >= 4.0  [17.0]
+PASS building hatch_plot on one terrace level  [{7}]
+PASS building hatch_plot clear of castle
+PASS building hatch_plot clear of stream/pond
+PASS bank/vault overlap only as an attached group
+PASS portal mine base on land and h 0
+PASS portal foothills base on land and h 0
+PASS portal ruin base on land and h 0
+PASS portal lair base on land and h 0
+PASS portal mirefen base on land and h 0
+PASS portal frostspire base on land and h 0
+PASS six portal slots kept
+PASS KEEP_ARCHES ids/angles match the six design slots  [[('mine', '-150', ''), ('foothills', '-126', ''), ('ruin', '-102', ''), ('lair', '-78', ''), ('mirefen', '-54', 'Mirefen: Chapter 2'), ('frostspire', '-30', 'Frostspire: Chapter 3')]]
+PASS portal mine: present current destination slot
+PASS portal foothills: present current destination slot
+PASS portal ruin: present current destination slot
+PASS portal lair: present current destination slot
+PASS portal mirefen: dormant placeholder matches KEEP_ARCHES
+PASS portal frostspire: dormant placeholder matches KEEP_ARCHES
+PASS portal mine: open_rule "progression" backed by story.ts portalState (s.portals.mine)
+PASS portal foothills: open_rule "progression" backed by story.ts portalState (s.portals.foothills)
+PASS portal ruin: open_rule "quest" backed by story.ts portalState (q.done)
+PASS portal lair: open_rule "restore" backed by story.ts portalState (s.keep.lair_arch)
+PASS no portal claims an unconditional live/open state
+PASS building smelter w/d/wallH equal zoneMaps.ts source  [, x: 20, z: 67, w: 17, d: 13, wallH: 3.9]
+PASS building bank w/d/wallH equal zoneMaps.ts source  [ x: 102, z: 69, w: 20, d: 15, wallH: 4.6]
+PASS building vault w/d/wallH equal zoneMaps.ts source  [ x: 121, z: 72, w: 10, d: 11, wallH: 4.0]
+PASS building shop w/d/wallH equal zoneMaps.ts source  [x: 100, z: 104, w: 15, d: 11, wallH: 3.7]
+PASS building alchemy_plot w/d/wallH equal zoneMaps.ts source  [ x: 32, z: 105, w: 13, d: 10, wallH: 3.6]
+PASS building rune_plot w/d/wallH equal zoneMaps.ts source  [, x: 90, z: 47, w: 11, d: 10, wallH: 4.0]
+PASS building hatch_plot w/d/wallH equal zoneMaps.ts source  [, x: 48, z: 46, w: 14, d: 12, wallH: 4.2]
+PASS castle transform is exactly rotation 0, translate (+28,+12), no scale
+PASS every castle curtain vertex moved by exactly (+28,+12)
+PASS station landing on land
+PASS station warden on land
+PASS station board on land
+PASS station furnace on land
+PASS station furnace inside smelter
+PASS station anvil on land
+PASS station emberforge on land
+PASS station bank_counter on land
+PASS station bank_counter inside bank
+PASS station shop_counter on land
+PASS station shop_counter inside shop
+PASS route approach: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route approach endpoint court
+PASS route approach endpoint castle:G_outer
+PASS route ore_lane: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route ore_lane endpoint court
+PASS route ore_lane endpoint door:smelter
+PASS route smithy_road: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route smithy_road endpoint court
+PASS route smithy_road endpoint door:smelter
+PASS route farm_lane: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route farm_lane endpoint route:smithy_road
+PASS route farm_lane endpoint area:farm
+PASS route spring_path: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route spring_path endpoint area:farm
+PASS route spring_path endpoint area:spring
+PASS route bank_road: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route bank_road endpoint court
+PASS route bank_road endpoint door:bank
+PASS route market_lane: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route market_lane endpoint court
+PASS route market_lane endpoint door:shop
+PASS route alchemy_lane: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route alchemy_lane endpoint court
+PASS route alchemy_lane endpoint door:alchemy_plot
+PASS route memorial_path: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route memorial_path endpoint court
+PASS route memorial_path endpoint area:lookout
+PASS route east_lane: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route east_lane endpoint route:bank_road
+PASS route east_lane endpoint door:rune_plot
+PASS route upland_lane: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route upland_lane endpoint route:east_lane
+PASS route upland_lane endpoint door:hatch_plot
+PASS route postern_stair: on land, bridged, graded, clear of buildings/portals/castle walls
+PASS route postern_stair endpoint castle:G_postern
+PASS route postern_stair endpoint area:farm
+PASS all routes connected to the portal court  [set()]
+PASS every building door group reached by a route (vault via bank)  [{'vault'}]
+PASS castle gate and postern reached
+PASS stream ends beyond the land edge (falls into void)
+PASS stream source on land
+PASS stall (153.8,158) clear of routes
+PASS stall (161,168) clear of routes
+PASS stall (175,167.5) clear of routes
+PASS home-island-topdown.svg rendered from current design.json
+PASS home-island-oblique.svg rendered from current design.json
+PASS home-island-topdown.svg matches render-manifest hash
+PASS home-island-topdown.png matches render-manifest hash
+PASS home-island-oblique.svg matches render-manifest hash
+PASS home-island-oblique.png matches render-manifest hash
+
+135/135 passed
+NOT covered: navmesh/cell rasterisation, collision, camera framing, rendered pixels, gameplay feel.

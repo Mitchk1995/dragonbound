@@ -1,0 +1,18 @@
+{
+  "record_type": "User review and task coordination; no visual authorship.",
+  "user_review_at_utc": "2026-10-01T05:32:57Z",
+  "user_review": "yeah that could work there is some clipping in the yard with the plan with the training area and inner walls but yeah i think itll work possibly?",
+  "approval_state": "Overall arrangement tentatively acceptable; construction NOT authorized.",
+  "current_task": "Opus-only bounded stair/wall-walk connection details; functional review plans, not game construction.",
+  "castle_siting": {
+    "status": "Provisional pending separate entire-island design",
+    "components": [
+      "site",
+      "orientation",
+      "approach"
+    ]
+  },
+  "island_work": "Separate parent task; excluded from this castle-only job.",
+  "authorship": "Opus owns all layout, visual generation, rendering and repairs. Codex owns orchestration, nonvisual evidence and Library transport.",
+  "followup_scope": "Preserve accepted envelope, rooms and successful yard clearances; make W1/W2 and wall/tower transitions explicit and checked."
+}

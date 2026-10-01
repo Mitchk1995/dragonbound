@@ -1,0 +1,20 @@
+{
+  "outputs": [
+    {
+      "local_path": "D:\\gameplanning\\docs\\blueprints\\home-island-v1\\home-island-topdown.png",
+      "sha256": "b3870c0f7a8a034cd33206cf70177f697118a78759c98d4fe5b962fc26647523",
+      "size_bytes": 688391
+    },
+    {
+      "local_path": "D:\\gameplanning\\docs\\blueprints\\home-island-v1\\home-island-oblique.png",
+      "sha256": "87130458200cee2cd5ad104a7aa01bcb60fa21ab363fad1d1a7fa998f46bddba",
+      "size_bytes": 622716
+    }
+  ],
+  "source_bundle": {
+    "local_path": "D:\\gameplanning\\docs\\blueprints\\home-island-v1\\dragonbound-home-island-v1-source.zip",
+    "sha256": "ee743722fcdbe3df43022498c1a0ca29d428ed23a8da1f654f1cebd392376a82",
+    "size_bytes": 6222409,
+    "files": 42
+  }
+}

@@ -1,0 +1,474 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1100" viewBox="0 0 1700 1100">
+<rect x="0.0" y="0.0" width="1700.0" height="1100.0" fill="#efe3c8" stroke="none" stroke-width="1" />
+<rect x="0.0" y="0.0" width="1700.0" height="78.0" fill="#2b2420" stroke="none" stroke-width="1" />
+<rect x="0.0" y="78.0" width="1700.0" height="5.0" fill="#b0262a" stroke="none" stroke-width="1" />
+<rect x="0.0" y="83.0" width="1700.0" height="2.0" fill="#e0b040" stroke="none" stroke-width="1" />
+<text x="28.0" y="44.0" font-family="sans-serif" font-size="30" fill="#f3e6c4" text-anchor="start" font-weight="bold">CASTLE v2 — GROUND FLOOR (+0)</text>
+<text x="28.0" y="68.0" font-family="sans-serif" font-size="15" fill="#d8c69c" text-anchor="start" font-weight="normal">Hall · screens · service end · two-storey kitchen · donjon guard hall · armory &amp; chapel wing · court entrances, door reserves, stair pairs</text>
+<rect x="1230.0" y="14.0" width="450.0" height="52.0" fill="#b0262a" stroke="#e0b040" stroke-width="3" rx="6"/>
+<text x="1455.0" y="38.0" font-family="sans-serif" font-size="19" fill="#fff3d0" text-anchor="middle" font-weight="bold">PROPOSAL — NOT IMPLEMENTED</text>
+<text x="1455.0" y="58.0" font-family="sans-serif" font-size="13" fill="#f6dca0" text-anchor="middle" font-weight="normal">OPUS-AUTHORED · castle-v2 · not gameplay</text>
+<rect x="0.0" y="1070.0" width="1700.0" height="30.0" fill="#2b2420" stroke="none" stroke-width="1" />
+<text x="20.0" y="1090.0" font-family="sans-serif" font-size="13" fill="#d8c69c" text-anchor="start" font-weight="normal">1 cell = 1 world unit · x east · +Z south = gameplay camera side · layout for review, not structural engineering</text>
+<text x="1680.0" y="1090.0" font-family="sans-serif" font-size="13" fill="#e0b040" text-anchor="end" font-weight="bold">PROPOSAL — NOT IMPLEMENTED / OPUS-AUTHORED</text>
+<rect x="40.0" y="105.0" width="908.8" height="880.4" fill="#7a9a4c" stroke="none" stroke-width="1" />
+<polygon points="68.4,474.2 324.0,190.2 806.8,133.4 1005.6,232.8 437.6,1080.1 153.6,928.6" fill="#c9b48c" stroke="none" stroke-width="1" stroke-linejoin="round" />
+<polygon points="1005.6,232.8 1147.6,303.8 1261.2,701.4 1034.0,1070.6 579.6,1155.8 437.6,1080.1" fill="#b59a72" stroke="none" stroke-width="1" stroke-linejoin="round" />
+<polyline points="40.0,105.0 40.0,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="68.4,105.0 68.4,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="96.8,105.0 96.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="125.2,105.0 125.2,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,105.0 153.6,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="182.0,105.0 182.0,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="210.4,105.0 210.4,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="238.8,105.0 238.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,105.0 267.2,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="295.6,105.0 295.6,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="324.0,105.0 324.0,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="352.4,105.0 352.4,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="380.8,105.0 380.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="409.2,105.0 409.2,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="437.6,105.0 437.6,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="466.0,105.0 466.0,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="494.4,105.0 494.4,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="522.8,105.0 522.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="551.2,105.0 551.2,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="579.6,105.0 579.6,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="608.0,105.0 608.0,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="636.4,105.0 636.4,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="664.8,105.0 664.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="693.2,105.0 693.2,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="721.6,105.0 721.6,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="750.0,105.0 750.0,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="778.4,105.0 778.4,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="806.8,105.0 806.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="835.2,105.0 835.2,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="863.6,105.0 863.6,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="892.0,105.0 892.0,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="920.4,105.0 920.4,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="948.8,105.0 948.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,105.0 948.8,105.0" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,133.4 948.8,133.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,161.8 948.8,161.8" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,190.2 948.8,190.2" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,218.6 948.8,218.6" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,247.0 948.8,247.0" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,275.4 948.8,275.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,303.8 948.8,303.8" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,332.2 948.8,332.2" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,360.6 948.8,360.6" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,389.0 948.8,389.0" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,417.4 948.8,417.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,445.8 948.8,445.8" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,474.2 948.8,474.2" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,502.6 948.8,502.6" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,531.0 948.8,531.0" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,559.4 948.8,559.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,587.8 948.8,587.8" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,616.2 948.8,616.2" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,644.6 948.8,644.6" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,673.0 948.8,673.0" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,701.4 948.8,701.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,729.8 948.8,729.8" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,758.2 948.8,758.2" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,786.6 948.8,786.6" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,815.0 948.8,815.0" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,843.4 948.8,843.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,871.8 948.8,871.8" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,900.2 948.8,900.2" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,928.6 948.8,928.6" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,957.0 948.8,957.0" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="40.0,985.4 948.8,985.4" fill="none" stroke="#d9c9a6" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="68.4,474.2 324.0,190.2" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="68.4,474.2 324.0,190.2" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="324.0,190.2 806.8,133.4" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="324.0,190.2 806.8,133.4" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="806.8,133.4 1147.6,303.8" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="806.8,133.4 1147.6,303.8" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1147.6,303.8 1261.2,701.4" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1147.6,303.8 1261.2,701.4" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1261.2,701.4 1034.0,1070.6" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1261.2,701.4 1034.0,1070.6" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1034.0,1070.6 579.6,1155.8" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1034.0,1070.6 579.6,1155.8" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="579.6,1155.8 153.6,928.6" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="579.6,1155.8 153.6,928.6" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,928.6 68.4,474.2" fill="none" stroke="#5e4a3a" stroke-width="31.240000000000002" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,928.6 68.4,474.2" fill="none" stroke="#8c7560" stroke-width="12.78" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1005.6,232.8 437.6,1080.1" fill="none" stroke="#5e4a3a" stroke-width="25.56" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="1005.6,232.8 437.6,1080.1" fill="none" stroke="#8c7560" stroke-width="9.94" stroke-linejoin="round" stroke-linecap="round" />
+<circle cx="324.0" cy="190.2" r="45.4" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="324.0" cy="190.2" r="20.4" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="806.8" cy="133.4" r="51.1" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="806.8" cy="133.4" r="23.0" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="1147.6" cy="303.8" r="48.3" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="1147.6" cy="303.8" r="21.7" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="1261.2" cy="701.4" r="54.0" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="1261.2" cy="701.4" r="24.3" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="1034.0" cy="1070.6" r="45.4" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="1034.0" cy="1070.6" r="20.4" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="579.6" cy="1155.8" r="51.1" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="579.6" cy="1155.8" r="23.0" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="153.6" cy="928.6" r="42.6" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="153.6" cy="928.6" r="19.2" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="1147.6" cy="886.0" r="25.6" fill="#d8c69c" stroke="#2b2420" stroke-width="1" />
+<circle cx="721.6" cy="656.0" r="25.6" fill="#d8c69c" stroke="#2b2420" stroke-width="1" />
+<circle cx="145.1" cy="900.2" r="17.0" fill="#d8c69c" stroke="#2b2420" stroke-width="1" />
+<circle cx="1139.8" cy="939.5" r="46.9" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="1139.8" cy="939.5" r="18.7" fill="#636b7a" stroke="none" stroke-width="1" />
+<circle cx="1191.6" cy="854.8" r="46.9" fill="#4d5462" stroke="#5e4a3a" stroke-width="7.1" />
+<circle cx="1191.6" cy="854.8" r="18.7" fill="#636b7a" stroke="none" stroke-width="1" />
+<polygon points="719.9,699.3 682.2,674.0 723.3,612.6 761.0,637.9" fill="#4d5462" stroke="#5e4a3a" stroke-width="5.68" stroke-linejoin="round" />
+<polyline points="719.9,699.3 682.2,674.0" fill="none" stroke="#2b2420" stroke-width="1.704" stroke-linejoin="round" stroke-linecap="round" />
+<circle cx="721.6" cy="656.0" r="19.9" fill="#d8c69c" stroke="#2b2420" stroke-width="1" />
+<rect x="409.2" y="474.2" width="227.2" height="113.6" fill="#ffffff" stroke="#5a4630" stroke-width="1.4" fill-opacity="0.22" stroke-dasharray="6,4"/>
+<rect x="679.0" y="445.8" width="99.4" height="85.2" fill="#ffffff" stroke="#5a4630" stroke-width="1.4" fill-opacity="0.22" stroke-dasharray="6,4"/>
+<rect x="210.4" y="843.4" width="170.4" height="99.4" fill="#ffffff" stroke="#5a4630" stroke-width="1.4" fill-opacity="0.22" stroke-dasharray="6,4"/>
+<circle cx="551.2" cy="673.0" r="22.7" fill="#4f86b8" stroke="#2b2420" stroke-width="2" />
+<rect x="835.2" y="445.8" width="198.8" height="227.2" fill="#ffffff" stroke="#5a4630" stroke-width="1.4" fill-opacity="0.22" stroke-dasharray="6,4"/>
+<rect x="892.0" y="758.2" width="198.8" height="170.4" fill="#ffffff" stroke="#5a4630" stroke-width="1.4" fill-opacity="0.22" stroke-dasharray="6,4"/>
+<circle cx="267.2" cy="445.8" r="99.4" fill="#b0a088" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="366.6" y="218.6" width="269.8" height="227.2" fill="#c08850" stroke="#5e4a3a" stroke-width="12.78" />
+<polyline points="366.6,232.8 636.4,232.8" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,247.0 636.4,247.0" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,261.2 636.4,261.2" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,275.4 636.4,275.4" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,289.6 636.4,289.6" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,303.8 636.4,303.8" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,318.0 636.4,318.0" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,332.2 636.4,332.2" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,346.4 636.4,346.4" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,360.6 636.4,360.6" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,374.8 636.4,374.8" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,389.0 636.4,389.0" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,403.2 636.4,403.2" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,417.4 636.4,417.4" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="366.6,431.6 636.4,431.6" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<rect x="636.4" y="218.6" width="42.6" height="227.2" fill="#cdbd9c" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="679.0" y="218.6" width="71.0" height="92.3" fill="#cdbd9c" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="679.0" y="310.9" width="71.0" height="28.4" fill="#cdbd9c" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="679.0" y="339.3" width="71.0" height="106.5" fill="#cdbd9c" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="750.0" y="190.2" width="113.6" height="198.8" fill="#cdbd9c" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="153.6" y="545.2" width="170.4" height="113.6" fill="#b0a088" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="153.6" y="658.8" width="170.4" height="142.0" fill="#c08850" stroke="#5e4a3a" stroke-width="12.78" />
+<polyline points="153.6,673.0 324.0,673.0" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,687.2 324.0,687.2" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,701.4 324.0,701.4" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,715.6 324.0,715.6" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,729.8 324.0,729.8" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,744.0 324.0,744.0" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,758.2 324.0,758.2" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,772.4 324.0,772.4" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="153.6,786.6 324.0,786.6" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<rect x="693.2" y="957.0" width="227.2" height="85.2" fill="#c08850" stroke="#5e4a3a" stroke-width="12.78" />
+<polyline points="693.2,971.2 920.4,971.2" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="693.2,985.4 920.4,985.4" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="693.2,999.6 920.4,999.6" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="693.2,1013.8 920.4,1013.8" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="693.2,1028.0 920.4,1028.0" fill="none" stroke="#a8743f" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round" />
+<rect x="1062.4" y="417.4" width="85.2" height="198.8" fill="#d6bc72" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="1090.8" y="673.0" width="85.2" height="85.2" fill="#b0a088" stroke="#5e4a3a" stroke-width="12.78" />
+<rect x="372.3" y="247.0" width="45.4" height="193.1" fill="#d9a868" stroke="#7a4a24" stroke-width="1.2" />
+<rect x="437.6" y="281.1" width="170.4" height="17.0" fill="#7a4a24" stroke="#3a2414" stroke-width="1.2" />
+<circle cx="446.1" cy="289.6" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<circle cx="461.7" cy="289.6" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<circle cx="477.4" cy="289.6" r="3.2" fill="#f0e0c0" stroke="none" stroke-width="1" />
+<circle cx="493.0" cy="289.6" r="3.2" fill="#b0262a" stroke="none" stroke-width="1" />
+<circle cx="508.6" cy="289.6" r="3.2" fill="#b0262a" stroke="none" stroke-width="1" />
+<circle cx="524.2" cy="289.6" r="3.2" fill="#e0b040" stroke="none" stroke-width="1" />
+<circle cx="539.8" cy="289.6" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<circle cx="555.5" cy="289.6" r="3.2" fill="#f0e0c0" stroke="none" stroke-width="1" />
+<circle cx="571.1" cy="289.6" r="3.2" fill="#f0e0c0" stroke="none" stroke-width="1" />
+<circle cx="586.7" cy="289.6" r="3.2" fill="#b0262a" stroke="none" stroke-width="1" />
+<circle cx="602.3" cy="289.6" r="3.2" fill="#e0b040" stroke="none" stroke-width="1" />
+<rect x="437.6" y="274.7" width="170.4" height="4.3" fill="#5e3a1c" stroke="none" stroke-width="1" />
+<rect x="437.6" y="300.2" width="170.4" height="4.3" fill="#5e3a1c" stroke="none" stroke-width="1" />
+<rect x="437.6" y="366.3" width="170.4" height="17.0" fill="#7a4a24" stroke="#3a2414" stroke-width="1.2" />
+<circle cx="446.1" cy="374.8" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<circle cx="461.7" cy="374.8" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<circle cx="477.4" cy="374.8" r="3.2" fill="#f0e0c0" stroke="none" stroke-width="1" />
+<circle cx="493.0" cy="374.8" r="3.2" fill="#b0262a" stroke="none" stroke-width="1" />
+<circle cx="508.6" cy="374.8" r="3.2" fill="#b0262a" stroke="none" stroke-width="1" />
+<circle cx="524.2" cy="374.8" r="3.2" fill="#e0b040" stroke="none" stroke-width="1" />
+<circle cx="539.8" cy="374.8" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<circle cx="555.5" cy="374.8" r="3.2" fill="#f0e0c0" stroke="none" stroke-width="1" />
+<circle cx="571.1" cy="374.8" r="3.2" fill="#f0e0c0" stroke="none" stroke-width="1" />
+<circle cx="586.7" cy="374.8" r="3.2" fill="#b0262a" stroke="none" stroke-width="1" />
+<circle cx="602.3" cy="374.8" r="3.2" fill="#e0b040" stroke="none" stroke-width="1" />
+<rect x="437.6" y="359.9" width="170.4" height="4.3" fill="#5e3a1c" stroke="none" stroke-width="1" />
+<rect x="437.6" y="385.4" width="170.4" height="4.3" fill="#5e3a1c" stroke="none" stroke-width="1" />
+<rect x="383.6" y="261.2" width="17.0" height="113.6" fill="#7a4a24" stroke="#3a2414" stroke-width="1.2" />
+<rect x="511.4" y="320.8" width="22.7" height="22.7" fill="#5a4a40" stroke="#2b2420" stroke-width="1.2" />
+<circle cx="522.8" cy="332.2" r="7.3" fill="#e8742a" stroke="none" stroke-width="1" />
+<circle cx="522.8" cy="332.2" r="3.4" fill="#e0b040" stroke="none" stroke-width="1" />
+<rect x="771.3" y="190.2" width="71.0" height="19.9" fill="#5a4a40" stroke="#2b2420" stroke-width="1.2" />
+<circle cx="806.8" cy="200.1" r="6.4" fill="#e8742a" stroke="none" stroke-width="1" />
+<circle cx="806.8" cy="200.1" r="3.0" fill="#e0b040" stroke="none" stroke-width="1" />
+<rect x="843.7" y="247.0" width="19.9" height="71.0" fill="#5a4a40" stroke="#2b2420" stroke-width="1.2" />
+<circle cx="853.7" cy="282.5" r="6.4" fill="#e8742a" stroke="none" stroke-width="1" />
+<circle cx="853.7" cy="282.5" r="3.0" fill="#e0b040" stroke="none" stroke-width="1" />
+<rect x="778.4" y="261.2" width="42.6" height="22.7" fill="#7a4a24" stroke="#3a2414" stroke-width="1.2" />
+<circle cx="786.9" cy="272.6" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<circle cx="802.5" cy="272.6" r="3.2" fill="#d07a30" stroke="none" stroke-width="1" />
+<rect x="778.4" y="254.8" width="42.6" height="4.3" fill="#5e3a1c" stroke="none" stroke-width="1" />
+<rect x="778.4" y="286.0" width="42.6" height="4.3" fill="#5e3a1c" stroke="none" stroke-width="1" />
+<circle cx="701.7" cy="232.8" r="7.8" fill="#8a5a30" stroke="#3a2414" stroke-width="1" />
+<circle cx="718.8" cy="232.8" r="7.8" fill="#8a5a30" stroke="#3a2414" stroke-width="1" />
+<circle cx="735.8" cy="232.8" r="7.8" fill="#8a5a30" stroke="#3a2414" stroke-width="1" />
+<rect x="693.2" y="423.1" width="51.1" height="17.0" fill="#7a4a24" stroke="#3a2414" stroke-width="1" />
+<rect x="167.8" y="708.5" width="17.0" height="42.6" fill="#e0b040" stroke="#3a2414" stroke-width="1" />
+<rect x="159.3" y="559.4" width="14.2" height="85.2" fill="#6a6a70" stroke="#3a2414" stroke-width="1" />
+<rect x="707.4" y="1019.5" width="198.8" height="17.0" fill="#8a5a30" stroke="#3a2414" stroke-width="1" />
+<rect x="1126.3" y="708.5" width="17.0" height="14.2" fill="#3a3a40" stroke="#3a2414" stroke-width="1" />
+<rect x="1156.1" y="687.2" width="19.9" height="42.6" fill="#5a4a40" stroke="#2b2420" stroke-width="1.2" />
+<circle cx="1166.1" cy="708.5" r="6.4" fill="#e8742a" stroke="none" stroke-width="1" />
+<circle cx="1166.1" cy="708.5" r="3.0" fill="#e0b040" stroke="none" stroke-width="1" />
+<rect x="466.0" y="438.7" width="56.8" height="14.2" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="466.0" y="389.0" width="56.8" height="56.8" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="466.0,445.8 466.0,389.0" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M466.0,389.0 A56.8,56.8 0 0 1 522.8,445.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="527.8" y="439.6" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="537.0" y="450.8" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D1</text>
+<rect x="639.9" y="438.7" width="35.5" height="14.2" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="639.9" y="410.3" width="35.5" height="35.5" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="639.9,445.8 639.9,410.3" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M639.9,410.3 A35.5,35.5 0 0 1 675.4,445.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="680.4" y="439.6" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="689.6" y="450.8" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D2</text>
+<rect x="629.3" y="310.9" width="14.2" height="42.6" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="593.8" y="310.9" width="42.6" height="42.6" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="636.4,310.9 593.8,310.9" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M593.8,310.9 A42.6,42.6 0 0 0 636.4,353.5" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="627.2" y="292.6" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="636.4" y="303.8" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D3</text>
+<rect x="671.9" y="247.0" width="14.2" height="28.4" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="679.0" y="247.0" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="679.0,247.0 707.4,247.0" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M707.4,247.0 A28.4,28.4 0 0 1 679.0,275.4" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="669.8" y="228.7" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="679.0" y="239.9" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D4</text>
+<rect x="671.9" y="310.9" width="14.2" height="28.4" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="679.0" y="310.9" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="679.0,310.9 707.4,310.9" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M707.4,310.9 A28.4,28.4 0 0 1 679.0,339.3" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="669.8" y="292.6" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="679.0" y="303.8" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D5</text>
+<rect x="742.9" y="310.9" width="14.2" height="28.4" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="750.0" y="310.9" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="750.0,310.9 778.4,310.9" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M778.4,310.9 A28.4,28.4 0 0 1 750.0,339.3" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="740.8" y="292.6" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="750.0" y="303.8" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D6</text>
+<rect x="671.9" y="374.8" width="14.2" height="28.4" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="679.0" y="374.8" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="679.0,374.8 707.4,374.8" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M707.4,374.8 A28.4,28.4 0 0 1 679.0,403.2" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="669.8" y="356.5" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="679.0" y="367.7" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D7</text>
+<rect x="785.5" y="381.9" width="42.6" height="14.2" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="785.5" y="346.4" width="42.6" height="42.6" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="785.5,389.0 785.5,346.4" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M785.5,346.4 A42.6,42.6 0 0 1 828.1,389.0" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="833.1" y="382.8" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="842.3" y="394.0" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D8</text>
+<rect x="359.5" y="403.2" width="14.2" height="28.4" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="338.2" y="403.2" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="366.6,403.2 338.2,403.2" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M338.2,403.2 A28.4,28.4 0 0 0 366.6,431.6" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="357.4" y="384.9" width="18.4" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="366.6" y="396.1" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D9</text>
+<rect x="253.0" y="538.1" width="28.4" height="14.2" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="253.0" y="545.2" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="253.0,545.2 253.0,573.6" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M253.0,573.6 A28.4,28.4 0 0 0 281.4,545.2" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="282.8" y="539.0" width="25.6" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="295.6" y="550.2" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D10</text>
+<rect x="316.9" y="587.8" width="14.2" height="28.4" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="295.6" y="587.8" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="324.0,587.8 295.6,587.8" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M295.6,587.8 A28.4,28.4 0 0 0 324.0,616.2" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="311.2" y="569.5" width="25.6" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="324.0" y="580.7" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D11</text>
+<rect x="224.6" y="651.7" width="28.4" height="14.2" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="224.6" y="658.8" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="224.6,658.8 224.6,687.2" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M224.6,687.2 A28.4,28.4 0 0 0 253.0,658.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="254.4" y="652.6" width="25.6" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="267.2" y="663.8" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D12</text>
+<rect x="316.9" y="708.5" width="14.2" height="42.6" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="281.4" y="708.5" width="42.6" height="42.6" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="324.0,708.5 281.4,708.5" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M281.4,708.5 A42.6,42.6 0 0 0 324.0,751.1" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="311.2" y="690.2" width="25.6" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="324.0" y="701.4" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D13</text>
+<rect x="785.5" y="949.9" width="42.6" height="14.2" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="785.5" y="957.0" width="42.6" height="42.6" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="785.5,957.0 785.5,999.6" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M785.5,999.6 A42.6,42.6 0 0 0 828.1,957.0" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="829.5" y="950.8" width="25.6" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="842.3" y="962.0" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D14</text>
+<rect x="1140.5" y="488.4" width="14.2" height="56.8" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="1090.8" y="488.4" width="56.8" height="56.8" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="1147.6,488.4 1090.8,488.4" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M1090.8,488.4 A56.8,56.8 0 0 0 1147.6,545.2" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="1134.8" y="470.1" width="25.6" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="1147.6" y="481.3" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D15</text>
+<rect x="1083.7" y="701.4" width="14.2" height="28.4" fill="#efe0bc" stroke="none" stroke-width="1" />
+<rect x="1090.8" y="701.4" width="28.4" height="28.4" fill="none" stroke="#b0262a" stroke-width="1" stroke-dasharray="3,3"/>
+<polyline points="1090.8,701.4 1119.2,701.4" fill="none" stroke="#2b2420" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<path d="M1119.2,701.4 A28.4,28.4 0 0 1 1090.8,729.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-dasharray="2,2"/>
+<rect x="1078.0" y="683.1" width="25.6" height="15.2" fill="#b0262a" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="1090.8" y="694.3" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">D16</text>
+<circle cx="267.2" cy="445.8" r="25.6" fill="#e6d6b0" stroke="#2b2420" stroke-width="1.5" />
+<polyline points="267.2,445.8 292.8,445.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 287.9,460.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 275.1,470.1" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 259.3,470.1" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 246.5,460.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 241.6,445.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 246.5,430.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 259.3,421.5" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 275.1,421.5" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="267.2,445.8 287.9,430.8" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<circle cx="267.2" cy="445.8" r="4.3" fill="#2b2420" stroke="none" stroke-width="1" />
+<rect x="229.2" y="476.2" width="76.0" height="15.2" fill="#3f6fb0" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="267.2" y="487.4" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">S1 ↑ UPPER</text>
+<rect x="637.8" y="223.6" width="39.8" height="39.8" fill="#e6d6b0" stroke="#2b2420" stroke-width="1.5" />
+<polyline points="637.8,223.6 677.6,223.6" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="637.8,229.2 677.6,229.2" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="637.8,234.9 677.6,234.9" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="637.8,240.6 677.6,240.6" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="637.8,246.3 677.6,246.3" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="637.8,252.0 677.6,252.0" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="637.8,257.6 677.6,257.6" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="657.7,263.3 657.7,226.4" fill="none" stroke="#b0262a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<rect x="557.8" y="237.2" width="76.0" height="15.2" fill="#3f6fb0" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="631.8" y="248.4" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="end" font-weight="bold">S2 ↑ UPPER</text>
+<rect x="502.9" y="880.3" width="39.8" height="39.8" fill="#e6d6b0" stroke="#2b2420" stroke-width="1.5" />
+<polyline points="502.9,880.3 542.7,880.3" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="502.9,886.0 542.7,886.0" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="502.9,891.7 542.7,891.7" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="502.9,897.4 542.7,897.4" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="502.9,903.0 542.7,903.0" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="502.9,908.7 542.7,908.7" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="502.9,914.4 542.7,914.4" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="502.9,920.1 542.7,920.1" fill="none" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="522.8,920.1 522.8,883.2" fill="none" stroke="#b0262a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+<rect x="484.8" y="924.9" width="76.0" height="15.2" fill="#3f6fb0" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="522.8" y="936.1" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">W1 ↑ UPPER</text>
+<polyline points="366.6,445.8 679.0,445.8" fill="none" stroke="#f6ecd4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="8,5"/>
+<polyline points="679.0,445.8 750.0,445.8" fill="none" stroke="#f6ecd4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="8,5"/>
+<polyline points="750.0,389.0 863.6,389.0" fill="none" stroke="#f6ecd4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="8,5"/>
+<rect x="0.0" y="85.0" width="40.0" height="1000.0" fill="#efe3c8" stroke="none" stroke-width="1" />
+<rect x="949.0" y="85.0" width="51.0" height="1000.0" fill="#efe3c8" stroke="none" stroke-width="1" />
+<rect x="0.0" y="985.0" width="1700.0" height="115.0" fill="#efe3c8" stroke="none" stroke-width="1" />
+<rect x="0.0" y="0.0" width="1700.0" height="105.0" fill="#efe3c8" stroke="none" stroke-width="1" />
+<rect x="1000.0" y="85.0" width="700.0" height="1015.0" fill="#efe3c8" stroke="none" stroke-width="1" />
+<rect x="0.0" y="0.0" width="1700.0" height="78.0" fill="#2b2420" stroke="none" stroke-width="1" />
+<rect x="0.0" y="78.0" width="1700.0" height="5.0" fill="#b0262a" stroke="none" stroke-width="1" />
+<rect x="0.0" y="83.0" width="1700.0" height="2.0" fill="#e0b040" stroke="none" stroke-width="1" />
+<text x="28.0" y="44.0" font-family="sans-serif" font-size="30" fill="#f3e6c4" text-anchor="start" font-weight="bold">CASTLE v2 — GROUND FLOOR (+0)</text>
+<text x="28.0" y="68.0" font-family="sans-serif" font-size="15" fill="#d8c69c" text-anchor="start" font-weight="normal">Hall · screens · service end · two-storey kitchen · donjon guard hall · armory &amp; chapel wing · court entrances, door reserves, stair pairs</text>
+<rect x="1230.0" y="14.0" width="450.0" height="52.0" fill="#b0262a" stroke="#e0b040" stroke-width="3" rx="6"/>
+<text x="1455.0" y="38.0" font-family="sans-serif" font-size="19" fill="#fff3d0" text-anchor="middle" font-weight="bold">PROPOSAL — NOT IMPLEMENTED</text>
+<text x="1455.0" y="58.0" font-family="sans-serif" font-size="13" fill="#f6dca0" text-anchor="middle" font-weight="normal">OPUS-AUTHORED · castle-v2 · not gameplay</text>
+<rect x="0.0" y="1070.0" width="1700.0" height="30.0" fill="#2b2420" stroke="none" stroke-width="1" />
+<text x="20.0" y="1090.0" font-family="sans-serif" font-size="13" fill="#d8c69c" text-anchor="start" font-weight="normal">1 cell = 1 world unit · x east · +Z south = gameplay camera side · layout for review, not structural engineering</text>
+<text x="1680.0" y="1090.0" font-family="sans-serif" font-size="13" fill="#e0b040" text-anchor="end" font-weight="bold">PROPOSAL — NOT IMPLEMENTED / OPUS-AUTHORED</text>
+<rect x="40.0" y="105.0" width="909.0" height="880.0" fill="none" stroke="#2b2420" stroke-width="1.5" />
+<rect x="445.8" y="454.3" width="12.0" height="18.0" fill="#b0262a" stroke="#2b2420" stroke-width="0.8" />
+<polygon points="451.8,458.3 455.8,463.3 451.8,468.3 447.8,463.3" fill="#e0b040" stroke="none" stroke-width="1" stroke-linejoin="round" />
+<rect x="573.6" y="454.3" width="12.0" height="18.0" fill="#b0262a" stroke="#2b2420" stroke-width="0.8" />
+<polygon points="579.6,458.3 583.6,463.3 579.6,468.3 575.6,463.3" fill="#e0b040" stroke="none" stroke-width="1" stroke-linejoin="round" />
+<rect x="363.4" y="332.2" width="12.0" height="18.0" fill="#b0262a" stroke="#2b2420" stroke-width="0.8" />
+<polygon points="369.4,336.2 373.4,341.2 369.4,346.2 365.4,341.2" fill="#e0b040" stroke="none" stroke-width="1" stroke-linejoin="round" />
+<polyline points="892.0,729.8 764.2,681.5 721.6,656.0 664.8,616.2 551.2,531.0 494.4,474.2 494.4,445.8 494.4,403.2 395.0,417.4 366.6,417.4 309.8,431.6" fill="none" stroke="#d49a1a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="9,6" opacity="0.9"/>
+<polyline points="735.8,488.4 806.8,417.4 806.8,389.0 806.8,325.1 750.0,325.1 707.4,325.1 679.0,325.1 657.7,329.4 636.4,332.2 579.6,332.2" fill="none" stroke="#d2601e" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="9,6" opacity="0.9"/>
+<polyline points="267.2,602.0 324.0,602.0 352.4,701.4 352.4,786.6 295.6,871.8 182.0,914.4 145.1,900.2 40.0,900.2" fill="none" stroke="#3f8f4a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="9,6" opacity="0.9"/>
+<rect x="467.6" y="229.3" width="82.0" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="508.6" y="241.3" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">GREAT HALL</text>
+<rect x="380.9" y="392.8" width="28.2" height="14.1" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="395.0" y="403.2" font-family="sans-serif" font-size="11" fill="#2b2420" text-anchor="middle" font-weight="normal">dais</text>
+<rect x="634.5" y="415.6" width="46.4" height="14.1" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="657.7" y="425.9" font-family="sans-serif" font-size="11" fill="#2b2420" text-anchor="middle" font-weight="normal">Screens</text>
+<rect x="691.3" y="286.3" width="46.4" height="14.1" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="714.5" y="296.7" font-family="sans-serif" font-size="11" fill="#2b2420" text-anchor="middle" font-weight="normal">Buttery</text>
+<rect x="703.4" y="321.8" width="22.2" height="14.1" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="714.5" y="332.2" font-family="sans-serif" font-size="11" fill="#2b2420" text-anchor="middle" font-weight="normal">svc</text>
+<rect x="694.4" y="392.8" width="40.3" height="14.1" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="714.5" y="403.2" font-family="sans-serif" font-size="11" fill="#2b2420" text-anchor="middle" font-weight="normal">Pantry</text>
+<rect x="754.1" y="342.9" width="105.4" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="806.8" y="354.9" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">GREAT KITCHEN</text>
+<rect x="729.2" y="225.3" width="155.2" height="14.1" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="806.8" y="235.6" font-family="sans-serif" font-size="11" fill="#2b2420" text-anchor="middle" font-weight="normal">two hearths, open to roof</text>
+<rect x="198.9" y="371.3" width="136.6" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="267.2" y="383.3" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">DONJON GUARD HALL</text>
+<rect x="173.7" y="625.5" width="144.4" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="245.9" y="637.5" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">GUARDROOM &amp; ARMORY</text>
+<rect x="227.6" y="767.5" width="50.8" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="253.0" y="779.5" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">CHAPEL</text>
+<rect x="477.9" y="558.7" width="89.8" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="522.8" y="570.8" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">FEAST COURT</text>
+<rect x="679.9" y="507.6" width="97.6" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="728.7" y="519.6" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">KITCHEN YARD</text>
+<rect x="533.6" y="709.2" width="35.2" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="551.2" y="721.3" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">WELL</text>
+<rect x="250.7" y="913.7" width="89.8" height="16.3" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="295.6" y="925.8" font-family="sans-serif" font-size="13" fill="#2b2420" text-anchor="middle" font-weight="bold">HERB GARDEN</text>
+<rect x="621.6" y="776.2" width="143.2" height="14.1" fill="#f6ecd4" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="693.2" y="786.6" font-family="sans-serif" font-size="11" fill="#2b2420" text-anchor="middle" font-weight="normal">cross wall → lower ward</text>
+<rect x="682.6" y="618.7" width="78.0" height="16.2" fill="#2b2420" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="721.6" y="630.4" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">INNER GATE</text>
+<rect x="182.2" y="953.8" width="56.4" height="16.2" fill="#2b2420" stroke="none" stroke-width="1" rx="3" opacity="0.88"/>
+<text x="210.4" y="965.5" font-family="sans-serif" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">POSTERN</text>
+<circle cx="90.0" cy="1010.0" r="26.0" fill="#f6ecd4" stroke="#2b2420" stroke-width="1.5" />
+<polygon points="90.0,988.0 83.0,1014.0 90.0,1008.0 97.0,1014.0" fill="#b0262a" stroke="#2b2420" stroke-width="1" stroke-linejoin="round" />
+<text x="90.0" y="980.0" font-family="sans-serif" font-size="15" fill="#2b2420" text-anchor="middle" font-weight="bold">N</text>
+<text x="90.0" y="1054.0" font-family="sans-serif" font-size="12" fill="#2b2420" text-anchor="middle" font-weight="normal">camera ↓ (+Z)</text>
+<rect x="140.0" y="1016.0" width="14.2" height="7.0" fill="#2b2420" stroke="none" stroke-width="1" />
+<rect x="154.2" y="1016.0" width="14.2" height="7.0" fill="#f6ecd4" stroke="#2b2420" stroke-width="0.8" />
+<rect x="168.4" y="1016.0" width="14.2" height="7.0" fill="#2b2420" stroke="none" stroke-width="1" />
+<rect x="182.6" y="1016.0" width="14.2" height="7.0" fill="#f6ecd4" stroke="#2b2420" stroke-width="0.8" />
+<rect x="196.8" y="1016.0" width="14.2" height="7.0" fill="#2b2420" stroke="none" stroke-width="1" />
+<rect x="211.0" y="1016.0" width="14.2" height="7.0" fill="#f6ecd4" stroke="#2b2420" stroke-width="0.8" />
+<text x="140.0" y="1008.0" font-family="sans-serif" font-size="12" fill="#2b2420" text-anchor="start" font-weight="normal">0</text>
+<text x="225.2" y="1008.0" font-family="sans-serif" font-size="12" fill="#2b2420" text-anchor="middle" font-weight="normal">6 cells</text>
+<rect x="1000.0" y="100.0" width="680.0" height="965.0" fill="#f6ecd4" stroke="#2b2420" stroke-width="1.5" rx="6"/>
+<text x="1018.0" y="128.0" font-family="sans-serif" font-size="16" fill="#2b2420" text-anchor="start" font-weight="bold">DOOR SCHEDULE (dashed red = swing reserve, keep clear)</text>
+<text x="1024.0" y="150.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D1   Great Hall ⇄ Inner court  (4 wide, swings N)</text>
+<text x="1024.0" y="168.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D2   Screens Passage ⇄ Inner court  (2.5 wide, swings N)</text>
+<text x="1024.0" y="186.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D3   Screens Passage ⇄ Great Hall  (3 wide, swings W)</text>
+<text x="1024.0" y="204.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D4   Screens Passage ⇄ Buttery  (2 wide, swings E)</text>
+<text x="1024.0" y="222.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D5   Screens Passage ⇄ Service Passage  (2 wide, swings E)</text>
+<text x="1024.0" y="240.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D6   Service Passage ⇄ Great Kitchen  (2 wide, swings E)</text>
+<text x="1024.0" y="258.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D7   Screens Passage ⇄ Pantry  (2 wide, swings E)</text>
+<text x="1024.0" y="276.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D8   Great Kitchen ⇄ Inner court  (3 wide, swings N)</text>
+<text x="1024.0" y="294.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D9   Great Hall ⇄ Donjon Guard Hall  (2 wide, swings W)</text>
+<text x="1024.0" y="312.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D10  Donjon Guard Hall ⇄ Guardroom &amp; Armory  (2 wide, swings S)</text>
+<text x="1024.0" y="330.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D11  Guardroom &amp; Armory ⇄ Inner court  (2 wide, swings W)</text>
+<text x="1024.0" y="348.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D12  Guardroom &amp; Armory ⇄ Chapel  (2 wide, swings S)</text>
+<text x="1024.0" y="366.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D13  Chapel ⇄ Inner court  (3 wide, swings W)</text>
+<text x="1024.0" y="384.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D14  Barracks ⇄ Lower ward  (3 wide, swings S)</text>
+<text x="1024.0" y="402.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D15  Stables ⇄ Lower ward  (4 wide, swings W)</text>
+<text x="1024.0" y="420.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">D16  Smithy ⇄ Lower ward  (2 wide, swings E)</text>
+<text x="1018.0" y="454.0" font-family="sans-serif" font-size="16" fill="#2b2420" text-anchor="start" font-weight="bold">STAIR PAIRS (fade triggers stand at the same x,z on both floors)</text>
+<text x="1024.0" y="476.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">S1  @ (22, 28)  spiral: G&lt;-&gt;U&lt;-&gt;roof (+13)</text>
+<text x="1024.0" y="494.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">S2  @ (49.5, 13.75)  straight: G screens &lt;-&gt; U minstrel gallery</text>
+<text x="1024.0" y="512.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">W1  @ (40, 60)  wall stair: inner court &lt;-&gt; wall walk (+7)</text>
+<text x="1024.0" y="530.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">W2  @ (78, 62)  wall stair: muster yard &lt;-&gt; wall walk / gatehouse (+7)</text>
+<text x="1018.0" y="564.0" font-family="sans-serif" font-size="16" fill="#2b2420" text-anchor="start" font-weight="bold">FOOD LOGIC (Bodiam-style service end)</text>
+<text x="1024.0" y="586.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Kitchen yard (deliveries, wood, water from well) → kitchen D8.</text>
+<text x="1024.0" y="604.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Kitchen → service passage D6 → screens D5; buttery D4 (casks, drink)</text>
+<text x="1024.0" y="622.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">  and pantry D7 (bread, stores) open off the same screens.</text>
+<text x="1024.0" y="640.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Servers enter the hall at D3, behind the table ends — never through guests.</text>
+<text x="1024.0" y="658.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Guests enter by the great door D1 from the feast court; lord's party</text>
+<text x="1024.0" y="676.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">  arrives at the dais from the donjon D9.</text>
+<text x="1024.0" y="694.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Central hearth (louver above) lights two long tables + high table.</text>
+<text x="1018.0" y="728.0" font-family="sans-serif" font-size="16" fill="#2b2420" text-anchor="start" font-weight="bold">CIRCULATION</text>
+<text x="1024.0" y="750.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">White dashed south faces = camera-side cutaway (walls cut to 1.2).</text>
+<text x="1024.0" y="768.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Main lanes 3-4 cells: hall aisle south of the tables, court routes.</text>
+<text x="1024.0" y="786.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Hall: 19×16 cells; aisle y 24-28 kept clear for the approach route.</text>
+<text x="1024.0" y="804.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Guard: armory D11 to court; donjon reachable only via hall dais</text>
+<text x="1024.0" y="822.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">  or armory D10 — defensible residence.</text>
+<text x="1024.0" y="840.0" font-family="sans-serif" font-size="12.5" fill="#2b2420" text-anchor="start" font-weight="normal">Lower ward rooms (barracks, stables, smithy) on overview sheet.</text>
+</svg>

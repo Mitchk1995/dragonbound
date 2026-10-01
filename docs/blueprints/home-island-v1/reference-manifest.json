@@ -1,0 +1,141 @@
+{
+  "snapshotted_at_utc": "2026-10-01T05:41:17.530900+00:00",
+  "files": [
+    {
+      "source": "docs/WORKING_DESIGN_PLAN.md",
+      "snapshot": "references/WORKING_DESIGN_PLAN.md",
+      "sha256": "a19fedcb1dd9f6ca49722b846c91f3306fe7cb25ecfddd6f31ef7d13e347f2e5"
+    },
+    {
+      "source": "src/data/zoneMaps.ts",
+      "snapshot": "references/zoneMaps.ts",
+      "sha256": "775074004f95ad67cfe96881fb541640fee707fc42bc4d657e2d29d8261ed46e"
+    },
+    {
+      "source": "src/data/zones.ts",
+      "snapshot": "references/zones.ts",
+      "sha256": "8135f05c0ac459052606ddc9a78428f08168a8f7e85080706e9980e01ff6c513"
+    },
+    {
+      "source": "src/data/keep.ts",
+      "snapshot": "references/keep.ts",
+      "sha256": "476caed70e84610aec01a50e5cd63b9f418b7df74ec5494b6785f5900901f532"
+    },
+    {
+      "source": "src/world/worldView.ts",
+      "snapshot": "references/worldView.ts",
+      "sha256": "ec664695e3b4e981fc9f9cf6f6ea0b95a128566b739700b344330ccc9d2bbb7b"
+    },
+    {
+      "source": "src/world/trees.ts",
+      "snapshot": "references/trees.ts",
+      "sha256": "23a11aa5899b6f74df967916facf1b56d58ba56e7995e4d84d8d3c6a63c54523"
+    },
+    {
+      "source": "src/world/portalFx.ts",
+      "snapshot": "references/portalFx.ts",
+      "sha256": "2c29c1a8bc80b805f425d0e456ceab336f212e6fd186116e153c6a54bf77b1bd"
+    },
+    {
+      "source": "src/world/layout.ts",
+      "snapshot": "references/layout.ts",
+      "sha256": "53ff368264cb944ce88d3e84d1ed7c3529de9ac6ebc2050230769db5e6df24b8"
+    },
+    {
+      "source": "src/world/terrain.ts",
+      "snapshot": "references/terrain.ts",
+      "sha256": "3046bb11eb025012f6579b7b9fda85d79c5fd264fe2eb966c1d95aa7c32e41be"
+    },
+    {
+      "source": "src/world/props.ts",
+      "snapshot": "references/props.ts",
+      "sha256": "cb8caabdd14da453e59e12f649d930f858a59137a9a4bc9cfca3afdfb5640921"
+    },
+    {
+      "source": "src/render/kit.ts",
+      "snapshot": "references/kit.ts",
+      "sha256": "ac1ceacb261a1d5171c97e774a35e61d2080b939d2c07503fa846105f06f68ca"
+    },
+    {
+      "source": "src/world/building.ts",
+      "snapshot": "references/building.ts",
+      "sha256": "7f4c532dd1723513099f2e7b4ec42911390a530bf19fe68fb004fe73d3e39bbc"
+    },
+    {
+      "source": "src/world/buildingModel.ts",
+      "snapshot": "references/buildingModel.ts",
+      "sha256": "c8b8ef392600344b0320ce7e66a91ca2fb3268e80c3a0ed7e42de3461b695fe2"
+    },
+    {
+      "source": "src/entities/player.ts",
+      "snapshot": "references/player.ts",
+      "sha256": "45911c8de1ca65c05bcaf9911a98154f2ff53994196d5ff4b15510fea13c8bf1"
+    },
+    {
+      "source": "inspect/browser-checkpoint.png",
+      "snapshot": "references/browser-checkpoint.png",
+      "sha256": "a639e3c6849a3ed863b5637e58a30f63d27933b742dc2cb71af97776d7cfea58"
+    },
+    {
+      "source": "docs/blueprints/castle-v2/references/02-castle-exterior-path.png",
+      "snapshot": "references/02-castle-exterior-path.png",
+      "sha256": "ca4d7d21569f3a3e5d1a17bb29ef85b66f43a57fe80912c3b937df5f73cc38f3"
+    },
+    {
+      "source": "docs/blueprints/castle-v2/design.json",
+      "snapshot": "references/castle-v2/design.json",
+      "sha256": "4cfd13c3d6f919429f8532167399d41d4c1dd545f7a50604284b2a34f93366c1",
+      "previous_snapshot": "references/castle-v2-initial/design.json",
+      "previous_sha256": "98122f5255258e94c6e7409e37192a9b77cb87e1b5452383cd9a9317f2d8f98f",
+      "updated_snapshot_at_utc": "2026-10-01T06:12:46.167255+00:00"
+    },
+    {
+      "source": "docs/blueprints/castle-v2/provenance.json",
+      "snapshot": "references/castle-v2/provenance.json",
+      "sha256": "5c78eb58f0a09f35de5a2efc0581bcd884d0ad8fb1df7b78c2e1649b15bc4490",
+      "previous_snapshot": "references/castle-v2-initial/provenance.json",
+      "previous_sha256": "c96be6b1930f671183c0a60b0310610e87cc4877522bd9884e391480fc13e5d9",
+      "updated_snapshot_at_utc": "2026-10-01T06:12:46.170857+00:00"
+    },
+    {
+      "source": "docs/blueprints/castle-v2/castle-v2-overview.png",
+      "snapshot": "references/castle-v2/castle-v2-overview.png",
+      "sha256": "c16039f1aa7b2cb7a099e04cf6709bde18ed0167f75615f90be6b5de7861557c",
+      "previous_snapshot": "references/castle-v2-initial/castle-v2-overview.png",
+      "previous_sha256": "6b53003c5c7824d355c0fc0f7dc4b51453ceb752425a231292c7780ec47466ef",
+      "updated_snapshot_at_utc": "2026-10-01T06:12:46.175176+00:00"
+    },
+    {
+      "source": "docs/blueprints/castle-v2/castle-v2-ground.png",
+      "snapshot": "references/castle-v2/castle-v2-ground.png",
+      "sha256": "0bcfafe06f36d0df9789f09a65fdb69d32f5d038215581f877312ab47852deec",
+      "previous_snapshot": "references/castle-v2-initial/castle-v2-ground.png",
+      "previous_sha256": "28e8107fb710d1eceaaec07c9d871ec612f674ebc5eab7ccc07ecf91eeeaee63",
+      "updated_snapshot_at_utc": "2026-10-01T06:12:46.179181+00:00"
+    },
+    {
+      "source": "docs/blueprints/castle-v2/castle-v2-upper.png",
+      "snapshot": "references/castle-v2/castle-v2-upper.png",
+      "sha256": "e86949f70610bb35209c47c38a5beb302c629efa9fd27b57fff88af427477ce9",
+      "previous_snapshot": "references/castle-v2-initial/castle-v2-upper.png",
+      "previous_sha256": "d6a07896e6901276a23b821cd6dc50a5f8356e12f8cabd9f2518c5784db66d14",
+      "updated_snapshot_at_utc": "2026-10-01T06:12:46.183204+00:00"
+    },
+    {
+      "source": "src/systems/story.ts",
+      "snapshot": "references/story.ts",
+      "sha256": "0535e17dcc8758abe28969378ee825a2ec028dd3b97e0693dab10ca282300f99"
+    },
+    {
+      "source": "src/world/zone.ts",
+      "snapshot": "references/zone.ts",
+      "sha256": "6fd00c06add7539358014227d7b3c3704efa528d5b468a042da1e754a059d16f"
+    },
+    {
+      "source": "Library libfile_c4a34c2e2c84819194416fd921dd2d26",
+      "snapshot": "references/01-portal-hub.png",
+      "sha256": "2007f55c67b13a441a34f0c4a5bc4771a609aa20947202cba77b6958307361c5",
+      "added_after_delivery_for_reference_verification_only": true
+    }
+  ]
+}

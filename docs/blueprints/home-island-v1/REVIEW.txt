@@ -1,0 +1,92 @@
+DRAGONBOUND HOME ISLAND v1 - PROPOSAL - NOT IMPLEMENTED / OPUS-AUTHORED - CASTLE SITE PROVISIONAL
+
+CONCEPT
+A torn crown-spur fragment. The north and west edges are fresh, angular tear faces, and a fresh unbridged
+fracture notch cuts in from the north. The east and south edges are older and weathered, with rounded lobes
+and a headland. The island floats over a sky void. There is no sea; the only water is a spring, a stream and
+a pond, and the stream falls off the south edge.
+
+SIZE
+The proposal is 270 x 216 cells (bounding box) with 44,938 cells of land, about 3.2x the current land. The
+current island is a nominal ~129 x 129 superellipse (~14,200 cells) on a 150x150 grid that is not all ground.
+
+CASTLE SITE (provisional; nothing approved)
+The castle-v2 footprint is placed by a rigid translation of (+28, +12) with rotation 0 and no scaling.
+Validation measured 0 error in the pairwise curtain distances. It sits on the NW crown spur at h +11. Its
+SE gatehouse already faces down to the settlement and the south camera, so no rotation was needed. Curtain
+walls and towers stand at least 3.87 cells inside the crown edge.
+- The postern leads to a new cliff stair down to the farm.
+- Small yard furnishings are omitted; the training-yard overlap is being corrected in a separate castle-v2 task.
+- No internal castle change was forced by this site.
+
+ROUTES
+The approach climbs in two ramp stages (h 0 -> +5 -> +11), about 75 cells. It leaves the court past the
+Emberdeep Mine slot instead of passing through the portal ring.
+
+PORTALS: SLOT PRESENT vs CURRENT OPEN STATE (story.ts portalState, zone.ts; mechanics unchanged)
+All six KEEP_ARCHES slots keep the same ring (r 10.5, same angles), 2.2 x 3.0 ovals on 3.0 stepped daises.
+- Emberdeep Mine, Wyrmwood Foothills: present current destination slots; opening is Warden/progression
+  controlled (s.portals.mine / s.portals.foothills).
+- Sunken Ruin: present slot; quest-dependent - open only while the cinder_seal quest is active, closed
+  before it starts and after it is done.
+- Cinderwing's Lair: present slot; dark until lair_arch is restored at the Restoration Board.
+- Mirefen (Chapter 2), Frostspire (Chapter 3): dormant chapter placeholders.
+The sheets draw slots 1-4 lit only to show which destination each one is. That lighting is illustrative:
+actual activation stays under current progression, and no save state is assumed. No new unlock plan.
+The portal drawings are a schematic stand-in built from portalFx.ts/props.ts (glimpse window, zone halo,
+title, stone dais). They are not the runtime shader.
+
+RETAINED ACCESSES (straight-line PLAN distance from the landing, proposed / current)
+These figures compare layouts only. They are not walking or route lengths and do not prove gameplay
+routes. The current-island figures are nominal.
+- Arrival landing and Warden stay at the portal court (6 / 6).
+- Restoration board moves from the keep to the court: 7.
+- Quartermaster: 28 / 35.
+- Smelter, anvil and Emberforge: 36 / 51.
+- Bank, with the vault restore inside: 32 / 41.
+- Locked/restorable plots keep their status. Alchemy (by the pond) is 60 / 39, now farther. Rune altar
+  (orchard side) and hatchery (NE upland) move out of the old bailey and are now far (112-113).
+- Farm, orchard, green and well, memorial garden, lookout, market stalls and spring are relocated as
+  existing functions.
+- Reserved, with no use assigned: the East Shelf (h +3), the rest of the NE upland (h +7) and the SW terrace.
+
+DECISIONS THAT MATTER
+1. Scale: about 3.2x the current land. Trim the East Shelf?
+2. Accept the unrotated castle-v2 on the NW spur?
+3. Move the restoration board to the arrival court?
+4. Rune and hatchery plots leave the bailey. Accept these sites and their longer walks?
+5. What, if anything, eventually uses the reserved ground?
+
+RUN NOTES
+python render.py writes both SVG/PNG sheets and render-manifest.json. python validate.py reports 135/135
+PASS (the castle-source sync added one check). Earlier passes reported 134/134
+PASS and writes validation-report.txt. This includes new checks:
+- slot vs open state against KEEP_ARCHES and story.ts portalState;
+- all seven building w/d/wallH equal their zoneMaps.ts KEEP_BUILDINGS source;
+- every castle vertex moved by exactly (+28,+12), rotation 0, no scale;
+- route clearance from portal bases now uses the real 3.0 dais (r 2.13).
+Checks are geometric and source-text only. Nothing covers the navmesh, collision, camera, pixels or a
+playtest, and nothing has been implemented.
+
+QA CORRECTION PASS (2026-10-01)
+- Portal 'live' claims were replaced by slot/open-state.
+- Oblique inset: titles moved to a non-overlapping row with leaders. Board and Warden tags moved off the
+  platform. The caption is now on its own strip. Portal art was improved: glimpse, halo, rim, dais and
+  pylons.
+- The "walking distances" contradiction is removed.
+- Plan tag boxes are widened. The cause was the label-width bug that let "RESERVED/UNDECIDED" overflow.
+- The castle courtyard overlap stays with the separate castle-v2 task.
+
+CASTLE SOURCE SYNC (2026-10-01, current castle-v2 sha256 4cfd13c3...66c1)
+- Imports the current revised castle-v2 source (curtain_thickness 2.2, was 2.0; cross_wall_thickness 1.8)
+  with the same rigid transform: +28,+12, rotation 0, no scale. Curtain vertices, towers and the outer
+  arrangement are unchanged; the cross wall now draws at its own 1.8 thickness.
+- At 2.2 thickness, the curtain and towers still clear the crown edge by at least 3.87 (minimum 3.0 required).
+  The SE approach and outer gate are unchanged and pass.
+- The source moved the postern gate from (13.4,60) to (12.875,56), world (40.875,68). Only the first point
+  of the postern cliff-stair route was updated to follow it. No other route, building or island change
+  was made, and the castle green apron was not copied.
+- Courtyard, training-yard, W2 and upper wall-walk detail remain owned by the separate castle-v2 task
+  and are omitted here. No material site-fit issue was found.
+- All three current castle-v2 sheets (overview, ground, upper) were read. Opus read both final island PNGs
+  after the final render; they are legible and no repair was needed.
