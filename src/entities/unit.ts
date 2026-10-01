@@ -118,6 +118,7 @@ export class Unit {
   }
 
   updateCommon(dt: number, nav: NavGrid) {
+    this.pos.y = nav.y(this.pos.x, this.pos.z);
     if (this.kbx || this.kbz) {
       this.pos.x += this.kbx * dt;
       this.pos.z += this.kbz * dt;

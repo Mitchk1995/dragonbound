@@ -42,6 +42,7 @@ export class Gen {
     L.ground = grow(L.ground, ground);
     L.fluid = grow(L.fluid, Fluid.None);
     L.elev = grow(L.elev, 0);
+    if (L.level) L.level = grow(L.level, 0);
     this.reserved = grow(this.reserved, 0);
     this.w = L.w = w;
     this.h = L.h = h;

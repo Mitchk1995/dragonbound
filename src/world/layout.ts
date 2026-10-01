@@ -73,6 +73,12 @@ export interface ZoneLayout {
   fluid: Uint8Array;
   /** Terrain height for raised cells (cliffs, plateaus, cave rock); 0 = use the default for the cell. */
   elev: Float32Array;
+  /**
+   * Height of the walkable ground per cell (plateaus, ramps, terraces), in world units; absent = flat at 0.
+   * Relief cells take the level of the ground they rise from and `elev` on top of it. Keep plateau
+   * levels whole numbers (the cliff terraces are 1 unit tall) and ramp between levels on walkable cells.
+   */
+  level?: Float32Array;
   entry: Vec2;
   packs: PackSpawn[];
   boss?: { id: string; x: number; z: number; r: number };

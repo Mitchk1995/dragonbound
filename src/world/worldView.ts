@@ -273,6 +273,8 @@ export interface WorldView {
   buildings: BuildingProp[];
   /** Terrain height at a world point (scenery and props stand on it). */
   heightAt(x: number, z: number): number;
+  /** Height of the walkable ground level at a world point (units, stations and buildings stand on it). */
+  floorAt(x: number, z: number): number;
   /** Advance animated surfaces (water, lava). */
   tick(t: number): void;
 }
@@ -288,7 +290,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const terrain = buildTerrain(layout, theme, seed);
   for (const tm of terrain.meshes) group.add(tm);
   if (terrain.relief) makeOccludable(terrain.relief.material as THREE.Material);
-  const heightAt = terrain.heightAt;
+  const heightAt = terrain.heightAt, floorAt = terrain.floorAt;
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const e = new THREE.Euler();
@@ -691,7 +693,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const props: Prop[] = [];
   for (const pr of layout.props) {
     const prop = pr.kind.startsWith('fit_') ? buildFitProp(pr.kind.slice(4), pr.len) : buildProp(pr.kind, pr.v === undefined ? pr.len : { len: pr.len, v: pr.v });
-    prop.obj.position.set(pr.x, Math.max(0, heightAt(pr.x, pr.z)), pr.z);
+    prop.obj.position.set(pr.x, Math.max(floorAt(pr.x, pr.z), heightAt(pr.x, pr.z)), pr.z);
     prop.obj.rotation.y = pr.rot ?? 0;
     if (pr.s) prop.obj.scale.setScalar(pr.s);
     if (OCCLUDING_PROPS.has(pr.kind)) occludeAll(prop.obj);
@@ -701,10 +703,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   // Buildings stand on the flat floor they stamped; their walls dissolve around the hero like
   // any other occluder.
   const buildings = (layout.buildings ?? []).map((b) => {
-    const bp = buildBuilding(b);
+    const bp = buildBuilding(b, floorAt(b.x + b.w / 2, b.z + b.d / 2));
     occludeAll(bp.obj);
     group.add(bp.obj);
     return bp;
   });
-  return { group, followers, props, buildings, heightAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; } };
+  return { group, followers, props, buildings, heightAt, floorAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; } };
 }
