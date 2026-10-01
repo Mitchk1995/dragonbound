@@ -208,7 +208,7 @@ Remaining work isn't implementation for this goal:
 
 Codex completed one subscription-authenticated Claude Opus 5.5 review at high effort, using CLI 2.1.286 with safe/restricted mode, only Read/Glob/Grep, no MCP, hooks, code execution or writes, and a four-minute limit. The review completed successfully with no permission denials. Codex alone edited the notes. No gameplay implementation or heavy validation job occurred in this planning task.
 
-The current decision record is [WORKING_DESIGN_PLAN.md](../WORKING_DESIGN_PLAN.md). The review below is retained in full as advisory reasoning, not accepted rules. Later user clarifications keep heavy-enemy/boss recovery undecided; neither blanket immunity nor the review's suggested tier ceiling is approved. The user requested optional long chains, not necessarily branching quests. Visual, cloud QA and repository-hygiene additions arrived after this review started and are assessed separately in the working plan. Claude did not receive pixels in this pass.
+The current decision record is [WORKING_DESIGN_PLAN.md](WORKING_DESIGN_PLAN.md). The review below is retained in full as advisory reasoning, not accepted rules. Later user clarifications keep heavy-enemy/boss recovery undecided; neither blanket immunity nor the review's suggested tier ceiling is approved. The user requested optional long chains, not necessarily branching quests. Visual, cloud QA and repository-hygiene additions arrived after this review started and are assessed separately in the working plan. Claude did not receive pixels in this pass.
 
 ### Full Opus review
 
