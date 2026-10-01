@@ -48,120 +48,125 @@ const ROOF = { slate: 0x4e5564, darkSlate: 0x3e4450, terracotta: 0x9a5438, moss:
  */
 export const KEEP_BUILDINGS: BuildingSpec[] = [
   {
-    // The castle keep, laid out as a medieval hall-keep (plans and reasoning: docs/CASTLE_DESIGN.md).
-    // Ground floor, three bays: the great hall in the middle, entered at its low (south) end
-    // through the great door and the screens passage, the Warden's throne on its dais at the high
-    // (north) end, straight up the runner from the door; the service end to the west (buttery and
-    // pantry off the screens, the kitchen beyond, the well in the south-west tower); the guard room
-    // by the entrance and the armoury behind it to the east. Spiral stairs climb inside two of the
-    // corner towers (the great stair from the guard room, the back stair from the kitchen) to the
-    // upper floor: the solar above the dais, the map room, the Warden's bedchamber, the library,
-    // the chapel and the stair-head antechamber.
-    id: 'keep', style: 'keep', interior: 'keep', x: 59, z: 36, w: 36, d: 20, wallH: 9.8, storeyH: 5.2, towers: 5, roof: ROOF.slate,
-    doors: [{ side: 's', at: 16, w: 4 }, { side: 'w', at: 7, w: 2 }],
-    turrets: [
-      { corner: 'se', use: 'stair', doors: { 0: 'n', 1: 'n' } },
-      { corner: 'nw', use: 'stair', doors: { 0: 's', 1: 's' } },
-      { corner: 'sw', use: 'well', doors: { 0: 'e' } },
-    ],
+    // Castle v2's residence range (docs/blueprints/castle-v2; plans: docs/CASTLE_DESIGN.md), along the
+    // inner court's north wall: the great hall open to its roof, entered from the feast court by the
+    // great door, the lord's high table on its dais at the west (upper) end against the donjon, two
+    // long tables either side of the central hearth. East of the panelled screens, the screens passage
+    // (its stair climbing to the minstrel gallery), then the buttery, the service passage through to
+    // the kitchen and the pantry. Upstairs, galleries run round the hall's north and west sides to the
+    // minstrel gallery over the screens, and the steward's chamber lies over the service end.
+    id: 'keep', style: 'keep', interior: 'keep', x: 57, z: 24, w: 27, d: 16, wallH: 9.0, storeyH: 5.0, roof: ROOF.slate,
+    doors: [{ side: 's', at: 7, w: 4 }, { side: 's', at: 20, w: 2 }, { side: 'e', at: 7, w: 2 }],
     partitions: [
-      { axis: 'z', at: 10, from: 1, to: 19, doors: [[16, 2]] },
-      { axis: 'z', at: 25, from: 1, to: 19, doors: [[16, 2]] },
-      { axis: 'x', at: 15, from: 11, to: 25, doors: [[16, 4]], screen: true },
-      { axis: 'x', at: 11, from: 1, to: 10, doors: [[6, 2]] },
-      { axis: 'x', at: 11, from: 26, to: 35, doors: [[29, 2]] },
+      // The screens (oak, with the wide opening onto the hall) and the stone wall of the service end.
+      { axis: 'z', at: 19, from: 1, to: 15, doors: [[7, 3]], screen: true },
+      { axis: 'z', at: 22, from: 1, to: 15, doors: [[2, 2], [7, 2], [11, 2]] },
+      // Buttery | service passage | pantry.
+      { axis: 'x', at: 6, from: 23, to: 26 },
+      { axis: 'x', at: 9, from: 23, to: 26 },
     ],
+    // The stair from the screens passage up to the minstrel gallery, climbing north along its west side.
+    stairs: [{ x: 20, z: 1, w: 1, len: 4, dir: 'n', land0: [20, 5], land1: [20, 5] }],
     windows: [
-      // Ground floor: the hall's two tall lights either side of the throne, one or two per side room.
-      { side: 'n', at: 13.5 }, { side: 'n', at: 22.5 }, { side: 'n', at: 29.5 },
-      { side: 's', at: 5.5 }, { side: 's', at: 29.5 },
-      { side: 'w', at: 4 }, { side: 'w', at: 14.5 }, { side: 'e', at: 5.5 }, { side: 'e', at: 14.5 },
-      // Upper floor.
-      { side: 'n', at: 15, floor: 1 }, { side: 'n', at: 21, floor: 1 }, { side: 'n', at: 29.5, floor: 1 },
-      { side: 's', at: 5.5, floor: 1 }, { side: 's', at: 12.5, floor: 1 }, { side: 's', at: 23.5, floor: 1 }, { side: 's', at: 29.5, floor: 1 },
-      { side: 'w', at: 4.5, floor: 1 }, { side: 'w', at: 15.3, floor: 1 }, { side: 'e', at: 4, floor: 1 }, { side: 'e', at: 7.6, floor: 1 }, { side: 'e', at: 14.5, floor: 1 },
+      { side: 'n', at: 6.5 }, { side: 'n', at: 12.5 }, { side: 's', at: 4.5 }, { side: 's', at: 15.5 }, { side: 's', at: 24.5 },
+      // Clerestory lights over the hall and the steward's window.
+      { side: 's', at: 6, floor: 1 }, { side: 's', at: 13, floor: 1 }, { side: 's', at: 24.5, floor: 1 }, { side: 'n', at: 9.5, floor: 1 },
     ],
     fits: [
-      // Great hall: the dais and throne at the high end between the two north lights, braziers at
-      // the dais corners; the runner from the screens to the dais between two long feast tables;
-      // the hearth in the west wall.
-      { kind: 'throne', x: 18, z: 2.6, block: [2.6, 1.5] },
-      { kind: 'banner', x: 15.7, z: 1.0 }, { kind: 'banner', x: 20.3, z: 1.0 },
-      { kind: 'brazier', x: 14.3, z: 4.6, block: [0.4, 0.4] }, { kind: 'brazier', x: 21.7, z: 4.6, block: [0.4, 0.4] },
-      { kind: 'rug', x: 18, z: 10.1, len: 10.2 },
-      { kind: 'feast_table', x: 14.4, z: 9.8, len: 7, block: [1.2, 3.5] },
-      { kind: 'feast_table', x: 21.6, z: 9.8, len: 7, block: [1.2, 3.5] },
-      { kind: 'fireplace', x: 11.45, z: 8.0, rot: Math.PI / 2, block: [0.6, 2] },
-      // Kitchen: the great hearth and bread oven on the north wall, the prep table, fuel and stores.
-      { kind: 'hearth_oven', x: 6.3, z: 1.6, block: [1.9, 0.7] },
-      { kind: 'kitchen_table', x: 5.4, z: 5.6, block: [1.2, 0.55] },
-      { kind: 'woodpile', x: 1.9, z: 5.5, rot: Math.PI / 2, block: [0.5, 0.7] },
-      { kind: 'sacks', x: 8.5, z: 3.9, block: [0.45, 0.45] },
-      { kind: 'jars', x: 8.6, z: 7.6, block: [0.45, 0.4] }, { kind: 'barrel', x: 8.6, z: 9.3, block: [0.5, 0.5] },
-      // Buttery (casks) and pantry (bread, cheese, flour) between the kitchen and the screens.
-      { kind: 'barrel', x: 1.7, z: 12.8, block: [0.5, 0.5] }, { kind: 'barrel', x: 1.7, z: 13.9, block: [0.5, 0.5] }, { kind: 'barrel', x: 1.7, z: 15.0, block: [0.5, 0.5] },
-      { kind: 'shelf', x: 3.8, z: 12.45, len: 0, block: [1.3, 0.4] },
-      { kind: 'sacks', x: 8.4, z: 13.0, block: [0.45, 0.45] }, { kind: 'crate', x: 8.4, z: 14.4, block: [0.5, 0.5] },
-      { kind: 'jars', x: 5.6, z: 17.9, block: [0.45, 0.4] },
-      // Guard room: two bunks, the dice table, the rack by the armoury door, a brazier.
-      { kind: 'bunk', x: 33.4, z: 13.3, block: [0.6, 1.1] }, { kind: 'bunk', x: 31.8, z: 13.3, block: [0.6, 1.1] },
-      { kind: 'guard_table', x: 28.6, z: 15.6, block: [0.9, 0.7] },
-      { kind: 'weapon_rack', x: 27.6, z: 12.25, block: [1.0, 0.25] },
-      { kind: 'brazier', x: 31.0, z: 18.2, block: [0.4, 0.4] },
-      // Armoury: suits of plate along the north wall, racks on the east wall, the armourer's bench
-      // and grindstone, a crate of fittings.
-      ...[27.4, 29.4, 31.4].map((x) => ({ kind: 'armor_stand', x, z: 1.7, block: [0.45, 0.45] as [number, number] })),
-      { kind: 'weapon_rack', x: 34.25, z: 5.0, rot: -Math.PI / 2, block: [0.25, 1.0] }, { kind: 'weapon_rack', x: 34.25, z: 8.0, rot: -Math.PI / 2, block: [0.25, 1.0] },
-      { kind: 'workbench', x: 30.8, z: 4.6, block: [1.1, 0.45] },
-      { kind: 'grindstone', x: 27.8, z: 6.6, block: [0.45, 0.5] },
-      { kind: 'crate', x: 27.2, z: 9.3, block: [0.5, 0.5] },
+      // The hall: the high table across the dais at the upper (west) end facing down the hall, the
+      // lord's banners behind it, two long tables either side of the open hearth, braziers by the dais.
+      { kind: 'high_table', x: 3.2, z: 7.5, rot: Math.PI / 2, block: [1.6, 2.6] },
+      { kind: 'banner', x: 1.0, z: 5.0, rot: Math.PI / 2 }, { kind: 'banner', x: 1.0, z: 10.0, rot: Math.PI / 2 },
+      { kind: 'brazier', x: 5.4, z: 3.6, block: [0.4, 0.4] }, { kind: 'brazier', x: 5.4, z: 11.4, block: [0.4, 0.4] },
+      { kind: 'feast_table', x: 12.5, z: 4.5, rot: Math.PI / 2, len: 11, block: [5.5, 1.2] },
+      { kind: 'feast_table', x: 12.5, z: 10.5, rot: Math.PI / 2, len: 11, block: [5.5, 1.2] },
+      { kind: 'open_hearth', x: 12.5, z: 7.5, block: [0.9, 0.9] },
+      // Buttery: casks; pantry: shelves, sacks and jars.
+      { kind: 'barrel', x: 23.6, z: 1.6, block: [0.5, 0.5] }, { kind: 'barrel', x: 24.8, z: 1.6, block: [0.5, 0.5] }, { kind: 'barrel', x: 23.6, z: 4.4, block: [0.5, 0.5] },
+      { kind: 'shelf', x: 24.5, z: 14.45, len: 0, block: [1.3, 0.4] },
+      { kind: 'sacks', x: 23.5, z: 11.0, block: [0.45, 0.45] }, { kind: 'jars', x: 25.0, z: 11.0, block: [0.45, 0.4] },
     ],
     upper: {
+      // Open to the roof over the hall: the galleries run round its north and west sides.
+      voids: [[2, 2, 19, 15]],
       partitions: [
-        { axis: 'z', at: 10, from: 1, to: 19, doors: [[2, 2], [14, 2]] },
-        { axis: 'z', at: 25, from: 1, to: 19, doors: [[2, 2], [14, 2]] },
-        { axis: 'x', at: 10, from: 11, to: 25, doors: [[16, 4]] },
-        { axis: 'x', at: 11, from: 1, to: 10, doors: [[7, 2]] },
-        { axis: 'x', at: 11, from: 26, to: 35, doors: [[29, 2]] },
+        { axis: 'z', at: 19, from: 1, to: 15, doors: [[1, 1]] },
+        { axis: 'z', at: 22, from: 1, to: 15, doors: [[9, 2]] },
       ],
       fits: [
-        // The solar, over the dais: the Warden's own hall. Hearth on the west wall (sharing the
-        // hall's flue), two chairs before it on a carpet, the writing desk under the north light,
-        // books, the house banner between the windows.
-        { kind: 'fireplace', x: 11.45, z: 8.0, rot: Math.PI / 2, block: [0.6, 2] },
-        { kind: 'rug', x: 15.6, z: 6.8, rot: Math.PI / 2, len: 4.4 },
-        { kind: 'chair', x: 14.0, z: 6.0, rot: -Math.PI / 2, block: [0.4, 0.4] }, { kind: 'chair', x: 14.0, z: 7.8, rot: -Math.PI / 2, block: [0.4, 0.4] },
-        { kind: 'ledger_desk', x: 21.8, z: 2.0, block: [0.9, 0.45] },
-        { kind: 'shelf', x: 12.7, z: 1.45, len: 1, block: [1.3, 0.4] },
-        { kind: 'banner', x: 18, z: 1.0 },
-        // The map room: the island laid out on a great table, lit from both ends; a map press.
-        { kind: 'map_table', x: 18, z: 14.6, block: [2.2, 1.4] },
-        { kind: 'candelabra', x: 14.4, z: 14.6, block: [0.3, 0.3] }, { kind: 'candelabra', x: 21.6, z: 14.6, block: [0.3, 0.3] },
-        { kind: 'shelf', x: 11.45, z: 12.6, rot: Math.PI / 2, len: 1, block: [0.4, 1.3] },
-        { kind: 'strongbox', x: 23.6, z: 17.9, rot: Math.PI / 2, block: [0.5, 0.6] },
-        // The Warden's bedchamber over the kitchen (on its warm flue): bed under the west light,
-        // chest at its foot, the hearth, a wardrobe.
-        { kind: 'fireplace', x: 6.3, z: 1.45, block: [2, 0.6] },
-        { kind: 'rug', x: 3.6, z: 7.2, rot: Math.PI / 2, len: 3.4 },
-        { kind: 'bed', x: 2.6, z: 7.2, rot: Math.PI / 2, block: [1.25, 0.9] },
-        { kind: 'strongbox', x: 4.9, z: 7.2, rot: Math.PI / 2, block: [0.4, 0.6] },
-        { kind: 'wardrobe', x: 8.6, z: 8.4, rot: -Math.PI / 2, block: [0.35, 0.75] },
-        // The library: book presses round the walls, a reading desk, a lectern.
-        { kind: 'shelf', x: 1.45, z: 13.0, rot: Math.PI / 2, len: 1, block: [0.4, 1.3] },
-        { kind: 'shelf', x: 1.45, z: 17.3, rot: Math.PI / 2, len: 1, block: [0.4, 1.3] },
-        { kind: 'shelf', x: 4.0, z: 12.45, len: 1, block: [1.3, 0.4] },
-        { kind: 'ledger_desk', x: 5.6, z: 15.4, block: [0.9, 0.45] },
-        { kind: 'lectern', x: 8.0, z: 17.4, rot: -0.6, block: [0.35, 0.35] },
-        // The chapel: the altar against the east wall between its two lights, pews facing it.
-        { kind: 'chapel_altar', x: 34.3, z: 5.8, rot: -Math.PI / 2, block: [0.6, 1.2] },
-        ...[28.6, 30.8].flatMap((x) => [3.9, 7.4].map((z) => ({ kind: 'bench', x, z, rot: Math.PI / 2, block: [0.3, 1.1] as [number, number] }))),
-        { kind: 'candelabra', x: 33.4, z: 3.6, block: [0.3, 0.3] }, { kind: 'candelabra', x: 33.4, z: 8.0, block: [0.3, 0.3] },
-        // The antechamber at the head of the great stair: a bench for those waiting, a suit of plate.
-        { kind: 'bench', x: 27.6, z: 12.4, block: [1.1, 0.3] },
-        { kind: 'armor_stand', x: 32.4, z: 12.4, block: [0.45, 0.45] },
-        { kind: 'rug', x: 30.2, z: 15.0, rot: Math.PI / 2, len: 5.6 },
+        // The minstrel gallery: benches along the screens; the steward's chamber: his desk and chest.
+        { kind: 'bench', x: 21.2, z: 13.0, rot: Math.PI / 2, block: [0.3, 1.1] },
+        { kind: 'ledger_desk', x: 24.2, z: 2.6, block: [0.9, 0.45] },
+        { kind: 'strongbox', x: 24.6, z: 13.6, rot: -Math.PI / 2, block: [0.5, 0.6] },
+        { kind: 'shelf', x: 25.55, z: 7.0, rot: -Math.PI / 2, len: 1, block: [0.4, 1.3] },
       ],
     },
+  },
+  {
+    // The great kitchen: two storeys high and open to its roof, its two hearths on the north and east
+    // walls, the long work table between them; it opens onto the kitchen yard and, through the wall it
+    // shares with the hall range, onto the service passage.
+    id: 'kitchen', style: 'stone', interior: 'keep', x: 83, z: 24, w: 9, d: 12, wallH: 7.5, roof: ROOF.darkSlate, shared: ['w'],
+    doors: [{ side: 'w', at: 7, w: 2 }, { side: 's', at: 4, w: 3 }],
+    windows: [{ side: 'n', at: 2.0 }, { side: 'e', at: 9.0 }],
+    fits: [
+      { kind: 'hearth_oven', x: 4.5, z: 1.6, block: [1.9, 0.7] },
+      { kind: 'hearth_oven', x: 7.4, z: 5.0, rot: -Math.PI / 2, block: [0.7, 1.9] },
+      { kind: 'kitchen_table', x: 4.0, z: 5.0, block: [1.2, 0.55] },
+      { kind: 'woodpile', x: 1.9, z: 2.0, rot: Math.PI / 2, block: [0.5, 0.7] },
+      { kind: 'sacks', x: 1.6, z: 9.4, block: [0.45, 0.45] }, { kind: 'jars', x: 5.8, z: 10.4, block: [0.45, 0.4] },
+      { kind: 'barrel', x: 7.3, z: 10.4, block: [0.5, 0.5] },
+    ],
+  },
+  {
+    // The private wing down the west wall: the guardroom and armory (from the donjon and the inner
+    // court), the chapel beyond it. Its upper floor (the solar and bedchamber) is reached from the donjon.
+    id: 'west_wing', style: 'stone', interior: 'keep', x: 42, z: 47, w: 12, d: 18, wallH: 9.0, roof: ROOF.slate,
+    doors: [{ side: 'e', at: 3, w: 2 }, { side: 'e', at: 12, w: 3 }],
+    partitions: [{ axis: 'x', at: 8, from: 1, to: 11, doors: [[5, 2]] }],
+    windows: [{ side: 'w', at: 4.0 }, { side: 'w', at: 12.5 }, { side: 'e', at: 6.5 }, { side: 'e', at: 16.0 }],
+    fits: [
+      // Guardroom and armory: the rack along the west wall, suits of plate, the armourer's bench.
+      { kind: 'weapon_rack', x: 1.25, z: 3.5, rot: Math.PI / 2, block: [0.25, 1.0] }, { kind: 'weapon_rack', x: 1.25, z: 6.0, rot: Math.PI / 2, block: [0.25, 1.0] },
+      ...[4.5, 6.5].map((x) => ({ kind: 'armor_stand', x, z: 1.7, block: [0.45, 0.45] as [number, number] })),
+      { kind: 'guard_table', x: 6.0, z: 5.2, block: [0.9, 0.7] },
+      { kind: 'workbench', x: 9.6, z: 1.6, block: [1.1, 0.45] },
+      // The chapel: the altar against the west wall, benches facing it.
+      { kind: 'chapel_altar', x: 1.7, z: 12.5, rot: Math.PI / 2, block: [0.6, 1.2] },
+      ...[5.0, 7.5].flatMap((x) => [11.0, 14.5].map((z) => ({ kind: 'bench', x, z, rot: Math.PI / 2, block: [0.3, 1.1] as [number, number] }))),
+      { kind: 'candelabra', x: 1.6, z: 10.4, block: [0.3, 0.3] }, { kind: 'candelabra', x: 1.6, z: 14.6, block: [0.3, 0.3] },
+    ],
+  },
+  {
+    // The barracks along the south wall of the lower ward: bunks down its length, the dice table.
+    id: 'barracks', style: 'stone', interior: 'keep', x: 80, z: 76, w: 16, d: 6, wallH: 4.4, roof: ROOF.darkSlate,
+    doors: [{ side: 'n', at: 7, w: 3 }],
+    windows: [{ side: 'n', at: 3.5 }, { side: 'n', at: 12.5 }],
+    fits: [
+      ...[1.8, 3.6, 5.4, 10.6, 12.4, 14.2].map((x) => ({ kind: 'bunk', x, z: 3.8, block: [0.6, 1.1] as [number, number] })),
+      { kind: 'guard_table', x: 8.5, z: 3.4, block: [0.9, 0.7] },
+    ],
+  },
+  {
+    // The stables on the lower ward's east side: stalls of hay and straw, the trough.
+    id: 'stables', style: 'timber', interior: 'keep', x: 106, z: 38, w: 6, d: 14, wallH: 4.0, roof: ROOF.terracotta,
+    doors: [{ side: 'e', at: 5, w: 4 }],
+    windows: [{ side: 'w', at: 3.5 }, { side: 'w', at: 10.5 }],
+    fits: [
+      { kind: 'hay', x: 1.8, z: 2.0, block: [0.6, 0.6] }, { kind: 'straw', x: 1.8, z: 11.8, block: [0.7, 0.6] },
+      { kind: 'trough', x: 1.6, z: 7.0, rot: Math.PI / 2, block: [0.4, 0.9] },
+    ],
+  },
+  {
+    // The castle's own smithy by the lists: its forge, anvil and tool rack.
+    id: 'smithy', style: 'stone', interior: 'keep', x: 108, z: 56, w: 6, d: 6, wallH: 4.2, roof: ROOF.darkSlate,
+    doors: [{ side: 'w', at: 2, w: 2 }],
+    windows: [{ side: 'n', at: 3.0 }],
+    fits: [
+      { kind: 'bellows', x: 4.3, z: 1.6, block: [0.6, 0.6] },
+      { kind: 'anvil_small', x: 3.0, z: 3.4, block: [0.45, 0.45] },
+      { kind: 'tool_rack', x: 4.6, z: 4.6, rot: -Math.PI / 2, block: [0.3, 0.9] },
+    ],
   },
   {
     // The smelter: a timber-framed forge house on a stone base, laid out as the work flows. Ore
@@ -336,7 +341,9 @@ export const KEEP_VIEWS: { label: string; x: number; z: number; zoom: number }[]
   { label: 'farm', x: 60, z: 132, zoom: 1.35 },
   { label: 'spring', x: 92, z: 114, zoom: 1.0 },
   { label: 'approach', x: 128, z: 104, zoom: 1.5 },
-  { label: 'castle-gate', x: 77, z: 86, zoom: 1.35 },
+  { label: 'castle-gate', x: 115, z: 82, zoom: 1.35 },
+  { label: 'castle-inner-court', x: 68, z: 58, zoom: 1.5 },
+  { label: 'castle-lower-ward', x: 98, z: 66, zoom: 1.5 },
   { label: 'orchard', x: 218, z: 84, zoom: 1.35 },
   { label: 'market-lane', x: 162, z: 162, zoom: 1.15 },
   { label: 'alchemy-pond', x: 100, z: 180, zoom: 1.2 },
@@ -387,11 +394,27 @@ const ISLAND = {
 };
 
 /**
- * The castle on the crown, until castle-v2 is built there: the keep and its bailey, moved up from
- * where they stood on the old island (every castle coordinate below is the old one plus this).
+ * Castle v2 on the crown (docs/blueprints/castle-v2): a spur castle whose eight-sided curtain follows
+ * the rock, split by a diagonal cross wall into the lower ward (entered by the twin-towered outer
+ * gatehouse in the south-east face) and the inner court (through the inner gatehouse), with the
+ * residence along its north and west walls hinged on the round donjon at the high corner. Points are
+ * the blueprint's, moved onto the island by CASTLE.
  */
-const CASTLE = { x: 2, z: 15 };
-const cas = (x: number, z: number) => ({ x: x + CASTLE.x, z: z + CASTLE.z });
+const CASTLE = { x: 28, z: 12 };
+const cv = (x: number, z: number) => ({ x: x + CASTLE.x, z: z + CASTLE.z });
+const cvs = (pts: number[][]) => pts.map(([x, z]) => cv(x, z));
+/** The curtain's corners, clockwise from the west corner. */
+const CURTAIN = cvs([[8, 30], [26, 10], [60, 6], [84, 18], [92, 46], [76, 72], [44, 78], [14, 62]]);
+/** The cross wall, north end to south end, and its inner gatehouse. */
+const CROSS = cvs([[74, 13], [34, 72.67]]);
+const GATE_OUTER = cv(84, 59), GATE_INNER = cv(54, 42.8), POSTERN = cv(12.875, 56);
+/** Round towers: [x, z, radius, height] (the corner at (8, 30) has none). */
+const TOWERS = [[26, 10, 3.2, 9], [60, 6, 3.6, 10], [84, 18, 3.4, 9], [92, 46, 3.8, 10], [76, 72, 3.2, 9], [44, 78, 3.6, 9], [14, 62, 3.0, 9]].map(([x, z, r, h]) => ({ ...cv(x, z), r, h }));
+const DONJON = { ...cv(22, 28), r: 7, h: 13 };
+/** The wards (inner court west of the cross wall, lower ward east of it). */
+const INNER_COURT = cvs([[8, 30], [26, 10], [60, 6], [74, 13], [34, 72.67], [14, 62]]);
+const LOWER_WARD = cvs([[74, 13], [84, 18], [92, 46], [76, 72], [44, 78], [34, 72.67]]);
+const inCastle = (x: number, z: number) => inPoly(x, z, CURTAIN.map((p) => [p.x, p.z]));
 
 /** Is a point inside a polygon (even-odd rule)? */
 function inPoly(x: number, z: number, poly: number[][]) {
@@ -420,14 +443,20 @@ export function buildKeep(seed: number): ZoneLayout {
     const wx = px + (G.noise(px * 0.07, pz * 0.07) - 0.5) * 8, wz = pz + (G.noise(px * 0.07 + 40, pz * 0.07 + 40) - 0.5) * 8;
     for (const lv of ISLAND.levels) if (inPoly(wx, wz, lv.poly)) level[i] = lv.h;
   }
+  // The castle stands on level ground: the crown, flat to a few cells outside its curtain.
+  const ring = [...CURTAIN, CURTAIN[0]];
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    const px = x + 0.5, pz = z + 0.5, i = G.idx(x, z);
+    if (G.l.cells[i] !== Cell.Void && (inCastle(px, pz) || distToPoly(px, pz, ring).d < 4)) level[i] = 11;
+  }
 
   // ─── Roads (laid before anything is built; ramps follow them between levels) ─
   const court = ISLAND.court;
   G.clearing(court.x, court.z, 14, Ground.Stone, 0.6);
   const roads: Record<string, Vec2[]> = {};
   const road = (id: string, pts: number[][], width: number, ground: Ground, wobble = 0.25) => (roads[id] = G.road(P(pts), width, ground, wobble));
-  // The approach climbs from the court up the castle rock to the bailey gate.
-  road('approach', [[137, 136], [133, 126], [130, 112], [128, 100], [123, 89], [112, 88], [94, 88], [cas(75, 0).x, 86], [cas(75, 0).x, cas(0, 61).z]], 4.0, Ground.Stone, 0.15);
+  // The approach climbs from the court up the castle rock to the castle's outer gate.
+  road('approach', [[137, 136], [133, 126], [130, 112], [128, 100], [123, 84], [117.5, 74.4], [GATE_OUTER.x, GATE_OUTER.z]], 4.0, Ground.Stone, 0.15);
   road('ore_lane', [[137, 132], [126, 132.5], [123, 132.5]], 2.5, Ground.Path);
   road('smithy', [[138, 139], [124, 142.5], [114.5, 142.5], [114.5, 139]], 3.4, Ground.Stone, 0.2);
   road('farm', [[118, 142.5], [104, 151], [97, 152], [84, 148], [72, 142]], 2.4, Ground.Path, 0.3);
@@ -544,18 +573,33 @@ export function buildKeep(seed: number): ZoneLayout {
   const look = { x: 153, z: 208 };
   G.floor(look.x, look.z, 4.6, 2.6, 0, Ground.Stone);
 
-  // The bailey round the keep: gate to the great door round a statue plaza, a cross path, the
-  // kitchen door's path out to its garden, the training yard by the west wall stair.
-  const casRoad = (pts: number[][], width: number, gr: Ground, wobble = 0.2) => G.road(pts.map(([x, z]) => cas(x, z)), width, gr, wobble);
-  casRoad([[75, 59], [75, 50], [75, 42]], 4.4, Ground.Stone);
-  casRoad([[62.5, 51], [68, 52], [82, 52], [89.5, 51]], 2.6, Ground.Path);
-  G.clearing(cas(75, 51).x, cas(75, 51).z, 3.8, Ground.Stone, 0.3);
-  casRoad([[56, 29], [49.6, 29]], 2.2, Ground.Path);
-  G.clearing(cas(68, 55.6).x, cas(68, 55.6).z, 3.2, Ground.Dirt, 0.4);
-  for (let z = 15; z < 60; z++) for (let x = 45; x < 106; x++) {
-    const c = cas(x, z), i = G.idx(c.x, c.z);
+  // ─── Castle v2: the wards, their routes and yards (before the buildings) ──────
+  // The inner court is trodden earth, the lower ward beaten dirt; the routes through them are paved:
+  // the approach from the outer gate across the lower ward to the inner gate and on through the
+  // feast court to the hall's great door, the service way from the kitchen yard, the guard's way from
+  // the barracks to the wall stair, and the postern way from the armory door out through the postern.
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    const px = x + 0.5, pz = z + 0.5, i = G.idx(x, z);
+    if (!inCastle(px, pz)) continue;
+    G.l.ground[i] = inPoly(px, pz, INNER_COURT.map((q) => [q.x, q.z])) ? Ground.Path : Ground.Dirt;
     if (!G.reserved[i]) G.reserved[i] = 3;
   }
+  const castleRoad = (pts: number[][], width: number, gr: Ground) => G.road(cvs(pts), width, gr, 0.15);
+  castleRoad([[84, 59], [79, 56], [66, 48], [57, 44.6], [54, 42.8], [50, 40], [42, 34], [38, 30], [38, 28.5]], 3.0, Ground.Stone);
+  castleRoad([[55, 31], [60, 27], [60, 24.5]], 2.2, Ground.Stone);
+  castleRoad([[60, 64.5], [62, 60], [72, 58], [79.7, 59.8]], 2.0, Ground.Stone);
+  castleRoad([[26.5, 39], [27.5, 39], [28, 46], [28, 54.6], [16, 55.4], [12.875, 56], [6, 57.3]], 1.8, Ground.Stone);
+  // The yards: the feast court and kitchen yard flagged, the herb garden lawn, the lists sanded,
+  // the muster yard flagged.
+  const yardRect = (x0: number, z0: number, x1: number, z1: number, gr: Ground) => {
+    const a = cv(x0, z0), b = cv(x1, z1);
+    for (let z = Math.floor(a.z); z < b.z; z++) for (let x = Math.floor(a.x); x < b.x; x++) G.l.ground[G.idx(x, z)] = gr;
+  };
+  yardRect(32, 30, 48, 38, Ground.Stone);
+  yardRect(51, 28.6, 58, 34, Ground.Stone);
+  yardRect(18, 56, 30, 62.5, Ground.Grass);
+  yardRect(65, 30, 76, 44, Ground.Arena);
+  yardRect(66, 50, 79, 60, Ground.Stone);
 
   // ─── Buildings ─────────────────────────────────────────────────────────────
   for (const b of KEEP_BUILDINGS) G.building(b);
@@ -565,29 +609,69 @@ export function buildKeep(seed: number): ZoneLayout {
   const great = keep.doors.find((d) => d.side === 's')!;
   for (const lx of [great.at - 2, great.at - 1, great.at + great.w, great.at + great.w + 1]) G.l.cells[G.idx(keep.x + lx, keep.z + keep.d)] = Cell.Blocked;
 
-  const wall = (x: number, z: number, len: number, rot: number) => {
-    const c = cas(x, z);
-    G.prop('curtain', c.x, c.z, rot).len = len;
-    const along = Math.abs(Math.sin(rot)) < 0.5;
-    blockRect(G, c.x, c.z, along ? len / 2 : 1, along ? 1 : len / 2, 0);
+  // ─── Castle v2: the curtain, its towers and gates, the cross wall, the donjon ───
+  /** A straight stretch of wall from a to b (`v`: 1 = cut down on the camera side, + 2 = the cross wall). */
+  const wallSeg = (a: Vec2, b: Vec2, v: number) => {
+    const L = Math.hypot(b.x - a.x, b.z - a.z), rot = Math.atan2(-(b.z - a.z), b.x - a.x);
+    if (L < 0.2) return;
+    const p = G.prop('castle_wall', (a.x + b.x) / 2, (a.z + b.z) / 2, rot);
+    p.len = L;
+    p.v = v;
+    blockRect(G, (a.x + b.x) / 2, (a.z + b.z) / 2, L / 2, v & 2 ? 0.9 : 1.1, rot);
   };
-  wall(75, 14, 62, Math.PI);
-  wall(44, 37, 46, -Math.PI / 2);
-  wall(106, 37, 46, Math.PI / 2);
-  wall(57, 60, 26, 0);
-  wall(93, 60, 26, 0);
-  for (const [x, z] of [[44, 14], [106, 14], [44, 60], [106, 60], [44, 37], [106, 37]]) {
-    const c = cas(x, z);
-    G.prop('wall_tower', c.x, c.z);
-    blockRect(G, c.x, c.z, 3, 3, 0);
+  /**
+   * A wall from a to b with gates cut out of it (centre and half-width along the wall), each gate
+   * built as `kind` across the gap, its jambs blocking either side of a passage `pass` wide.
+   */
+  const gatedWall = (a: Vec2, b: Vec2, v: number, gates: { at: Vec2; half: number; kind: string; pass: number }[]) => {
+    const L = Math.hypot(b.x - a.x, b.z - a.z), ux = (b.x - a.x) / L, uz = (b.z - a.z) / L, rot = Math.atan2(-uz, ux);
+    const pt = (t: number) => ({ x: a.x + ux * t, z: a.z + uz * t });
+    let t0 = 0;
+    for (const gt of gates.map((q) => ({ ...q, t: (q.at.x - a.x) * ux + (q.at.z - a.z) * uz })).sort((p1, p2) => p1.t - p2.t)) {
+      wallSeg(pt(t0), pt(gt.t - gt.half), v);
+      const c = pt(gt.t);
+      G.prop(gt.kind, c.x, c.z, rot).len = gt.pass;
+      for (const sx of [-1, 1]) {
+        const j = pt(gt.t + sx * (gt.pass / 2 + (gt.half - gt.pass / 2) / 2));
+        blockRect(G, j.x, j.z, (gt.half - gt.pass / 2) / 2, v & 2 ? 1.6 : 1.1, rot);
+      }
+      t0 = gt.t + gt.half;
+    }
+    wallSeg(pt(t0), b, v);
+  };
+  // The curtain's camera-side faces (outward toward +z) are cut down; the north, east and west stand full.
+  const lowFace = (a: Vec2, b: Vec2) => (b.x - a.x) / Math.hypot(b.x - a.x, b.z - a.z) < -0.5;
+  const onEdge = (p: Vec2, a: Vec2, b: Vec2) => distToPoly(p.x, p.z, [a, b]).d < 0.6;
+  for (let k = 0; k < CURTAIN.length; k++) {
+    const a = CURTAIN[k], b = CURTAIN[(k + 1) % CURTAIN.length];
+    const gates = [
+      { at: GATE_OUTER, half: 4.35, kind: 'outer_gatehouse', pass: 3 },
+      { at: POSTERN, half: 2.2, kind: 'postern', pass: 2 },
+    ].filter((gt) => onEdge(gt.at, a, b));
+    gatedWall(a, b, lowFace(a, b) ? 1 : 0, gates);
   }
-  const gate = cas(75, 60);
-  G.prop('gatehouse', gate.x, gate.z).len = 4;
-  for (const sx of [-1, 1]) blockRect(G, gate.x + sx * 3.7, gate.z, 1.7, 2, 0);
-  for (const [x, dir] of [[66, 1], [84, -1]]) {
-    const c = cas(x, 58.4);
-    G.prop('wall_stair', c.x, c.z, 0).len = dir;
-    blockRect(G, c.x, c.z, 3.3, 0.6, 0);
+  // The outer gatehouse's D-towers stand out from the curtain either side of the passage.
+  {
+    const a = CURTAIN[4], b = CURTAIN[5], L = Math.hypot(b.x - a.x, b.z - a.z), ux = (b.x - a.x) / L, uz = (b.z - a.z) / L;
+    for (const sx of [-1, 1]) blockDisc(G.l, GATE_OUTER.x + ux * sx * 4.35 + uz * 1.5, GATE_OUTER.z + uz * sx * 4.35 - ux * 1.5, 2.6);
+  }
+  gatedWall(CROSS[0], CROSS[1], 1 + 2, [{ at: GATE_INNER, half: 2.6, kind: 'inner_gatehouse', pass: 3 }]);
+  for (const t of TOWERS) {
+    const p = G.prop('round_tower', t.x, t.z);
+    p.len = t.r;
+    p.v = t.h;
+    blockDisc(G.l, t.x, t.z, t.r);
+  }
+  const don = G.prop('donjon', DONJON.x, DONJON.z);
+  don.len = DONJON.r;
+  don.v = DONJON.h;
+  blockDisc(G.l, DONJON.x, DONJON.z, DONJON.r);
+  // The stone flights up to the wall walk: along the cross wall from the inner court, and along the
+  // south-east curtain from the muster yard.
+  for (const [foot, top] of [[[40.93, 59.46], [36.26, 66.43]], [[80.46, 61.32], [76.05, 68.48]]]) {
+    const a = cv(foot[0], foot[1]), b = cv(top[0], top[1]), L = Math.hypot(b.x - a.x, b.z - a.z), rot = Math.atan2(-(b.z - a.z), b.x - a.x);
+    G.prop('wall_flight', (a.x + b.x) / 2, (a.z + b.z) / 2, rot).len = L;
+    blockRect(G, (a.x + b.x) / 2, (a.z + b.z) / 2, L / 2, 0.65, rot);
   }
 
   // ─── Stations (bank, furnace and shop first: the inspect tool frames the first few) ──
@@ -615,8 +699,8 @@ export function buildKeep(seed: number): ZoneLayout {
 
   // ─── Dressing ──────────────────────────────────────────────────────────────
   // Real lights only at the court, the castle gate and the two busiest doors; lamp posts elsewhere.
-  for (const [x, z] of [[court.x - 12.5, court.z + 0.5], [court.x + 12.5, court.z + 0.5], [gate.x - 4, gate.z + 4], [gate.x + 4, gate.z + 4], [inB('bank', 6, 17).x, inB('bank', 6, 17).z], [inB('shop', 4.5, 15.2).x, inB('shop', 4.5, 15.2).z]]) G.prop('lamp', x, z, 0, 1, 0.4);
-  for (const p of [cas(71.2, 44.2), cas(78.8, 44.2), { x: 126, z: 140 }, { x: 140.6, z: 129 }, { x: 160.4, z: 146 }, { x: 132, z: 154 }, { x: 147.6, z: 160 }, { x: 170, z: 128 }, { x: 128, z: 104 }]) G.prop('lamp_post', p.x, p.z, 0, 1, 0.4);
+  for (const [x, z] of [[court.x - 12.5, court.z + 0.5], [court.x + 12.5, court.z + 0.5], [cv(85.8, 63.6).x, cv(85.8, 63.6).z], [cv(89, 58.5).x, cv(89, 58.5).z], [inB('bank', 6, 17).x, inB('bank', 6, 17).z], [inB('shop', 4.5, 15.2).x, inB('shop', 4.5, 15.2).z]]) G.prop('lamp', x, z, 0, 1, 0.4);
+  for (const p of [cv(34.5, 31.2), cv(41.5, 31.2), cv(78, 57.5), cv(56.5, 46.5), { x: 126, z: 140 }, { x: 140.6, z: 129 }, { x: 160.4, z: 146 }, { x: 132, z: 154 }, { x: 147.6, z: 160 }, { x: 170, z: 128 }, { x: 128, z: 104 }]) G.prop('lamp_post', p.x, p.z, 0, 1, 0.4);
   // The forge yard, as the work flows from west to east (see FORGE): under the lean-to against the
   // smelter's south wall the Emberforge (its bellows and chimney built on) and the coal bin; the bars come out of
   // the smelter door onto their pallet. Out in front of the fire: the anvil, the quench trough at the
@@ -635,9 +719,8 @@ export function buildKeep(seed: number): ZoneLayout {
   fit('minecart', inB('smelter', 19.6, 6.5), Math.PI / 2, 1, 0.9);
   fit('fit_ore_bin', inB('smelter', 20.0, 3.0), 0, 1, 0.8);
   fit('fit_woodpile', inB('smelter', -1.4, 6.0), Math.PI / 2, 1, 0.8);
-  // Bailey: the statue plaza on the approach, the well on the east lawn.
-  fit('statue', cas(75, 51), 0, 1, 1.3);
-  fit('well', cas(83.4, 46.6), 0, 1, 1.1);
+  // The castle's well in the inner court.
+  fit('well', cv(42, 44), 0, 1, 1.1);
   // The market: stalls along the lane down to the shop.
   G.prop('stall', 153.8, 158, Math.PI / 2, 1, 1.6).len = 0;
   G.prop('stall', 161, 168, Math.PI / 2 - 0.3, 1, 1.6).len = 2;
@@ -738,26 +821,25 @@ export function buildKeep(seed: number): ZoneLayout {
   dress('cart', 214.4, 96.6, -0.3, 1.1);
   dress('crates', 218.0, 97.2, 0.3, 0.9);
 
-  // Bailey: the kitchen garden by the keep's kitchen door, a woodpile, the training yard and the
-  // stores that come in at the gate.
-  for (const [x, z, kind] of [[47.6, 32.0, 'veg_patch'], [51.8, 32.0, 'veg_patch'], [47.6, 36.4, 'veg_patch'], [51.8, 36.4, 'herb_bed']] as [number, number, string][]) {
-    const c = cas(x, z);
-    dress(kind, c.x, c.z, Math.PI / 2, kind === 'veg_patch' ? 1.5 : 1.2);
-  }
-  const cd = (kind: string, x: number, z: number, rot: number, block: number, opt?: { paved?: boolean }) => dress(kind, cas(x, z).x, cas(x, z).z, rot, block, opt);
-  cd('scarecrow', 49.7, 39.4, 0.2, 0.4);
-  cd('fit_woodpile', 55.5, 26.0, Math.PI / 2, 0.8);
-  for (const x of [98, 101.5]) for (const z of [23, 27, 31, 35]) {
-    const c = cas(x, z);
-    G.l.cells[G.idx(Math.floor(c.x), Math.floor(c.z))] = Cell.Tree;
-  }
-  cd('fit_bench', 99.8, 39.2, 0, 0.5);
-  for (const x of [65.6, 68.1, 70.6]) fit('dummy', cas(x, 55.2), Math.PI, 1, 0.5);
-  cd('weapon_rack', 64.4, 53.4, 0.2, 0.8, { paved: true });
-  cd('cart', 83.4, 55.8, 1.6, 1.1);
-  cd('barrels', 87.4, 56.8, 0.3, 0.9);
-  cd('crates', 88.6, 58.0, 0.5, 0.9);
-  cd('fit_bench', 86.2, 44.2, -Math.PI / 2, 0.5);
+  // Castle v2: herb beds in the garden, the tilting rails of the lists and their butts, the muster
+  // yard's racks and pells, the kitchen yard's fuel and stores, carts by the outer gate, benches in
+  // the feast court and hay by the stables.
+  const cd = (kind: string, x: number, z: number, rot: number, block: number, opt?: { paved?: boolean }) => dress(kind, cv(x, z).x, cv(x, z).z, rot, block, opt);
+  for (const z of [57.2, 59.6, 62.0]) for (const x of [20.5, 24, 27.5]) cd('herb_bed', x, z, 0, 1.2);
+  for (const x of [67.2, 69.4, 71.6, 73.8]) line('fence', cv(x, 31.5).x, cv(x, 31.5).z, cv(x, 42.5).x, cv(x, 42.5).z);
+  cd('target', 66.4, 31.0, 0, 0.8, { paved: true });
+  cd('target', 75.0, 31.0, 0, 0.8, { paved: true });
+  for (const [x, z] of [[67.5, 54.5], [70, 55], [72.5, 55.5]]) cd('dummy', x, z, Math.PI, 0.5, { paved: true });
+  cd('weapon_rack', 66.5, 52.8, 0.2, 0.8, { paved: true });
+  cd('fit_woodpile', 56.6, 30.0, Math.PI / 2, 0.8, { paved: true });
+  cd('barrels', 52.8, 33.0, 0.3, 0.9, { paved: true });
+  cd('crates', 57.0, 33.2, 0.5, 0.9, { paved: true });
+  cd('cart', 85.4, 51.6, 1.6, 1.1);
+  cd('barrels', 82.6, 49.8, 0.2, 0.9);
+  cd('fit_bench', 33.4, 36.6, 0, 0.5, { paved: true });
+  cd('fit_bench', 46.6, 36.6, 0, 0.5, { paved: true });
+  cd('haystack', 80.4, 23.6, 0.3, 1.2);
+  cd('fit_hay', 77.2, 26.2, 0.4, 0.8);
 
   // The hero is staged here for character creation and the pose tools; keep every camera spot
   // around it clear, or the near plane slices whatever prop sits there.
@@ -808,7 +890,7 @@ export function buildKeep(seed: number): ZoneLayout {
       if (G.l.cells[i] === Cell.Ground && !G.reserved[i] && G.rng() < 0.6) G.l.cells[i] = Cell.Tree;
     });
   }
-  const castleBox = (x: number, z: number) => x > cas(41, 0).x && x < cas(109, 0).x && z > cas(0, 10).z && z < cas(0, 63).z;
+  const castleBox = (x: number, z: number) => inCastle(x, z) || distToPoly(x, z, ring).d < 4;
   G.scatter((x, z) => {
     if (castleBox(x, z)) return 0;
     const d = voidD[G.idx(Math.floor(x), Math.floor(z))];

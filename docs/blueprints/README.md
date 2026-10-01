@@ -1,6 +1,6 @@
-# Blueprints (proposals, not built)
+# Blueprints
 
-Each folder holds the finished plan pictures and the design data a builder follows. Nothing here is in the game yet. Approve or change a blueprint before anyone builds it.
+Each folder holds the finished plan pictures and the design data a builder follows. Approve or change a blueprint before anyone builds it. Both blueprints here are approved and built: the island in full, the castle in stages (see [CASTLE_DESIGN.md](../CASTLE_DESIGN.md) for what stands).
 
 ## castle-v2: Dragonspire Keep redesign
 

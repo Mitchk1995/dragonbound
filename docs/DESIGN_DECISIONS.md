@@ -68,6 +68,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
 - **The side panel's tabs stand on top of the panel, bigger, with painted icons** made with Codex (backpack, breastplate, sword and pickaxe, journal, treasure chest, cog), as Mitchell asked; approved, spanning the panel's full width and cut from the same stone and rim as the panel so they blend in.
 - **Items never cross their slot's rim:** every item picture fills the same share of its box.
 - **All bows lie the same way in their icons:** tilted like the Recurve (top tip to the upper right, string below), which Mitchell liked; the Worn Shortbow, Hunter's Bow and Emberstring icons were turned to match.
+- **Castle v2 stage 1 is built on the crown** (docs/CASTLE_DESIGN.md): the curtain with its seven towers, the outer and inner gatehouses, the postern, both wards and their yards, the residence range with its open hall and galleries, the kitchen, the west wing, barracks, stables and smithy. The donjon stands solid until stage 2 opens it with the west wing's upper floor; the wall walk is not playable yet.
 - **The 14 material and quest item icons are approved** (ores, bars, uncut gems, the Cinder Seal Fragment and the Cinder Key) and are in the game. Every item now has painted artwork.
 
 ### Already done before Round 5

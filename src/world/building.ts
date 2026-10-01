@@ -81,33 +81,34 @@ export interface BuildingSpec {
   partitions?: Partition[];
   /** Height of the ground storey of a multi-storey building (upper-floor windows sit above it). */
   storeyH?: number;
-  /**
-   * Corner towers: square, `towers` cells a side (odd), centred on each outer corner cell, so a
-   * quarter of each stands inside the corner room. What each one holds is in `turrets`.
-   */
-  towers?: number;
-  /** What the corner towers are for (towers not listed are solid masonry). */
-  turrets?: Turret[];
+  /** Stairs between the ground and upper floors (a building with an `upper` floor). */
+  stairs?: Stair[];
   /** The upper floor's rooms (a building with `storeyH`): its own interior walls and furnishings. */
   upper?: Storey;
 }
 
-export type Corner = 'nw' | 'ne' | 'sw' | 'se';
-
 /**
- * A corner tower with a use. A spiral stair links the floors listed in `doors`; a well room opens
- * on the ground floor only. `doors` maps a floor to the side of the tower its door opens toward
- * (always into the building: e.g. the north-west tower opens 'e' or 's').
+ * A straight stair between the floors: a flight `w` cells across and `len` cells long, its
+ * rectangle starting at local cell (x, z), climbing toward `dir` from its foot row to its head row.
+ * On the ground floor the foot row is the stair (stepping onto it takes you up) and the rest of the
+ * flight is solid; upstairs the head row is the stair (stepping onto it takes you down) and the rest
+ * is the open stairwell. You arrive beside it, on local cell `land0` (ground) or `land1` (upstairs).
  */
-export interface Turret {
-  corner: Corner;
-  use: 'stair' | 'well';
-  doors: Partial<Record<0 | 1, Side>>;
+export interface Stair {
+  x: number;
+  z: number;
+  w: number;
+  len: number;
+  dir: Side;
+  land0: [number, number];
+  land1: [number, number];
 }
 
 export interface Storey {
   partitions?: Partition[];
   fits?: Fit[];
+  /** Local cell rectangles [x0, z0, x1, z1) open to the floor below (a hall open to its roof): no floor up here. */
+  voids?: [number, number, number, number][];
 }
 
 /** A floor of a building: 0 = ground, 1 = the upper floor. */
@@ -117,69 +118,49 @@ export type Floor = 0 | 1;
 export const partitionsOf = (b: BuildingSpec, floor: Floor = 0) => (floor ? b.upper?.partitions : b.partitions) ?? [];
 export const fitsOf = (b: BuildingSpec, floor: Floor = 0) => (floor ? b.upper?.fits : b.fits) ?? [];
 
-/** The corner cell (world) of a corner, and the unit direction pointing into the building. */
-export function cornerCell(b: BuildingSpec, c: Corner) {
-  const west = c[1] === 'w', north = c[0] === 'n';
-  return { cx: west ? b.x : b.x + b.w - 1, cz: north ? b.z : b.z + b.d - 1, ix: west ? 1 : -1, iz: north ? 1 : -1 };
+/** A stair's flight rectangle [x0, z0, x1, z1) in local cells. */
+export function stairRect(st: Stair): [number, number, number, number] {
+  const alongZ = st.dir === 'n' || st.dir === 's';
+  return alongZ ? [st.x, st.z, st.x + st.w, st.z + st.len] : [st.x, st.z, st.x + st.len, st.z + st.w];
 }
 
-/** The tower standing on a cell, with the cell in the tower's inward frame (ti, tj in -h..h), if any. */
-export function towerAt(b: BuildingSpec, cx: number, cz: number) {
-  const S = b.towers ?? 0, h = (S - 1) / 2;
-  if (!S) return null;
-  for (const c of ['nw', 'ne', 'sw', 'se'] as Corner[]) {
-    const k = cornerCell(b, c), tx = cx - k.cx, tz = cz - k.cz;
-    if (Math.abs(tx) <= h && Math.abs(tz) <= h) {
-      // Inward-facing coordinates: +ti / +tj point into the building.
-      return { corner: c, ...k, ti: tx * k.ix, tj: tz * k.iz, h, turret: b.turrets?.find((t) => t.corner === c) };
-    }
-  }
-  return null;
+/** Is local cell (lx, lz) on the stair's foot row (floor 0) or head row (floor 1)? */
+function onStairEnd(st: Stair, lx: number, lz: number, floor: Floor) {
+  const [x0, z0, x1, z1] = stairRect(st);
+  if (lx < x0 || lx >= x1 || lz < z0 || lz >= z1) return false;
+  // The low end of the rectangle is the foot when the flight climbs toward +x / +z.
+  const low = st.dir === 's' || st.dir === 'e', atLow = st.dir === 'n' || st.dir === 's' ? lz === z0 : lx === x0;
+  const atHigh = st.dir === 'n' || st.dir === 's' ? lz === z1 - 1 : lx === x1 - 1;
+  return floor === 0 ? (low ? atLow : atHigh) : low ? atHigh : atLow;
 }
 
-/** The ring cell a tower door passes through on a floor (world cell), or null. */
-export function towerDoorCell(b: BuildingSpec, t: Turret, floor: Floor): [number, number] | null {
-  const side = t.doors[floor];
-  if (!side) return null;
-  const k = cornerCell(b, t.corner), h = ((b.towers ?? 0) - 1) / 2;
-  // A door toward ±x passes the ring at (h, 1) inward; toward ±z at (1, h).
-  const alongX = side === 'e' || side === 'w';
-  return alongX ? [k.cx + h * k.ix, k.cz + k.iz] : [k.cx + k.ix, k.cz + h * k.iz];
-}
+/** The stair whose flight covers local cell (lx, lz), if any. */
+const stairOn = (b: BuildingSpec, lx: number, lz: number) =>
+  (b.stairs ?? []).find((st) => {
+    const [x0, z0, x1, z1] = stairRect(st);
+    return lx >= x0 && lx < x1 && lz >= z0 && lz < z1;
+  });
 
-/** The cell inside a tower just through its door (the stair foot / the well-room floor). */
-export function towerEntry(b: BuildingSpec, t: Turret): [number, number] {
-  const k = cornerCell(b, t.corner);
-  return [k.cx + k.ix, k.cz + k.iz];
-}
-
-/** Where you step out of a tower's door on a floor: the centre of the room cell beyond the door. */
-export function towerExit(b: BuildingSpec, t: Turret, floor: Floor): { x: number; z: number } | null {
-  const d = towerDoorCell(b, t, floor);
-  if (!d) return null;
-  const side = t.doors[floor]!, dx = side === 'e' ? 1 : side === 'w' ? -1 : 0, dz = side === 's' ? 1 : side === 'n' ? -1 : 0;
-  return { x: d[0] + dx + 0.5, z: d[1] + dz + 0.5 };
-}
+/** Is local cell (lx, lz) open to the floor below on the upper floor? */
+export const isVoid = (b: BuildingSpec, lx: number, lz: number) => (b.upper?.voids ?? []).some(([x0, z0, x1, z1]) => lx >= x0 && lx < x1 && lz >= z0 && lz < z1);
 
 /**
- * If (x, z) stands on the foot of a spiral stair on `floor`, where the stair comes out on the
- * other floor (the room just outside its door there) and the height of that floor.
+ * If (x, z) stands on a stair's foot (ground) or head (upstairs), where it brings you on the other
+ * floor (the cell beside the stair there) and that floor's height.
  */
 export function stairDest(b: BuildingSpec, x: number, z: number, floor: Floor): { x: number; z: number; floor: Floor; y: number } | null {
-  for (const t of b.turrets ?? []) {
-    if (t.use !== 'stair' || !t.doors[floor]) continue;
-    const [ex, ez] = towerEntry(b, t);
-    if (Math.floor(x) !== ex || Math.floor(z) !== ez) continue;
-    const to: Floor = floor ? 0 : 1, out = towerExit(b, t, to);
-    if (out) return { ...out, floor: to, y: to ? b.storeyH ?? 0 : 0 };
+  const lx = Math.floor(x) - b.x, lz = Math.floor(z) - b.z;
+  for (const st of b.stairs ?? []) {
+    if (!onStairEnd(st, lx, lz, floor)) continue;
+    const to: Floor = floor ? 0 : 1, [ax, az] = to ? st.land1 : st.land0;
+    return { x: b.x + ax + 0.5, z: b.z + az + 0.5, floor: to, y: to ? b.storeyH ?? 0 : 0 };
   }
   return null;
 }
 
-/** Cell bounds [x0, z0, x1, z1) of the whole footprint, towers included. */
+/** Cell bounds [x0, z0, x1, z1) of the footprint. */
 export function footprint(b: BuildingSpec): [number, number, number, number] {
-  const h = b.towers ? (b.towers - 1) / 2 : 0;
-  return [b.x - h, b.z - h, b.x + b.w + h, b.z + b.d + h];
+  return [b.x, b.z, b.x + b.w, b.z + b.d];
 }
 
 /** Wall length in cells along a side. */
@@ -203,25 +184,21 @@ export function fitBlocks(b: BuildingSpec, cx: number, cz: number, floor: Floor 
   return fitsOf(b, floor).some((f) => f.block && Math.abs(cx + 0.5 - (b.x + f.x)) <= f.block[0] && Math.abs(cz + 0.5 - (b.z + f.z)) <= f.block[1]);
 }
 
-/** 'stair' is the foot of a spiral stair: walkable, and stepping onto it takes you to the other floor. */
+/**
+ * 'stair' is a stair's end on this floor: walkable, and stepping onto it takes you to the other
+ * floor. A stair's flight (and, upstairs, its well) and the upper floor's voids are 'wall'.
+ */
 export type CellRole = 'out' | 'wall' | 'door' | 'floor' | 'stair';
 
-/** What a grid cell is for this building, on a floor (corner towers included). */
+/** What a grid cell is for this building, on a floor. */
 export function cellRole(b: BuildingSpec, cx: number, cz: number, floor: Floor = 0): CellRole {
-  const t = towerAt(b, cx, cz);
-  if (t) {
-    if (Math.abs(t.ti) === t.h || Math.abs(t.tj) === t.h) {
-      const d = t.turret && towerDoorCell(b, t.turret, floor);
-      return d && d[0] === cx && d[1] === cz ? 'door' : 'wall';
-    }
-    // Inside: only the cell through the door is open (the steps and the newel, or the well, fill the rest).
-    if (t.turret?.doors[floor] && t.ti === 1 && t.tj === 1) return t.turret.use === 'stair' ? 'stair' : 'floor';
-    return 'wall';
-  }
   const lx = cx - b.x, lz = cz - b.z;
   if (lx < 0 || lz < 0 || lx >= b.w || lz >= b.d) return 'out';
   const edgeX = lx === 0 || lx === b.w - 1, edgeZ = lz === 0 || lz === b.d - 1;
   if (!edgeX && !edgeZ) {
+    const st = stairOn(b, lx, lz);
+    if (st) return onStairEnd(st, lx, lz, floor) ? 'stair' : 'wall';
+    if (floor && isVoid(b, lx, lz)) return 'wall';
     const p = partitionAt(b, lx, lz, floor);
     return !p ? 'floor' : p.door ? 'door' : 'wall';
   }
@@ -281,16 +258,6 @@ export function partitionRuns(p: Partition): [number, number][] {
   }
   if (p.to > s) runs.push([s, p.to]);
   return runs;
-}
-
-/** World cell rectangles [x0, z0, x1, z1) of the corner towers (each centred on its corner cell). */
-export function towerRects(b: BuildingSpec): [number, number, number, number][] {
-  const S = b.towers ?? 0, h = (S - 1) / 2;
-  if (!S) return [];
-  return (['nw', 'ne', 'sw', 'se'] as Corner[]).map((c) => {
-    const k = cornerCell(b, c);
-    return [k.cx - h, k.cz - h, k.cx + h + 1, k.cz + h + 1] as [number, number, number, number];
-  });
 }
 
 /** Solid wall runs along a side, between doorways: [start, end) in cells from the low end. */

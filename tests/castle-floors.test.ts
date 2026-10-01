@@ -4,7 +4,7 @@ import { KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { Player } from '../src/entities/player';
 import { Pet } from '../src/entities/pet';
 import { Game } from '../src/game';
-import { towerEntry } from '../src/world/building';
+import { stairRect } from '../src/world/building';
 import { ZoneRuntime } from '../src/world/zone';
 
 // Exercise the real zone/navigation and Game stair transition without a GPU or desktop window.
@@ -14,6 +14,9 @@ vi.mock('../src/world/worldView', () => ({
 }));
 
 const keep = KEEP_BUILDINGS.find((b) => b.id === 'keep')!;
+/** The screens stair's foot (ground) and head (upstairs) cells. It climbs north. */
+const stair = keep.stairs![0], [sx0, sz0, , sz1] = stairRect(stair);
+const footCell = [keep.x + sx0, keep.z + sz1 - 1], headCell = [keep.x + sx0, keep.z + sz0];
 function fixture() {
   let finishFade: () => void = () => {};
   const game = Object.assign(Object.create(Game.prototype) as Game, {
@@ -26,8 +29,7 @@ function fixture() {
   Object.assign(game, { zoneOrNull: zone });
   const station = { obj: new THREE.Group(), update: vi.fn(), kind: 'bank' };
   zone.interactables.push(station as any);
-  const [x, z] = towerEntry(keep, keep.turrets!.find((t) => t.use === 'stair')!);
-  game.player.pos.set(x + 0.5, 0, z + 0.5);
+  game.player.pos.set(footCell[0] + 0.5, 0, footCell[1] + 0.5);
   const step = (dt = 1 / 60) => (game as unknown as { tryStairs(dt: number): void }).tryStairs(dt);
   return { game, zone, station, step, finish: () => finishFade() };
 }
@@ -51,8 +53,7 @@ describe('castle floor travel', () => {
     expect(f.station.obj.visible).toBe(false);
     f.step();
     expect(f.game.ui.fade).toHaveBeenCalledTimes(1);
-    const [x, z] = towerEntry(keep, keep.turrets!.find((t) => t.use === 'stair')!);
-    f.game.player.pos.set(x + 0.5, keep.storeyH!, z + 0.5);
+    f.game.player.pos.set(headCell[0] + 0.5, keep.storeyH!, headCell[1] + 0.5);
     f.step();
     f.finish();
     expect(f.zone.floor).toBe(0);
@@ -87,7 +88,7 @@ describe('castle floor travel', () => {
   it('pets follow at their owner\'s floor height, including distance catch-up', () => {
     const f = fixture();
     f.zone.setFloor(1, keep);
-    f.game.player.pos.set(75, keep.storeyH!, 28);
+    f.game.player.pos.set(keep.x + 21.5, keep.storeyH!, keep.z + 8.5);
     f.game.pet!.pos.set(0, 0, 0);
     f.game.pet!.follow(1 / 60, f.game.player, f.zone.nav);
     expect(f.game.pet!.pos.y).toBe(keep.storeyH);

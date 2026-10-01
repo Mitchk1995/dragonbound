@@ -605,6 +605,11 @@ function bonePile(k: ModelKit, g: Obj, variant: number) {
 
 type Builder = (k: ModelKit, g: THREE.Group, arg?: any) => Prop | void;
 
+/** A prop's length argument: a number, or the `len` of `{ len, v }` (a length with a variant). */
+const lenOf = (arg: any): number | undefined => (typeof arg === 'number' ? arg : arg?.len);
+/** A prop's variant (the `v` of `{ len, v }`), 0 if none. */
+const vOf = (arg: any): number => (arg !== null && typeof arg === 'object' ? arg.v ?? 0 : 0);
+
 /**
  * Mine support set across a tunnel (local X spans the tunnel, +Z is along it): squared posts on
  * stone footings, a cap beam with corner braces, and an iron lantern hanging off-centre. The lit
@@ -1038,79 +1043,146 @@ const BUILDERS: Record<string, Builder> = {
     k.box(lamp, [0.2, 0.26, 0.2], [-0.05, 2.25, 0.2], 0xffd080, undefined, 0xffb040, 2);
     return { obj: g, setState: (s) => (lamp.visible = s === 'restored') };
   },
-  curtain: (k, g, arg) => {
-    // A curtain wall along X: battered plinth, a string course, arrow slits outside (+Z), a
-    // walkway and merlons on both faces.
-    const L = arg ?? 10, T = 1.8, H = 4.2;
-    cb(k, g, [L, 0.5, T + 0.36], [0, 0.25, 0], STONE_DD, undefined, 0.06);
-    cb(k, g, [L, H - 0.5, T], [0, 0.5 + (H - 0.5) / 2, 0], STONE, undefined, 0.04);
-    cb(k, g, [L, 0.2, T + 0.14], [0, 2.1, 0], STONE_D, undefined, 0.03);
-    cb(k, g, [L, 0.3, T + 0.34], [0, H, 0], STONE_D, undefined, 0.05);
-    k.box(g, [L, 0.06, T - 0.6], [0, H + 0.18, 0], 0x5e5850);
-    for (let u = -L / 2 + 0.55; u < L / 2 - 0.3; u += 1.25) for (const e of [-1, 1]) cb(k, g, [0.72, 0.7, 0.42], [u, H + 0.5, e * (T / 2 - 0.02)], hash01(u, e) > 0.7 ? STONE_L : STONE, undefined, 0.05);
-    for (let u = -L / 2 + 1.8; u < L / 2 - 1; u += 3.6) k.box(g, [0.16, 0.95, 0.1], [u, 3.0, T / 2 + 0.01], DARK);
-  },
-  wall_tower: (k, g) => {
-    // A square wall tower: battered body, banded courses, corbelled parapet with merlons around a
-    // slate spire, lit slits and a pennant.
-    const S = 5.4, H = 7.4;
-    cb(k, g, [S + 0.9, 0.6, S + 0.9], [0, 0.3, 0], STONE_DD, undefined, 0.08);
-    k.mesh(g, taper(S + 0.4, S + 0.4, S, S, H - 0.6), STONE, [0, 0.6 + (H - 0.6) / 2, 0]);
-    for (const y of [2.6, 5.0]) cb(k, g, [S + 0.14, 0.18, S + 0.14], [0, y, 0], STONE_D, undefined, 0.03);
-    cb(k, g, [S + 0.7, 0.45, S + 0.7], [0, H + 0.2, 0], STONE_D, undefined, 0.06);
-    for (let i = 0; i < 4; i++) for (let j = -2; j <= 2; j++) {
-      if (Math.abs(j) === 2 && i % 2) continue;
-      const a = (i * Math.PI) / 2, r = S / 2 + 0.12, t = j * 1.3;
-      cb(k, g, [0.72, 0.72, 0.5], [Math.sin(a) * r + Math.cos(a) * t, H + 0.78, Math.cos(a) * r - Math.sin(a) * t], STONE_L, [0, a, 0], 0.05);
+  // ─── Castle v2 (docs/blueprints/castle-v2): curtain, towers, gates ─────────────
+  // Every wall piece is built along local X with its outer face toward -Z (the inner face, the wall
+  // walk's rail side, toward +Z). The camera-side walls are drawn cut down to a clean course at 1.2
+  // (`low`), so the wards stay in view; their towers and gates stand full height.
+  /** A curtain (or the cross wall): `len` long; `v` = 1 low (camera side), + 2 the thinner cross wall. */
+  castle_wall: (k, g, arg) => {
+    const L = lenOf(arg) ?? 10, v = vOf(arg), low = (v & 1) === 1, T = v & 2 ? 1.8 : 2.2, H = 7;
+    cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
+    if (low) {
+      cb(k, g, [L, 0.5, T], [0, 1.05 - 0.25, 0], STONE, undefined, 0.03);
+      cb(k, g, [L + 0.04, 0.16, T + 0.12], [0, 1.2, 0], STONE_L, undefined, 0.03);
+      return;
     }
-    k.mesh(g, taper(S - 1.0, S - 1.0, 0.001, 0.001, 3.6), SLATE, [0, H + 0.42 + 1.8, 0]);
-    cb(k, g, [0.1, 1.6, 0.1], [0, H + 4.6, 0], IRON, undefined, 0.02);
-    cb(k, g, [0.9, 0.5, 0.04], [0.47, H + 5.1, 0], 0x7a2020, undefined, 0.01);
-    for (const y of [3.6, 6.0]) k.box(g, [0.26, 0.9, 0.1], [0, y, S / 2 + 0.02], 0xffc870, undefined, 0xffa040, 1.3);
+    cb(k, g, [L, H - 0.8, T], [0, 0.8 + (H - 0.8) / 2, 0], STONE, undefined, 0.04);
+    cb(k, g, [L, 0.2, T + 0.16], [0, 3.6, 0], STONE_D, undefined, 0.03);
+    // The wall walk: the deck, the outer parapet with its merlons, the inner rail.
+    k.box(g, [L, 0.06, T - 0.9], [0, H + 0.03, 0.1], 0x5e5850);
+    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], STONE, undefined, 0.03);
+    for (let u = -L / 2 + 0.5; u < L / 2 - 0.3; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], hash01(u, T) > 0.7 ? STONE_L : STONE, undefined, 0.05);
+    cb(k, g, [L, 0.9, 0.3], [0, H + 0.45, T / 2 - 0.15], STONE_D, undefined, 0.03);
+    // Arrow slits in the outer face.
+    for (let u = -L / 2 + 2; u < L / 2 - 1; u += 4) k.box(g, [0.16, 1.0, 0.1], [u, 4.6, -T / 2 - 0.01], DARK);
   },
-  gatehouse: (k, g, arg) => {
-    // The inner keep's gatehouse: two square towers and a vaulted passage (arg = passage width)
-    // under a raised portcullis, with banners toward the courtyard approach (+Z).
-    const P = arg ?? 4, TW = 3.4, D = 4.0, H = 6.8;
+  /** A round wall tower, radius `len`, `v` tall: an open platform at the walk (+7) inside a crenellated ring. */
+  round_tower: (k, g, arg) => {
+    const r = lenOf(arg) ?? 3.2, H = vOf(arg) || 9, N = 16;
+    k.cyl(g, r + 0.15, r + 0.5, 0.9, [0, 0.45, 0], STONE_DD, undefined, N);
+    k.cyl(g, r, r, 7 - 0.9, [0, 0.9 + (7 - 0.9) / 2, 0], STONE, undefined, N);
+    for (const y of [3.6, 7]) k.cyl(g, r + 0.1, r + 0.1, 0.22, [0, y, 0], STONE_D, undefined, N);
+    k.cyl(g, r - 0.5, r - 0.5, 0.08, [0, 7.08, 0], 0x5e5850, undefined, N);
+    // The crenellated ring round the platform.
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2, c = 2 * r * Math.sin(Math.PI / N) + 0.05;
+      const x = Math.sin(a) * (r - 0.3), z = Math.cos(a) * (r - 0.3);
+      cb(k, g, [c, H - 0.7 - 7, 0.6], [x, 7 + (H - 0.7 - 7) / 2, z], STONE, [0, a, 0], 0.03);
+      if (i % 2 === 0) cb(k, g, [c * 0.8, 0.7, 0.62], [x, H - 0.35, z], hash01(i, r) > 0.7 ? STONE_L : STONE, [0, a, 0], 0.05);
+    }
+    for (const a of [0.6, 2.2, 3.8, 5.3]) k.box(g, [0.16, 1.0, 0.1], [Math.sin(a) * (r + 0.02), 4.8, Math.cos(a) * (r + 0.02)], DARK, [0, a, 0]);
+  },
+  /**
+   * The outer gatehouse in the curtain: two round towers (radius 2.6, height 10) standing out from
+   * the curtain's outer face either side of a vaulted passage `len` wide (the towers' centres 4.35
+   * either side of it), the portcullis raised under the outer arch, the lord's banners on the towers.
+   */
+  outer_gatehouse: (k, g, arg) => {
+    const P = lenOf(arg) ?? 3, R = 2.6, H = 10, cx = 4.35, tz = -1.5, T = 2.2;
     for (const sx of [-1, 1]) {
-      const x = sx * (P / 2 + TW / 2);
-      cb(k, g, [TW + 0.5, 0.5, D + 0.5], [x, 0.25, 0], STONE_DD, undefined, 0.06);
-      cb(k, g, [TW, H - 0.5, D], [x, 0.5 + (H - 0.5) / 2, 0], STONE, undefined, 0.05);
-      for (const y of [2.4, 4.6]) cb(k, g, [TW + 0.12, 0.18, D + 0.12], [x, y, 0], STONE_D, undefined, 0.03);
-      cb(k, g, [TW + 0.4, 0.4, D + 0.4], [x, H, 0], STONE_D, undefined, 0.05);
-      for (const [mx, mz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 1], [0, -1]]) cb(k, g, [0.72, 0.72, 0.5], [x + mx * (TW / 2 - 0.2), H + 0.55, mz * (D / 2 - 0.1)], STONE_L, undefined, 0.05);
-      k.box(g, [0.26, 0.9, 0.1], [x, 4.4, D / 2 + 0.02], 0xffc870, undefined, 0xffa040, 1.3);
-      // Banner on the approach face.
-      cb(k, g, [1.3, 2.2, 0.06], [x, 2.9, D / 2 + 0.06], 0x7a2020, undefined, 0.01);
-      k.box(g, [0.5, 0.5, 0.04], [x, 3.1, D / 2 + 0.1], 0xd8b060, [0, 0, Math.PI / 4]);
-      cb(k, g, [1.5, 0.12, 0.12], [x, 4.05, D / 2 + 0.1], WOOD_D, undefined, 0.02);
+      const x = sx * cx;
+      k.cyl(g, R + 0.2, R + 0.55, 0.9, [x, 0.45, tz], STONE_DD, undefined, 16);
+      k.cyl(g, R, R, H - 0.9, [x, 0.9 + (H - 0.9) / 2, tz], STONE, undefined, 16);
+      for (const y of [3.8, 7]) k.cyl(g, R + 0.1, R + 0.1, 0.22, [x, y, tz], STONE_D, undefined, 16);
+      for (let i = 0; i < 12; i++) {
+        const a2 = (i / 12) * Math.PI * 2;
+        if (i % 2) continue;
+        cb(k, g, [0.72, 0.75, 0.6], [x + Math.sin(a2) * (R - 0.25), H + 0.37, tz + Math.cos(a2) * (R - 0.25)], STONE_L, [0, a2, 0], 0.05);
+      }
+      k.box(g, [0.16, 1.0, 0.1], [x, 5.4, tz - R - 0.01], DARK);
+      cb(k, g, [1.3, 2.4, 0.06], [x, 6.4, tz - R - 0.05], 0x7a2020, undefined, 0.01);
+      k.box(g, [0.5, 0.5, 0.04], [x, 6.6, tz - R - 0.09], 0xd8b060, [0, 0, Math.PI / 4]);
+      // The jamb wall between the tower and the passage, through the curtain's thickness.
+      const jx = sx * (P / 2 + (cx - P / 2) / 2);
+      cb(k, g, [cx - P / 2, 4.5, T], [jx, 2.25, 0], STONE, undefined, 0.04);
     }
-    // Vault over the passage: voussoir band and keystone on both faces, walkway merlons above.
-    cb(k, g, [P + 0.2, H - 4.2, D - 0.2], [0, 4.2 + (H - 4.2) / 2, 0], STONE, undefined, 0.04);
+    // The block over the passage (soffit 4.5) carrying the walk between the towers, its arch rings.
+    cb(k, g, [2 * cx, H - 1 - 4.5, T], [0, 4.5 + (H - 1 - 4.5) / 2, 0], STONE, undefined, 0.04);
     for (const e of [-1, 1]) {
-      cb(k, g, [P + 0.5, 0.5, 0.3], [0, 4.35, e * (D / 2 - 0.05)], STONE_L, undefined, 0.04);
-      k.mesh(g, taper(0.5, 0.34, 0.8, 0.34, 0.8), STONE_L, [0, 4.55, e * (D / 2)]);
-      for (let u = -P / 2 + 0.4; u < P / 2; u += 1.3) cb(k, g, [0.72, 0.7, 0.45], [u, H + 0.35, e * (D / 2 - 0.25)], STONE_L, undefined, 0.05);
+      cb(k, g, [P + 0.6, 0.5, 0.3], [0, 4.6, e * (T / 2 - 0.1)], STONE_L, undefined, 0.04);
+      for (const sx of [-1, 1]) cb(k, g, [0.3, 4.5, 0.3], [sx * (P / 2 + 0.15), 2.25, e * (T / 2 - 0.1)], STONE_L, undefined, 0.03);
     }
-    // Portcullis teeth showing under the arch.
+    for (let u = -cx + 1.2; u < cx - 1; u += 1.3) cb(k, g, [0.72, 0.7, 0.5], [u, H - 1 + 0.35, -T / 2 + 0.25], STONE_L, undefined, 0.05);
     for (let x = -P / 2 + 0.3; x < P / 2; x += 0.5) {
-      k.box(g, [0.1, 0.7, 0.1], [x, 3.85, 0.9], IRON);
-      k.mesh(g, taper(0.1, 0.1, 0.01, 0.01, 0.2), IRON, [x, 3.4, 0.9], [Math.PI, 0, 0]);
+      k.box(g, [0.1, 0.7, 0.1], [x, 4.15, -T / 2 + 0.4], IRON);
+      k.mesh(g, taper(0.1, 0.1, 0.01, 0.01, 0.2), IRON, [x, 3.7, -T / 2 + 0.4], [Math.PI, 0, 0]);
     }
-    k.box(g, [P, 0.12, 0.12], [0, 3.9, 0.9], IRON);
+    k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], STONE_D);
+  },
+  /** The inner gatehouse in the cross wall: a tower block 5.2 long, height 9, over a vaulted passage `len` wide. */
+  inner_gatehouse: (k, g, arg) => {
+    const P = lenOf(arg) ?? 3, L = 5.2, D = 3.2, H = 9;
+    cb(k, g, [L + 0.5, 0.8, D + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
+    for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2, 4.5, D], [sx * (P / 2 + (L - P) / 4), 2.25, 0], STONE, undefined, 0.04);
+    cb(k, g, [L, H - 4.5, D], [0, 4.5 + (H - 4.5) / 2, 0], STONE, undefined, 0.04);
+    for (const y of [3.6, 7]) cb(k, g, [L + 0.16, 0.2, D + 0.16], [0, y, 0], STONE_D, undefined, 0.03);
+    for (const e of [-1, 1]) {
+      cb(k, g, [P + 0.6, 0.5, 0.3], [0, 4.6, e * (D / 2 - 0.1)], STONE_L, undefined, 0.04);
+      for (let u = -L / 2 + 0.4; u < L / 2; u += 1.2) cb(k, g, [0.66, 0.7, 0.5], [u, H + 0.35, e * (D / 2 - 0.25)], STONE_L, undefined, 0.05);
+    }
+    for (let x = -P / 2 + 0.3; x < P / 2; x += 0.5) k.box(g, [0.1, 0.7, 0.1], [x, 4.15, -D / 2 + 0.5], IRON);
     k.box(g, [P - 0.1, 0.04, D], [0, 0.02, 0], STONE_D);
   },
-  wall_stair: (k, g, arg) => {
-    // A masonry stair up to the curtain's wall walk, built against the wall's inner face (on its
-    // +Z side), climbing toward +X (arg = -1 climbs toward -X). Solid stepped courses, the top
-    // step level with the walk.
-    const dir = arg === -1 ? -1 : 1, L = 6.6, H = 4.3, n = 12, t = L / n, D = 1.3;
+  /** The postern: a narrow arched gate `len` wide through a short stretch of full-height curtain. */
+  postern: (k, g, arg) => {
+    const P = lenOf(arg) ?? 2, L = P + 2.4, T = 2.2, H = 7;
+    cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
+    for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2, 3, T], [sx * (P / 2 + (L - P) / 4), 1.5, 0], STONE, undefined, 0.04);
+    cb(k, g, [L, H - 3, T], [0, 3 + (H - 3) / 2, 0], STONE, undefined, 0.04);
+    cb(k, g, [P + 0.5, 0.4, T + 0.1], [0, 3.1, 0], STONE_L, undefined, 0.03);
+    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], STONE, undefined, 0.03);
+    for (let u = -L / 2 + 0.5; u < L / 2; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], STONE, undefined, 0.05);
+    cb(k, g, [P - 0.2, 2.8, 0.12], [0, 1.4, -0.4], WOOD_D, undefined, 0.02);
+    for (const y of [0.8, 2.0]) k.box(g, [P - 0.1, 0.1, 0.06], [0, y, -0.48], IRON);
+  },
+  /**
+   * A solid masonry stair against a wall's inner face (on its -Z side), climbing toward +X over
+   * `len` to the wall walk at +7: one block per riser, no space beneath.
+   */
+  wall_flight: (k, g, arg) => {
+    const L = lenOf(arg) ?? 8.4, n = 25, t = L / n, D = 1.3, H = 7;
     for (let i = 0; i < n; i++) {
-      const y = ((i + 1) * H) / n, x = dir * (-L / 2 + (i + 0.5) * t);
-      cb(k, g, [t + 0.01, y, D], [x, y / 2, 0.05], i % 2 ? STONE : STONE_L, undefined, 0.02);
-      cb(k, g, [t + 0.03, 0.08, D + 0.04], [x, y - 0.03, 0.05], STONE_D, undefined, 0.02);
+      const y = ((i + 1) * H) / n, x = -L / 2 + (i + 0.5) * t;
+      cb(k, g, [t + 0.01, y, D], [x, y / 2, 0], i % 2 ? STONE : STONE_L, undefined, 0.02);
+      cb(k, g, [t + 0.03, 0.06, D + 0.04], [x, y - 0.03, 0], STONE_D, undefined, 0.01);
     }
-    cb(k, g, [L + 0.2, 0.3, D + 0.2], [0, 0.15, 0.05], STONE_DD, undefined, 0.04);
+  },
+  /**
+   * The donjon: the great round tower at the castle's high corner (radius `len`, `v` tall), a
+   * battered base, string courses at each floor, lit windows, a corbelled crenellated parapet and
+   * the lord's banner on a pole above it.
+   */
+  donjon: (k, g, arg) => {
+    const r = lenOf(arg) ?? 7, H = vOf(arg) || 13, N = 24;
+    k.cyl(g, r + 0.3, r + 0.8, 1.2, [0, 0.6, 0], STONE_DD, undefined, N);
+    k.cyl(g, r, r, H - 1.2, [0, 1.2 + (H - 1.2) / 2, 0], STONE, undefined, N);
+    for (const y of [5, 9]) k.cyl(g, r + 0.12, r + 0.12, 0.26, [0, y, 0], STONE_D, undefined, N);
+    k.cyl(g, r + 0.45, r + 0.2, 0.5, [0, H + 0.25, 0], STONE_D, undefined, N);
+    k.cyl(g, r - 0.4, r - 0.4, 0.1, [0, H + 0.45, 0], 0x5e5850, undefined, N);
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2, c = 2 * (r + 0.2) * Math.sin(Math.PI / N) + 0.05;
+      const x = Math.sin(a) * (r + 0.05), z = Math.cos(a) * (r + 0.05);
+      cb(k, g, [c, 0.8, 0.6], [x, H + 0.9, z], STONE, [0, a, 0], 0.03);
+      if (i % 2 === 0) cb(k, g, [c * 0.8, 0.7, 0.62], [x, H + 1.65, z], hash01(i, r) > 0.7 ? STONE_L : STONE, [0, a, 0], 0.05);
+    }
+    for (const [a, y] of [[0.3, 7], [1.4, 7], [2.6, 7], [4.4, 7], [5.6, 7], [0.9, 2.8], [3.4, 2.8]] as [number, number][]) {
+      const x = Math.sin(a) * (r + 0.02), z = Math.cos(a) * (r + 0.02);
+      k.box(g, [0.9, 1.6, 0.12], [x, y, z], 0xffc870, [0, a, 0], 0xffa040, 1.2);
+      cb(k, g, [1.3, 0.2, 0.3], [Math.sin(a) * (r + 0.1), y - 0.9, Math.cos(a) * (r + 0.1)], STONE_L, [0, a, 0], 0.02);
+    }
+    cb(k, g, [0.14, 3.2, 0.14], [0, H + 2.5, 0], IRON, undefined, 0.02);
+    cb(k, g, [1.6, 1.0, 0.05], [0.82, H + 3.4, 0], 0x7a2020, undefined, 0.01);
+    k.box(g, [0.4, 0.4, 0.04], [0.82, H + 3.4, 0.04], 0xd8b060, [0, 0, Math.PI / 4]);
   },
   stall: (k, g, v) => {
     // A market stall: counter, four posts and a striped awning (colours vary).
@@ -2193,7 +2265,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['curtain', 'wall_tower', 'gatehouse', 'wall_stair', 'forge_canopy']);
+export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'outer_gatehouse', 'inner_gatehouse', 'postern', 'wall_flight', 'donjon', 'forge_canopy']);
 
 /** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
 export const PROP_KINDS = Object.keys(BUILDERS);
