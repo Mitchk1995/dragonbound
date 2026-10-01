@@ -63,8 +63,8 @@ const EMBER: Record<string, string> = {
   ember_pickaxe: 'ember_pickaxe-icon-v1.png',
 };
 const BOWS_STAVES: Record<string, string> = {
-  worn_bow: 'worn-bow-redesign-v2.png',
-  hunter_bow: 'hunter-bow-redesign-v2.png',
+  worn_bow: 'worn-bow-tilted-v3.png',
+  hunter_bow: 'hunter-bow-tilted-v3.png',
   recurve_bow: 'recurve-bow-redesign-v2.png',
   drakebone_bow: 'drakebone-bow-redesign-v2.png',
   oak_staff: 'oak_staff-redesign-v3.png',
@@ -97,7 +97,7 @@ const UNIQUE_ART: Record<string, [file: string, base: string]> = {
   cinderfang: ['cinderfang-redesign-v1.png', 'steel_longsword'],
   ashen_crown: ['ashen-crown-redesign-v1.png', 'iron_fullhelm'],
   scaleguard: ['wyrmbone-harness-redesign-v1.png', 'steel_chainbody'],
-  emberstring: ['emberstring-aligned-v2.png', 'recurve_bow'],
+  emberstring: ['emberstring-tilted-v3.png', 'recurve_bow'],
   kindled_ash: ['kindled-ash-aligned-v2.png', 'runed_staff'],
 };
 
@@ -137,8 +137,8 @@ const META: Record<string, [sha256: string, w: number, h: number, alphaMin: numb
   'ember_staff-redesign-v6.png': ['88c1761243d776fc4019c2793ee62e6b818d8ad5158333ea9d928efd7f26e7be', 256, 256, 0, 255],
   'ember_sword-icon-v3.png': ['3c3c3ff3110a93ae38ec67266b9d14108fd9e832e6f3a11d55fe2ccf17f9fbb1', 256, 256, 0, 255],
   'emberite_ore-icon-v1.png': ['f2a9f5a3d24dbc49985daedb8a7b3004e6db7666e5db7e85addf11ac96321d3f', 256, 256, 0, 255],
-  'emberstring-aligned-v2.png': ['eadbe200e65b8d7c45229f9b9af40605816851665a7ac6c315c1dda199a34cc1', 256, 256, 0, 255],
-  'hunter-bow-redesign-v2.png': ['a2d17d5e1ec4df221d3e83cd1a10a2baad426fc1c2e723dfbd7c17aed1723809', 256, 256, 0, 255],
+  'emberstring-tilted-v3.png': ['d67c5c14aea93bc46c5a71d388cd11bb64df5dd18b4465552409c8d8a3689758', 256, 256, 0, 255],
+  'hunter-bow-tilted-v3.png': ['29cfd929736a88b091cfd730d7eebaefe774a67ce9c38617f5123051a312df8a', 256, 256, 0, 255],
   'iron-boots-icon-v1.png': ['c70257c93946e7d66490b1d10b3bce8eca46ad477ef005fd9d7f73312f3208d4', 256, 256, 0, 255],
   'iron-chainbody-icon-v1.png': ['0c6b0071792420daae8dce2224a3c19078a490c6f1a26be7b34bca56ba5a5148', 256, 256, 0, 255],
   'iron-fullhelm-icon-v1.png': ['05c788bbb4d427a0cfc2183f067034c71ecd26bf80b459895749dcb799817e73', 256, 256, 0, 255],
@@ -175,7 +175,7 @@ const META: Record<string, [sha256: string, w: number, h: number, alphaMin: numb
   'uncut_emerald-icon-v1.png': ['f47d5209f5975b2acc1da2577ec193e87cb2ee8919697fa14bf67143e527549c', 256, 256, 0, 255],
   'uncut_ruby-icon-v1.png': ['dd96b05c65797179d105a0e628c363268923d000090b22214179c5c7f6f06151', 256, 256, 0, 255],
   'uncut_sapphire-icon-v1.png': ['7dede80951412f045a66de0326959cbe1543b42d839103424122f077db0722c3', 256, 256, 0, 255],
-  'worn-bow-redesign-v2.png': ['d200c7efd1418f38addd7a9c06924bab07704a90f3cf83b27b23675ac93279a2', 256, 256, 0, 255],
+  'worn-bow-tilted-v3.png': ['f5595fe02e26ee4df806bb7ce0d2ff0897d580670d8bdba06c9a7581013e2d3d', 256, 256, 0, 255],
   'wyrmbone-harness-redesign-v1.png': ['6e4d69519b696e65d30d84ef228f16e8d9b81303b367c7a88d01f0014fb8ba5e', 256, 256, 0, 255],
 };
 

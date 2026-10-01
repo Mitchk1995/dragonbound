@@ -9,7 +9,7 @@ import { xpDropLabel } from './skillGrid';
 import type { Dialogue } from '../systems/story';
 import type { Item, SkillId, Style } from '../types';
 import { abilityArtUrl } from './approvedArt';
-import { el, esc, fmt } from './dom';
+import { el, esc, fmt, installArtFit } from './dom';
 import { SIDE_TABS, TAB_KEYS, tabArtUrl, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, type SideState, type SideTab } from './hudLayout';
 import { icon } from './icons';
 import { installKit } from './kit';
@@ -60,6 +60,7 @@ export class UI {
 
   init() {
     installKit();
+    installArtFit();
     this.buildHud();
     for (const root of [this.hud, this.panelRoot, this.dialogueRoot]) {
       root.addEventListener('mouseover', (e) => {
