@@ -720,8 +720,14 @@ export class Game {
     this.ndc.set((this.mouse.x / w) * 2 - 1, -(this.mouse.y / h) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, this.camera);
     const ray = this.raycaster.ray;
-    this.groundPlane.constant = -this.zone.floorHeight;
+    // The ground under the cursor: intersect the level the hero stands on, then settle onto the
+    // ground level where the ray lands (a couple of passes are exact on plateaus and close on ramps).
+    this.groundPlane.constant = -this.player.pos.y;
     ray.intersectPlane(this.groundPlane, this.ground);
+    for (let pass = 0; pass < 3; pass++) {
+      this.groundPlane.constant = -this.zone.groundY(this.ground.x, this.ground.z);
+      if (!ray.intersectPlane(this.groundPlane, this.ground)) break;
+    }
     const center = new THREE.Vector3();
     let best: Enemy | null = null;
     let bestD = Infinity;

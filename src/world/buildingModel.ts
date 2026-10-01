@@ -126,14 +126,15 @@ type Put = (kk: ModelKit, pp: Obj, y0: number, y1: number) => void;
 /** Splits a vertical span of a piece by the cut bands (see buildBuilding). */
 type Band = (lift: boolean, y0: number, y1: number, put: Put) => void;
 
-export function buildBuilding(b: BuildingSpec): BuildingProp {
+/** `baseY`: the ground level the building stands on (its cut heights are measured from it). */
+export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   // k: walls that stand (dissolve round the hero like any occluder); mk: walls that go with the
   // ground-floor cut; fk: the roof and what goes on any floor; ik: the ground floor's floor and
   // furnishings (never dissolved: the occluder cone would eat holes in the floor in front of the
   // hero); uk: the upper floor's boards and furnishings (go with the ground-floor cut).
   const k = new ModelKit(), mk = new ModelKit(), fk = new ModelKit(), ik = new ModelKit(), uk = new ModelKit();
   const g = new THREE.Group();
-  g.position.set(b.x, 0, b.z);
+  g.position.set(b.x, baseY, b.z);
   const floorG = new THREE.Group(), built = new THREE.Group(), lifted = new THREE.Group(), ruin = new THREE.Group(), mid = new THREE.Group();
   const ground = new THREE.Group();
   g.add(floorG, built, lifted, ruin, mid);
@@ -480,7 +481,7 @@ export function buildBuilding(b: BuildingSpec): BuildingProp {
 
   // The cut sweeps down from above the spires to the course of the floor the hero stands on.
   const TOP = roofTop + 8;
-  const wipe = (c: number, base: number) => (c <= 0.0001 ? OFF : base + (TOP - base) * (1 - c) * (1 - c));
+  const wipe = (c: number, base: number) => (c <= 0.0001 ? OFF : baseY + base + (TOP - base) * (1 - c) * (1 - c));
   let cutV = 0, floorV: Floor = 0, restored = !b.restore;
   const shadows = (grp: Obj, on: boolean) => grp.traverse((o) => {
     if (o instanceof THREE.Mesh) o.castShadow = on && !(o.material as THREE.Material).userData.decal;

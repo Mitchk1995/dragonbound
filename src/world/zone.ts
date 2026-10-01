@@ -47,6 +47,8 @@ export class ZoneRuntime {
     this.groundNav = new NavGrid(this.layout.w, this.layout.h, this.layout.cells);
     this.upperNav = this.layout.upper ? new NavGrid(this.layout.w, this.layout.h, this.layout.upper) : null;
     this.view = buildWorldView(this.layout, this.def.theme, seed + 7);
+    this.groundNav.y = (x, z) => this.view.floorAt(x, z);
+    if (this.upperNav) this.upperNav.y = (x, z) => this.groundY(x, z);
     this.group.add(this.view.group);
     this.enteredAt = g.time;
   }
@@ -56,8 +58,10 @@ export class ZoneRuntime {
     return this.floor && this.upperNav ? this.upperNav : this.groundNav;
   }
 
-  get floorHeight() {
-    return this.floor ? this.floorBuilding?.storeyH ?? 0 : 0;
+  /** Height of the floor the player can see at a point: the ground level, or the upper floor of the building. */
+  groundY(x: number, z: number) {
+    const b = this.floor ? this.floorBuilding : null;
+    return b ? this.view.floorAt(b.x + b.w / 2, b.z + b.d / 2) + (b.storeyH ?? 0) : this.view.floorAt(x, z);
   }
 
   stairAt(x: number, z: number) {
@@ -83,10 +87,15 @@ export class ZoneRuntime {
   /** Spawn everything; called after the zone is registered on the game. */
   populate() {
     const g = this.g, L = this.layout;
-    for (const n of L.nodes) this.addInteractable(new Interactable('rock', n.ore, n.x, n.z, Math.random() * 6));
+    for (const n of L.nodes) {
+      const rock = new Interactable('rock', n.ore, n.x, n.z, Math.random() * 6);
+      rock.obj.position.y = this.view.floorAt(n.x, n.z);
+      this.addInteractable(rock);
+    }
     for (const s of L.stations) {
       const arg = this.stationArg(s.kind, s.id);
       const it = new Interactable(s.kind, s.id, s.x, s.z, s.rot ?? 0, arg);
+      it.obj.position.y = this.view.floorAt(s.x, s.z);
       if (s.kind === 'portal') it.state = arg?.color != null ? 'lit' : 'dark';
       this.addInteractable(it);
     }
@@ -133,6 +142,7 @@ export class ZoneRuntime {
           // Rebuild the arch so the swirl and light match.
           it.obj.removeFromParent();
           const fresh = new Interactable('portal', it.id, it.x, it.z, it.obj.rotation.y, this.stationArg('portal', it.id));
+          fresh.obj.position.y = it.obj.position.y;
           fresh.state = lit ? 'lit' : 'dark';
           this.interactables[this.interactables.indexOf(it)] = fresh;
           this.group.add(fresh.obj);

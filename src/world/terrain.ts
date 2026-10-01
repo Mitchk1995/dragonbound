@@ -9,8 +9,10 @@ import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
  * - flat ground: everything walkable and its gentle shore slopes (never dissolved), and
  * - relief: cliffs, plateaus and cave rock rising out of the same grid (dissolves around the
  *   hero like trees do, so a cliff never hides them);
- * plus animated water/lava surfaces over Fluid cells. Units stand at y = 0 on walkable cells;
- * raised terrain only ever rises on cells that block movement.
+ * plus animated water/lava surfaces over Fluid cells. Raised terrain only ever rises on cells that
+ * block movement. The walkable ground itself may sit at a level (layout.level: plateaus, ramps):
+ * every height below is worked out relative to the local ground level and lifted onto it at the end,
+ * so a zone without levels is unchanged, and units stand on the ground level (floorAt).
  */
 
 /** Default relief height per blocking cell type (plateaus/walls can override via layout.elev). */
@@ -55,6 +57,8 @@ export interface Terrain {
   relief: THREE.Mesh | null;
   /** Terrain height at a world point (bilinear over the vertex grid). */
   heightAt(x: number, z: number): number;
+  /** Height of the walkable ground level at a world point (where units stand). */
+  floorAt(x: number, z: number): number;
   /** Animated surfaces to tick each frame. */
   tick(t: number): void;
 }
@@ -131,6 +135,23 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   // The raw colour sums, before shading (AO, soot, tone) is folded in: the per-channel colours
   // take the same shading as a ratio at the end.
   const rawCol = col.slice();
+  // Ground level at each vertex: the highest walkable cell touching it (so a plateau's edge stays on
+  // the plateau and the cliff below rises from the lower ground), else the highest cell touching it.
+  const base = new Float32Array(nV);
+  if (layout.level) {
+    const lv = layout.level;
+    for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+      let walk = -Infinity, any = -Infinity;
+      for (const [cx, cz] of [[x - 1, z - 1], [x, z - 1], [x - 1, z], [x, z]]) {
+        const cell = at(cx, cz);
+        if (cell === Cell.Void) continue;
+        const v = lv[cz * w + cx];
+        any = Math.max(any, v);
+        if (!isRelief(cell, theme)) walk = Math.max(walk, v);
+      }
+      base[vi(x, z)] = walk > -Infinity ? walk : any > -Infinity ? any : 0;
+    }
+  }
   /** Distance from a grid vertex to the nearest dry (non-fluid, non-void) cell, searched out to 5. */
   const distToLand = (vx: number, vz: number) => {
     let best = 5;
@@ -320,7 +341,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     }
     hgt.set(next);
   }
-  for (let k = 0; k < nV; k++) pos[k * 3 + 1] = hgt[k];
+  for (let k = 0; k < nV; k++) pos[k * 3 + 1] = base[k] + hgt[k];
   // Per-channel colours, shaded like the blended vertex colour (a channel absent at a vertex takes
   // the blended colour, so a sharpened blend never reaches for an undefined one).
   const chanCol = [0, 1, 2, 3].map(() => new Float32Array(nV * 3));
@@ -376,18 +397,20 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   function caveRelief() {
     const S = 2, band = [1.16, 0.82, 1.04, 0.88];
     const P: number[] = [], C: number[] = [], A: number[] = [], N: number[] = [];
-    const src = (k: number) => (fullRelief(k) ? raw[k] : hgt[k]);
-    type V = { x: number; z: number; r: number; c: number[]; a: number[] };
+    const src = (k: number) => base[k] + (fullRelief(k) ? raw[k] : hgt[k]);
+    // r: absolute height; f: the ground level under the point.
+    type V = { x: number; z: number; r: number; f: number; c: number[]; a: number[] };
     const sample = (x: number, z: number, u: number, v: number): V => {
       const k00 = vi(x, z), k10 = vi(x + 1, z), k01 = vi(x, z + 1), k11 = vi(x + 1, z + 1);
       const w00 = (1 - u) * (1 - v), w10 = u * (1 - v), w01 = (1 - u) * v, w11 = u * v;
       const bil = (arr: ArrayLike<number>, n: number, j: number) => arr[k00 * n + j] * w00 + arr[k10 * n + j] * w10 + arr[k01 * n + j] * w01 + arr[k11 * n + j] * w11;
       const r = src(k00) * w00 + src(k10) * w10 + src(k01) * w01 + src(k11) * w11;
+      const f = base[k00] * w00 + base[k10] * w10 + base[k01] * w01 + base[k11] * w11;
       // (No nudge off the grid: the cut lines follow the noise in the heights, never the rows.)
-      return { x: x + u, z: z + v, r, c: [bil(col, 3, 0), bil(col, 3, 1), bil(col, 3, 2)], a: [bil(splat, 4, 0), bil(splat, 4, 1), bil(splat, 4, 2), bil(splat, 4, 3)] };
+      return { x: x + u, z: z + v, r, f, c: [bil(col, 3, 0), bil(col, 3, 1), bil(col, 3, 2)], a: [bil(splat, 4, 0), bil(splat, 4, 1), bil(splat, 4, 2), bil(splat, 4, 3)] };
     };
     const lerpV = (p: V, q: V, t: number): V => ({
-      x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t, r: p.r + (q.r - p.r) * t,
+      x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t, r: p.r + (q.r - p.r) * t, f: p.f + (q.f - p.f) * t,
       c: p.c.map((v, j) => v + (q.c[j] - v) * t),
       a: p.a.map((v, j) => v + (q.a[j] - v) * t),
     });
@@ -428,7 +451,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         N.push(fn.x, fn.y, fn.z);
       }
     };
-    const floorY = (r: number) => Math.min(r, FLOOR_CAP);
+    /**
+     * Height of terrace band k at a point: the bands at or below the local ground level hug the
+     * ground (at most FLOOR_CAP above it, so edges shared with the floor mesh meet it exactly);
+     * every band above lies flat at its level.
+     */
+    const bandY = (k: number, v: V) => (k <= Math.floor(v.f / CAVE_TERRACE + 1e-6) ? v.f + Math.min(v.r - v.f, FLOOR_CAP) : k * CAVE_TERRACE);
     const flat = (k: number, q: V[]) => {
       const shade = (v: V) => {
         const f = tone(k, v.x, v.z);
@@ -454,7 +482,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         if (k > 0) poly = clip(poly, k * CAVE_TERRACE, 1);
         if (k < k1) poly = clip(poly, (k + 1) * CAVE_TERRACE, -1);
         if (poly.length >= 3) {
-          const y = (v: V) => (k === 0 ? floorY(v.r) : k * CAVE_TERRACE);
+          const y = (v: V) => bandY(k, v);
           const shade = (v: V) => {
             const f = tone(k, v.x, v.z), lift = k > 0 ? 1 : 0;
             return [v.c[0] * f * (1 + 0.03 * lift), v.c[1] * f, v.c[2] * f * (1 - 0.04 * lift)];
@@ -472,13 +500,13 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
             if ((p.r >= lv) !== (q.r >= lv)) cut.push(lerpV(p, q, (lv - p.r) / (q.r - p.r)));
           }
           if (cut.length !== 2) continue;
-          const bot = k === 1 ? floorY(lv) : lv - CAVE_TERRACE;
           const [u, v] = cut;
+          const bot = (w: V) => bandY(k - 1, { ...w, r: lv });
           const shade = (w: V) => {
             const f = tone(k, w.x, w.z);
             return [w.c[0] * f * 1.03, w.c[1] * f, w.c[2] * f * 0.96];
           };
-          const pu0 = [u.x, bot, u.z], pv0 = [v.x, bot, v.z], pu1 = [u.x, lv, u.z], pv1 = [v.x, lv, v.z];
+          const pu0 = [u.x, bot(u), u.z], pv0 = [v.x, bot(v), v.z], pu1 = [u.x, lv, u.z], pv1 = [v.x, lv, v.z];
           tri([pu0, pv0, pv1], [shade(u), shade(v), shade(v)], [u.a, v.a, v.a], down);
           tri([pu0, pv1, pu1], [shade(u), shade(v), shade(u)], [u.a, v.a, u.a], down);
         }
@@ -489,9 +517,10 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const grid: V[] = [];
       for (let jv = 0; jv <= S; jv++) for (let ju = 0; ju <= S; ju++) grid.push(sample(x, z, ju / S, jv / S));
       const at2 = (ju: number, jv: number) => grid[jv * (S + 1) + ju];
-      // A cell lying wholly on one ledge (the broad tops of the high rock) is one flat quad.
+      // A cell lying wholly on one ledge above its ground (the broad tops of the high rock) is one flat quad.
       const lv0 = Math.floor(grid[0].r / CAVE_TERRACE);
-      if (lv0 >= 1 && grid.every((q) => Math.floor(q.r / CAVE_TERRACE) === lv0)) {
+      const groundLv = Math.floor(Math.min(...grid.map((q) => q.f)) / CAVE_TERRACE + 1e-6);
+      if (lv0 >= groundLv + 1 && grid.every((q) => Math.floor(q.r / CAVE_TERRACE) === lv0)) {
         const q00 = at2(0, 0), q10 = at2(S, 0), q01 = at2(0, S), q11 = at2(S, S);
         flat(lv0, [q00, q01, q11]);
         flat(lv0, [q00, q11, q10]);
@@ -564,7 +593,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       // Counter-clockwise seen from above (normal +Y), or the surface is culled.
       for (const [dx, dz] of [[0, 0], [1, 1], [1, 0], [0, 0], [0, 1], [1, 1]]) {
         const vx = x + dx, vz = z + dz;
-        fp.push(vx, WATER_Y, vz);
+        fp.push(vx, base[vi(vx, vz)] + WATER_Y, vz);
         depth.push(WATER_Y - hgt[vi(vx, vz)]);
       }
     }
@@ -579,13 +608,15 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     ticks.push(tick);
   }
 
-  const heightAt = (x: number, z: number) => {
+  const bilinear = (grid: Float32Array, x: number, z: number) => {
     const x0 = Math.max(0, Math.min(w - 1, Math.floor(x))), z0 = Math.max(0, Math.min(h - 1, Math.floor(z)));
     const fx = Math.max(0, Math.min(1, x - x0)), fz = Math.max(0, Math.min(1, z - z0));
-    const a = hgt[vi(x0, z0)], b = hgt[vi(x0 + 1, z0)], cc = hgt[vi(x0, z0 + 1)], d = hgt[vi(x0 + 1, z0 + 1)];
+    const a = grid[vi(x0, z0)], b = grid[vi(x0 + 1, z0)], cc = grid[vi(x0, z0 + 1)], d = grid[vi(x0 + 1, z0 + 1)];
     return a + (b - a) * fx + (cc - a) * fz + (a - b - cc + d) * fx * fz;
   };
-  return { meshes, relief, heightAt, tick: (t) => { GROUND_TIME.value = t; ticks.forEach((f) => f(t)); } };
+  const heightAt = (x: number, z: number) => bilinear(base, x, z) + bilinear(hgt, x, z);
+  const floorAt = (x: number, z: number) => bilinear(base, x, z);
+  return { meshes, relief, heightAt, floorAt, tick: (t) => { GROUND_TIME.value = t; ticks.forEach((f) => f(t)); } };
 }
 
 /**

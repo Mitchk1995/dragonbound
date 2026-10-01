@@ -10,7 +10,7 @@ import { ZoneRuntime } from '../src/world/zone';
 // Exercise the real zone/navigation and Game stair transition without a GPU or desktop window.
 vi.mock('../src/world/worldView', () => ({
   OCCLUDE: {},
-  buildWorldView: () => ({ group: new THREE.Group(), buildings: [], followers: [], props: [], tick: () => {} }),
+  buildWorldView: () => ({ group: new THREE.Group(), buildings: [], followers: [], props: [], heightAt: () => 0, floorAt: () => 0, tick: () => {} }),
 }));
 
 const keep = KEEP_BUILDINGS.find((b) => b.id === 'keep')!;
@@ -47,7 +47,7 @@ describe('castle floor travel', () => {
     expect(f.zone.nav.isWalkable(f.game.player.x, f.game.player.z)).toBe(true);
     expect(f.game.player.pos.y).toBe(keep.storeyH);
     expect(f.game.pet!.pos.y).toBe(keep.storeyH);
-    expect(f.zone.floorHeight).toBe(keep.storeyH);
+    expect(f.zone.groundY(f.game.player.x, f.game.player.z)).toBe(keep.storeyH);
     expect(f.station.obj.visible).toBe(false);
     f.step();
     expect(f.game.ui.fade).toHaveBeenCalledTimes(1);

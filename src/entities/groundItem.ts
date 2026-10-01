@@ -61,6 +61,9 @@ export class GroundItem {
   readonly x0: number;
   readonly z0: number;
 
+  /** Ground level where it lands (set by whoever drops it). */
+  baseY = 0;
+
   constructor(public item: Item | null, public gold: number, fromX: number, fromZ: number, toX: number, toZ: number) {
     this.x0 = toX;
     this.z0 = toZ;
@@ -118,11 +121,11 @@ export class GroundItem {
     if (!this.flight) return false;
     const f = this.flight;
     const p = Math.min(1, this.t / f.dur);
-    this.group.position.set(f.fx + (f.tx - f.fx) * p, Math.sin(p * Math.PI) * 1.6, f.fz + (f.tz - f.fz) * p);
+    this.group.position.set(f.fx + (f.tx - f.fx) * p, this.baseY + Math.sin(p * Math.PI) * 1.6, f.fz + (f.tz - f.fz) * p);
     this.group.rotation.y += dt * 8;
     if (p >= 1) {
       this.flight = null;
-      this.group.position.y = 0;
+      this.group.position.y = this.baseY;
       return true;
     }
     return false;

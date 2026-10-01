@@ -21,6 +21,7 @@ export class Items {
     const a = Math.random() * Math.PI * 2, r = 0.8 + Math.random() * spread;
     const spot = g.zone.nav.nearestWalkable(fromX + Math.cos(a) * r, fromZ + Math.sin(a) * r) ?? { x: fromX, z: fromZ };
     const gi = new GroundItem(item, gold, fromX, fromZ, spot.x, spot.z);
+    gi.baseY = g.zone.groundY(spot.x, spot.z);
     g.zone.items.push(gi);
     g.zone.group.add(gi.group);
     if (item?.rarity === 'unique') {
@@ -181,6 +182,7 @@ export class Items {
     }
     this.inv[index] = null;
     const gi = new GroundItem(item, 0, g.player.x, g.player.z, g.player.x + 0.8, g.player.z + 0.4);
+    gi.baseY = g.zone.groundY(g.player.x + 0.8, g.player.z + 0.4);
     g.zone.items.push(gi);
     g.zone.group.add(gi.group);
     this.changed();

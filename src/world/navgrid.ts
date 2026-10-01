@@ -2,6 +2,9 @@ import type { Vec2 } from '../types';
 
 /** Walkability grid with 1-unit cells, A* pathfinding and circle collision. */
 export class NavGrid {
+  /** Height of the walkable ground at a point (the zone sets it; flat at 0 otherwise). Units stand on it. */
+  y: (x: number, z: number) => number = () => 0;
+
   constructor(public w: number, public h: number, public blocked: Uint8Array) {}
 
   isBlocked(cx: number, cz: number): boolean {

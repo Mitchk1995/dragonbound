@@ -57,7 +57,7 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
     g.zone.setFloor(floor, keep);
     for (const [id, , x, z] of ROOMS[floor]) {
       const stand = g.zone.nav.nearestWalkable(keep.x + x, keep.z + z)!;
-      g.player.pos.set(stand.x, g.zone.floorHeight, stand.z);
+      g.player.pos.set(stand.x, g.zone.groundY(stand.x, stand.z), stand.z);
       g.camPos.copy(g.player.pos);
       g.camZoom = id === 'great-hall' || id === 'map-room' ? 1.2 : 0.8;
       g.update(0);
