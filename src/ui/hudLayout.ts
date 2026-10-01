@@ -11,18 +11,20 @@ export type SideTab = 'inventory' | 'equipment' | 'skills' | 'journal' | 'collec
 export interface TabDef {
   id: SideTab;
   label: string;
-  icon: string;
   key: string;
 }
 
+/** Each tab's painted icon (public/icons/tabs, 128 px, made with Codex). */
+export const tabArtUrl = (id: SideTab) => `./icons/tabs/${id}.png`;
+
 /** Left to right along the top of the side panel. */
 export const SIDE_TABS: TabDef[] = [
-  { id: 'inventory', label: 'Inventory', icon: 'bag', key: 'I' },
-  { id: 'equipment', label: 'Equipment', icon: 'item_body', key: 'C' },
-  { id: 'skills', label: 'Skills', icon: 'skills', key: 'K' },
-  { id: 'journal', label: 'Journal', icon: 'quest', key: 'J' },
-  { id: 'collection', label: 'Collection log', icon: 'collection', key: 'L' },
-  { id: 'help', label: 'Controls & settings', icon: 'settings', key: 'Esc' },
+  { id: 'inventory', label: 'Inventory', key: 'I' },
+  { id: 'equipment', label: 'Equipment', key: 'C' },
+  { id: 'skills', label: 'Skills', key: 'K' },
+  { id: 'journal', label: 'Journal', key: 'J' },
+  { id: 'collection', label: 'Collection log', key: 'L' },
+  { id: 'help', label: 'Controls & settings', key: 'Esc' },
 ];
 
 /** Lower-case key → tab. B (bag) is an alias for the inventory, H for settings. */

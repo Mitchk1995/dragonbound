@@ -10,7 +10,7 @@ import type { Dialogue } from '../systems/story';
 import type { Item, SkillId, Style } from '../types';
 import { abilityArtUrl } from './approvedArt';
 import { el, esc, fmt } from './dom';
-import { SIDE_TABS, TAB_KEYS, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, type SideState, type SideTab } from './hudLayout';
+import { SIDE_TABS, TAB_KEYS, tabArtUrl, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, type SideState, type SideTab } from './hudLayout';
 import { icon } from './icons';
 import { installKit } from './kit';
 import { Panels } from './panels';
@@ -89,7 +89,7 @@ export class UI {
   // ─── HUD ─────────────────────────────────────────────────────────────────
 
   private buildHud() {
-    const tabs = SIDE_TABS.map((t) => `<button class="stab" data-tab="${t.id}">${icon(t.icon, 26)}</button>`).join('');
+    const tabs = SIDE_TABS.map((t) => `<button class="stab" data-tab="${t.id}"><img src="${tabArtUrl(t.id)}" alt="" draggable="false"></button>`).join('');
     this.hud.innerHTML = `
       <div class="vignette"></div>
       <div class="topleft"><div class="zoneline"><div class="zone plaque"><span class="zname"></span><i class="sheen"></i></div><div class="zkind"></div></div><div class="weak"></div></div>
