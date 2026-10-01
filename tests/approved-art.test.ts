@@ -1,8 +1,8 @@
 /**
  * Approved painted artwork: every piece of equipment (the bronze, iron, steel and Emberforged sets, the four bows,
- * the four staves, leather and jewellery) routes to its file by base; all five uniques (the Wyrmbone Harness by its
- * save id `scaleguard`) by their own unique id, ahead of their approved bases; Cleave to its tile. Everything else
- * (materials, quest items, any unknown unique, the other abilities and the basic attacks) keeps its generated icon.
+ * the four staves, leather and jewellery), every material and quest item routes to its file by base; all five uniques
+ * (the Wyrmbone Harness by its save id `scaleguard`) by their own unique id, ahead of their approved bases; Cleave to
+ * its tile. Everything else (any unknown unique, the other abilities and the basic attacks) keeps its generated icon.
  * The files are the approved art scaled to 256 px on the long side (256×256, the leather gloves and boots 256×171),
  * which stays sharp at every size the game shows; the full-size originals are kept outside the repo.
  */
@@ -84,7 +84,14 @@ const JEWELLERY: Record<string, string> = {
   copper_ring: 'copper_ring-icon-v1.png',
   silver_ring: 'silver_ring-icon-v1.png',
 };
-const ITEMS = { ...BRONZE, ...IRON, ...STEEL, ...EMBER, ...BOWS_STAVES, ...LEATHER, ...JEWELLERY };
+const EQUIPMENT = { ...BRONZE, ...IRON, ...STEEL, ...EMBER, ...BOWS_STAVES, ...LEATHER, ...JEWELLERY };
+/** Materials (ores, bars, uncut gems) and quest items. */
+const MATERIALS: Record<string, string> = Object.fromEntries(
+  ['copper_ore', 'tin_ore', 'iron_ore', 'coal', 'emberite_ore', 'bronze_bar', 'iron_bar', 'steel_bar', 'ember_bar', 'uncut_sapphire', 'uncut_emerald', 'uncut_ruby', 'seal_fragment', 'cinder_key'].map(
+    (id) => [id, `${id}-icon-v1.png`],
+  ),
+);
+const ITEMS = { ...EQUIPMENT, ...MATERIALS };
 /** By exact unique id, with the approved base each sits on. */
 const UNIQUE_ART: Record<string, [file: string, base: string]> = {
   cinderfang: ['cinderfang-redesign-v1.png', 'steel_longsword'],
@@ -93,8 +100,6 @@ const UNIQUE_ART: Record<string, [file: string, base: string]> = {
   emberstring: ['emberstring-aligned-v2.png', 'recurve_bow'],
   kindled_ash: ['kindled-ash-aligned-v2.png', 'runed_staff'],
 };
-/** Bases that are not equipment, which keep their generated icons. */
-const GENERATED = ['bronze_bar', 'copper_ore', 'uncut_ruby', 'cinder_key'];
 
 /**
  * Every approved file as shipped: SHA-256, width, height and alpha range.
@@ -112,10 +117,15 @@ const META: Record<string, [sha256: string, w: number, h: number, alphaMin: numb
   'bronze-pickaxe-icon-v1.png': ['e77e0cb997a1e4eb6b1ab3cee352976197def044e11976cbf473966b44158bec', 256, 256, 0, 255],
   'bronze-platebody-clearance-icon-v1.png': ['04ae0c97e880a0f9ac460ad13981893a20342427d4533c81c713b5dd2de4db73', 256, 256, 0, 255],
   'bronze-sword-icon-v1.png': ['9e7f9a8ad37ed085370bcc7d15f688fd40a50f44d965804edb438acb13f40b4f', 256, 256, 0, 255],
+  'bronze_bar-icon-v1.png': ['d98e5e6dfea2463a99982177c5516f936d5bddabca212403395749f7aa028e6d', 256, 256, 0, 255],
+  'cinder_key-icon-v1.png': ['8cb4c9d725579301275cc79b1de4ad8ae4a792303fd20ef676df748a12213d93', 256, 256, 0, 255],
   'cinderfang-redesign-v1.png': ['8dae251e133f23dd5b4c69a6a0177ef7227b1418cb5febab7efe4f2d0de5dde3', 256, 256, 0, 255],
   'cleave-straight-hilt-v5.png': ['8fa4171348781f7fbca191e6aeb25747f5bfa10eb36ae827dafc0144d4449295', 256, 256, 0, 255],
+  'coal-icon-v1.png': ['cec76aca5044efc0821a6968f774069c40f15680800ca428cf614b771c95dbe6', 256, 256, 0, 255],
+  'copper_ore-icon-v1.png': ['a1e77bbbdb9a72bdca4d4602164a726009a162c54cbb5a3310e55d9d9d74956a', 256, 256, 0, 255],
   'copper_ring-icon-v1.png': ['b7b78f62c238f077dff004f15a8a3dec06b13fa3c0ee8c7f6b943f618fea444e', 256, 256, 0, 255],
   'drakebone-bow-redesign-v2.png': ['2c56465ee15608f3074a04ec51b4ffc589a5cbd64d17eeecb5fa83bab7448c36', 256, 256, 0, 255],
+  'ember_bar-icon-v1.png': ['cdf49c13c5a5a2f537fdab4c79a1deea8cf4f707f3bc956996b39e0e09a70ea4', 256, 256, 0, 255],
   'ember_boots-icon-v1.png': ['e4d5d9d72f765b5273723973bbce751ceb3dbf1f77fc53bfe3eb5e1ca5bb207e', 256, 256, 0, 255],
   'ember_chainbody-icon-v1.png': ['5d6f714ea647269ad6cc0080f870e12af834b990d6de797d09222ee2d973be59', 256, 256, 0, 255],
   'ember_fullhelm-icon-v1.png': ['80b53c8658ad5153e2dd3ffdd9b2857c17a86d2d0a16cf3336919ca6acb74506', 256, 256, 0, 255],
@@ -126,6 +136,7 @@ const META: Record<string, [sha256: string, w: number, h: number, alphaMin: numb
   'ember_platebody-icon-v1.png': ['4176972246ba4701f3da691079d1ebfa55f5482e068a58e251fdd09bcb859404', 256, 256, 0, 255],
   'ember_staff-redesign-v6.png': ['88c1761243d776fc4019c2793ee62e6b818d8ad5158333ea9d928efd7f26e7be', 256, 256, 0, 255],
   'ember_sword-icon-v3.png': ['3c3c3ff3110a93ae38ec67266b9d14108fd9e832e6f3a11d55fe2ccf17f9fbb1', 256, 256, 0, 255],
+  'emberite_ore-icon-v1.png': ['f2a9f5a3d24dbc49985daedb8a7b3004e6db7666e5db7e85addf11ac96321d3f', 256, 256, 0, 255],
   'emberstring-aligned-v2.png': ['eadbe200e65b8d7c45229f9b9af40605816851665a7ac6c315c1dda199a34cc1', 256, 256, 0, 255],
   'hunter-bow-redesign-v2.png': ['a2d17d5e1ec4df221d3e83cd1a10a2baad426fc1c2e723dfbd7c17aed1723809', 256, 256, 0, 255],
   'iron-boots-icon-v1.png': ['c70257c93946e7d66490b1d10b3bce8eca46ad477ef005fd9d7f73312f3208d4', 256, 256, 0, 255],
@@ -137,6 +148,8 @@ const META: Record<string, [sha256: string, w: number, h: number, alphaMin: numb
   'iron-pickaxe-clear-margin-icon-v2.png': ['30a5565ec7be3e36ebdb834a357735bb3ceb4dd774017e1351cbab1994bd2d51', 256, 256, 0, 255],
   'iron-platebody-icon-v1.png': ['ae71eb915de60c8d797b941ea7e3330c210b7d5b05803165c75af3c15e2ef131', 256, 256, 0, 255],
   'iron-sword-icon-v1.png': ['30ea3272642c934448c777c2c139b4b9f8111184d86701d077b4529b0c57f422', 256, 256, 0, 255],
+  'iron_bar-icon-v1.png': ['fc52e0f0e2c0f53186d0a8659030f88e4a1f4622c1724e32990babb7c2e0fec5', 256, 256, 0, 255],
+  'iron_ore-icon-v1.png': ['ac99bb8f1b6cf874375e47d70f36cb350465af2710e6e1cb6c9aaf6b60e16bd7', 256, 256, 0, 255],
   'jade_amulet-icon-v1.png': ['8683f9b16795f70bd7382efeb5a87213e9c4739d18c6394bae962ee0ef600987', 256, 256, 0, 255],
   'kindled-ash-aligned-v2.png': ['e3af296a9fd367f91438665ce23cdbb5c99b897271ed9a1416f92dc55339bf54', 256, 256, 0, 255],
   'leather_body-icon-v2.png': ['24b7d0931b05394fe7450f78e88289469dde4ad874341668008701443919a866', 256, 256, 0, 255],
@@ -146,6 +159,7 @@ const META: Record<string, [sha256: string, w: number, h: number, alphaMin: numb
   'oak_staff-redesign-v3.png': ['7ca28e816c0672150a80868d3829c5c1900ce309bb01bf1f1a11d9d2eafdea7b', 256, 256, 0, 255],
   'recurve-bow-redesign-v2.png': ['d7b55b9e18543a97b9d2ae1a948559a1caaf35588641f5289e7274e1c1339887', 256, 256, 0, 255],
   'runed_staff-redesign-v5.png': ['a788ada3ac972a22464b4932293eaf49dc863622a93468b7b089f872890e251e', 256, 256, 0, 255],
+  'seal_fragment-icon-v1.png': ['b87971373f256dfb4551cef71817ad064f0d29e345c615ef52f3160962ec08d8', 256, 256, 0, 255],
   'silver_ring-icon-v1.png': ['11e827a9ddc074ea19de09fa585f31a17c393f68668ce427858c15f2c193b638', 256, 256, 0, 255],
   'steel-full-helm-icon-v1.png': ['64e8caa890fadb53621a940ad79321d28087b580453b60cae8b2b59c50aab128', 256, 256, 0, 255],
   'steel-longsword-icon-v1.png': ['5c3e2403e95684544686afc3190bbc043f34996207b46691095caf6adce673ff', 256, 256, 0, 255],
@@ -153,9 +167,14 @@ const META: Record<string, [sha256: string, w: number, h: number, alphaMin: numb
   'steel-pickaxe-icon-v2.png': ['58f1163c918defe4652d0309da8d6fbcb5e5851fe4a628a1b368a90233c0e249', 256, 256, 0, 255],
   'steel-platebody-clearance-v3.png': ['29780a17f836a7a06fb5627c6598a47e6ff738140a04d3326f55d3bf90bb3d78', 256, 256, 0, 255],
   'steel-sword-icon-v1.png': ['fbddaec509382aa710edbcb5bd1a7f8650061629d960dda6669a5a74f9bbc66c', 256, 256, 0, 255],
+  'steel_bar-icon-v1.png': ['650471655d4543d2f67b7275775f94f64b28b35583777d5f4843dcc2963aabf5', 256, 256, 0, 255],
   'steel_boots.png': ['c4cd3d1f5373e8863e6bf44a1d537af265f848c6c0fd7fff48083041376b17bf', 256, 256, 0, 255],
   'steel_chainbody.png': ['d7b717cd532ff2d74c91c63a8812ed8051a8517a9859a3b17e9a8889f8786dc1', 256, 256, 0, 255],
   'steel_gauntlets-v2.png': ['9d200508b9824bcd194d8950118908e6ad025650fae6813992f5b5e5bf5fa97a', 256, 256, 0, 255],
+  'tin_ore-icon-v1.png': ['4fb940c094ff604008c781f8893bde663d3b4becec829bc525cc63b97ec384ca', 256, 256, 0, 255],
+  'uncut_emerald-icon-v1.png': ['f47d5209f5975b2acc1da2577ec193e87cb2ee8919697fa14bf67143e527549c', 256, 256, 0, 255],
+  'uncut_ruby-icon-v1.png': ['dd96b05c65797179d105a0e628c363268923d000090b22214179c5c7f6f06151', 256, 256, 0, 255],
+  'uncut_sapphire-icon-v1.png': ['7dede80951412f045a66de0326959cbe1543b42d839103424122f077db0722c3', 256, 256, 0, 255],
   'worn-bow-redesign-v2.png': ['d200c7efd1418f38addd7a9c06924bab07704a90f3cf83b27b23675ac93279a2', 256, 256, 0, 255],
   'wyrmbone-harness-redesign-v1.png': ['6e4d69519b696e65d30d84ef228f16e8d9b81303b367c7a88d01f0014fb8ba5e', 256, 256, 0, 255],
 };
@@ -220,7 +239,7 @@ function alphaRange(png: Buffer): [number, number] {
 describe('approved item artwork', () => {
   for (const [id, file] of Object.entries(ITEMS)) {
     it(`${id} shows ${file}, whatever its rarity`, () => {
-      expect(BASES[id]?.kind, id).toBe(id.endsWith('_pickaxe') ? 'tool' : 'gear');
+      expect(BASES[id]?.kind, id).toBe(id in MATERIALS ? (id === 'seal_fragment' || id === 'cinder_key' ? 'quest' : 'material') : id.endsWith('_pickaxe') ? 'tool' : 'gear');
       for (const rarity of ['normal', 'magic', 'rare'] as const) {
         const item: Item = { ...makeItem(id), rarity };
         expect(itemArtUrl(item), rarity).toBe(art(file));
@@ -247,15 +266,12 @@ describe('approved item artwork', () => {
     expect(Object.values(BASES).filter((b) => b.slot === 'amulet' || b.slot === 'ring').map((b) => b.id).sort()).toEqual(Object.keys(JEWELLERY).sort());
   });
 
-  it('every equipment base has artwork; materials and quest items keep their generated icons', () => {
+  it('every base has artwork: the equipment, the materials and the quest items', () => {
     const equipment = Object.values(BASES).filter((b) => b.kind === 'gear' || b.kind === 'tool').map((b) => b.id);
-    expect(equipment.sort()).toEqual(Object.keys(ITEMS).sort());
-    const others = Object.keys(BASES).filter((id) => !(id in ITEMS));
-    for (const id of GENERATED) expect(others).toContain(id);
-    for (const id of others) {
-      expect(BASES[id].kind, id).not.toMatch(/^(gear|tool)$/);
-      expect(itemArtUrl(makeItem(id)), id).toBeNull();
-    }
+    expect(equipment.sort()).toEqual(Object.keys(EQUIPMENT).sort());
+    const materials = Object.values(BASES).filter((b) => b.kind === 'material' || b.kind === 'quest').map((b) => b.id);
+    expect(materials.sort()).toEqual(Object.keys(MATERIALS).sort());
+    expect(Object.keys(BASES).sort()).toEqual(Object.keys(ITEMS).sort());
   });
 });
 
@@ -279,7 +295,7 @@ describe('approved unique artwork', () => {
   }
 
   it('an unknown unique falls back to its rendered icon on any base', () => {
-    for (const id of [...Object.keys(ITEMS), ...GENERATED]) {
+    for (const id of Object.keys(ITEMS)) {
       expect(itemArtUrl({ base: id, unique: 'any' }), id).toBeNull();
       expect(itemArtUrl(asUnique('not_a_unique', id)), id).toBeNull();
     }
@@ -303,14 +319,15 @@ describe('approved ability artwork', () => {
 describe('approved files', () => {
   const read = (file: string) => readFileSync(join('public', APPROVED_DIR, file));
 
-  it('are exactly the fifty-eight supplied (52 base items, 5 uniques, Cleave), each in public/', () => {
+  it('are exactly the seventy-two supplied (52 pieces of equipment, 14 materials and quest items, 5 uniques, Cleave), each in public/', () => {
     const uniqueFiles = Object.values(UNIQUE_ART).map(([file]) => file);
-    expect(Object.keys(ITEMS)).toHaveLength(52);
-    expect(new Set(Object.values(ITEMS)).size).toBe(52);
+    expect(Object.keys(EQUIPMENT)).toHaveLength(52);
+    expect(Object.keys(MATERIALS)).toHaveLength(14);
+    expect(new Set(Object.values(ITEMS)).size).toBe(66);
     expect(uniqueFiles).toHaveLength(5);
     expect([...APPROVED_FILES].sort()).toEqual([...Object.values(ITEMS), ...uniqueFiles, 'cleave-straight-hilt-v5.png'].sort());
-    expect(APPROVED_FILES).toHaveLength(58);
-    expect(new Set(APPROVED_FILES).size).toBe(58);
+    expect(APPROVED_FILES).toHaveLength(72);
+    expect(new Set(APPROVED_FILES).size).toBe(72);
     expect(Object.keys(META).sort()).toEqual([...APPROVED_FILES].sort());
     // Nothing unapproved sits in the folder alongside them.
     expect(readdirSync(join('public', APPROVED_DIR)).sort()).toEqual([...APPROVED_FILES].sort());
