@@ -1,19 +1,31 @@
 /**
- * Global XP pacing. Chapter 1 aims for OSRS-length progression on Diablo-speed combat:
- * combat XP comes from each enemy's fixed `xp` value (shared by the fraction of its health
- * you dealt), so area damage and overkill can't inflate it, and XP/hour is bounded by how
- * fast an instance can be cleared. The Diablo 2 pacing pass slowed clears by about a sixth, so
- * regular enemies' XP went up 20% to keep XP/hour where it was (tests/balance.test.ts simulates
- * both); Cinderwing stayed put so one kill is still less than a level at 30.
+ * Global XP pacing: OSRS's XP curve, and rates set so efficient play takes about as long as OSRS.
+ * Combat XP comes from each enemy's fixed `xp` value (data/enemies.ts, shared by the fraction of its
+ * health you dealt), so area damage and overkill can't inflate it and XP/hour is bounded by how
+ * fast a zone can be cleared. Those values were cut to about a fifth so a combat style reaches 10 in
+ * about 20 minutes, 20 in about an hour and 50 in about a dozen hours of efficient Chapter 1 play;
+ * 99 then takes about 200 hours once later chapters add zones that keep XP/hour climbing. Mining
+ * was already on that pace. The deterministic simulators in tests/balance/ measure all of it and
+ * docs/BALANCE.md has the tables.
  */
 export const XP_TUNING = {
-  /** Hitpoints XP as a fraction of the combat XP earned. */
+  /** Hitpoints XP as a fraction of the combat XP earned (OSRS's 1/3). */
   hitpointsShare: 1 / 3,
-  /** Defence XP per point of damage your armour absorbs (on top of stance XP). */
-  defencePerAbsorbed: 0.5,
-  /** Multipliers on the per-action XP in data/ores.ts and data/recipes.ts. */
+  /** Defence XP as a fraction of the combat XP earned, whatever the weapon style. */
+  defenceShare: 0.5,
+  /**
+   * Plus Defence XP per point of damage your armour absorbs. Kept small (a few percent of a fight's
+   * Defence XP) so standing in a pack soaking hits is never a way to train.
+   */
+  defencePerAbsorbed: 0.1,
+  /**
+   * Multipliers on the per-action XP in data/ores.ts and data/recipes.ts (OSRS's own values).
+   * Mining keeps half, which already gives OSRS-length Mining. Smithing gets the full value: there is
+   * no bar market here, every bar is mined and smelted by hand first, so the whole mine-smelt-smith
+   * loop sets its pace, and at half it took several times longer than OSRS to 99.
+   */
   mining: 0.5,
-  smithing: 0.5,
+  smithing: 1,
 };
 
 /**
@@ -65,6 +77,14 @@ export const COMBAT_TUNING = {
     staff: 1.0,
     heavyStaff: 0.95,
   },
+  /**
+   * Melee swings track their target (combat/stats swingTrackStep / swingConnects): during the
+   * wind-up the hero steps after an enemy backing out of reach at up to `speed` units/s (a kobold
+   * backs off at about 2.1), stopping `margin` inside striking distance, and the blow still lands
+   * on its target up to `leeway` units past reach. Without the step a kobold on open ground
+   * slipped out of every swing that started with it in reach.
+   */
+  meleeTrack: { speed: 3.4, margin: 0.3, leeway: 0.8 },
   /** War Cry's attack-speed bonus in percent (its ability text says the same). */
   warCryAtkSpd: 20,
   /** Attack speed can't go above this, however much gear stacks. */

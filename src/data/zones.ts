@@ -38,6 +38,8 @@ export interface ZoneTheme {
   wallRise?: number;
   /** Ground on top of cliffs/mesas (their steep faces are rock); undefined = rock all over. */
   mesaTop?: Ground;
+  /** The land dims over its last cells before the Void that ends it (an organic outline). */
+  edgeFade?: boolean;
 }
 
 export interface ZoneDef {
@@ -71,7 +73,7 @@ export const ZONES: Record<string, ZoneDef> = {
   mine: {
     id: 'mine', name: 'Emberdeep Mine', kind: 'gather', arch: 0xffb050, build: buildMine,
     theme: {
-      bg: 0x0c0908, fog: [26, 60], hemi: [0xc8b098, 0x4a3828, 1.3], sun: [0xffd0a0, 1.5], exposure: 1.35,
+      bg: 0x0c0908, fog: [26, 60], hemi: [0xaaa49c, 0x3e3026, 1.3], sun: [0xffc88c, 1.65], exposure: 1.35,
       ambient: 'cave', trees: 'pine', wall: 'cave',
       ground: { [Ground.Cave]: [0x5e5042, 0x86725a] },
       cliff: [0x6e5c4a, 0x56463a],
@@ -89,6 +91,7 @@ export const ZONES: Record<string, ZoneDef> = {
       forest: { pine: 0.55, grove: 0.3, ash: 0.15 },
       reliefTrees: 0.08,
       mesaTop: Ground.Grass,
+      edgeFade: true,
       flowers: [0xf0c040, 0xd85a4a, 0xa888ff, 0xf4f0e0],
       cliff: [0x7a6a5a, 0x5a4e44],
       water: [0x4a8aa0, 0x16384a],
@@ -102,7 +105,7 @@ export const ZONES: Record<string, ZoneDef> = {
       ground: { [Ground.Stone]: [0x6a7070, 0x5a6060], [Ground.Grass]: [0x3a5a3a, 0x4a6a44] },
       forest: { grove: 0.7, ash: 0.3 },
       cliff: [0x4a5456, 0x3a4244],
-      water: [0x3a7a74, 0x0f3036],
+      water: [0x2c8a84, 0x08203a],
     },
   },
   lair: {

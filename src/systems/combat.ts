@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { castAbility } from '../abilities';
 import { newBossState } from '../ai/boss';
 import { mitigate, rollHit } from '../combat/damage';
-import { canAfford, swingTiming } from '../combat/stats';
+import { canAfford, swingConnects, swingTiming } from '../combat/stats';
 import { abilityFor, type AbilityKey } from '../data/abilities';
 import { Enemy, type PackState } from '../entities/enemy';
 import { ATTACK_ANIM } from '../entities/player';
@@ -112,7 +112,7 @@ export class Combat {
         g.sfx.play('swing', 0.8, 0.9 + Math.random() * 0.2);
         g.fx.arc(p.x, p.z, dirA, st.range + 0.6, Math.PI * 0.6, 0xffffff);
         const hits = this.enemiesInCone(p.x, p.z, dirA, st.range + 0.5, Math.PI * 0.6);
-        if (target && !target.dead && !hits.includes(target) && p.distTo(target) <= st.range + target.radius + 0.8) hits.push(target);
+        if (target && !target.dead && !hits.includes(target) && swingConnects(p.distTo(target), st.range, target.radius)) hits.push(target);
         for (const e of hits) this.hitEnemy(e, 1, { kb: COMBAT_TUNING.knockback.melee, fromX: p.x, fromZ: p.z });
       } else {
         const tx = target && !target.dead ? target.x : p.x + Math.cos(dirA);
@@ -127,7 +127,8 @@ export class Combat {
           this.firePlayerProjectile('bolt', dx / d, dz / d, 1, { speed: 18 });
         }
       }
-    });
+    });    // A melee swing steps after its target through the wind-up (see Player.update).
+    if (st.style === 'melee' && target && p.action) p.action.track = { target, reach: st.range + target.radius };
   }
 
   /** `quiet` (a held key repeating) skips the refusal sounds and messages. */
@@ -375,7 +376,7 @@ export class Combat {
     p.sinceHit = 0;
     p.flash(0.8);
     p.anim.hurt = 1;
-    // Defence trains a little from absorbing hits, on top of stance XP.
+    // Defence trains from what the armour absorbs, on top of its share of combat XP.
     g.prog.grant('defence', Math.max(0, amount - dmg) * XP_TUNING.defencePerAbsorbed);
     g.text.damage(dmg, p.x, 2.2, p.z, 'hurt');
     g.sfx.play('playerHurt', 0.8);

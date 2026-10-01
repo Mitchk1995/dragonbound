@@ -1,5 +1,5 @@
 import { BASES } from '../data/items';
-import { COMBAT_TUNING, MANA_TUNING } from '../data/tuning';
+import { COMBAT_TUNING, MANA_TUNING, XP_TUNING } from '../data/tuning';
 import type { Item, SkillId, Slot, Style } from '../types';
 
 export interface PlayerStats {
@@ -131,9 +131,36 @@ export function castTime(skillId: CastSkill, castSpeed: number) {
   return COMBAT_TUNING.skillCast[skillId] / castSpeed;
 }
 
-/** Split combat XP across skills according to stance (OSRS-style). */
-export function stanceSplit(stance: 'aggressive' | 'defensive' | 'shared', style: Style, xp: number): [SkillId, number][] {
-  if (stance === 'aggressive') return [[style, xp]];
-  if (stance === 'defensive') return [['defence', xp]];
-  return [[style, xp / 2], ['defence', xp / 2]];
+/**
+ * Where an enemy's combat XP goes. There is no stance to pick (this plays like Diablo 2): the
+ * weapon style you fought with gets all of it, and Hitpoints and Defence each get a fixed share
+ * on top. Defence also trains from the damage your armour absorbs (Combat.damagePlayer), so a
+ * hero who wears armour into a fight keeps it close behind the weapon style.
+ */
+export function combatXpSplit(style: Style, xp: number): [SkillId, number][] {
+  return [[style, xp], ['hitpoints', xp * XP_TUNING.hitpointsShare], ['defence', xp * XP_TUNING.defenceShare]];
+}
+
+/**
+ * Combat level, on the same 1-99 scale as skills and enemy levels (the target frame shows those):
+ * half your best weapon style plus a quarter each of Defence and Hitpoints. A new hero is 3.
+ */
+export function combatLevel(levels: Pick<Record<SkillId, number>, 'melee' | 'ranged' | 'magic' | 'defence' | 'hitpoints'>) {
+  return Math.max(1, Math.floor(Math.max(levels.melee, levels.ranged, levels.magic) / 2 + (levels.defence + levels.hitpoints) / 4));
+}
+
+/**
+ * A melee swing follows the enemy it was aimed at. During the wind-up the hero steps after a
+ * target that is backing off (a kiting kobold), so the step this frame is how far it has drifted
+ * past striking distance, capped by COMBAT_TUNING.meleeTrack.speed. 0 while it's still close.
+ */
+export function swingTrackStep(dist: number, reach: number, dt: number) {
+  const T = COMBAT_TUNING.meleeTrack;
+  const over = dist - (reach - T.margin);
+  return over > 0 ? Math.min(over, T.speed * dt) : 0;
+}
+
+/** Does a melee blow land on the enemy it was aimed at (centre distance `dist`)? */
+export function swingConnects(dist: number, range: number, radius: number) {
+  return dist <= range + radius + COMBAT_TUNING.meleeTrack.leeway;
 }

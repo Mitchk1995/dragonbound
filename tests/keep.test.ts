@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { RESTORATION_BY_ID } from '../src/data/keep';
 import { KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
-import { cellRole, fitBlocks, inRoom, partitionRuns, sideLen, towerRects, wallCell, wallRuns, type BuildingSpec } from '../src/world/building';
+import { cellRole, fitBlocks, fitsOf, inRoom, partitionRuns, sideLen, stairDest, towerEntry, towerExit, towerRects, wallCell, wallRuns, type BuildingSpec, type Floor } from '../src/world/building';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
 import { Cell, Ground } from '../src/world/layout';
 import { buildProp } from '../src/world/props';
@@ -39,18 +39,14 @@ describe('building specs (pure)', () => {
     expect(cellRole(r, 13, 23)).toBe('floor');
     expect(partitionRuns(r.partitions![0])).toEqual([[1, 3], [5, 7]]);
   });
-  it('corner towers sit outside the wall ring, sharing only its corner cells', () => {
+  it('corner towers are centred on the corner cells and their masonry blocks the whole footprint', () => {
     const t: BuildingSpec = { ...b, towers: 3 };
     const rects = towerRects(t);
-    expect(rects).toHaveLength(4);
+    expect(rects).toEqual([[9, 19, 12, 22], [16, 19, 19, 22], [9, 24, 12, 27], [16, 24, 19, 27]]);
     for (const [x0, z0, x1, z1] of rects) {
-      let shared = 0;
       for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
-        const role = cellRole(t, x, z);
-        expect(role === 'out' || role === 'wall').toBe(true);
-        if (role === 'wall') shared++;
+        expect(cellRole(t, x, z)).toBe('wall');
       }
-      expect(shared).toBe(1);
     }
   });
   it('a room counts the floor and the doorway, not the street outside', () => {
@@ -91,7 +87,9 @@ describe('Dragonspire Keep', () => {
     expect(k.storeyH).toBeLessThan(k.wallH - 3);
     expect(k.windows.some((w) => w.floor === 1)).toBe(true);
     for (const [x0, z0, x1, z1] of towerRects(k)) {
-      for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) expect(L.cells[z * L.w + x], `tower ${x},${z}`).toBe(Cell.Blocked);
+      for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
+        expect(L.cells[z * L.w + x], `tower ${x},${z}`).toBe(cellRole(k, x, z) === 'wall' ? Cell.Blocked : Cell.Ground);
+      }
     }
     const p = buildBuilding(k), box = new THREE.Box3().setFromObject(p.obj);
     expect(box.max.y).toBeGreaterThan(k.wallH + 5);
@@ -128,7 +126,37 @@ describe('Dragonspire Keep', () => {
     }
     // The great hall has the throne and feast tables; the other rooms their own furnishings.
     const kinds = new Set((k.fits ?? []).map((f) => f.kind));
-    for (const kind of ['throne', 'feast_table', 'stair', 'gallery', 'hearth_oven', 'bunk', 'chapel_altar', 'weapon_rack']) expect(kinds, kind).toContain(kind);
+    for (const kind of ['throne', 'feast_table', 'hearth_oven', 'bunk', 'weapon_rack']) expect(kinds, kind).toContain(kind);
+    expect(kinds).not.toContain('stair');
+    expect(kinds).not.toContain('gallery');
+    const upstairs = new Set(fitsOf(k, 1).map((f) => f.kind));
+    for (const kind of ['bed', 'shelf', 'map_table', 'chapel_altar']) expect(upstairs, kind).toContain(kind);
+  });
+  it('both tower stairs connect the entry to every upper-floor room and back without retriggering', () => {
+    const k = B.keep, stairs = k.turrets!.filter((t) => t.use === 'stair');
+    const up = new NavGrid(L.w, L.h, L.upper!);
+    expect(stairs).toHaveLength(2);
+    expect(up.isWalkable(L.entry.x, L.entry.z), 'there is no upstairs street').toBe(false);
+    for (const stair of stairs) {
+      const [x, z] = towerEntry(k, stair);
+      const path = nav.findPath(L.entry.x, L.entry.z, x + 0.5, z + 0.5)!;
+      expect(path).not.toBeNull();
+      expect(path.at(-1)).toEqual({ x: x + 0.5, z: z + 0.5 });
+      for (const floor of [0, 1] as Floor[]) {
+        const dest = stairDest(k, x + 0.5, z + 0.5, floor)!;
+        expect(dest.floor).toBe(floor ? 0 : 1);
+        expect(dest.y).toBe(floor ? 0 : k.storeyH);
+        expect((floor ? nav : up).isWalkable(dest.x, dest.z)).toBe(true);
+        expect(stairDest(k, dest.x, dest.z, dest.floor)).toBeNull();
+      }
+      const landing = towerExit(k, stair, 1)!;
+      for (let zz = k.z + 1; zz < k.z + k.d - 1; zz++) for (let xx = k.x + 1; xx < k.x + k.w - 1; xx++) {
+        if (!up.isWalkable(xx + 0.5, zz + 0.5)) continue;
+        const p = up.findPath(landing.x, landing.z, xx + 0.5, zz + 0.5)!;
+        expect(p, `upstairs cell ${xx},${zz} from ${stair.corner}`).not.toBeNull();
+        expect(p.at(-1)).toEqual({ x: xx + 0.5, z: zz + 0.5 });
+      }
+    }
   });
   it('the smelter is laid out as the work flows: ore in from the east, furnace, casting to the west, bars by the south door', () => {
     const s = B.smelter, at = (kind: string) => s.fits!.find((f) => f.kind === kind)!;
@@ -245,6 +273,17 @@ describe('building models', () => {
     expect(p.contains(B.bank.x + 5, B.bank.z + 5)).toBe(true);
     expect(p.contains(B.bank.x - 3, B.bank.z + 5)).toBe(false);
   });
+  it('upstairs shows the boards and upper rooms, hides the ground rooms, and switches back cleanly', () => {
+    const p = buildBuilding(B.keep);
+    const [, built, roof, , upper] = p.obj.children;
+    const ground = built.children[0];
+    p.setCut(1, 0);
+    expect([ground.visible, upper.visible, roof.visible]).toEqual([true, false, false]);
+    p.setCut(1, 1);
+    expect([ground.visible, upper.visible, roof.visible]).toEqual([false, true, false]);
+    p.setCut(1, 0);
+    expect([ground.visible, upper.visible, roof.visible]).toEqual([true, false, false]);
+  });
   it('the lifted parts sit above the cut; what stays is floor, stubs, back walls and furniture', () => {
     const p = buildBuilding(B.shop);
     const box = new THREE.Box3().setFromObject(lifted(p));
@@ -278,7 +317,7 @@ describe('building models', () => {
     expect([built.visible, lift.visible, ruin.visible]).toEqual([true, true, false]);
   });
   it('every building and furnishing builds with finite geometry', () => {
-    const used = new Set(KEEP_BUILDINGS.flatMap((b) => (b.fits ?? []).map((f) => f.kind)));
+    const used = new Set(KEEP_BUILDINGS.flatMap((b) => [...fitsOf(b), ...fitsOf(b, 1)].map((f) => f.kind)));
     for (const k of used) expect(FIT_KINDS, k).toContain(k);
     for (const b of KEEP_BUILDINGS) {
       let bad = 0;

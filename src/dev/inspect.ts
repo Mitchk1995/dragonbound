@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ENEMIES } from '../data/enemies';
 import { BASES, TIER_ORDER, TIERS, UNIQUES } from '../data/items';
 import { KEEP_STAGE, ZONES } from '../data/zones';
+import { KEEP_VIEWS } from '../data/zoneMaps';
 import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
 import { startAction, type ActionKind } from '../ai/boss';
@@ -17,7 +18,9 @@ import type { Slot } from '../types';
  * Automated visual + performance audit (dev only). `npm run inspect` launches Electron against
  * the dev server with DRAGONBOUND_INSPECT=<suites>; this drives the real game through every zone,
  * point of interest, model, pose and panel and writes full-window PNGs plus report.json to
- * inspect/. Suites: all | zones | models | anims | ui | icons (comma separated).
+ * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
+ * perf, trees (tree style comparison, see treeLineup.ts), approved (approved artwork, see approvedInspect.ts).
+ * Castle plans and rooms: castle.
  */
 
 type Api = NonNullable<NonNullable<Window['electronAPI']>['inspect']>;
@@ -102,13 +105,22 @@ export async function runInspect(g: Game, suites: string) {
     // `zones:keep+mine` captures only those zones.
     const zoneArg = suites.split(',').find((s) => s.startsWith('zones:'));
     if (want('zones') || zoneArg) report.zones = await zonesSuite(g, shot, zoneArg?.slice(6).split('+'));
+    if (want('castle')) report.castle = await (await import('./castleInspect')).castleSuite(g, shot);
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     if (want('effects')) await effectsSuite(g, shot);
     if (want('boss')) await bossSuite(g, shot);
     if (want('ui')) await uiSuite(g, shot);
-    if (want('models')) await modelsSuite(g, shot);
+    // `hero` is the models suite without the creature sheets (quick passes on gear and hair).
+    if (want('models') || want('hero')) await modelsSuite(g, shot, !want('models'));
     if (want('anims')) await animsSuite(g, shot);
     if (want('icons')) await iconsSuite(shot);
+    // Tree style comparison (explicit only: `trees`, or `trees:scout` to pick the forest patch).
+    const treeArg = suites.split(',').find((s) => s === 'trees' || s.startsWith('trees:'));
+    if (treeArg) report.trees = await (await import('./treeLineup')).treesSuite(g, shot, treeArg.split(':').slice(1));
+    // Approved artwork in every consumer, and the Steel Platebody's fit (explicit only: `approved`; `approved:ui` or
+    // `approved:fit` runs one half).
+    const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
+    if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
   } catch (e) {
     errors.push(`inspect aborted: ${(e as Error).stack ?? e}`);
   }
@@ -117,7 +129,7 @@ export async function runInspect(g: Game, suites: string) {
   await api.done(errors.length ? 1 : 0);
 }
 
-function equip(g: Game, gear: Partial<Record<Slot, string | null>>) {
+export function equip(g: Game, gear: Partial<Record<Slot, string | null>>) {
   for (const [slot, id] of Object.entries(gear)) g.save.equipment[slot as Slot] = id && BASES[id] ? makeItem(id) : null;
   g.prog.recomputeStats();
   g.dressHero();
@@ -163,7 +175,7 @@ function lumStats(g: Game): LumStats {
  * - gpuMs: GPU time of the whole render (EXT_disjoint_timer_query_webgl2), the real render cost.
  * Wall-clock with a readPixels sync is NOT used: it quantises to the display's vsync period.
  */
-async function perf(g: Game, n = 60): Promise<PerfStats> {
+export async function perf(g: Game, n = 60): Promise<PerfStats> {
   const gl = g.renderer.getContext() as WebGL2RenderingContext;
   const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
   const cpu: number[] = [];
@@ -257,11 +269,17 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>, only?: st
         const p = L.props.find((q) => q.kind === kind);
         if (p) pois.push([label, p.x, p.z + dz]);
       };
-      if (L.buildings?.some((b) => b.id === 'keep')) pois.push(['facade-keep', 75, 51]);
+      if (L.buildings?.some((b) => b.id === 'keep')) pois.push(['facade-keep', 75, 51], ['behind-keep', 66, 19.6], ['behind-bank', 108, 67.6]);
+      // The island's districts and landmarks outside the castle.
+      if (id === 'keep') for (const v of KEEP_VIEWS) pois.push([`view-${v.label}`, v.x, v.z]);
       landmark('ritual_dais', 'landmark-shrine', 4);
       landmark('temple_dais', 'landmark-temple', 9);
       landmark('stall_ruin', 'landmark-market', 3);
       landmark('ember_vent', 'landmark-ravine', 2);
+      landmark('waterfall', 'landmark-waterfall', 6);
+      if (id === 'foothills') landmark('tower_ruin', 'landmark-tower', 5);
+      landmark('palisade', 'landmark-warcamp', 8);
+      landmark('wall_lantern', 'landmark-lamp', 3);
       for (const n of L.nodes.filter((n, i, a) => a.findIndex((m) => m.ore === n.ore) === i)) pois.push([`ore-${n.ore}`, n.x, n.z + 1.6]);
       L.packs.slice(0, 10).forEach((p, i) => pois.push([`pack${i}-${p.comp.join('+')}`, p.x, p.z + 4]));
       if (L.boss) pois.push([`boss-${L.boss.id}`, L.boss.x, L.boss.z + 6]);
@@ -272,7 +290,8 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>, only?: st
         p.stop();
         g.camPos.copy(p.pos);
         // Big creatures need the widest zoom to be framed whole.
-        g.camZoom = label.startsWith('boss') || label === 'front-keep' || label.startsWith('landmark') ? 1.35 : label === 'facade-keep' ? 1.7 : 1;
+        const view = label.startsWith('view-') ? KEEP_VIEWS.find((v) => `view-${v.label}` === label) : undefined;
+        g.camZoom = view ? view.zoom : label.startsWith('boss') || label === 'front-keep' || label.startsWith('landmark') ? 1.35 : label === 'facade-keep' ? 1.7 : 1;
         g.debug.timeScale = 0;
         g.update(0);
         const perfStats = await perf(g, 40);
@@ -296,6 +315,17 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>, only?: st
   return out;
 }
 
+/**
+ * An open spot by one of the Foothills goblin camps (their fires, east to west: 0 = the south-east
+ * camp, 1 = the southern camp, 2 and 3 = the war camp), `dz` south of its fire. Found from the layout, so
+ * the harness follows the map when it moves.
+ */
+function goblinCamp(g: Game, which: number, dz = 5) {
+  const fires = g.zone.layout.props.filter((p) => p.kind === 'campfire' && p.z > 115).sort((a, b) => b.x - a.x || b.z - a.z);
+  const f = fires[Math.min(which, fires.length - 1)];
+  return { x: f.x, z: f.z + dz };
+}
+
 // ─── Effects ────────────────────────────────────────────────────────────────
 
 /**
@@ -307,7 +337,7 @@ async function effectsSuite(g: Game, shot: (n: string) => Promise<void>) {
   g.travel('foothills', true);
   await frames(15);
   // An open clearing (the southern goblin camp, emptied for the test).
-  const spot = { x: 106, z: 157 };
+  const spot = goblinCamp(g, 0);
   const p = g.player;
   const step = (secs: number) => {
     for (let i = 0; i < Math.round(secs * 60); i++) g.update(1 / 60);
@@ -445,9 +475,11 @@ async function bossSuite(g: Game, shot: (n: string) => Promise<void>) {
  */
 async function perfSuite(g: Game) {
   const out: Record<string, Record<string, string>> = {};
-  for (const [zone, x, z] of [['foothills', 70, 162], ['foothills', 106, 156], ['foothills', 48, 128]] as [string, number, number][]) {
+  for (const which of [1, 0, 3]) {
+    const zone = 'foothills';
     g.travel(zone, true);
     await frames(20);
+    const { x, z } = goblinCamp(g, which, 4);
     const p = g.player;
     p.pos.set(x, 0, z);
     g.camPos.copy(p.pos);
@@ -597,6 +629,16 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   document.querySelector('.stile[data-skill="smithing"]')?.dispatchEvent(new MouseEvent('mouseenter'));
   await next('skill-hover');
   ui.hideTooltip();
+  // Defence's card says how it trains now there's no stance; the summary cards above the grid.
+  document.querySelector('.stile[data-skill="defence"]')?.dispatchEvent(new MouseEvent('mouseenter'));
+  await next('skill-hover-defence');
+  ui.hideTooltip();
+  document.querySelector('.ssum[data-sum="combat"]')?.dispatchEvent(new MouseEvent('mouseenter'));
+  await next('skill-hover-combat-level');
+  ui.hideTooltip();
+  document.querySelector('.ssum[data-sum="xp"]')?.dispatchEvent(new MouseEvent('mouseenter'));
+  await next('skill-hover-total-xp');
+  ui.hideTooltip();
   ui.showTab('journal');
   ui.panels.journalTab = 'diary';
   ui.refresh();
@@ -658,7 +700,7 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
   // The console mid-fight: cooldowns sweeping, a pool too low for the big skill, life low.
   g.travel('foothills', true);
   await frames(15);
-  const spot = { x: 106, z: 157 };
+  const spot = goblinCamp(g, 0);
   const stage = (weapon: string) => {
     for (const e of g.zone.enemies) {
       e.dead = true;
@@ -746,7 +788,7 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
 
 // ─── Studio renders (models, gear, animation strips) ────────────────────────
 
-class Studio {
+export class Studio {
   readonly scene = new THREE.Scene();
   readonly cam = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
   private overlay: HTMLElement;
@@ -821,7 +863,7 @@ function views(h: number, dist = 2.2): [string, THREE.Vector3][] {
  * Camera placement that fits a posed object whole: its bounding sphere, seen from `dir`, fills a
  * studio cell (FOV 38°, cells ~0.9 aspect so the horizontal FOV is the tighter one).
  */
-function fit(o: THREE.Object3D, dir: THREE.Vector3) {
+export function fit(o: THREE.Object3D, dir: THREE.Vector3) {
   o.updateMatrixWorld(true);
   const sphere = new THREE.Box3().setFromObject(o).getBoundingSphere(new THREE.Sphere());
   const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(19)) * 0.88);
@@ -842,11 +884,11 @@ function sizeOf(o: THREE.Object3D) {
   return { box: b, h: Math.max(0.3, b.max.y - b.min.y), size: b.getSize(new THREE.Vector3()), center: b.getCenter(new THREE.Vector3()) };
 }
 
-async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
+async function modelsSuite(g: Game, shot: (n: string) => Promise<void>, heroOnly = false) {
   document.body.classList.add('inspect-clean');
   const st = new Studio(g);
   // Characters and creatures: 4 views each, two models per sheet.
-  const units = MODEL_FILES.filter((n) => hasModel(n) && !n.startsWith('gear_') && !n.startsWith('hair_') && !n.startsWith('beard_') && !n.startsWith('prop_'));
+  const units = heroOnly ? [] : MODEL_FILES.filter((n) => hasModel(n) && !n.startsWith('gear_') && !n.startsWith('hair_') && !n.startsWith('beard_') && !n.startsWith('prop_'));
   for (let i = 0; i < units.length; i += 2) {
     const cells: Parameters<Studio['sheet']>[0] = [];
     const objs: THREE.Object3D[] = [];
@@ -888,6 +930,35 @@ async function modelsSuite(g: Game, shot: (n: string) => Promise<void>) {
     }
     st.sheet(cells, 4, 1);
     await shot(`hero-${label.replace(/\s+/g, '_')}`);
+    st.clear(objs);
+  }
+  // The legendary set up close: each unique weapon in hand with the full set on, the crown, and the whole set from
+  // the gameplay camera's pitch (about 56° down) all round.
+  {
+    const cells: Parameters<Studio['sheet']>[0] = [];
+    const objs: THREE.Object3D[] = [];
+    const uniqueItem = (id: string) => ({ ...makeItem(UNIQUES[id].base), unique: id, rarity: 'unique' }) as any;
+    const dressed = (weapon: string) => {
+      const m = makeModel('hero');
+      const holder = new THREE.Group();
+      holder.add(m.root);
+      const items: Record<string, any> = {};
+      for (const u of Object.values(UNIQUES)) if (BASES[u.base].slot !== 'weapon') items[BASES[u.base].slot!] = uniqueItem(u.id);
+      items.weapon = uniqueItem(weapon);
+      new HeroDresser(m).dress({ name: '', skin: 1, hair: 2, hairColor: 1, beard: 1, cloth: 0, cloth2: 5 }, items);
+      new Rig(m.root).update(0, newAnimState());
+      objs.push(holder);
+      return holder;
+    };
+    const weapons = Object.values(UNIQUES).filter((u) => BASES[u.base].slot === 'weapon').map((u) => u.id);
+    for (const w of weapons) cells.push({ label: `${UNIQUES[w].name}`, obj: dressed(w), eye: new THREE.Vector3(-1.6, 1.7, 2.9), at: new THREE.Vector3(-0.15, 1.2, 0) });
+    cells.push({ label: 'Ashen Crown', obj: dressed(weapons[0]), eye: new THREE.Vector3(0.7, 2.3, 1.6), at: new THREE.Vector3(0, 1.95, 0) });
+    for (const [label, yaw] of [['game cam · front', 0.5], ['game cam · back', Math.PI + 0.4], ['game cam · left', Math.PI / 2], ['game cam · right', -Math.PI / 2]] as const) {
+      const k = 0.36;
+      cells.push({ label, obj: dressed(weapons[(cells.length - 4) % weapons.length]), eye: new THREE.Vector3(Math.sin(yaw) * 14 * k, 1 + 21 * k, Math.cos(yaw) * 14 * k), at: new THREE.Vector3(0, 1, 0) });
+    }
+    st.sheet(cells, 4, 2);
+    await shot('hero-uniques-detail');
     st.clear(objs);
   }
   // Every hair style and beard, 3/4 from above (the gameplay angle shows the crown).
@@ -1053,6 +1124,21 @@ async function iconsSuite(shot: (n: string) => Promise<void>) {
     }
     await shot(`icons-items-${p + 1}`);
   }
+  // Uniques and trinkets at slot size and large, so their framing and orientation can be judged.
+  sheet.innerHTML = '';
+  const trinkets = Object.keys(BASES).filter((id) => BASES[id].slot === 'amulet' || BASES[id].slot === 'ring');
+  const looks = [
+    ...Object.values(UNIQUES).map((u) => ({ label: u.name, item: { ...makeItem(u.base), unique: u.id, rarity: 'unique' } as any })),
+    ...trinkets.map((id) => ({ label: id, item: makeItem(id) })),
+  ];
+  for (const size of [72, 144]) {
+    for (const { label, item } of looks) {
+      const f = document.createElement('figure');
+      f.innerHTML = `<img width="${size}" height="${size}" src="${itemIconUrl(item)}"><figcaption>${label}</figcaption>`;
+      sheet.appendChild(f);
+    }
+  }
+  await shot('icons-uniques');
   sheet.innerHTML = ICON_NAMES.map((n) => `<figure>${icon(n, 64)}<figcaption>${n}</figcaption></figure>`).join('');
   await shot('icons-svg');
   sheet.remove();

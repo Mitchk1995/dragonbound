@@ -34,3 +34,13 @@ export function skillTileInfo(xp: number): SkillTileInfo {
     pct: maxed ? 100 : Math.min(99, Math.floor(frac * 100)),
   };
 }
+
+/**
+ * An XP drop's number. Combat XP comes in small pieces (a goblin is worth 3 XP, shared over the hits
+ * that killed it), so small drops keep one decimal like OSRS's XP values ("+1.4", never a misleading
+ * "+1" for 0.4); from 10 up they're whole numbers with thousands separators.
+ */
+export function xpDropLabel(amount: number): string {
+  if (amount >= 9.95) return Math.round(amount).toLocaleString('en-US');
+  return String(Math.max(0.1, Math.round(amount * 10) / 10));
+}

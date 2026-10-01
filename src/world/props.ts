@@ -4,7 +4,7 @@ import { ModelKit, PAL, type V3 } from '../render/kit';
 import { hasModel, makeModel } from '../render/registry';
 import { applyFinish, studioEnv } from '../render/env';
 import { applyPaint, type PaintKind } from '../render/paint';
-import { chamferBox, hash01, octagon, prism, rockBlock, taper, wedge } from '../render/blocks';
+import { chamferBox, hash01, octagon, prism, rockBlock, slabBlock, taper, wedge } from '../render/blocks';
 import { makePortal, type PortalSpec } from './portalFx';
 
 export interface Prop {
@@ -30,6 +30,8 @@ export const SLATE = 0x4e5564, PLASTER = 0xd6cab0, DARK = 0x1c1612;
 export const IRON = 0x4a4a52, IRON_L = 0x6e7280;
 const BONE = 0xcbbd9c, BONE_D = 0xa8997a;
 export const COAL = 0x161517, OBSIDIAN = 0x1a1418;
+/** Old iron gone to rust (the cracked anvil): dull brown iron with a paler pitted face, rust streaks. */
+const RUSTY = 0x5a4842, RUSTY_L = 0x6e5a50, RUST = 0x8a4a2a;
 /** Basalt (lair): cooled black rock with slightly lighter weathered tops. */
 const BASALT = 0x2e2626, BASALT_L = 0x453a36, BASALT_D = 0x201a1a;
 /** Standing water on a cave floor: dark and glossy (reflects like coal and obsidian). */
@@ -46,7 +48,7 @@ export const PLOT_MARK: Record<string, number> = { vault_expanded: PAL.gold, alc
 const PAINT_OF = new Map<number, PaintKind>();
 const paintAs = (kind: PaintKind, cols: number[]) => cols.forEach((c) => PAINT_OF.set(c, kind));
 paintAs('masonry', [STONE, STONE_L, STONE_D, STONE_DD, 0x7e776c, 0x7a7870, 0x6a6860, 0x6e6a66]);
-paintAs('rock', [...BLOCKS, BASALT, BASALT_L, BASALT_D, 0x3a2e24, 0x241e1a, 0x1a1311, 0x0f0b0a, 0x2a1d17, BRICK, BRICK_L, BRICK_D, 0x4a4240, 0x3e3634, 0x554c48, 0x3a3230, 0x3a3232, 0x2a2424, 0x6a6258, 0x6e6a66, 0x3c3834, 0x2e2624, 0x7a7068, 0x6a6058, 0x4a4440, 0x6a5a40, 0x5a4a34, 0x2e2828, 0x241e1e, 0x1e1818]);
+paintAs('rock', [RUSTY, RUSTY_L, RUST, ...BLOCKS, BASALT, BASALT_L, BASALT_D, 0x3a2e24, 0x241e1a, 0x1a1311, 0x0f0b0a, 0x2a1d17, BRICK, BRICK_L, BRICK_D, 0x4a4240, 0x3e3634, 0x554c48, 0x3a3230, 0x3a3232, 0x2a2424, 0x6a6258, 0x6e6a66, 0x3c3834, 0x2e2624, 0x7a7068, 0x6a6058, 0x4a4440, 0x6a5a40, 0x5a4a34, 0x2e2828, 0x241e1e, 0x1e1818]);
 paintAs('wood', [WOOD, WOOD_D, WOOD_L, 0x7a5636, 0x94704a, 0x5a3a22, 0x3a2618, 0x5a3a20, 0x4a2e18, 0x8a6a44, 0x5a4a3a, 0x3a2a1e, 0xa08058]);
 paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438, 0x3e6a6a, 0x7a4a34]);
 paintAs('soft', [0x4b3122]);
@@ -79,6 +81,14 @@ export function chunk(k: ModelKit, p: Obj, seed: number, size: V3, pos: V3, colo
   // otherwise be judged wood and get plank grain).
   if (!PAINT_OF.has(color) && !em) PAINT_OF.set(color, 'rock');
   return k.mesh(p, rockBlock(seed, size[0], size[1], size[2]), color, pos, [0, rotY, 0], em, int);
+}
+
+/** A flat-topped rock slab with sheer sides (base at y = pos.y), scaled to `size`. */
+export function slab(k: ModelKit, p: Obj, seed: number, size: V3, pos: V3, color: number, rotY = 0) {
+  if (!PAINT_OF.has(color)) PAINT_OF.set(color, 'rock');
+  const m = k.mesh(p, slabBlock(seed), color, pos, [0, rotY, 0]);
+  m.scale.set(...size);
+  return m;
 }
 
 /**
@@ -402,8 +412,31 @@ function oreRock(k: ModelKit, g: THREE.Group, id: string): Prop {
       xs.forEach(([x, y, z, w, h], i) => k.mesh(ore, prism(w, h, 0.3), i % 2 ? 0xff8a3a : 0xff6a1a, [x, y, z], [z * 0.7, i * 0.9, -x * 0.7], 0xff4a10, 1.6));
     }
   }
+  // Glints: a few tiny bright facets on the ore that flash in turn (they bloom), so a vein catches
+  // the eye in the dark the way wet metal catches a lamp. Emberite glows on its own.
+  const glints: THREE.Object3D[] = [];
+  const glintCol: Record<string, number> = { copper: 0xffc070, tin: 0xe8f4ff, iron: 0xffb080, coal: 0xd8e4ff };
+  if (glintCol[id]) {
+    const spots: V3[] = id === 'copper' ? [[0.1, 0.72, 0.28], [-0.4, 0.5, 0.58], [0.5, 0.5, 0.62]]
+      : id === 'tin' ? [[0.02, 1.32, 0.12], [0.36, 0.96, 0.4], [-0.32, 0.92, 0.36]]
+      : [[0.08, 0.98, 0.36], [-0.4, 0.72, 0.62], [0.5, 0.74, 0.6]];
+    spots.forEach((at, i) => {
+      const m = k.mesh(ore, prism(0.09, 0.16, 0.5), glintCol[id], at, [0.6, i * 1.3, 0.4], glintCol[id], 3.2);
+      m.name = 'glint';
+      glints.push(m);
+    });
+  }
+  const phase = (s * 0.37) % 1;
   return {
     obj: g,
+    tick: glints.length ? (t) => {
+      glints.forEach((m, i) => {
+        // Each flashes for a short moment of its own 3.4 s cycle.
+        const f = (t / 3.4 + phase + i / glints.length) % 1;
+        const on = Math.max(0, 1 - Math.abs(f - 0.5) / 0.07);
+        m.scale.setScalar(0.45 + on * 0.9);
+      });
+    } : undefined,
     setState: (st) => {
       ore.visible = st !== 'depleted';
       host.scale.setScalar(st === 'depleted' ? 0.85 : 1);
@@ -474,7 +507,116 @@ function mineFrame(k: ModelKit, g: THREE.Group, span: number, lit: boolean): Pro
   return { obj: g, light: l };
 }
 
+/**
+ * Falling water: a sheet whose streaks pour downward (UV v runs down the fall), brightest at the
+ * lip and churning to white at the foot. Unlit-ish (a little emission) so it reads in any light;
+ * never casts a shadow. `time` is shared by every sheet of one waterfall.
+ */
+function fallingWater(w: number, h: number, time: { value: number }, seed: number) {
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, transparent: true, depthWrite: false, emissive: 0x1e4a52 });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uFallT = time;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFallUv;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvFallUv = vec2(uv.x, 1.0 - uv.y);');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec2 vFallUv;
+        uniform float uFallT;
+        float fallH(float n) { return fract(sin(n * 91.7 + ${seed.toFixed(1)}) * 43758.5453); }`)
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          // Columns of streaks, each with its own speed and phase, pouring down.
+          float cols = ${Math.max(4, Math.round(w * 5))}.0;
+          float c = floor(vFallUv.x * cols);
+          float sp = 0.9 + fallH(c) * 0.7;
+          float v = vFallUv.y * ${(h * 0.9).toFixed(2)} - uFallT * sp * 1.6 + fallH(c + 7.0) * 9.0;
+          float streak = smoothstep(0.55, 0.95, fract(v * 0.8)) * (0.5 + 0.5 * fallH(c + floor(v * 0.8) * 3.1));
+          float edge = smoothstep(0.0, 0.12, vFallUv.x) * smoothstep(1.0, 0.88, vFallUv.x);
+          float lip = 1.0 - smoothstep(0.0, 0.18, vFallUv.y);
+          float foot = smoothstep(0.7, 1.0, vFallUv.y);
+          vec3 deep = vec3(0.18, 0.46, 0.52), pale = vec3(0.86, 0.96, 0.98);
+          diffuseColor.rgb = mix(deep, pale, clamp(streak * 0.85 + lip * 0.5 + foot * 0.7, 0.0, 1.0));
+          diffuseColor.a = (0.62 + 0.3 * streak + 0.2 * foot) * edge;
+        }`,
+      )
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= 1.0 + 2.0 * diffuseColor.r;');
+  };
+  mat.customProgramCacheKey = () => `fall${seed}`;
+  mat.userData.decal = true;
+  mat.userData.noOcclude = true;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  m.name = 'waterfall';
+  m.renderOrder = 2;
+  return m;
+}
+
 const BUILDERS: Record<string, Builder> = {
+  /**
+   * A waterfall pouring down a stepped rock face (front = +Z, back against the cliff): three tiers
+   * of big flat slabs, the water cutting a channel down their middle, a step pool on each ledge
+   * and white churn where it lands in the river. About 5 wide, 3.5 deep, 4.3 high.
+   */
+  waterfall: (k, g) => {
+    const time = { value: 0 };
+    const ROCK = 0x7a6a5a, ROCK_D = 0x5e5246, ROCK_L = 0x8a7a68;
+    // Tiers: [front z, height]; each tier's slab runs back to the cliff at z = -2.
+    const tiers: [number, number][] = [[0.6, 1.3], [-0.5, 2.6], [-1.4, 4.0]];
+    tiers.forEach(([fz, ht], i) => {
+      const d = fz + 2.1;
+      for (const sx of [-1, 1]) {
+        // Cheeks either side of the channel, each split into two blocks of their own tone.
+        slab(k, g, 400 + i * 4 + (sx > 0 ? 1 : 0), [1.9, ht + 0.5, d], [sx * 1.75, -0.3, fz - d / 2], i % 2 ? ROCK_D : ROCK, sx * 0.04);
+        slab(k, g, 402 + i * 4 + (sx > 0 ? 1 : 0), [1.0, ht + 0.8, d * 0.75], [sx * 2.55, -0.3, fz - d * 0.55], ROCK_L, -sx * 0.06);
+      }
+      // The channel floor of this tier (lower than the cheeks: the water has worn it down).
+      slab(k, g, 420 + i, [1.75, ht + 0.18, d], [0, -0.3, fz - d / 2], ROCK_D);
+    });
+    // Water: a sheet down the front of each tier, a pool on each ledge, the stream on the top.
+    const lips = [[0.6, 1.18, -0.2], [-0.5, 2.48, 1.18], [-1.4, 3.88, 2.48]];
+    lips.forEach(([fz, top, bot], i) => {
+      const hh = top - bot + 0.1;
+      const sheet = fallingWater(1.5 - i * 0.12, hh, time, 11 + i);
+      sheet.position.set(0, (top + bot) / 2, fz + 0.06);
+      g.add(sheet);
+    });
+    const pool = new THREE.MeshStandardMaterial({ color: 0x3a8a9a, roughness: 0.15, emissive: 0x0e2a30, transparent: true, opacity: 0.85 });
+    pool.userData.decal = true;
+    for (const [z0, z1, y] of [[-0.5, 0.55, 1.2], [-1.4, -0.55, 2.5], [-2.0, -1.45, 3.9]]) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(1.55, z1 - z0).rotateX(-Math.PI / 2), pool);
+      p.position.set(0, y + 0.01, (z0 + z1) / 2);
+      p.name = 'waterfall-pool';
+      g.add(p);
+    }
+    // Churn where it lands: pale foam boulders that heave, and a soft white spread on the river.
+    const foamMat = new THREE.MeshStandardMaterial({ color: 0xe8f4f4, roughness: 0.6, emissive: 0x3a5a60, flatShading: true });
+    const foam: THREE.Mesh[] = [];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI - Math.PI, r = 0.5 + hash01(i, 9) * 0.6;
+      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 + hash01(i, 3) * 0.16, 0), foamMat);
+      f.position.set(Math.cos(a) * r * 1.2, -0.2, 0.9 + Math.abs(Math.sin(a)) * r * 0.6);
+      f.name = 'foam';
+      g.add(f);
+      foam.push(f);
+    }
+    const spread = new THREE.Mesh(softDisc(77, 1.9, [0.86, 0.95, 0.95], 0.55), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+    spread.position.set(0, -0.22, 1.5);
+    spread.name = 'foam-spread';
+    spread.material.userData.decal = true;
+    g.add(spread);
+    return {
+      obj: g,
+      tick: (t) => {
+        time.value = t;
+        foam.forEach((f, i) => {
+          const s = 0.8 + 0.3 * Math.sin(t * 3.1 + i * 1.7);
+          f.scale.set(s, s * (0.8 + 0.2 * Math.sin(t * 4.3 + i)), s);
+        });
+      },
+    };
+  },
   // ─── Landmarks & world dressing ───────────────────────────────────────────
   /** Plank bridge along local +Z; `arg` = span length in cells. */
   bridge: (k, g, arg) => {
@@ -919,62 +1061,59 @@ const BUILDERS: Record<string, Builder> = {
     })();
   },
   anvil: (k, g) => {
-    // The Great Anvil on a stone footing with a quench trough. Before 'Reforge the Great Anvil' it
-    // is a cracked, rust-streaked block split clean across the face, its horn snapped off and
-    // lying in the soot, the stump bound with rope. Reforged, it stands on a new iron-banded
-    // stump with a bright steel face, gold inlay round the waist, an ember rune on its flank and a
-    // glowing bar across the face, the hammer laid ready.
+    // The Great Anvil on its stump, read as a classic London anvil in blocks: a wide stepped base
+    // (the feet), a narrow waist, a throat flaring up into the body and one long flat face from
+    // the square heel to the horn. Past the face a short step down (the table), then the horn: a
+    // beak that tapers to a point with its top level just under the face line and its underside
+    // sweeping up, never a cone poking out above the face. Before 'Reforge the Great Anvil' it is
+    // rust-brown and cracked across the face, the horn snapped off short (the tip lies in the
+    // soot), the old stump bound with rope. Reforged: a bright steel face on dark iron, an ember
+    // rune on the flank, a bar at working heat across the face and the hammer ready against a new
+    // iron-banded stump.
     const a = new THREE.Group();
-    a.scale.setScalar(1.3);
+    a.scale.setScalar(1.2);
     g.add(a);
     const cracked = new THREE.Group(), reforged = new THREE.Group();
     a.add(cracked, reforged);
     reforged.visible = false;
-    cb(k, a, [1.7, 0.12, 1.4], [0.35, 0.06, 0], STONE_D, undefined, 0.04);
-    // Quench trough (both states).
-    cb(k, a, [0.7, 0.5, 1.1], [1.35, 0.37, 0.05], WOOD, undefined, 0.04);
-    for (const z of [-0.35, 0.45]) k.box(a, [0.74, 0.06, 0.06], [1.35, 0.52, z], IRON);
-    k.box(a, [0.56, 0.04, 0.96], [1.35, 0.61, 0.05], 0x24505c);
-    const RUST = 0x7a4a2a, SOOT = 0x2a2420;
+    cb(k, a, [1.7, 0.1, 1.25], [0.1, 0.05, 0], STONE_D, undefined, 0.04);
+    const body = (p: Obj, iron: number, face: number, hornLen: number, hornTip: number) => {
+      cb(k, p, [0.92, 0.14, 0.58], [-0.05, 0.63, 0], iron, undefined, 0.04);
+      cb(k, p, [0.7, 0.1, 0.46], [-0.05, 0.75, 0], iron, undefined, 0.03);
+      k.mesh(p, taper(0.5, 0.38, 0.34, 0.26, 0.2), iron, [-0.05, 0.9, 0]);
+      k.mesh(p, taper(0.34, 0.26, 0.86, 0.36, 0.12), iron, [-0.09, 1.06, 0]);
+      cb(k, p, [1.0, 0.16, 0.37], [-0.1, 1.2, 0], iron, undefined, 0.03);
+      k.box(p, [0.98, 0.03, 0.35], [-0.1, 1.29, 0], face);
+      // The table: a step a little below the face, then the beak (top flat, underside rising).
+      cb(k, p, [0.14, 0.13, 0.33], [0.47, 1.195, 0], iron, undefined, 0.02);
+      const rootH = 0.2;
+      k.mesh(p, taper(rootH, 0.3, hornTip, hornTip * 1.3, hornLen, (hornTip - rootH) / 2, 0), iron, [0.54 + hornLen / 2, 1.16, 0], [0, 0, -Math.PI / 2]);
+      // Hardy and pritchel holes near the heel.
+      k.box(p, [0.08, 0.012, 0.08], [-0.48, 1.31, 0], DARK);
+      k.box(p, [0.045, 0.012, 0.045], [-0.34, 1.31, 0], DARK);
+    };
     // ── Cracked ──
-    cb(k, cracked, [0.9, 0.62, 0.9], [0, 0.43, 0], 0x4a3020, [0, 0.1, 0], 0.2);
-    for (const y of [0.3, 0.62]) cb(k, cracked, [0.93, 0.08, 0.93], [0, y, 0], 0x8a7050, [0, 0.1, 0], 0.2);
-    k.mesh(cracked, taper(0.8, 0.52, 0.42, 0.3, 0.18), IRON, [0, 0.83, 0]);
-    cb(k, cracked, [0.32, 0.22, 0.26], [0, 1.03, 0], IRON, undefined, 0.03);
-    // The face split in two, the halves sagging apart round a dark crack.
-    cb(k, cracked, [0.46, 0.24, 0.42], [-0.3, 1.25, 0], IRON, [0, 0, 0.07], 0.04);
-    cb(k, cracked, [0.44, 0.24, 0.42], [0.2, 1.24, 0.01], IRON, [0, 0.04, -0.08], 0.04);
-    k.box(cracked, [0.07, 0.26, 0.44], [-0.04, 1.2, 0], SOOT, [0, 0, 0.1]);
-    k.mesh(cracked, taper(0.36, 0.3, 0.2, 0.2, 0.2), IRON, [0.5, 1.22, 0], [0, 0, -Math.PI / 2]);
-    k.mesh(cracked, taper(0.2, 0.2, 0.04, 0.06, 0.34), IRON, [0.5, 0.2, 0.55], [0.1, 0.8, -Math.PI / 2 + 0.3]);
-    cb(k, cracked, [0.22, 0.14, 0.34], [-0.6, 1.2, 0], IRON, undefined, 0.03);
-    // Rust streaks and soot.
-    // (Long thin streaks run down from the crack, off-centre: square patches read as a face.)
-    for (const [x, y, z, sx, sy] of [[0.06, 1.12, 0.215, 0.05, 0.3], [-0.46, 1.17, 0.215, 0.07, 0.2], [0.34, 1.19, 0.215, 0.05, 0.14], [-0.2, 1.15, -0.215, 0.06, 0.26]] as [number, number, number, number, number][]) k.box(cracked, [sx, sy, 0.02], [x, y, z], RUST);
-    k.box(cracked, [0.5, 0.02, 0.36], [-0.28, 1.375, 0], RUST, [0, 0, 0.07]);
-    decal(k.mesh(cracked, raggedDisc(88, 12, 0.7, 0.95, 0.3), 0x3a3430, [0.1, 0.125, 0.1]));
-    // Rope lashing round the stump.
-    cb(k, cracked, [0.95, 0.06, 0.95], [0, 0.46, 0], 0xb09a70, [0, 0.4, 0.05], 0.2);
-    cb(k, cracked, [0.06, 0.06, 0.55], [-0.05, 0.16, 0.8], WOOD, [0, 1.2, 0], 0.01);
-    cb(k, cracked, [0.14, 0.12, 0.22], [0.12, 0.16, 0.62], RUST, [0, 1.2, 0], 0.02);
+    cb(k, cracked, [0.84, 0.56, 0.84], [0, 0.28, 0], 0x4a3020, [0, 0.1, 0], 0.2);
+    for (const y of [0.14, 0.44]) cb(k, cracked, [0.87, 0.05, 0.87], [0, y, 0], RUSTY, [0, 0.1, 0], 0.2);
+    cb(k, cracked, [0.88, 0.06, 0.88], [0, 0.3, 0], 0xb09a70, [0, 0.4, 0.04], 0.2);
+    body(cracked, RUSTY, RUSTY_L, 0.24, 0.11);
+    // A crack clean across the face and down the flank; rust weeping from it.
+    k.box(cracked, [0.035, 0.2, 0.39], [-0.14, 1.21, 0], DARK);
+    for (const [x, y, sy] of [[-0.12, 1.08, 0.22], [-0.44, 1.12, 0.14], [0.24, 1.13, 0.12]] as [number, number, number][]) k.box(cracked, [0.05, sy, 0.02], [x, y, 0.19], RUST);
+    // The snapped horn tip lying in the soot.
+    k.mesh(cracked, taper(0.11, 0.14, 0.03, 0.04, 0.3, -0.04, 0), RUSTY, [0.72, 0.07, 0.5], [0.1, 0.7, -Math.PI / 2 + 0.15]);
+    decal(k.mesh(cracked, raggedDisc(88, 12, 0.7, 0.95, 0.3), 0x3a3430, [0.1, 0.105, 0.05]));
     // ── Reforged ──
-    cb(k, reforged, [0.95, 0.62, 0.95], [0, 0.43, 0], WOOD_D, undefined, 0.2);
-    for (const y of [0.24, 0.44, 0.66]) cb(k, reforged, [0.99, 0.07, 0.99], [0, y, 0], IRON, undefined, 0.2);
-    for (const [x, z] of [[-0.5, 0], [0.5, 0], [0, 0.5], [0, -0.5]]) k.box(reforged, [0.07, 0.07, 0.07], [x, 0.66, z], PAL.gold);
-    k.mesh(reforged, taper(0.86, 0.56, 0.44, 0.32, 0.2), IRON, [0, 0.84, 0]);
-    cb(k, reforged, [0.36, 0.22, 0.28], [0, 1.05, 0], IRON, undefined, 0.03);
-    cb(k, reforged, [0.4, 0.05, 0.3], [0, 1.0, 0], PAL.gold, undefined, 0.01);
-    cb(k, reforged, [1.0, 0.24, 0.44], [-0.05, 1.28, 0], IRON_L, undefined, 0.04);
-    cb(k, reforged, [0.96, 0.04, 0.4], [-0.05, 1.41, 0], PAL.steel, undefined, 0.01);
-    k.mesh(reforged, taper(0.38, 0.32, 0.04, 0.06, 0.6), IRON_L, [0.76, 1.26, 0], [0, 0, -Math.PI / 2]);
-    cb(k, reforged, [0.24, 0.16, 0.36], [-0.64, 1.23, 0], IRON, undefined, 0.03);
+    cb(k, reforged, [0.86, 0.56, 0.86], [0, 0.28, 0], WOOD_D, undefined, 0.2);
+    for (const y of [0.12, 0.3, 0.48]) cb(k, reforged, [0.89, 0.05, 0.89], [0, y, 0], IRON, undefined, 0.2);
+    body(reforged, IRON, PAL.steel, 0.46, 0.05);
     // An ember rune on the flank, facing the smith (+Z).
-    k.mesh(reforged, octagon(0.09, 0.02), 0xffa040, [-0.05, 1.28, 0.225], [0, Math.PI / 2, 0], PAL.fire, 1.8);
-    for (const e of [-1, 1]) k.box(reforged, [0.16, 0.025, 0.02], [-0.05 + e * 0.17, 1.28, 0.225], 0xffa040, undefined, PAL.fire, 1.4);
-    // A bar at working heat across the face, the hammer beside it.
-    cb(k, reforged, [0.6, 0.06, 0.1], [-0.12, 1.465, 0.06], 0xffb050, [0, 0.15, 0], 0.01, PAL.fire, 2.4);
-    cb(k, reforged, [0.07, 0.07, 0.62], [0.3, 1.47, -0.12], WOOD_L, [0, -0.5, 0], 0.01);
-    cb(k, reforged, [0.16, 0.14, 0.26], [0.42, 1.49, -0.34], IRON, [0, -0.5, 0], 0.02);
+    k.mesh(reforged, octagon(0.06, 0.02), 0xffa040, [-0.1, 1.2, 0.19], [0, Math.PI / 2, 0], PAL.fire, 1.8);
+    for (const e of [-1, 1]) k.box(reforged, [0.12, 0.022, 0.02], [-0.1 + e * 0.13, 1.2, 0.19], 0xffa040, undefined, PAL.fire, 1.4);
+    // A bar at working heat on the face; the hammer leaning on the stump, ready.
+    cb(k, reforged, [0.5, 0.05, 0.08], [-0.05, 1.33, 0.04], 0xffb050, [0, 0.12, 0], 0.01, PAL.fire, 2.4);
+    cb(k, reforged, [0.06, 0.62, 0.06], [-0.42, 0.33, 0.47], WOOD_L, [0.25, 0, 0.12], 0.01);
+    cb(k, reforged, [0.24, 0.13, 0.13], [-0.46, 0.66, 0.55], IRON, [0.25, 0, 0.12], 0.02);
     return {
       obj: g,
       setState: (s) => {
@@ -998,6 +1137,58 @@ const BUILDERS: Record<string, Builder> = {
         cb(k, g, [x1 - x0 + 0.1, 0.1, 0.08], [(x0 + x1) / 2, y + (hash01(i, y) - 0.5) * 0.05, 0.1], WOOD, undefined, 0.02);
       }
     }
+  },
+  /**
+   * The forge yard's lean-to: a shingled roof on four squared posts on stone pads, built to stand
+   * against a wall on its back (-Z) side, sloping down toward the front (+Z), with a deep front
+   * beam, knee braces and the forge's brick stack rising through it at the back. Kept high and
+   * shallow so the hearth under its front edge stays in view of the high camera.
+   */
+  forge_canopy: (k, g) => {
+    const W = 7.0, D = 3.0, back = 3.6, front = 3.2;
+    // The forge's brick stack rises behind the hearth, through the roof, against the wall.
+    cb(k, g, [0.95, 5.2, 0.85], [-0.3, 2.6, -D / 2 + 0.45], BRICK, undefined, 0.04);
+    cb(k, g, [1.15, 0.26, 1.05], [-0.3, 5.3, -D / 2 + 0.45], STONE_D, undefined, 0.04);
+    k.box(g, [0.6, 0.05, 0.5], [-0.3, 5.45, -D / 2 + 0.45], 0x2a0c04, undefined, 0xff5a1a, 0.9);
+    for (const x of [-W / 2 + 0.2, W / 2 - 0.2]) for (const z of [-D / 2 + 0.2, D / 2 - 0.2]) {
+      const h = z < 0 ? back : front;
+      cb(k, g, [0.5, 0.2, 0.5], [x, 0.1, z], STONE_D, undefined, 0.04);
+      cb(k, g, [0.24, h, 0.24], [x, h / 2, z], WOOD_D, undefined, 0.03);
+      if (z > 0) for (const e of [-1, 1]) if ((x < 0 && e > 0) || (x > 0 && e < 0)) cb(k, g, [0.9, 0.14, 0.14], [x + e * 0.38, front - 0.42, z], WOOD_D, [0, 0, e * 0.7], 0.02);
+    }
+    cb(k, g, [W + 0.2, 0.3, 0.26], [0, front - 0.1, D / 2 - 0.2], WOOD, undefined, 0.03);
+    cb(k, g, [W + 0.2, 0.26, 0.26], [0, back - 0.1, -D / 2 + 0.2], WOOD, undefined, 0.03);
+    for (const x of [-W / 2 + 0.2, W / 2 - 0.2]) cb(k, g, [0.2, 0.2, D], [x, (front + back) / 2 + 0.02, 0], WOOD, [Math.atan2(back - front, D), 0, 0], 0.02);
+    const slope = Math.atan2(back - front, D), run = (D + 0.9) / Math.cos(slope);
+    cb(k, g, [W + 0.7, 0.16, run], [0, (front + back) / 2 + 0.2, 0.15], 0x9a5438, [slope, 0, 0], 0.03);
+    cb(k, g, [W + 0.75, 0.12, 0.2], [0, front + 0.06, D / 2 + 0.55], 0x7a4a34, [slope, 0, 0], 0.02);
+  },
+  /** A memorial: a stele on three steps with a bronze dragon crest, an undying flame before it. */
+  memorial: (k, g) => {
+    cb(k, g, [3.0, 0.24, 3.0], [0, 0.12, 0], STONE_DD, undefined, 0.05);
+    cb(k, g, [2.3, 0.24, 2.3], [0, 0.36, 0], STONE_D, undefined, 0.05);
+    cb(k, g, [1.6, 0.24, 1.2], [0, 0.6, -0.2], STONE, undefined, 0.05);
+    k.mesh(g, taper(1.1, 0.46, 0.92, 0.38, 2.2), STONE_L, [0, 1.82, -0.2]);
+    cb(k, g, [1.2, 0.22, 0.56], [0, 3.02, -0.2], STONE, undefined, 0.05);
+    k.mesh(g, taper(0.9, 0.42, 0.2, 0.2, 0.36), STONE, [0, 3.31, -0.2]);
+    // The crest: a bronze diamond with spread wings, and a dark tablet of names below it.
+    k.box(g, [0.44, 0.44, 0.06], [0, 2.35, 0.0], 0xb07a3a, [0, 0, Math.PI / 4]);
+    for (const e of [-1, 1]) k.mesh(g, wedge(0.5, 0.2, 0.05), 0xb07a3a, [e * 0.38, 2.42, 0.0], [0, 0, e * -0.35]);
+    k.box(g, [0.66, 0.66, 0.04], [0, 1.45, 0.01], 0x4a4440);
+    for (let i = 0; i < 4; i++) k.box(g, [0.46 - (i % 2) * 0.12, 0.04, 0.02], [0, 1.66 - i * 0.14, 0.04], 0xc8b890);
+    // The undying flame in a bowl on the top step.
+    k.mesh(g, taper(0.36, 0.36, 0.56, 0.56, 0.22), IRON, [0, 0.83, 0.65]);
+    k.box(g, [0.46, 0.04, 0.46], [0, 0.93, 0.65], 0x4a1c0c, undefined, PAL.fire, 0.6);
+    return { obj: g, tick: flame(k, g, 0, 0.92, 0.65, 0.55) };
+  },
+  /** A low stone parapet along local X (`arg` = length): a plinth, a solid breast wall, a coping. */
+  parapet: (k, g, arg) => {
+    const L = Math.max(2, arg ?? 6);
+    cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], STONE_DD, undefined, 0.04);
+    cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], STONE, undefined, 0.04);
+    cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], STONE_L, undefined, 0.03);
+    const n = Math.max(1, Math.round(L / 2.6));
+    for (let i = 0; i <= n; i++) cb(k, g, [0.7, 0.32, 0.86], [-L / 2 + (i * L) / n, 1.12, 0], STONE_D, undefined, 0.04);
   },
   /** A clipped box hedge along local X, `len` long, with leafy lumps on top. */
   hedge: (k, g, arg) => {
@@ -1523,6 +1714,89 @@ const BUILDERS: Record<string, Builder> = {
     // Slabs that went under, tipped at the sides of the gap.
     for (const sx of [-1, 1]) cb(k, g, [1.3, 0.3, 1.5], [sx * 1.9, -0.42, (hash01(sx, span) - 0.5) * span * 0.5], 0x6a6860, [0, 0.3 * sx, sx * 0.32], 0.05);
   },
+  /**
+   * The drowned temple's great portico (faces +Z; about 17 wide, 4.5 deep, 6.5 high): a stepped
+   * platform carrying six tall square columns before the dark doorway of the cella wall, a heavy
+   * architrave still spanning four of them; the fifth has snapped, its drums and a fallen lintel
+   * lying across the steps, and the last stands alone. Built of the same big ashlar as the walls.
+   */
+  temple_portico: (k, g) => {
+    const S1 = 0x6a6860, S2 = 0x6e6a66, S3 = 0x7a7870, S4 = 0x84827a;
+    // Platform: three broad steps.
+    cb(k, g, [17.4, 0.4, 4.8], [0, 0.15, -0.2], S1, undefined, 0.06);
+    cb(k, g, [16.6, 0.4, 4.2], [0, 0.55, -0.4], S2, undefined, 0.06);
+    cb(k, g, [15.8, 0.4, 3.6], [0, 0.95, -0.6], S3, undefined, 0.06);
+    const base = 1.15;
+    // The cella wall behind: big courses, a tall doorway in the middle (dark inside), its top
+    // broken down toward the sides.
+    const wallZ = -2.1;
+    for (let r = 0; r < 7; r++) {
+      const y = base + r * 0.72 + 0.36;
+      let x = -7.6 + (r % 2 ? 0.7 : 0);
+      for (let b = 0; x < 7.6; b++) {
+        const bl = 1.5 + hash01(r, b, 41) * 0.9, a = x, e = Math.min(7.6, x + bl);
+        x += bl;
+        const mid = (a + e) / 2;
+        if (Math.abs(mid) < 1.5 && r < 5) continue;
+        // The top courses survive only toward the middle.
+        if (r >= 5 && Math.abs(mid) > 7.2 - (r - 4) * 2.2) continue;
+        cb(k, g, [q(e - a - 0.06), 0.68, 0.9], [mid, y, wallZ], [S1, S2, S3][(r + b) % 3], undefined, 0.07);
+      }
+    }
+    // The doorway: a deep dark opening under a lintel.
+    k.box(g, [2.9, 3.5, 0.2], [0, base + 1.75, wallZ - 0.3], 0x101416);
+    cb(k, g, [3.8, 0.6, 1.0], [0, base + 3.86, wallZ], S4, undefined, 0.06);
+    // Columns: base block, a shaft of three drums, a capital.
+    const xs = [-6.5, -3.9, -1.3, 1.3, 3.9, 6.5];
+    const colZ = 0.4, H = 4.6;
+    xs.forEach((x, i) => {
+      const broken = i === 4;
+      cb(k, g, [1.25, 0.35, 1.25], [x, base + 0.17, colZ], S1, undefined, 0.05);
+      const drums = broken ? 1 : 3;
+      for (let d = 0; d < drums; d++) cb(k, g, [0.9 - d * 0.03, H / 3 - 0.04, 0.9 - d * 0.03], [x, base + 0.35 + (d + 0.5) * (H / 3), colZ], d % 2 ? S2 : S3, [0, hash01(i, d) * 0.06, 0], 0.08);
+      if (!broken) cb(k, g, [1.3, 0.4, 1.3], [x, base + 0.35 + H + 0.2, colZ], S4, undefined, 0.06);
+    });
+    // The architrave over the first four columns, in two long blocks with a cornice.
+    const top = base + 0.35 + H + 0.4;
+    cb(k, g, [5.4, 0.75, 1.3], [-5.2, top + 0.37, colZ], S2, undefined, 0.06);
+    cb(k, g, [5.2, 0.75, 1.3], [0, top + 0.37, colZ], S3, [0, 0, 0.012], 0.06);
+    cb(k, g, [10.8, 0.3, 1.55], [-2.6, top + 0.9, colZ], S4, undefined, 0.05);
+    // Beams back to the cella wall (the portico's roof is gone; only a few remain).
+    for (const x of [-5.2, -1.3]) cb(k, g, [0.6, 0.5, 2.6], [x, top + 0.4, -0.85], S1, undefined, 0.05);
+    // The fall: the snapped column's drums and a lintel block across the steps.
+    cb(k, g, [0.9, 1.4, 0.9], [4.6, 0.9, 1.9], S3, [Math.PI / 2, 0.5, 0], 0.08);
+    cb(k, g, [0.88, 1.4, 0.88], [5.9, 0.75, 2.6], S2, [Math.PI / 2, 1.2, 0.1], 0.08);
+    cb(k, g, [3.6, 0.7, 1.2], [3.2, 1.5, 1.3], S2, [0.12, 0.25, -0.2], 0.06);
+    chunk(k, g, 470, [0.7, 0.4, 0.6], [6.9, 0.35, 2.2], S1, 0.6);
+  },
+  /**
+   * A drowned arcade (an aqueduct or a city gallery) rising out of the water along local X:
+   * square piers carrying blocky stepped arches, the deck above broken off at one end. Its base is
+   * well below the surface. `arg` = number of bays (2..4).
+   */
+  drowned_arcade: (k, g, arg) => {
+    const bays = Math.max(2, Math.min(4, arg ?? 3)), span = 3.2, len = bays * span;
+    const S = [0x6a6860, 0x6e6a66, 0x7a7870];
+    const y0 = -1.6, pierH = 3.2;
+    for (let i = 0; i <= bays; i++) {
+      const x = -len / 2 + i * span;
+      const h = i === bays ? pierH * 0.55 : pierH;
+      cb(k, g, [1.0, h, 1.2], [x, y0 + h / 2, 0], S[i % 3], undefined, 0.06);
+      if (i === bays) continue;
+      cb(k, g, [1.2, 0.3, 1.3], [x, y0 + pierH + 0.15, 0], S[2], undefined, 0.04);
+    }
+    // Every bay but the last (whose far pier has broken off) still carries its arch.
+    for (let i = 0; i < bays - 1; i++) {
+      const x = -len / 2 + (i + 0.5) * span;
+      // A stepped arch: two corbel blocks narrowing the opening, a keystone course across.
+      for (const sx of [-1, 1]) cb(k, g, [0.7, 0.45, 1.15], [x + sx * (span / 2 - 0.75), y0 + pierH + 0.52, 0], S[1], undefined, 0.05);
+      cb(k, g, [span + 0.2, 0.55, 1.2], [x, y0 + pierH + 1.0, 0], S[(i + 1) % 3], undefined, 0.05);
+      // The deck's parapet blocks, some fallen away.
+      if (hash01(i, bays) < 0.7) cb(k, g, [span * 0.8, 0.4, 0.4], [x + (hash01(i, 3) - 0.5) * 0.5, y0 + pierH + 1.48, 0.42], S[i % 3], undefined, 0.04);
+    }
+    // The broken end: a fallen voussoir block half in the water.
+    cb(k, g, [1.3, 0.55, 1.0], [len / 2 - 0.9, -0.35, 0.9], S[0], [0.3, 0.6, 0.2], 0.05);
+  },
   /** The temple's stepped dais with the altar on top (faces +Z). */
   temple_dais: (k, g) => {
     const DAIS = [0x6a6860, 0x6e6a66, 0x7a7870];
@@ -1636,6 +1910,22 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [0.1, 2.2, 0.1], [0, 1.1, 0], PAL.wood, undefined, 0.02);
     k.mesh(g, taper(0.4, 0.4, 0.1, 0.1, 0.16), IRON, [0, 2.5, 0]);
     return { obj: g, light: light(g, 0xffa050, 12, 12, 2.2) };
+  },
+  // A miner's wall lamp: a timber post set against the rock (its back at -Z), an arm reaching out
+  // over the floor and a lantern hanging from it, throwing a warm pool across the wall and the ore
+  // in front of it.
+  wall_lantern: (k, g) => {
+    chunk(k, g, 171, [0.55, 0.28, 0.5], [0, -0.06, -0.1], 0x5a4a3c, 0.4);
+    cb(k, g, [0.26, 2.9, 0.26], [0, 1.45, -0.1], WOOD_D, [0.03, 0, 0], 0.04);
+    cb(k, g, [0.2, 0.2, 1.05], [0, 2.82, 0.32], WOOD, undefined, 0.03);
+    cb(k, g, [0.1, 0.5, 0.1], [0, 2.45, 0.1], WOOD_D, [0.75, 0, 0], 0.02);
+    k.box(g, [0.04, 0.36, 0.04], [0, 2.56, 0.7], IRON);
+    cb(k, g, [0.32, 0.4, 0.32], [0, 2.2, 0.7], IRON, undefined, 0.03);
+    k.box(g, [0.22, 0.28, 0.22], [0, 2.2, 0.7], 0xffd890, undefined, 0xffb040, 2.8);
+    k.mesh(g, taper(0.38, 0.38, 0.1, 0.1, 0.14), IRON, [0, 2.4, 0.7]);
+    const l = light(g, 0xffa458, 15, 12, 2.0);
+    l.position.z = 1.0;
+    return { obj: g, light: l };
   },
   crystal: (k, g) => {
     k.mesh(g, prism(0.26, 0.9, 0.35), 0xff8a3a, [0, 0, 0], [0.2, 0.4, 0.1], 0xff5a1a);
@@ -1759,7 +2049,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['curtain', 'wall_tower', 'gatehouse', 'wall_stair']);
+export const OCCLUDING_PROPS = new Set(['curtain', 'wall_tower', 'gatehouse', 'wall_stair', 'forge_canopy']);
 
 /** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
 export const PROP_KINDS = Object.keys(BUILDERS);

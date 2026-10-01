@@ -22,7 +22,7 @@ export class Pet extends Unit {
     const d = Math.hypot(tx - this.x, tz - this.z);
     let moved = 0;
     if (d > 8) {
-      this.pos.set(tx, 0, tz);
+      this.pos.set(tx, owner.pos.y, tz);
     } else if (d > 0.3) {
       const speed = Math.min(12, d * 3);
       const step = Math.min(d, speed * dt);
@@ -34,6 +34,7 @@ export class Pet extends Unit {
       this.faceTo(owner.x + Math.sin(owner.facing) * 5, owner.z + Math.cos(owner.facing) * 5);
     }
     this.anim.speed = dt > 0 ? moved / dt : 0;
+    this.pos.y = owner.pos.y;
     this.updateCommon(dt, nav);
     if (this.flies) this.model.root.position.y = 0.6 + Math.sin(this.t * 2.5) * 0.15;
   }

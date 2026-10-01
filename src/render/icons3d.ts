@@ -21,6 +21,8 @@ const FILL = 0.94;
 const PAIR_GAP = 0.1;
 /** Armour and trinkets are turned three-quarters and tipped toward the viewer. */
 const YAW = -0.45, PITCH = 0.22;
+/** Amulets face the camera, turned just enough to show their depth. */
+export const AMULET_YAW = -0.22, AMULET_PITCH = 0.08;
 
 let renderer: THREE.WebGLRenderer | null = null;
 const scene = new THREE.Scene();
@@ -108,8 +110,14 @@ export function iconSubject(item: Item): { holder: THREE.Object3D; half: number;
   if (base?.kind === 'material' || base?.kind === 'quest' || base?.slot === 'amulet' || base?.slot === 'ring') {
     const kind = base.slot === 'amulet' || base.slot === 'ring' ? base.slot : base.model ?? 'ore';
     const g = buildMaterialModel(kind, base.color ?? base.palette?.main ?? 0x888888, base.id);
-    g.rotation.x = 0.5;
-    holder = turn(g, PITCH, YAW, 0);
+    // Amulets are flat pendants built facing the camera: show them face-on, only a touch turned so they keep
+    // some depth (tipped and turned like the rest, the pendant ended up edge-on, facing away). Everything else
+    // is tipped toward the viewer and turned three-quarters.
+    if (base.slot === 'amulet') holder = turn(g, AMULET_PITCH, AMULET_YAW, 0);
+    else {
+      g.rotation.x = 0.5;
+      holder = turn(g, PITCH, YAW, 0);
+    }
   } else if (!gl) {
     holder = turn(buildMaterialModel('gem', 0x888888), PITCH, YAW, 0);
   } else {

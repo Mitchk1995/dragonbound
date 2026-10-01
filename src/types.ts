@@ -3,9 +3,6 @@ export type SkillId = 'melee' | 'ranged' | 'magic' | 'defence' | 'hitpoints' | '
 export const SKILLS: SkillId[] = ['melee', 'ranged', 'magic', 'defence', 'hitpoints', 'mining', 'smithing'];
 export const COMBAT_SKILLS: SkillId[] = ['melee', 'ranged', 'magic', 'defence', 'hitpoints'];
 
-/** OSRS-style attack stance: where combat XP goes. */
-export type Stance = 'aggressive' | 'defensive' | 'shared';
-
 export type Rarity = 'normal' | 'magic' | 'rare' | 'unique';
 export const RARITIES: Rarity[] = ['normal', 'magic', 'rare', 'unique'];
 

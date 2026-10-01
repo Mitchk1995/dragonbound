@@ -1,4 +1,5 @@
 import { BASES } from '../data/items';
+import { swingTrackStep } from '../combat/stats';
 import { COMBAT_TUNING } from '../data/tuning';
 import type { AttackKind } from '../render/anim';
 import { BowDraw } from '../render/bowDraw';
@@ -25,6 +26,8 @@ export interface Action {
   done: boolean;
   kind: AttackKind;
   onHit: () => void;
+  /** Melee swings: the enemy it was aimed at, followed during the wind-up (combat/stats swingTrackStep). */
+  track?: { target: Enemy; reach: number };
 }
 
 export interface Dash {
@@ -178,6 +181,10 @@ export class Player extends Unit {
     } else {
       if (this.action) {
         const a = this.action;
+        if (a.track && !a.done && !a.track.target.dead) {
+          const tg = a.track.target, step = swingTrackStep(this.distTo(tg), a.track.reach, dt);
+          if (step > 0) moved = this.moveToward(dt, tg.x, tg.z, step / dt, g.zone.nav);
+        }
         a.t += dt / a.dur;
         this.anim.attack = Math.min(1, a.t);
         this.anim.attackKind = a.kind;

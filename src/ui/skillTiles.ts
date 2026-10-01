@@ -1,6 +1,7 @@
 import { mulberry32 } from '../core/rng';
 import { ABILITY_ELEMENT, type Element } from '../data/abilities';
 import type { Style } from '../types';
+import { abilityArtUrl } from './approvedArt';
 
 /**
  * Painted skill tiles for the HUD console, generated once at startup (no image files), in the same
@@ -510,7 +511,10 @@ export function tileElement(id: string): Element {
   return ABILITY_ELEMENT[id] ?? Object.values(BASIC_TILE).find((b) => b.id === id)?.element ?? 'physical';
 }
 
-/** Data URL of a painted tile for an ability id or a basic-attack id (strike / shoot / spark). */
+/**
+ * Data URL of a painted tile for an ability id or a basic-attack id (strike / shoot / spark). Abilities with
+ * approved artwork (approvedArt.ts) get the ground only: the console lays the artwork over it as its own image.
+ */
 export function skillTileUrl(id: string): string {
   const hit = cache.get(id);
   if (hit) return hit;
@@ -521,7 +525,7 @@ export function skillTileUrl(id: string): string {
   let seed = 0;
   for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) | 0;
   paintGround(c, pal, seed);
-  GLYPHS[id]?.(c, pal);
+  if (!abilityArtUrl(id)) GLYPHS[id]?.(c, pal);
   const url = cv.toDataURL();
   cache.set(id, url);
   return url;

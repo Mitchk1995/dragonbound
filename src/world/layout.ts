@@ -84,8 +84,12 @@ export interface ZoneLayout {
    * source (a point, or a segment to x2/z2) and fading out over `r`; `k` is the strength (0..1).
    */
   burns?: Burn[];
+  /** Walk grid of the upper floors of multi-storey buildings (0 = open; see building.ts upperCells). */
+  upper?: Uint8Array;
   /** Enterable buildings (walls in the grid are Blocked; see building.ts). */
   buildings?: BuildingSpec[];
+  /** Chance (percent) of a tree on each raised relief cell; the theme's reliefTrees otherwise. */
+  canopy?: Uint8Array;
 }
 
 export interface Burn {

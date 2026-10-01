@@ -3,7 +3,7 @@
  * scalp (no bald patches at the temples), the tunic front is plain cloth (no floating V-neck wedge), kobolds are
  * short, drakelings have wings as wide as they are long, swords are long, every hairstyle is one sculpted piece, plate
  * stays a few bold blocks, the Emberforged set glows only in thin seams and its visor slit, swept and tied hair sit on
- * the head (no gap under their edge), and the Scaleguard has no horns.
+ * the head (no gap under their edge), and the Wyrmbone shoulders stay compact behind the hero.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import * as THREE from 'three';
@@ -178,8 +178,8 @@ describe('gear', () => {
     expect(parts('gear_boots_p')).toBeLessThanOrEqual(8);
     expect(parts('gear_body_plate_e')).toBeLessThanOrEqual(parts('gear_body_plate_p') + 3);
   });
-  it('the Scaleguard has nothing sweeping back off the shoulders (no horns)', () => {
-    const root = makeModel('gear_u_scaleguard').root;
+  it('the Wyrmbone has nothing sweeping back off the shoulders', () => {
+    const root = makeModel('gear_u_wyrmbone').root;
     root.updateMatrixWorld(true);
     const v = new THREE.Vector3();
     for (const name of ['sock_shoulderL', 'sock_shoulderR']) {

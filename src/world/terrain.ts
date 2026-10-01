@@ -18,6 +18,8 @@ const CLIFF_H = 3.2;
 const CAVE_WALL_H = 3.6;
 /** Fluid beds sink below the surface; the surface sits at WATER_Y. */
 const BED_Y = -1.0;
+/** Highest a relief vertex below the first terrace may stand (cells with a corner above it are relief). */
+const FLOOR_CAP = 0.6;
 export const WATER_Y = -0.28;
 
 const SPLAT: Record<number, number> = {
@@ -200,6 +202,20 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       for (let j = 0; j < 3; j++) col[k * 3 + j] *= f;
     }
   }
+  // Where the land ends (a zone wrapped in an organic outline of Void), it dims over its last few
+  // cells, so the edge melts into the dusk instead of stopping on a cell-sized step.
+  if (theme.edgeFade) {
+    const voidV = new Uint8Array(nV);
+    for (let i = 0; i < w * h; i++) if (layout.cells[i] === Cell.Void) {
+      const x0 = i % w, z0 = (i - x0) / w;
+      for (const [xx, zz] of [[x0, z0], [x0 + 1, z0], [x0 + 1, z0 + 1], [x0, z0 + 1]]) voidV[vi(xx, zz)] = 1;
+    }
+    const edge = distField((k) => voidV[k] === 1);
+    for (let k = 0; k < nV; k++) {
+      const f = 0.22 + 0.78 * sstep(0, 7, edge[k]);
+      for (let j = 0; j < 3; j++) col[k * 3 + j] *= f;
+    }
+  }
   // Scorched floor: soot gradients around burn sources and along lava shores, darkening and greying
   // the rock with a faint warm cast right at the heat (soft, so it reads as a burn, not a blotch).
   if (layout.burns?.length || theme.lava) {
@@ -234,10 +250,9 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   const hgt = new Float32Array(nV);
   // Cave rock: raw (unterraced) heights, and the terrace profile: wide flat ledges, short risers.
   const raw = new Float32Array(nV);
-  const terrace = (y: number) => {
-    const t = y / CAVE_TERRACE, f = t - Math.floor(t);
-    return (Math.floor(t) + sstep(0.72, 0.9, f)) * CAVE_TERRACE;
-  };
+  // The same hard steps the relief mesh is cut into (below the first ledge the rock stays at most
+  // FLOOR_CAP high, so a vertex the floor mesh shares is never lifted off it).
+  const terrace = (y: number) => (y < CAVE_TERRACE ? Math.min(y, FLOOR_CAP) : Math.floor(y / CAVE_TERRACE) * CAVE_TERRACE);
   for (let z = 0; z <= h; z++) {
     for (let x = 0; x <= w; x++) {
       const k = vi(x, z);
@@ -327,14 +342,14 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const a = vi(x, z), b = vi(x + 1, z), cc = vi(x + 1, z + 1), d = vi(x, z + 1);
       const tris = (x + z) & 1 ? [a, d, b, b, d, cc] : [a, d, cc, a, cc, b];
       // Cave rock is rebuilt finer (caveRelief below): its cells leave the grid mesh entirely.
-      if ([a, b, cc, d].some((v) => hgt[v] > 0.6)) {
+      if ([a, b, cc, d].some((v) => hgt[v] > FLOOR_CAP)) {
         caveCells.push(x, z);
         continue;
       }
       // A triangle is relief if any corner is raised (so cliff faces dissolve as one piece).
       for (let t = 0; t < 6; t += 3) {
         const tri = tris.slice(t, t + 3);
-        (tri.some((v) => hgt[v] > 0.6) ? rough : flat).push(...tri);
+        (tri.some((v) => hgt[v] > FLOOR_CAP) ? rough : flat).push(...tri);
       }
     }
   }
@@ -348,52 +363,157 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   geo.computeVertexNormals();
   const wet = layout.fluid.some((f) => f === Fluid.Water);
   /**
-   * Cave rock, rebuilt at twice the grid's resolution from the raw heights and terraced per
-   * sub-vertex, then faceted (one normal per triangle). On the coarse grid a terrace riser had to
-   * span a whole cell, so the ledges melted into soft, clay-like slopes; here each riser is a short
-   * steep face with a crisp lip, and the colour alternates light and dark by terrace like the slabs
-   * stacked at the wall foot. High vertices are nudged off the grid so the facets don't line up in
-   * rows. Edges shared with the floor mesh stay exactly on it (no cracks).
+   * Relief rock (cave walls, cliffs, rims), rebuilt at twice the grid's resolution from the raw
+   * heights and cut into true terraces: every triangle of the fine grid is sliced by the terrace
+   * planes, each band between two planes lies flat at its floor level, and a vertical wall stands
+   * along every cut from the level below up to it. So whichever way a wall faces (far side, west
+   * side or toward the camera) it is a stack of flat-topped slabs with sheer faces and crisp lips,
+   * never a sloped facet. The cut lines follow the slow noise in the heights, so ledges wander
+   * organically. Each slab takes one tone (light and dark alternating by level, like the stacked
+   * slabs at the wall foot). A cell lying wholly on one ledge is a single flat quad. Edges shared
+   * with the floor mesh stay exactly on it (no cracks).
    */
   function caveRelief() {
     const S = 2, band = [1.16, 0.82, 1.04, 0.88];
-    const P: number[] = [], C: number[] = [], A: number[] = [];
+    const P: number[] = [], C: number[] = [], A: number[] = [], N: number[] = [];
     const src = (k: number) => (fullRelief(k) ? raw[k] : hgt[k]);
-    const sample = (x: number, z: number, u: number, v: number) => {
+    type V = { x: number; z: number; r: number; c: number[]; a: number[] };
+    const sample = (x: number, z: number, u: number, v: number): V => {
       const k00 = vi(x, z), k10 = vi(x + 1, z), k01 = vi(x, z + 1), k11 = vi(x + 1, z + 1);
       const w00 = (1 - u) * (1 - v), w10 = u * (1 - v), w01 = (1 - u) * v, w11 = u * v;
       const bil = (arr: ArrayLike<number>, n: number, j: number) => arr[k00 * n + j] * w00 + arr[k10 * n + j] * w10 + arr[k01 * n + j] * w01 + arr[k11 * n + j] * w11;
       const r = src(k00) * w00 + src(k10) * w10 + src(k01) * w01 + src(k11) * w11;
-      const up = sstep(0.9, 1.6, r);
-      const y = r < 0.9 ? r : terrace(r);
-      const px = x + u, pz = z + v;
-      // Only a slight nudge off the grid (a stronger one pulled the facets into spikes).
-      const jx = (noise(px * 0.61 + 11, pz * 0.61) - 0.5) * 0.12 * up, jz = (noise(px * 0.61 + 29, pz * 0.61 + 7) - 0.5) * 0.12 * up;
-      const b = Math.floor(y / CAVE_TERRACE + 0.3 + (noise(px * 0.05 + 3, pz * 0.05) - 0.5) * 0.3);
-      const f = 1 + (band[((b % 4) + 4) % 4] * (0.95 + noise(px * 0.3 + 60, pz * 0.3) * 0.1) - 1) * up;
-      return { p: [px + jx, y, pz + jz], c: [bil(col, 3, 0) * f * (1 + 0.03 * up), bil(col, 3, 1) * f, bil(col, 3, 2) * f * (1 - 0.04 * up)], a: [0, 1, 2, 3].map((j) => bil(splat, 4, j)) };
+      // (No nudge off the grid: the cut lines follow the noise in the heights, never the rows.)
+      return { x: x + u, z: z + v, r, c: [bil(col, 3, 0), bil(col, 3, 1), bil(col, 3, 2)], a: [bil(splat, 4, 0), bil(splat, 4, 1), bil(splat, 4, 2), bil(splat, 4, 3)] };
+    };
+    const lerpV = (p: V, q: V, t: number): V => ({
+      x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t, r: p.r + (q.r - p.r) * t,
+      c: p.c.map((v, j) => v + (q.c[j] - v) * t),
+      a: p.a.map((v, j) => v + (q.a[j] - v) * t),
+    });
+    /** Clip a convex polygon to r >= lv (keep = 1) or r < lv (keep = -1). */
+    const clip = (poly: V[], lv: number, keep: 1 | -1) => {
+      const out: V[] = [];
+      for (let i = 0; i < poly.length; i++) {
+        const p = poly[i], q = poly[(i + 1) % poly.length];
+        const pin = keep > 0 ? p.r >= lv : p.r < lv, qin = keep > 0 ? q.r >= lv : q.r < lv;
+        if (pin) out.push(p);
+        if (pin !== qin) out.push(lerpV(p, q, (lv - p.r) / (q.r - p.r)));
+      }
+      return out;
+    };
+    /** Tone of the slab at terrace level `lv` (0 = the floor), at a point. */
+    const tone = (lv: number, x: number, z: number) => {
+      if (lv <= 0) return 1;
+      const b = lv + Math.floor((noise(x * 0.05 + 3, z * 0.05) - 0.5) * 0.6 + 0.5);
+      return band[((b % 4) + 4) % 4] * (0.95 + noise(x * 0.3 + 60, z * 0.3) * 0.1);
+    };
+    const ea = new THREE.Vector3(), eb = new THREE.Vector3(), fn = new THREE.Vector3();
+    const tri = (p: number[][], c: number[][], a: number[][], want: number[]) => {
+      ea.set(p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]);
+      eb.set(p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]);
+      fn.crossVectors(ea, eb);
+      const len = fn.length();
+      if (len < 1e-7) return;
+      let order = [0, 1, 2];
+      if (fn.x * want[0] + fn.y * want[1] + fn.z * want[2] < 0) {
+        order = [0, 2, 1];
+        fn.negate();
+      }
+      fn.divideScalar(len);
+      for (const o of order) {
+        P.push(p[o][0], p[o][1], p[o][2]);
+        C.push(c[o][0], c[o][1], c[o][2]);
+        A.push(a[o][0], a[o][1], a[o][2], a[o][3]);
+        N.push(fn.x, fn.y, fn.z);
+      }
+    };
+    const floorY = (r: number) => Math.min(r, FLOOR_CAP);
+    const flat = (k: number, q: V[]) => {
+      const shade = (v: V) => {
+        const f = tone(k, v.x, v.z);
+        return [v.c[0] * f * 1.03, v.c[1] * f, v.c[2] * f * 0.96];
+      };
+      tri(q.map((v) => [v.x, k * CAVE_TERRACE, v.z]), q.map(shade), q.map((v) => v.a), [0, 1, 0]);
+    };
+    const slice = (t: V[]) => {
+      let lo = Infinity, hi = -Infinity;
+      for (const v of t) {
+        lo = Math.min(lo, v.r);
+        hi = Math.max(hi, v.r);
+      }
+      const k0 = Math.max(0, Math.floor(lo / CAVE_TERRACE)), k1 = Math.max(0, Math.floor(hi / CAVE_TERRACE));
+      // Downhill (toward lower r) in the triangle's plane, for the walls' facing.
+      const ab = [t[1].x - t[0].x, t[1].z - t[0].z, t[1].r - t[0].r], ac = [t[2].x - t[0].x, t[2].z - t[0].z, t[2].r - t[0].r];
+      const det = ab[0] * ac[1] - ab[1] * ac[0] || 1e-9;
+      const gx = (ab[2] * ac[1] - ac[2] * ab[1]) / det, gz = (ac[2] * ab[0] - ab[2] * ac[0]) / det;
+      const down = [-gx, 0, -gz];
+      for (let k = k0; k <= k1; k++) {
+        // The band of this triangle between level k and k + 1, lying flat at level k.
+        let poly = t;
+        if (k > 0) poly = clip(poly, k * CAVE_TERRACE, 1);
+        if (k < k1) poly = clip(poly, (k + 1) * CAVE_TERRACE, -1);
+        if (poly.length >= 3) {
+          const y = (v: V) => (k === 0 ? floorY(v.r) : k * CAVE_TERRACE);
+          const shade = (v: V) => {
+            const f = tone(k, v.x, v.z), lift = k > 0 ? 1 : 0;
+            return [v.c[0] * f * (1 + 0.03 * lift), v.c[1] * f, v.c[2] * f * (1 - 0.04 * lift)];
+          };
+          for (let i = 1; i < poly.length - 1; i++) {
+            const q = [poly[0], poly[i], poly[i + 1]];
+            tri(q.map((v) => [v.x, y(v), v.z]), q.map(shade), q.map((v) => v.a), [0, 1, 0]);
+          }
+        }
+        // The sheer face up to this level, along the cut where r crosses it.
+        if (k > 0 && k > k0) {
+          const lv = k * CAVE_TERRACE, cut: V[] = [];
+          for (let i = 0; i < 3; i++) {
+            const p = t[i], q = t[(i + 1) % 3];
+            if ((p.r >= lv) !== (q.r >= lv)) cut.push(lerpV(p, q, (lv - p.r) / (q.r - p.r)));
+          }
+          if (cut.length !== 2) continue;
+          const bot = k === 1 ? floorY(lv) : lv - CAVE_TERRACE;
+          const [u, v] = cut;
+          const shade = (w: V) => {
+            const f = tone(k, w.x, w.z);
+            return [w.c[0] * f * 1.03, w.c[1] * f, w.c[2] * f * 0.96];
+          };
+          const pu0 = [u.x, bot, u.z], pv0 = [v.x, bot, v.z], pu1 = [u.x, lv, u.z], pv1 = [v.x, lv, v.z];
+          tri([pu0, pv0, pv1], [shade(u), shade(v), shade(v)], [u.a, v.a, v.a], down);
+          tri([pu0, pv1, pu1], [shade(u), shade(v), shade(u)], [u.a, v.a, u.a], down);
+        }
+      }
     };
     for (let i = 0; i < caveCells.length; i += 2) {
       const x = caveCells[i], z = caveCells[i + 1];
-      const grid: ReturnType<typeof sample>[] = [];
+      const grid: V[] = [];
       for (let jv = 0; jv <= S; jv++) for (let ju = 0; ju <= S; ju++) grid.push(sample(x, z, ju / S, jv / S));
       const at2 = (ju: number, jv: number) => grid[jv * (S + 1) + ju];
+      // A cell lying wholly on one ledge (the broad tops of the high rock) is one flat quad.
+      const lv0 = Math.floor(grid[0].r / CAVE_TERRACE);
+      if (lv0 >= 1 && grid.every((q) => Math.floor(q.r / CAVE_TERRACE) === lv0)) {
+        const q00 = at2(0, 0), q10 = at2(S, 0), q01 = at2(0, S), q11 = at2(S, S);
+        flat(lv0, [q00, q01, q11]);
+        flat(lv0, [q00, q11, q10]);
+        continue;
+      }
       for (let jv = 0; jv < S; jv++) for (let ju = 0; ju < S; ju++) {
         const q00 = at2(ju, jv), q10 = at2(ju + 1, jv), q01 = at2(ju, jv + 1), q11 = at2(ju + 1, jv + 1);
         const alt = (x * S + ju + z * S + jv) & 1;
-        const tris = alt ? [q00, q01, q10, q10, q01, q11] : [q00, q01, q11, q00, q11, q10];
-        for (const q of tris) {
-          P.push(...q.p);
-          C.push(...q.c);
-          A.push(...q.a);
+        if (alt) {
+          slice([q00, q01, q10]);
+          slice([q10, q01, q11]);
+        } else {
+          slice([q00, q01, q11]);
+          slice([q00, q11, q10]);
         }
       }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
     g.setAttribute('aSplat', new THREE.Float32BufferAttribute(A, 4));
-    g.computeVertexNormals();
     return g;
   }
   const make = (index: number[], name: string, sharp = true) => {
@@ -554,8 +674,11 @@ function planarReflection(y: number) {
 function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, mirror = false) {
   const lava = kind === Fluid.Lava;
   const refl = mirror ? planarReflection(WATER_Y) : null;
-  const skyHigh = new THREE.Color(theme.hemi[0]).multiplyScalar(0.75);
-  const skyLow = new THREE.Color(theme.bg).lerp(new THREE.Color(theme.hemi[0]), 0.25);
+  // The painted sky the water reflects. Mirror water (the drowned city) reflects a deep
+  // dusk navy instead: a pale painted sky turned its open water milky grey from the steep camera.
+  const deepHex = theme.water?.[1] ?? 0x123a52;
+  const skyHigh = mirror ? new THREE.Color(deepHex).lerp(new THREE.Color(theme.hemi[0]), 0.3).multiplyScalar(0.9) : new THREE.Color(theme.hemi[0]).multiplyScalar(0.75);
+  const skyLow = mirror ? new THREE.Color(deepHex).multiplyScalar(0.8) : new THREE.Color(theme.bg).lerp(new THREE.Color(theme.hemi[0]), 0.25);
   const uniforms = {
     uTime: { value: 0 },
     uNoise: { value: noiseTexture() },
@@ -687,8 +810,14 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
              vec2 ruv = rc.xy / rc.w + (normal.xy - flatN.xy) * 0.45;
              vec4 mir = texture2D(uRefl, ruv);
              float cover = clamp(mir.a, 0.0, 1.0) * uReflOn;
-             envC = mix(envC, mir.rgb * (0.75 + 0.25 * pow(1.0 - ndv, 2.0)), cover);
-             diffuseColor.rgb *= 1.0 - cover * 0.6;` : ''}
+             envC = mix(envC, mir.rgb * (0.95 + 0.25 * pow(1.0 - ndv, 2.0)), cover);
+             diffuseColor.rgb *= 1.0 - cover * 0.78;
+             // Caustic shimmer in the shallows: a drifting web of light over the drowned paving.
+             float ca = fluidN(fp * 0.55 + vec2(uTime * 0.035, uTime * 0.013));
+             float cb = fluidN(fp * 0.73 + vec2(0.37, 0.61) - vec2(uTime * 0.015, uTime * 0.03));
+             float caus = pow((1.0 - abs(ca * 2.0 - 1.0)) * (1.0 - abs(cb * 2.0 - 1.0)), 4.0);
+             float shoal = 1.0 - smoothstep(0.06, 0.5, vDepth);
+             totalEmissiveRadiance += vec3(0.5, 0.95, 0.85) * caus * shoal * (1.0 - cover * 0.7) * 0.55;` : ''}
              totalEmissiveRadiance += envC * (0.55 + 0.45 * smoothstep(0.0, 0.5, vDepth));
              // Sun glints: a sun low ahead of the camera, reflected by the ripple normals, so a
              // path of sparkles flickers on the crests (HDR: they bloom).

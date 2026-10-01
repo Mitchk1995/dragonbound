@@ -192,7 +192,7 @@ export const UNIQUES: Record<string, UniqueDef> = {
     id: 'cinderfang', name: 'Cinderfang', base: 'steel_longsword', model: 'u_cinderfang',
     affixes: [{ id: 'dmgPct', value: 45 }, { id: 'atkSpd', value: 15 }, { id: 'critChance', value: 8 }, { id: 'lifeOnHit', value: 3 }],
     req: { skill: 'melee', level: 22 },
-    flavor: "Forged from a whelp's broken fang. Still warm.",
+    flavor: "A dragon's fang, still burning at its core.",
   },
   emberstring: {
     id: 'emberstring', name: 'Emberstring', base: 'recurve_bow', model: 'u_emberstring',
@@ -210,13 +210,14 @@ export const UNIQUES: Record<string, UniqueDef> = {
     id: 'ashen_crown', name: 'Ashen Crown', base: 'iron_fullhelm', model: 'u_ashen_crown',
     affixes: [{ id: 'life', value: 30 }, { id: 'xpPct', value: 10 }, { id: 'critChance', value: 5 }],
     req: { skill: 'defence', level: 20 },
-    flavor: 'Worn by the first who dared to hunt the Cinder brood.',
+    flavor: 'Five horns of the Cinder brood, worn by the first who dared to hunt them.',
   },
+  // The id stays `scaleguard` so saves and drop tables keep working; the armour itself is now the Wyrmbone set.
   scaleguard: {
-    id: 'scaleguard', name: 'Scaleguard Hauberk', base: 'steel_chainbody', model: 'u_scaleguard',
+    id: 'scaleguard', name: 'Wyrmbone Harness', base: 'steel_chainbody', model: 'u_wyrmbone',
     affixes: [{ id: 'armor', value: 12 }, { id: 'life', value: 45 }, { id: 'regen', value: 2 }],
     req: { skill: 'defence', level: 22 },
-    flavor: 'Shed scales, stitched by a patient hand.',
+    flavor: 'Carved from the bones of a fallen wyrm. Its eyes still smoulder.',
   },
 };
 

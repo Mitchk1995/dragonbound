@@ -363,17 +363,9 @@ describe('zones', () => {
     const L = build('foothills');
     const { fill } = outline(L, 30, L.h - 10);
     expect(fill, 'fill of the bounding box').toBeLessThan(0.72);
-    let rockTop = 0, border = 0, borderRock = 0;
-    for (let z = 0; z < L.h; z++) for (let x = 0; x < L.w; x++) {
-      const i = z * L.w + x;
-      if (L.cells[i] === Cell.Cliff && L.ground[i] === Ground.Cave) rockTop++;
-      if (Math.min(x, z, L.w - 1 - x, L.h - 1 - z) < 6) {
-        border++;
-        if (L.cells[i] === Cell.Cliff) borderRock++;
-      }
-    }
+    let rockTop = 0;
+    for (let i = 0; i < L.w * L.h; i++) if (L.cells[i] === Cell.Cliff && L.ground[i] === Ground.Cave) rockTop++;
     expect(rockTop, 'bare rock terraces').toBeGreaterThan(2000);
-    expect(borderRock / border, 'the map edge is rock, not forest').toBeGreaterThan(0.8);
     // Bare ground only where it means something: far less of the meadow is dirt than grass.
     let dirt = 0, grass = 0;
     for (let i = 0; i < L.w * L.h; i++) if (L.cells[i] === Cell.Ground) {
@@ -381,6 +373,57 @@ describe('zones', () => {
       if (L.ground[i] === Ground.Grass) grass++;
     }
     expect(dirt / grass).toBeLessThan(0.08);
+  });
+  it('the Foothills end along an organic outline far beyond sight of anywhere the hero walks', () => {
+    const L = build('foothills');
+    const at = (x: number, z: number) => L.cells[z * L.w + x];
+    // Nothing but void at the map's own edge: the rectangle is never part of the land.
+    for (let x = 0; x < L.w; x++) expect(at(x, 0) === Cell.Void && at(x, L.h - 1) === Cell.Void).toBe(true);
+    for (let z = 0; z < L.h; z++) expect(at(0, z) === Cell.Void && at(L.w - 1, z) === Cell.Void).toBe(true);
+    // The landmass's outline wanders: how far in the land starts varies along every side.
+    const wander = (vals: number[]) => {
+      const m = vals.reduce((a, b) => a + b, 0) / vals.length;
+      return Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length);
+    };
+    const west: number[] = [], south: number[] = [];
+    for (let z = 20; z < L.h - 20; z += 2) {
+      let x = 0;
+      while (x < L.w && at(x, z) === Cell.Void) x++;
+      west.push(x);
+    }
+    for (let x = 20; x < L.w - 20; x += 2) {
+      let z = L.h - 1;
+      while (z > 0 && at(x, z) === Cell.Void) z--;
+      south.push(z);
+    }
+    expect(wander(west), 'west outline').toBeGreaterThan(2.5);
+    expect(wander(south), 'south outline').toBeGreaterThan(2.5);
+    // From every walkable cell the void is out of the camera's sight (over 20 cells away), and
+    // every walkable cell has room on the south (camera) side.
+    const voids: [number, number][] = [];
+    for (let z = 0; z < L.h; z += 1) for (let x = 0; x < L.w; x += 1) if (at(x, z) === Cell.Void) {
+      const inner = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => x + dx >= 0 && z + dz >= 0 && x + dx < L.w && z + dz < L.h && at(x + dx, z + dz) !== Cell.Void);
+      if (inner) voids.push([x, z]);
+    }
+    for (let z = 0; z < L.h; z += 3) for (let x = 0; x < L.w; x += 3) {
+      if (at(x, z) !== Cell.Ground) continue;
+      const near = voids.reduce((d, [vx, vz]) => Math.min(d, Math.hypot(vx - x, vz - z)), Infinity);
+      expect(near, `void seen from ${x},${z}`).toBeGreaterThan(20);
+    }
+    // The waterfall feeds the river, and the shrine stands on designed ground (paved forecourt,
+    // worn verges, scorch only round its fires), not a bare disc of dirt.
+    expect(L.props.some((p) => p.kind === 'waterfall')).toBe(true);
+    const dais = L.props.find((p) => p.kind === 'ritual_dais')!;
+    let stone = 0, scorch = 0, n = 0;
+    for (let z = Math.floor(dais.z - 9); z <= dais.z + 9; z++) for (let x = Math.floor(dais.x - 9); x <= dais.x + 22; x++) {
+      if (at(x, z) !== Cell.Ground) continue;
+      n++;
+      if (L.ground[z * L.w + x] === Ground.Stone) stone++;
+      if (L.ground[z * L.w + x] === Ground.Scorch) scorch++;
+    }
+    expect(stone / n, 'paved').toBeGreaterThan(0.2);
+    expect(scorch, 'no scorched disc').toBe(0);
+    expect((L.burns ?? []).filter((b) => Math.hypot(b.x - dais.x, b.z - dais.z) < 10).length).toBeGreaterThanOrEqual(2);
   });
   it('the drowned market has its trade knocked down round the edges, with open floor to fight on', () => {
     const L = build('ruin');
