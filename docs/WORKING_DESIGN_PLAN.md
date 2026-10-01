@@ -123,6 +123,7 @@ No game upload, hosting, deployment, rebuild or new heavy job occurs for this pl
 ## Still open from earlier plans
 
 - Blender-made world props with ruined/restored states (the last open item of the [art fix plan](history/ART_FIX_PLAN.md), phase 3).
+- **Armour models to match the approved icons (awaiting owner):** an open collar on the plate bodies instead of the solid neck cap, and thumbless mitten gauntlets like the approved gauntlet icons. Both are worked out but not built; they affect the bronze, iron, steel and Emberforged sets.
 
 ## Repository hygiene
 
