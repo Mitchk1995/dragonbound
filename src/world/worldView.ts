@@ -681,9 +681,17 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     // a little by the void's glow so they read as stone, not black blobs.
     const debrisMat = new THREE.MeshStandardMaterial({ color: 0x8a7a6c, flatShading: true, roughness: 0.95, emissive: 0x241a2c });
     applyPaint(debrisMat, 'rock', 'object', 0.8);
+    // Each drifts out over the void: on a big island it is pushed out past the shore, never left
+    // half-sunk in the fields.
+    const overLand = (x: number, z: number, r: number) => {
+      for (let dz = -r; dz <= r; dz += 2) for (let dx = -r; dx <= r; dx += 2) if (at(Math.floor(x + dx), Math.floor(z + dz)) !== Cell.Void) return true;
+      return false;
+    };
     for (let i = 0; i < 14; i++) {
-      const a = rng() * Math.PI * 2, r = 55 + rng() * 50;
+      const a = rng() * Math.PI * 2;
+      let r = 55 + rng() * 50;
       const size = 2 + rng() * 5;
+      while (r < 400 && overLand(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r, size + 4)) r += 4;
       const rock = new THREE.Mesh(rockBlock(20 + i, size, size * 0.8, size * 0.9), debrisMat);
       rock.position.set(w / 2 + Math.cos(a) * r, -10 + rng() * 25, h / 2 + Math.sin(a) * r);
       // Mostly upright (a flat top catching the light), turned freely about the vertical.

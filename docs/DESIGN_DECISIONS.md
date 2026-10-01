@@ -69,6 +69,12 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
 - **Items never cross their slot's rim:** every item picture fills the same share of its box.
 - **All bows lie the same way in their icons:** tilted like the Recurve (top tip to the upper right, string below), which Mitchell liked; the Worn Shortbow, Hunter's Bow and Emberstring icons were turned to match.
 - **Castle v2 stage 1 is built on the crown** (docs/CASTLE_DESIGN.md): the curtain with its seven towers, the outer and inner gatehouses, the postern, both wards and their yards, the residence range with its open hall and galleries, the kitchen, the west wing, barracks, stables and smithy. The donjon stands solid until stage 2 opens it with the west wing's upper floor; the wall walk is not playable yet.
+- **Castle look, from Mitchell's first walk round** (docs/CASTLE_DESIGN.md):
+  - No house-style pitched roofs on castle buildings: every one has a flat roof behind a crenellated parapet.
+  - Fewer, better windows: tall lancets, placed symmetrically.
+  - The walls on the camera side stand full height (they dissolve round the hero like other tall things) instead of being cut down, which read as missing walls.
+  - The wards are lush lawn, not patchy dirt, and designed as gardens. The inner court has a tiered fountain with running water, flower beds, clipped topiary, benches, two stone champions at the great door and a hedged privy garden. A bronze dragon greets you inside the outer gate.
+  - No random barrels, crates or carts lying about.
 - **The 14 material and quest item icons are approved** (ores, bars, uncut gems, the Cinder Seal Fragment and the Cinder Key) and are in the game. Every item now has painted artwork.
 
 ### Already done before Round 5

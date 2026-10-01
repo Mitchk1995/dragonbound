@@ -203,8 +203,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   // and head heights with gaps where the windows are, the glass sits in the middle of the wall's
   // thickness, and the surround lies flush on both faces (only the outside sill ledge projects).
   const face = (timber ? WALL_T - 0.08 : WALL_T) / 2;
-  // (The keep's upper windows are wide paired lights under a stepped arch, their sills clear of the upper course.)
-  const winDims = (wi: Window) => (wi.floor ? (keep ? { ww: 1.6, wh: 2.3, wy: storeyH + CUT_H + 0.25 } : { ww: 1.1, wh: 2.1, wy: storeyH + 1.0 }) : keep || hall ? { ww: 1.3, wh: 2.3, wy: 1.9 } : { ww: 1.0, wh: 1.3, wy: 1.55 });
+  // (The castle's windows are tall narrow lancets, their upper ones' sills clear of the upper course.)
+  const winDims = (wi: Window) => (keep ? { ww: 0.8, wh: 2.4, wy: wi.floor ? storeyH + CUT_H + 0.3 : 1.7 } : wi.floor ? { ww: 1.1, wh: 2.1, wy: storeyH + 1.0 } : hall ? { ww: 1.3, wh: 2.3, wy: 1.9 } : { ww: 1.0, wh: 1.3, wy: 1.55 });
   for (const side of ['n', 's', 'e', 'w'] as Side[]) {
     if (shared.has(side)) continue;
     const W = wallFrame(b, side), fade = side === 's';
@@ -281,23 +281,19 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       W.glass(gp, gm.warm, ww, tr - wy, 0.04, wi.at, (wy + tr) / 2, 0);
       W.glass(gp, gm.sky, ww, top - tr, 0.04, wi.at, (tr + top) / 2, 0);
       const MULL = timber ? TIMBER : STONE_L;
-      if (keep && wi.floor) {
-        // The keep's upper floor: two lights under a stepped arch (the head of the opening steps
-        // in twice from each side to a keystone), a stone mullion between them, a hood mould
-        // over the arch outside.
-        W.box(gk, gp, 0.2, wh, WALL_T - 0.1, wi.at, wy + wh / 2, 0, MULL, 0, 0.02);
+      if (keep) {
+        // A castle lancet: the opening's head closes to a point (two springers leaning in from
+        // each side), deep reveals, a pointed hood mould outside and a plain sill.
         for (const s of [-1, 1]) {
-          W.box(gk, gp, 0.3, 0.3, WALL_T, wi.at + s * (ww / 2 - 0.15), top - 0.45, 0, UPPER, 0, 0.02);
-          W.box(gk, gp, 0.58, 0.3, WALL_T, wi.at + s * (ww / 2 - 0.29), top - 0.15, 0, UPPER, 0, 0.02);
-          W.box(gk, gp, 0.16, 0.3, WALL_T, wi.at + s * 0.18, top - 0.75, 0, UPPER, 0, 0.02);
+          W.box(gk, gp, ww / 2 + 0.16, 0.34, WALL_T, wi.at + s * (ww / 4 - 0.02), top - 0.12, 0, UPPER, s * -0.55, 0.02);
+          W.box(gk, gp, ww / 2 + 0.5, 0.18, 0.2, wi.at + s * (ww / 4 + 0.02), top + 0.22, face + 0.08, STONE_L, s * -0.55, 0.02);
         }
-        W.box(gk, gp, 0.46, 0.5, 0.2, wi.at, top + 0.05, face + 0.05, STONE_L, 0, 0.03);
-        W.box(gk, gp, ww + 0.9, 0.2, 0.22, wi.at, top + 0.4, face + 0.08, STONE_D, 0, 0.03);
-        for (const s of [-1, 1]) W.box(gk, gp, 0.2, 0.7, 0.22, wi.at + s * (ww / 2 + 0.35), top + 0.05, face + 0.08, STONE_D, 0, 0.03);
-      } else if (ww >= 1.05) W.box(gk, gp, 0.13, wh, 0.34, wi.at, wy + wh / 2, 0, MULL, 0, 0.02);
+        W.box(gk, gp, ww + 0.5, 0.14, 0.3, wi.at, wy - 0.07, face + 0.08, STONE_L, 0, 0.02);
+        for (const s of [-1, 1]) W.box(gk, gp, 0.14, wh - 0.2, 0.16, wi.at + s * (ww / 2 + 0.07), wy + (wh - 0.2) / 2, face + 0.04, STONE_L, 0, 0.02);
+        continue;
+      }
+      if (ww >= 1.05) W.box(gk, gp, 0.13, wh, 0.34, wi.at, wy + wh / 2, 0, MULL, 0, 0.02);
       W.box(gk, gp, ww, 0.12, 0.34, wi.at, tr, 0, MULL, 0, 0.02);
-      // The keep's ground-floor windows are plain rectangles under a flat lintel with a keystone.
-      if (keep && !wi.floor) W.box(gk, gp, 0.36, 0.42, 0.18, wi.at, top + 0.16, face + 0.07, STONE_L, 0, 0.03);
       for (const o of [1, -1]) {
         const off = o * face;
         for (const s of [-1, 1]) W.box(gk, gp, 0.18, wh + 0.2, 0.08, wi.at + s * (ww / 2 + 0.09), wy + (wh + 0.2) / 2, off, FRAME, 0, 0.02);
@@ -456,15 +452,17 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // wall the hearth backs onto, and a louver on the ridge over an open hearth.
       for (const f of b.fits ?? []) {
         if (f.kind === 'open_hearth') {
-          cb(fk, lifted, [1.6, 1.2, 1.6], [f.x, roofTop + 0.4, f.z], STONE_D, undefined, 0.04);
-          fk.mesh(lifted, taper(2.2, 2.2, 0.2, 0.2, 1.0), b.roof, [f.x, roofTop + 1.5, f.z]);
+          // A square stone lantern on the leads, its louvred openings dark, a small capped top.
+          cb(fk, lifted, [1.8, 1.4, 1.8], [f.x, wallH + 0.9, f.z], STONE, undefined, 0.04);
+          for (const [dx, dz] of [[0.91, 0], [-0.91, 0], [0, 0.91], [0, -0.91]]) fk.box(lifted, [dz ? 0.8 : 0.04, 0.6, dz ? 0.04 : 0.8], [f.x + dx, wallH + 1.0, f.z + dz], DARK);
+          cb(fk, lifted, [2.1, 0.24, 2.1], [f.x, wallH + 1.72, f.z], STONE_D, undefined, 0.03);
           continue;
         }
         if (f.kind !== 'fireplace' && f.kind !== 'hearth_oven') continue;
         // The hearth faces `rot` (0 = +Z): its back is toward the opposite wall.
         const r = f.rot ?? 0, bx = -Math.sin(r), bz = -Math.cos(r);
         const x = Math.abs(bx) > Math.abs(bz) ? (bx > 0 ? w - 0.9 : 0.9) : f.x, z = Math.abs(bx) > Math.abs(bz) ? f.z : bz < 0 ? 0.9 : d - 0.9;
-        const top = roofTop - 0.6;
+        const top = roofTop + 1.4;
         cb(fk, lifted, [1.5, top - wallH, 1.5], [x, (wallH + top) / 2, z], STONE, undefined, 0.05);
         cb(fk, lifted, [1.8, 0.3, 1.8], [x, top + 0.1, z], STONE_D, undefined, 0.04);
         fk.box(lifted, [1.0, 0.06, 1.0], [x, top + 0.27, z], DARK);
@@ -741,7 +739,7 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     band(lift, y0, y1, (kk, pp, a, e) => cb(kk, pp, [sx, e - a, sz], [x, (a + e) / 2, z], color, undefined, ch));
 
   // ── Entrance bay round the great door ──
-  const dr = b.doors.find((x) => x.side === 's');
+  const dr = b.doors.find((x) => x.side === 's' && x.w >= 4);
   if (dr) {
     const u0 = dr.at - 1.4, u1 = dr.at + dr.w + 1.4, P = 0.8, zf = d - 0.5 + face, zc = zf + P / 2 - 0.05;
     const BH = wallH, dh = 3.8;
@@ -775,7 +773,7 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     }
     cb(ak, ap, [1.9, 0.14, 0.3], [uc, wy0 - 0.07, zb1 + 0.1], STONE_L, undefined, 0.02);
     cb(ak, ap, [2.1, 0.2, 0.22], [uc, wy1 + 0.35, zb1 + 0.08], STONE_D, undefined, 0.03);
-    // Corbels, parapet and merlons, then the spire.
+    // Corbels, parapet and merlons round a flat deck; the banner pole.
     for (let i = 0; i < 6; i++) {
       const t = -tw / 2 + 0.4 + (i * (tw - 0.8)) / 5;
       cb(ak, ap, [0.34, 0.4, 0.5], [uc + t, TWH - 0.2, zb1 + 0.12], STONE_D, undefined, 0.03);
@@ -784,9 +782,8 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     cb(ak, ap, [tw + 0.8, 0.16, td + 0.8], [uc, TWH + 0.66, tz], STONE_L, undefined, 0.03);
     for (let i = 0; i < 5; i++) cb(ak, ap, [0.72, 0.7, 0.5], [u0 + 0.2 + (i * (tw - 0.4)) / 4, TWH + 1.09, zb1 + 0.2], STONE, undefined, 0.04);
     for (const s of [-1, 1]) for (let i = 0; i < 3; i++) cb(ak, ap, [0.5, 0.7, 0.72], [uc + s * (tw / 2 + 0.2), TWH + 1.09, zb0 + 0.5 + (i * (td - 1)) / 2], STONE, undefined, 0.04);
-    ak.mesh(ap, taper(tw - 0.6, td - 0.6, 0.001, 0.001, 4.6), b.roof, [uc, TWH + 0.74 + 2.3, tz]);
-    cb(ak, ap, [0.1, 1.2, 0.1], [uc, TWH + 5.6, tz], IRON, undefined, 0.02);
-    cb(ak, ap, [1.1, 0.6, 0.04], [uc + 0.57, TWH + 5.85, tz], RUG, undefined, 0.01);
+    cb(ak, ap, [0.12, 2.6, 0.12], [uc, TWH + 2.0, tz], IRON, undefined, 0.02);
+    cb(ak, ap, [1.3, 0.75, 0.04], [uc + 0.67, TWH + 2.85, tz], RUG, undefined, 0.01);
     // The lord's banner on the bay, over the door: red with a gold dragon diamond (all of it above
     // the upper cut, so it goes whole).
     const zb = zf + P + 0.04, by = storeyH + CUT_H + 0.1;
@@ -819,7 +816,7 @@ function flight(k: ModelKit, g: Obj, st: Stair, storeyH: number) {
 /** Is local cell (lx, lz) inside a rectangle [x0, z0, x1, z1)? */
 const inRect = ([x0, z0, x1, z1]: [number, number, number, number], lx: number, lz: number) => lx >= x0 && lx < x1 && lz >= z0 && lz < z1;
 
-/** The keep's roof: a flat lead deck inside a corbelled, crenellated parapet, and a hipped slate roof. */
+/** The castle's roof: a flat lead deck inside a corbelled, crenellated parapet. Returns the parapet's top. */
 function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
   const { w, d, wallH } = b;
   cb(fk, p, [w - 0.3, 0.3, d - 0.3], [w / 2, wallH + 0.05, d / 2], STONE_D, undefined, 0.03);
@@ -831,10 +828,8 @@ function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
     const n = Math.max(1, Math.round((hi - lo - 1.2) / 1.6));
     for (let i = 0; i <= n; i++) W.box(fk, p, 0.82, 0.74, 0.7, lo + 0.6 + (i * (hi - lo - 1.2)) / n, wallH + 1.5, o, STONE, 0, 0.04);
   }
-  const rw = w - 3.6, rd = d - 3.6, rise = 4.4;
-  fk.mesh(p, taper(rw, rd, rw - rd + 0.3, 0.3, rise), b.roof, [w / 2, wallH + 0.2 + rise / 2, d / 2]);
-  cb(fk, p, [rw - rd + 0.9, 0.28, 0.5], [w / 2, wallH + 0.25 + rise, d / 2], 0x3a3230, undefined, 0.04);
-  return wallH + 0.2 + rise;
+  fk.box(p, [w - 1.8, 0.06, d - 1.8], [w / 2, wallH + 0.22, d / 2], 0x4e4a44);
+  return wallH + 1.9;
 }
 
 // ─── Furnishings ─────────────────────────────────────────────────────────────
