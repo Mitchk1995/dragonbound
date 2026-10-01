@@ -11,7 +11,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 ## Where things are
 
 - **The plan:** [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) holds agreed direction, working proposals and open decisions. Record every decision the owner makes there in the same session, whichever chat it came from; a decision that lives only in a chat is lost. Don't start new plan files. The README lists the other docs.
-- **Design images** (concepts, icons, mockups) can be generated with Codex. The owner reviews them in batches before anything goes into the game.
+- **Design images** (concepts, icons, mockups) are generated with Codex: any agent can run it headless with `codex exec -m gpt-5.6-sol -C D:\dragonbound-archive\codex --skip-git-repo-check -s workspace-write -i <reference> -` (prompt on stdin), asking it to use its image generation tool and save the PNG. Run it outside the repo: the dev server watches the repo and crashes on files Codex holds open. The owner reviews images in batches before anything goes into the game; concept sheets that models are built from live in `docs/concepts/`.
 - **Scratch output** (captures, logs, agent run files) goes in `inspect/`, which git ignores, or outside the repo. Large archives go in `D:\dragonbound-archive`.
 
 ## How work lands
