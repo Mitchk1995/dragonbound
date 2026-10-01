@@ -387,8 +387,9 @@ svg { display: block; }
   background: linear-gradient(rgba(10,8,6,0.95), rgba(10,8,6,0.95)), var(--tex-stone) repeat;
   background-attachment: fixed;
   border: 1px solid #94743f; border-bottom: none;
-  /* The case's dark outline round the top and sides; never along the bottom. */
-  box-shadow: -1px 0 0 #0a0705, 1px 0 0 #0a0705, 0 -1px 0 #0a0705, inset 0 -6px 8px rgba(0,0,0,0.45);
+  /* The case's dark outline round the top and sides, raised a pixel so it stops short of the bottom: the rim runs on
+     unbroken into each tab's side. */
+  box-shadow: -1px -1px 0 #0a0705, 1px -1px 0 #0a0705, inset 0 -6px 8px rgba(0,0,0,0.45);
 }
 .stab svg, .stab img { width: 32px; height: 32px; filter: saturate(0.5) brightness(0.62); transition: filter 0.1s; }
 .stab:hover svg, .stab:hover img { filter: saturate(0.85) brightness(0.9); }
@@ -396,7 +397,7 @@ svg { display: block; }
   z-index: 1; height: 47px; top: 1px;
   background: linear-gradient(rgba(22,18,13,0.92), rgba(22,18,13,0.92)), var(--tex-stone) repeat;
   background-attachment: fixed;
-  box-shadow: -1px 0 0 #0a0705, 1px 0 0 #0a0705, 0 -1px 0 #0a0705;
+  box-shadow: -1px -1px 0 #0a0705, 1px -1px 0 #0a0705;
 }
 .stab.on svg, .stab.on img { width: 34px; height: 34px; filter: drop-shadow(0 0 3px rgba(255,200,120,0.35)); }
 .sbody { height: calc(7 * var(--slot) + 6 * var(--inv-gap) + var(--inv-foot)); padding: 0 1px; overflow-x: hidden; }
