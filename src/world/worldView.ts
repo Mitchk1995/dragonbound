@@ -8,7 +8,7 @@ import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel'
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
-import { rockBlock, taper } from '../render/blocks';
+import { rockBlock, slabBlock, taper } from '../render/blocks';
 
 type TreeKind = ZoneTheme['trees'];
 import type { SurfaceKind } from '../render/textures';
@@ -22,15 +22,17 @@ export const OCCLUDE = {
   uOccRadius: { value: 0.16 },
   /** 1 during gameplay; 0 on the title/creation screens where nothing should be cut away. */
   uOccOn: { value: 0 },
+  /** Direction toward the sun (game.ts keeps the sun at this offset from the hero). */
+  uOccSun: { value: new THREE.Vector3(14, 28, 10).normalize() },
 };
 
 /**
  * Patch a material so fragments between the camera and the player, inside a small
- * screen-space circle around the player, dissolve with an ordered dither. Trees and walls
- * never hide the hero, and nothing pops in or out.
+ * screen-space circle around the player and above the hero's knees, are cut away cleanly (no
+ * dither). Trees and walls never hide the hero; a low stub of what was cut stays in place.
  */
-export function makeOccludable(mat: THREE.Material) {
-  addPatch(mat, { key: 'occlude', apply: (shader) => {
+export function makeOccludable(mat: THREE.Material, shadow = false) {
+  addPatch(mat, { key: shadow ? 'occlude:shadow' : 'occlude', slot: 'occlude', apply: (shader) => {
     Object.assign(shader.uniforms, OCCLUDE);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vOccWorld;')
@@ -52,12 +54,7 @@ export function makeOccludable(mat: THREE.Material) {
         uniform vec3 uOccCam;
         uniform float uOccRadius;
         uniform float uOccOn;
-        float occBayer(vec2 p) {
-          ivec2 i = ivec2(mod(p, 4.0));
-          int idx = i.x + i.y * 4;
-          float m[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
-          return (m[idx] + 0.5) / 16.0;
-        }`,
+        uniform vec3 uOccSun;`,
       )
       .replace(
         '#include <clipping_planes_fragment>',
@@ -69,22 +66,40 @@ export function makeOccludable(mat: THREE.Material) {
           vec3 dirP = toP / lenP;
           vec3 toF = vOccWorld - uOccCam;
           float along = dot(toF, dirP);
-          if (uOccOn > 0.5 && along > 0.5 && along < lenP - 0.8) {
+          // A clean cut-away: whatever stands in front of the hero inside the circle is removed
+          // down to a low stub with a hard edge.
+          ${shadow ? `// Shadow pass: follow the sun ray down to the ground; a part whose shadow would land
+          // in the opening (in front of the hero) casts none, so the ground seen through the cut
+          // is never smeared with the shadow of what was cut away.
+          float lift = vOccWorld.y - uOccPlayer.y;
+          toF = vOccWorld - uOccSun * (lift / max(uOccSun.y, 0.05)) - uOccCam;
+          along = dot(toF, dirP);
+          float feet = dot(uOccPlayer - uOccCam, dirP);
+          if (uOccOn > 0.5 && lift > 0.4 && along > 0.5 && along < feet + 0.3) {` : `if (uOccOn > 0.5 && along > 0.5 && along < lenP - 0.8 && vOccWorld.y > uOccPlayer.y + 0.4) {`}
             float perp = length(toF - dirP * along);
-            float screen = perp / along;
-            float fade = 1.0 - smoothstep(uOccRadius * 0.55, uOccRadius, screen);
-            if (fade > occBayer(gl_FragCoord.xy)) discard;
+            if (perp / along < uOccRadius * 0.85) discard;
           }
         }`,
       );
   } });
 }
 
-/** Make every material under an object dissolve between the camera and the hero. */
+/** Shadow-pass depth material with the same cut-away (see makeOccludable). */
+let occDepth: THREE.MeshDepthMaterial | null = null;
+function occludedDepth() {
+  if (!occDepth) {
+    occDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    makeOccludable(occDepth, true);
+  }
+  return occDepth;
+}
+
+/** Make every material under an object cut away between the camera and the hero (shadows too). */
 function occludeAll(root: THREE.Object3D) {
   const seen = new Set<THREE.Material>();
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
+    if (o.castShadow && !(o.material instanceof THREE.ShaderMaterial)) o.customDepthMaterial = occludedDepth();
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
       if (seen.has(m) || m instanceof THREE.ShaderMaterial || m.userData.noOcclude) continue;
       seen.add(m);
@@ -559,10 +574,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const caveShade = (mat: THREE.MeshStandardMaterial) => {
     if (theme.wallRise) applyHeightShade(mat, theme.topShade ?? 1, ...(theme.topRange ?? [2.5, 12]));
   };
-  inst(rockBlock(31, 1, 1, 1), half(strata, 0), half(strataCols, 0), 0, true, 'rock', true, undefined, caveShade);
-  inst(rockBlock(32, 1, 1, 1), half(strata, 1), half(strataCols, 1), 0, true, 'rock', true, undefined, caveShade);
-  inst(rockBlock(34, 1, 1, 1), half(mass, 0), half(massCols, 0), 0, true, 'rock', false, undefined, caveShade);
-  inst(rockBlock(35, 1, 1, 1), half(mass, 1), half(massCols, 1), 0, true, 'rock', false, undefined, caveShade);
+  inst(slabBlock(31), half(strata, 0), half(strataCols, 0), 0, true, 'rock', true, undefined, caveShade);
+  inst(slabBlock(32), half(strata, 1), half(strataCols, 1), 0, true, 'rock', true, undefined, caveShade);
+  inst(slabBlock(34), half(mass, 0), half(massCols, 0), 0, true, 'rock', false, undefined, caveShade);
+  inst(slabBlock(35), half(mass, 1), half(massCols, 1), 0, true, 'rock', false, undefined, caveShade);
   inst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), crevices, null, 0x120e0b, true, undefined, false);
   inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false);
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
@@ -620,13 +635,17 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     voidSky(skyGroup, rng);
     followers.push(skyGroup);
     group.add(skyGroup);
-    // Drifting debris islands in the distance.
+    // Drifting debris islands in the distance: painted rock like the island's own underside, lit
+    // a little by the void's glow so they read as stone, not black blobs.
+    const debrisMat = new THREE.MeshStandardMaterial({ color: 0x8a7a6c, flatShading: true, roughness: 0.95, emissive: 0x241a2c });
+    applyPaint(debrisMat, 'rock', 'object', 0.8);
     for (let i = 0; i < 14; i++) {
       const a = rng() * Math.PI * 2, r = 55 + rng() * 50;
       const size = 2 + rng() * 5;
-      const rock = new THREE.Mesh(rockBlock(20 + i, size, size * 0.8, size * 0.9), new THREE.MeshStandardMaterial({ color: 0x5a4e48, flatShading: true }));
+      const rock = new THREE.Mesh(rockBlock(20 + i, size, size * 0.8, size * 0.9), debrisMat);
       rock.position.set(w / 2 + Math.cos(a) * r, -10 + rng() * 25, h / 2 + Math.sin(a) * r);
-      rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      // Mostly upright (a flat top catching the light), turned freely about the vertical.
+      rock.rotation.set((rng() - 0.5) * 0.6, rng() * 6.3, (rng() - 0.5) * 0.6);
       rock.name = 'debris';
       group.add(rock);
     }

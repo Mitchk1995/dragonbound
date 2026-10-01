@@ -211,7 +211,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   },
   {
     // Chapter 3: the rune altar house, in the bailey's east corner.
-    id: 'rune_plot', style: 'stone', interior: 'rune', x: 94, z: 47, w: 11, d: 10, wallH: 4.0, roof: ROOF.violet, restore: 'rune_altar',
+    id: 'rune_plot', style: 'stone', interior: 'rune', x: 90, z: 47, w: 11, d: 10, wallH: 4.0, roof: ROOF.violet, restore: 'rune_altar',
     doors: [{ side: 'w', at: 4, w: 3 }],
     windows: [{ side: 's', at: 3 }, { side: 's', at: 8 }, { side: 'n', at: 5.5 }, { side: 'e', at: 5 }],
     fits: [
@@ -227,7 +227,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   },
   {
     // Chapter 4: the dragon hatchery, a timber roost barn in the bailey's west corner.
-    id: 'hatch_plot', style: 'timber', interior: 'hatchery', x: 45, z: 46, w: 14, d: 12, wallH: 4.2, roof: ROOF.rust, restore: 'hatchery',
+    id: 'hatch_plot', style: 'timber', interior: 'hatchery', x: 48, z: 46, w: 14, d: 12, wallH: 4.2, roof: ROOF.rust, restore: 'hatchery',
     doors: [{ side: 'e', at: 5, w: 3 }],
     windows: [{ side: 's', at: 3.5 }, { side: 's', at: 10.5 }, { side: 'n', at: 4 }, { side: 'n', at: 10 }, { side: 'w', at: 6 }],
     fits: [
@@ -285,7 +285,7 @@ export function buildKeep(seed: number): ZoneLayout {
   // Inside the walls: gate to the keep's great door round a statue plaza; a cross path to the two
   // plot doors; the kitchen door's path out to its garden.
   G.road([{ x: 75, z: 59 }, { x: 75, z: 50 }, { x: 75, z: 42 }], 4.4, Ground.Stone, 0.2);
-  G.road([{ x: 59.5, z: 52 }, { x: 68, z: 52 }, { x: 82, z: 52 }, { x: 93, z: 52 }], 2.6, Ground.Path, 0.2);
+  G.road([{ x: 62.5, z: 51 }, { x: 68, z: 52 }, { x: 82, z: 52 }, { x: 89.5, z: 51 }], 2.6, Ground.Path, 0.2);
   G.clearing(75, 51, 3.8, Ground.Stone, 0.3);
   G.road([{ x: 56, z: 25.6 }, { x: 50, z: 25.6 }, { x: 49.8, z: 29 }], 2.2, Ground.Path, 0.2);
   // Anvil yard, bank and shop forecourts, market square, alchemy garden.
@@ -295,7 +295,7 @@ export function buildKeep(seed: number): ZoneLayout {
   G.clearing(93, 110, 5, Ground.Stone, 0.8);
   G.clearing(46, 110, 4.5, Ground.Dirt, 1);
   // Bailey: a sanded training yard by the west wall stair.
-  G.clearing(65.5, 55.6, 3.2, Ground.Dirt, 0.4);
+  G.clearing(68, 55.6, 3.2, Ground.Dirt, 0.4);
   // The bailey lawn stays open (trees only where planted below).
   for (let z = 15; z < 60; z++) for (let x = 45; x < 106; x++) if (!G.reserved[G.idx(x, z)]) G.reserved[G.idx(x, z)] = 3;
 
@@ -389,14 +389,15 @@ export function buildKeep(seed: number): ZoneLayout {
   G.prop('brazier', 36.4, 94.2, 0, 1, 0.45);
   // Bailey: the statue plaza on the approach, the well on the east lawn.
   G.prop('statue', 75, 51, 0, 1, 1.3);
-  G.prop('well', 85.5, 47.2, 0, 1, 1.1);
+  G.prop('well', 83.4, 46.6, 0, 1, 1.1);
   // Market stalls between the court road and the shop.
   G.prop('stall', 92, 106.5, Math.PI / 2, 1, 1.6).len = 0;
   G.prop('stall', 92.5, 113.5, Math.PI / 2, 1, 1.6).len = 1;
   // Alchemy garden: the pond.
   G.lake(52, 119, 4.5, Fluid.Water, 1.2);
-  G.prop('signpost', 63, 100, 0.5, 1, 0.3);
-  G.prop('signpost', 88.5, 91.5, -0.4, 1, 0.3);
+  // Fingerposts where the smithy and bank roads leave the court, upright, facing the court.
+  G.prop('signpost', 60.6, 91.2, 0, 1, 0.3);
+  G.prop('signpost', 89.6, 98.2, 0, 1, 0.3);
 
   // ─── District and roadside dressing ──────────────────────────────────────────
   // Everything here keeps off the roads, the station approaches and the stage (any cell it would
@@ -478,14 +479,14 @@ export function buildKeep(seed: number): ZoneLayout {
   for (const x of [98, 101.5]) for (const z of [23, 27, 31, 35]) G.l.cells[G.idx(Math.floor(x), z)] = Cell.Tree;
   dress('fit_bench', 99.8, 39.2, 0, 0.5);
   // The training yard by the west wall stair: three dummies in a row and the weapon rack.
-  for (const x of [63, 65.5, 68]) G.prop('dummy', x, 55.2, Math.PI, 1, 0.5);
-  dress('weapon_rack', 61.2, 57.2, 0.2, 0.8, { paved: true });
+  for (const x of [65.6, 68.1, 70.6]) G.prop('dummy', x, 55.2, Math.PI, 1, 0.5);
+  dress('weapon_rack', 64.4, 53.4, 0.2, 0.8, { paved: true });
   // Stores come in at the gate: a supply cart and its load by the east wall stair.
   dress('cart', 83.4, 55.8, 1.6, 1.1);
   dress('barrels', 87.4, 56.8, 0.3, 0.9);
-  dress('crates', 89.6, 55.6, 0.5, 0.9);
+  dress('crates', 88.6, 58.0, 0.5, 0.9);
   // The well's bench.
-  dress('fit_bench', 88.6, 47.2, -Math.PI / 2, 0.5);
+  dress('fit_bench', 86.2, 44.2, -Math.PI / 2, 0.5);
 
   // The rim lawns: a hay paddock in the north-west, a woodcutter's clearing in the north-east.
   dress('haystack', 31.0, 49.0, 0, 1.2);
@@ -760,13 +761,14 @@ export function buildFoothills(seed: number): ZoneLayout {
     G.road([{ x: 96, z: 64 }, { x: 122, z: 58 }, { x: 138, z: 48 }], 2.6),
     G.road([{ x: 72, z: 104 }, { x: 52, z: 96 }, { x: 34, z: 88 }], 2.4),
   ];
-  // Region grounds: ash in the north, meadow in the south.
-  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+  // Region grounds: meadow grass everywhere, with bare ground only where it means something: the
+  // roads, the camps, the scorched drake nests and the shrine (set below), plus a few dry, stony
+  // patches in the harsher north. No random brown smudges across the meadows.
+  for (let z = 0; z < 70; z++) for (let x = 0; x < w; x++) {
     const i = G.idx(x, z);
     if (G.l.ground[i] === Ground.Path) continue;
-    const ash = z < 66 + (G.noise(x * 0.05, 3) - 0.5) * 24;
-    if (ash) G.l.ground[i] = G.noise(x * 0.12, z * 0.12) > 0.55 ? Ground.Scorch : Ground.Dirt;
-    else if (G.noise(x * 0.07 + 20, z * 0.07) > 0.68) G.l.ground[i] = Ground.Dirt;
+    const north = z < 62 + (G.noise(x * 0.05, 3) - 0.5) * 20;
+    if (north && G.noise(x * 0.09 + 40, z * 0.09) > 0.66) G.l.ground[i] = Ground.Dirt;
   }
   // Water: a river across the middle (bridged by every road) and a lake in the west.
   G.river([{ x: -4, z: 108 }, { x: 36, z: 114 }, { x: 70, z: 112 }, { x: 100, z: 118 }, { x: 128, z: 110 }, { x: 174, z: 116 }], 5, Fluid.Water, roads);
@@ -788,7 +790,14 @@ export function buildFoothills(seed: number): ZoneLayout {
   G.clearing(41, 52, 10, Ground.Scorch, 2);
   G.road([{ x: 57, z: 52 }, { x: 37, z: 52 }], 4.4, Ground.Stone, 0.05);
   // Encounter areas (packs sit in clearings; the roads link them).
-  const P = (x: number, z: number, comp: string[], r = 7, g?: Ground) => G.pack(x, z, comp, r, g);
+  // A camp's trodden earth or a drake nest's scorch is a ragged patch inside the clearing (lobed,
+  // never a disc), so bare ground reads as a purposeful place, not a stamp.
+  const P = (x: number, z: number, comp: string[], r = 7, g?: Ground) => {
+    G.pack(x, z, comp, r);
+    if (g !== undefined) G.blob(x, z, r * 0.72, r * 0.38, (i) => {
+      if (G.l.cells[i] === Cell.Ground && G.l.ground[i] !== Ground.Path && G.l.ground[i] !== Ground.Stone) G.l.ground[i] = g;
+    });
+  };
   P(70, 158, ['goblin', 'goblin', 'goblin']);
   P(106, 152, ['goblin', 'goblin', 'goblin', 'goblin']);
   P(84, 134, ['goblin', 'kobold']);
@@ -855,6 +864,8 @@ export function buildFoothills(seed: number): ZoneLayout {
     if (z < foot && G.reserved[i] !== 1 && G.reserved[i] !== 3 && (Math.abs(x + 0.5 - gate.x) > 2.5 || z < gate.z - 3)) {
       G.l.cells[i] = Cell.Cliff;
       G.l.elev[i] = 6;
+      // Bare rock above the gate (the lair's mountain), not another meadow.
+      G.l.ground[i] = Ground.Cave;
     }
   }
   G.station('gate', 'lair', gate.x, gate.z - 0.5, 0, 2.2);
@@ -867,16 +878,36 @@ export function buildFoothills(seed: number): ZoneLayout {
     if (G.reserved[i] === 1 || G.reserved[i] === 3 || (G.l.cells[i] === Cell.Cliff && G.l.elev[i] >= 6)) continue;
     const bd = Math.min(x, z, w - 1 - x, h - 1 - z);
     const n = G.noise(x * 0.045 + 7, z * 0.045 + 3);
-    const reach = Math.max(0, Math.min(1, (30 - bd) / 12));
-    const t = Math.max((coreD[i] - (10 + n * 10)) * reach, (10 - bd) * 1.7 + (n - 0.5) * 4);
+    const reach = Math.max(0, Math.min(1, (34 - bd) / 12));
+    const t = Math.max((coreD[i] - (7 + n * 9)) * reach, (12 - bd) * 1.7 + (n - 0.5) * 4);
     if (t <= 0) continue;
-    // Terraces: wide steps, each edge wobbling on its own.
+    // A thin band of wood at the foot, then rock terraces climbing to the high ground: wide steps,
+    // each edge wobbling on its own, the top one a sheer wall at the map's edge.
     const step = t + (G.noise(x * 0.11 + 40, z * 0.11) - 0.5) * 3;
-    if (step > 5) {
+    if (step > 3.5) {
       G.l.cells[i] = Cell.Cliff;
       G.l.fluid[i] = Fluid.None;
-      G.l.elev[i] = step > 15 ? 7.2 : step > 10 ? 4.9 : 2.6;
-    } else if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i] && G.rng() < 0.3 + t * 0.1) G.l.cells[i] = G.rng() < 0.08 ? Cell.Rock : Cell.Tree;
+      G.l.elev[i] = step > 17 ? 9.5 : step > 12 ? 7.2 : step > 7.5 ? 4.9 : 2.8;
+      // The high terraces are bare rock; the lower ones keep their grass and a few trees.
+      if (step > 7.5 + (G.noise(x * 0.13 + 70, z * 0.13) - 0.5) * 4) G.l.ground[i] = Ground.Cave;
+    } else if (G.l.cells[i] === Cell.Ground && !G.l.fluid[i] && G.rng() < 0.35 + t * 0.12) G.l.cells[i] = G.rng() < 0.1 ? Cell.Rock : Cell.Tree;
+  }
+  // Rock outcrops breaking the tree wall: bluffs thrust out from the rim into the woods at the
+  // edge of the open land (never onto a road, a camp or a clearing).
+  for (let k = 0, placed = 0; k < 400 && placed < 16; k++) {
+    const x = 8 + G.rng() * (w - 16), z = 30 + G.rng() * (h - 40);
+    const i = G.idx(Math.floor(x), Math.floor(z));
+    const bd = Math.min(x, z, w - x, h - z);
+    if (bd > 38 || coreD[i] < 5 || coreD[i] > 11 || G.l.cells[i] === Cell.Cliff) continue;
+    const r = 2.2 + G.rng() * 2.2, top = 3.4 + G.rng() * 2.6;
+    G.blob(x, z, r, 1.2, (j, _x, _z, d) => {
+      if (G.reserved[j] === 1 || G.reserved[j] === 3 || coreD[j] < 3) return;
+      G.l.cells[j] = Cell.Cliff;
+      G.l.fluid[j] = Fluid.None;
+      G.l.elev[j] = Math.max(G.l.elev[j], top * (d < 0.55 ? 1 : 0.62));
+      G.l.ground[j] = Ground.Cave;
+    });
+    placed++;
   }
   // Woods: clustered forests and copses, open meadows between; logs and mushrooms in the woods.
   G.scatter((x, z) => {
@@ -1055,6 +1086,20 @@ export function buildRuin(seed: number): ZoneLayout {
   wallRun(G, m3.x, m3.z, m4.x, m4.z, 0.7, [], 0.1);
   const mp = mAt(-6, 5);
   G.prop('pillar_broken', mp.x, mp.z, 2.2, 1, 0.5);
+  // The market's trade, knocked down by the flood, kept to the edges so the middle stays open to
+  // fight in: two toppled stalls along the west side facing in, a broken well in the south-east
+  // corner, and amphorae spilled by the stalls and the stall-wall stubs.
+  for (const [lx, lz, v] of [[-8.6, -3.6, 0], [-8.2, 2.4, 1]]) {
+    const p = mAt(lx, lz);
+    G.prop('stall_ruin', p.x, p.z, market.rot + Math.PI / 2, 1).len = v;
+    G.rect(p.x, p.z, 1.9, 0.8, market.rot + Math.PI / 2, (i) => (G.l.cells[i] = Cell.Blocked));
+  }
+  const well = mAt(7, 5.2);
+  G.prop('well_ruin', well.x, well.z, 0.4, 1, 1.3);
+  for (const [lx, lz, v] of [[-6.8, -6.4, 0], [7.4, -4.2, 1], [-9.2, 5.8, 2], [4.2, 6.6, 3]]) {
+    const p = mAt(lx, lz);
+    G.prop('amphorae', p.x, p.z, lx + lz, 1, 0.6).len = v;
+  }
   // Watchtowers on the two outer isles.
   G.prop('tower_ruin', 14.5, 35.5, 1.2, 0.8, 2.2);
   G.prop('tower_ruin', 95.5, 30.5, -0.8, 0.8, 2.2);
@@ -1157,6 +1202,49 @@ export function buildLair(seed: number): ZoneLayout {
   // (reserved, so no spire or rock grows through it).
   G.prop('dragon_bones', 66, 83.6, 1.45, 0.8);
   for (let t = -9; t <= 7; t += 2) G.reserve(66 + t, 83.6 + t * 0.12, 2);
+  // The badlands are not a box: open ground only in a chain of lobes and bays strung along the
+  // road (the entry basin, the river crossing, the lava bays, the skeleton's shelf, the packs'
+  // hollows), with an uneven rock rim everywhere else. The lava river and lakes run in and out of
+  // the rock. Camera-side rock stays low so it never walls off the view.
+  {
+    const open = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) if (G.reserved[i] === 1 || G.reserved[i] === 3) open[i] = 1;
+    const lobesB: [number, number, number][] = [
+      [58, 118, 7.5], [52, 110, 6], [46, 102, 7], [36, 106, 5.5], [26, 104, 8],
+      [41, 93, 7.5], [31, 88, 6], [52, 91, 6.5], [63, 93, 5.5], [19, 77, 11.5],
+      [47, 80, 8], [55, 75, 6.5], [63, 71, 5.5], [64, 84, 6], [73, 85, 5],
+      [38, 71, 5.5], [33, 64, 7.5], [72, 66, 4.5], [79, 75, 6], [88, 79, 7.5],
+      [80, 104, 9], [68, 108, 5.5], [81, 54, 7], [72, 58, 3.5],
+    ];
+    for (const [x, z, r] of lobesB) G.blob(x, z, r, 2.2, (i) => (open[i] = 1));
+    // Every road keeps a walkable corridor either side (the ravine stays a ravine: narrow).
+    G.along(road, 6.4, 0.8, (i) => (open[i] = 1));
+    // The ravine through the caldera rim is widened a little so the climb reads from the camera.
+    G.along(road, 5.4, 0.5, (i) => {
+      if (G.l.cells[i] !== Cell.Cliff) return;
+      G.l.cells[i] = Cell.Ground;
+      G.l.ground[i] = Ground.Path;
+      open[i] = 1;
+    });
+    const openD = G.distance((i) => open[i] === 1);
+    for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+      const i = G.idx(x, z);
+      if (open[i] || G.l.cells[i] === Cell.Cliff) continue;
+      let north = 99;
+      for (let k = 1; k <= 7 && z - k >= 0; k++) if (open[G.idx(x, z - k)]) {
+        north = k;
+        break;
+      }
+      const d = openD[i];
+      const elev = 3.4 + Math.min(d, 8) * 0.5 + G.noise(x * 0.15 + 3, z * 0.15) * 1.8;
+      G.l.cells[i] = Cell.Cliff;
+      G.l.fluid[i] = Fluid.None;
+      // Camera-side rock steps down in whole ledges (a ramp would make long diagonal facets).
+      G.l.elev[i] = Math.min(elev, north <= 2 ? 1.6 : north <= 4 ? 3.1 : 99);
+    }
+  }
+  // Warm light down the ravine: ember vents glowing in its walls, so the way up reads from afar.
+  for (const [x, z, r] of [[69.6, 67.9, -0.6], [73.2, 55.6, 2.4], [63.2, 50.6, 0.9]]) G.prop('ember_vent', x, z, r, 1, 0.9);
   // Obsidian spires and bone fields across the badlands.
   for (let k = 0; k < 26; k++) {
     const x = 10 + G.rng() * (w - 20), z = 60 + G.rng() * 58;

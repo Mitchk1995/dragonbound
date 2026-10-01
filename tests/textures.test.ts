@@ -177,7 +177,9 @@ describe('shader patches compose', () => {
     expect(patchKeys(mat)).toEqual(['occlude', 'surface:world']);
     expect(mat.customProgramCacheKey()).toBe('occlude|surface:world');
     const s = compile(mat);
-    expect(s.fragmentShader).toContain('occBayer');
+    // A clean cut-away: a hard discard, never a dither stipple.
+    expect(s.fragmentShader).toContain('uOccRadius * 0.85) discard');
+    expect(s.fragmentShader).not.toMatch(/Bayer/i);
     expect(s.fragmentShader).toContain('surfSample(surfGrad)');
     expect(s.fragmentShader).toContain('surfBump(normal');
     expect(s.uniforms.uSurfTex.value).toBe(surfaceTexture('stone'));
@@ -258,5 +260,15 @@ describe('shader patches compose', () => {
     expect(compile(lair).fragmentShader).toContain('float ash');
     expect(compile(mine).fragmentShader).toContain('float stain');
     expect(lair.customProgramCacheKey()).not.toBe(mine.customProgramCacheKey());
+    // Sharpened ground: per-channel colours and a height blend (crisp edges, no smeared colours);
+    // steep faces take the shared painted rock.
+    const sharp = new THREE.MeshStandardMaterial();
+    applyGround(sharp, 0, 1, 0x7a6a5a, undefined, false, null, undefined, false, true, true);
+    const ss = compile(sharp);
+    expect(ss.vertexShader).toContain('attribute vec3 aCol3');
+    expect(ss.fragmentShader).toContain('vec4 hk = k + (t - 0.5)');
+    expect(ss.fragmentShader).toContain('float mossK');
+    expect(ss.fragmentShader).toContain('rockPaint(diffuseColor.rgb, vSurfPos, fn, rockK)');
+    expect(sharp.customProgramCacheKey()).not.toBe(mat.customProgramCacheKey());
   });
 });
