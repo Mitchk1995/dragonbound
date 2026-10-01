@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { charTexture, groundTexture, noiseTexture, surfaceTexture, SURFACES, type SurfaceKind } from './textures';
+import { charTexture, forgeTexture, groundTexture, noiseTexture, surfaceTexture, SURFACES, type SurfaceKind } from './textures';
 import { PAINT_TINT } from './paint';
 import { ROCK_GLSL, rockAtlas, ROCK_TILE } from './rock';
 
@@ -294,6 +294,10 @@ export function trackGradeRoot(mesh: THREE.Mesh) {
  *   downward faces the shade.
  * - `moss`: tints up-facing, lighter patches moss green (stone).
  * - `scale`: pattern size multiplier (scales are finer than leather blotches).
+ * - `forge`: forged metal (0..1, from the forge atlas): hammered dishes and fine draw-marks,
+ *   a bright worn lip on every edge and bevel, soot and grime settling along the foot of each
+ *   plate (where it meets the plate below) and in blotches, and a tone of its own per plate;
+ *   the sheen varies with it (grime dull, worn edges polished).
  */
 export interface CharPaint {
   w: [number, number, number, number];
@@ -301,13 +305,14 @@ export interface CharPaint {
   grad: number;
   moss?: number;
   scale?: number;
+  forge?: number;
 }
 
 /** The recipes, large-scale and low-to-medium contrast: readable from the gameplay camera, never noisy. */
 export const CHAR_PAINTS = {
-  metal: { w: [0.04, 0.1, 0, 0], edge: 0.2, grad: 0.2 },
+  metal: { w: [0.03, 0.05, 0, 0], edge: 0.3, grad: 0.16, forge: 1 },
   trim: { w: [0, 0.06, 0, 0], edge: 0.22, grad: 0.14 },
-  darkMetal: { w: [0.03, 0.08, 0, 0], edge: 0.3, grad: 0.12 },
+  darkMetal: { w: [0.03, 0.05, 0, 0], edge: 0.3, grad: 0.12, forge: 0.8 },
   leather: { w: [0.2, 0, 0, 0], edge: -0.12, grad: 0.08 },
   cloth: { w: [0.05, 0, 0.34, 0], edge: 0.05, grad: 0.14 },
   skin: { w: [0.05, 0, 0, 0], edge: 0, grad: 0.04 },
@@ -319,6 +324,7 @@ export const CHAR_PAINTS = {
   stone: { w: [0.3, 0, 0, 0], edge: 0.18, grad: 0.12, moss: 0.8 },
   scales: { w: [0.06, 0, 0, 0.34], edge: 0.1, grad: 0.1, scale: 1.6 },
   softScales: { w: [0.04, 0, 0, 0.2], edge: 0.08, grad: 0.08, scale: 1.6 },
+  dragonPlate: { w: [0.04, 0, 0, 0.36], edge: 0.26, grad: 0.14, scale: 1.4, forge: 0.4 },
   membrane: { w: [0.16, 0, 0.08, 0], edge: 0.1, grad: 0.1 },
 } satisfies Record<string, CharPaint>;
 
@@ -417,28 +423,46 @@ export function prepareCharGeometry(src: THREE.BufferGeometry, rest: THREE.Matri
   geo.setAttribute('aRest', new THREE.BufferAttribute(P, 3));
   geo.setAttribute('aFace', new THREE.BufferAttribute(face, 4));
   geo.setAttribute('aRestN', new THREE.BufferAttribute(fn, 3));
+  // A random tone per authored part (each plate is its own part until parts merge), keyed to
+  // where it sits, so every copy of a model paints each plate the same.
+  let cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < n; i++) {
+    cx += P[i * 3];
+    cy += P[i * 3 + 1];
+    cz += P[i * 3 + 2];
+  }
+  const k = n ? Math.sin((cx / n) * 127.1 + (cy / n) * 311.7 + (cz / n) * 74.7) * 43758.5453 : 0;
+  geo.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(k - Math.floor(k)), 1));
   return geo;
 }
 
-const paintVec = (p: CharPaint) => ({ w: new THREE.Vector4(...p.w), x: new THREE.Vector4(p.edge, p.grad, p.moss ?? 0, p.scale ?? 1) });
+const paintVec = (p: CharPaint) => ({
+  w: new THREE.Vector4(...p.w),
+  x: new THREE.Vector4(p.edge, p.grad, p.moss ?? 0, p.scale ?? 1),
+  y: new THREE.Vector4(p.forge ?? 0, 0, 0, 0),
+});
 
 /** Per-vertex recipe attributes for merged parts that mix several recipes in one material. */
 export function paintAttributes(geo: THREE.BufferGeometry, p: CharPaint | null) {
   const n = geo.attributes.position.count;
-  const w = new Float32Array(n * 4), x = new Float32Array(n * 4);
+  const w = new Float32Array(n * 4), x = new Float32Array(n * 4), y = new Float32Array(n * 4);
   if (p) {
-    const { w: pw, x: px } = paintVec(p);
+    const { w: pw, x: px, y: py } = paintVec(p);
     for (let i = 0; i < n; i++) {
       pw.toArray(w, i * 4);
       px.toArray(x, i * 4);
+      py.toArray(y, i * 4);
     }
   }
   geo.setAttribute('aPaintW', new THREE.BufferAttribute(w, 4));
   geo.setAttribute('aPaintX', new THREE.BufferAttribute(x, 4));
+  geo.setAttribute('aPaintY', new THREE.BufferAttribute(y, 4));
 }
 
 interface CharUniforms {
   uCharTex: { value: THREE.Texture };
+  uForgeTex: { value: THREE.Texture };
+  uPaintY: { value: THREE.Vector4 };
   uCharScale: { value: number };
   uCharEdgeW: { value: number };
   uCharGain: { value: number };
@@ -459,6 +483,8 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
   const init = paintVec(per ? { w: [0, 0, 0, 0], edge: 0, grad: 0 } : paint);
   const uniforms: CharUniforms = {
     uCharTex: { value: charTexture() },
+    uForgeTex: { value: forgeTexture() },
+    uPaintY: { value: init.y },
     uCharScale: { value: 1 / (CHAR_TILE * size) },
     uCharEdgeW: { value: CHAR_EDGE * size },
     uCharGain: { value: 1 },
@@ -466,22 +492,24 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
     uPaintX: { value: init.x },
   };
   mat.userData.charPaint = uniforms;
-  const W = per ? 'vPaintW' : 'uPaintW', X = per ? 'vPaintX' : 'uPaintX';
+  const W = per ? 'vPaintW' : 'uPaintW', X = per ? 'vPaintX' : 'uPaintX', Y = per ? 'vPaintY' : 'uPaintY';
   addPatch(mat, {
     key: `cpaint:${per ? 'vertex' : 'uniform'}`,
     slot: 'surface',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
-      const vary = `varying vec3 vRest;\nvarying vec3 vRestN;\nvarying vec4 vFace;\n${per ? 'varying vec4 vPaintW;\nvarying vec4 vPaintX;' : ''}`;
+      const vary = `varying vec3 vRest;\nvarying vec3 vRestN;\nvarying vec4 vFace;\nvarying float vPart;\n${per ? 'varying vec4 vPaintW;\nvarying vec4 vPaintX;\nvarying vec4 vPaintY;' : ''}`;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\nattribute vec3 aRest;\nattribute vec3 aRestN;\nattribute vec4 aFace;\n${per ? 'attribute vec4 aPaintW;\nattribute vec4 aPaintX;' : ''}\n${vary}`)
-        .replace('#include <project_vertex>', `#include <project_vertex>\nvRest = aRest;\nvRestN = aRestN;\nvFace = aFace;\n${per ? 'vPaintW = aPaintW;\nvPaintX = aPaintX;' : ''}`);
+        .replace('#include <common>', `#include <common>\nattribute vec3 aRest;\nattribute vec3 aRestN;\nattribute vec4 aFace;\nattribute float aPart;\n${per ? 'attribute vec4 aPaintW;\nattribute vec4 aPaintX;\nattribute vec4 aPaintY;' : ''}\n${vary}`)
+        .replace('#include <project_vertex>', `#include <project_vertex>\nvRest = aRest;\nvRestN = aRestN;\nvFace = aFace;\nvPart = aPart;\n${per ? 'vPaintW = aPaintW;\nvPaintX = aPaintX;\nvPaintY = aPaintY;' : ''}`);
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
           `#include <common>
           ${vary}
           uniform sampler2D uCharTex;
+          uniform sampler2D uForgeTex;
+          uniform vec4 uPaintY;
           uniform float uCharScale;
           uniform float uCharEdgeW;
           uniform float uCharGain;
@@ -491,6 +519,7 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
+          float cpRough = 0.0;
           {
             // Flat face normal in the rest frame (an attribute: derivative normals break up into
             // speckle on faces seen edge-on).
@@ -512,11 +541,29 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
             float gy = faceOk * (vFace.y / max(vFace.w, 1e-6) - 0.5);
             float grad = mix(sign(rn.y) * 0.5, gy, side);
             diffuseColor.rgb *= clamp(1.0 + (cv + px.x * edge + px.y * grad) * uCharGain, 0.35, 1.8);
+            float forge = ${Y}.x;
+            if (forge > 0.0) {
+              // Forged metal: hammered dishes and draw-marks, a polished worn lip on every edge,
+              // soot settling along each plate's foot and in blotches, a tone per plate.
+              vec4 ft = texture2D(uForgeTex, cuv) - 0.5;
+              float footD = mix(1.0, vFace.y, side * faceOk);
+              float foot = (1.0 - smoothstep(0.0, 0.09, footD)) * side + step(rn.y, -0.6) * 0.5;
+              float grime = clamp(foot * (0.75 + ft.b) + smoothstep(0.05, 0.4, ft.b) * 0.6, 0.0, 1.0);
+              float tone = (fract(vPart * 7.13) - 0.5) * 0.2;
+              float f = ft.r * 0.42 + ft.g * 0.14 + ft.a * 0.05 + tone + edge * 0.32 - grime * 0.36;
+              diffuseColor.rgb *= clamp(1.0 + f * forge * uCharGain, 0.35, 1.8);
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15))), grime * forge * 0.35 * uCharGain);
+              cpRough = (grime * 0.3 - edge * 0.12 + ft.r * 0.25 + ft.a * 0.15) * forge * uCharGain;
+            }
             if (px.z > 0.0) {
               float moss = smoothstep(0.1, 0.24, ct.r + rn.y * 0.3 - 0.12) * px.z * uCharGain;
               diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.13, 0.22, 0.05) * (0.8 + ct.r), moss * 0.6);
             }
           }`,
+        )
+        .replace(
+          '#include <roughnessmap_fragment>',
+          '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + cpRough, 0.05, 1.0);',
         );
     },
   });
@@ -529,6 +576,7 @@ export function setCharPaint(mat: THREE.Material, paint: CharPaint) {
   const v = paintVec(paint);
   u.uPaintW.value.copy(v.w);
   u.uPaintX.value.copy(v.x);
+  u.uPaintY.value.copy(v.y);
 }
 
 /** Scale every painted material's contrast under `root` (item icons paint a little softer). */

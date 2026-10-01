@@ -2,7 +2,8 @@
  * Character and gear art rules from the owner's review, measured on the real exported GLBs: hair covers the whole
  * scalp (no bald patches at the temples), the tunic front is plain cloth (no floating V-neck wedge), kobolds are
  * short, drakelings have wings as wide as they are long, swords are long, every hairstyle is one sculpted piece, plate
- * stays a few bold blocks, the Emberforged set keeps its glow to the visor slit, and the Scaleguard has no horns.
+ * stays a few bold blocks, the Emberforged set glows only in thin seams and its visor slit, swept and tied hair sit on
+ * the head (no gap under their edge), and the Scaleguard has no horns.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import * as THREE from 'three';
@@ -63,6 +64,40 @@ describe('hair', () => {
   }
 });
 
+describe('hair meets the head', () => {
+  // The owner: swept-back and tied hair read as a helmet floating on the head, with a dark void at the temples and
+  // sides. Along each side of the head, the lowest edge of the hair has to sit on the skin, not stand off it.
+  for (const style of [2, 3]) {
+    it(`style ${style} has no gap under its edge at the sides of the head`, () => {
+      const root = makeModel(`hair_${style}`).root;
+      root.updateMatrixWorld(true);
+      const sock = root.getObjectByName('sock_head')!;
+      const inv = sock.matrixWorld.clone().invert();
+      const hair = meshes(root).filter((m) => role(m) === 'hair')[0];
+      const pos = hair.geometry.getAttribute('position');
+      const v = new THREE.Vector3();
+      // Lowest hair point over each strip of the side faces of the head (front half to back, both sides).
+      const lowest = new Map<string, THREE.Vector3>();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(hair.matrixWorld).applyMatrix4(inv);
+        if (Math.abs(v.x) < 0.16 || Math.abs(v.z) > 0.16) continue;
+        const key = `${Math.sign(v.x)}:${Math.round(v.z / 0.04)}`;
+        const cur = lowest.get(key);
+        if (!cur || v.y < cur.y) lowest.set(key, v.clone());
+      }
+      expect(lowest.size).toBeGreaterThan(10);
+      // Distance outside the chamfered head cube (0.23 half size, 0.06 chamfers).
+      const outside = (p: THREE.Vector3) => {
+        const a = [Math.abs(p.x), Math.abs(p.y), Math.abs(p.z)];
+        let d = Math.max(a[0] - 0.23, a[1] - 0.23, a[2] - 0.23);
+        for (const [i, j] of [[0, 1], [0, 2], [1, 2]]) d = Math.max(d, (a[i] + a[j] - 0.4) / Math.SQRT2);
+        return d;
+      };
+      for (const [key, p] of lowest) expect(outside(p), `hair ${style} edge at ${key}: ${p.toArray().map((x) => x.toFixed(3))}`).toBeLessThan(0.02);
+    });
+  }
+});
+
 describe('hair is one piece', () => {
   // The owner: every style has to be one cohesive piece, not a base cap with wigs and locks stacked on top.
   for (const style of [1, 2, 3, 4]) {
@@ -108,20 +143,40 @@ describe('gear', () => {
     expect(extent(makeModel('gear_sword').root).y).toBeGreaterThan(1.35);
     expect(extent(makeModel('gear_longsword').root).y).toBeGreaterThan(1.75);
   });
-  it('Emberforged keeps its glow to one spot: the ember line in the visor slit (no chest symbol)', () => {
-    const glow = (f: string) => meshes(makeModel(f).root).filter((m) => role(m) === 'glow').length;
-    expect(glow('gear_body_plate_e')).toBe(0);
-    expect(glow('gear_helm_full_e')).toBe(1);
-    expect(glow('gear_gloves_e') + glow('gear_boots_e')).toBe(0);
+  it('Emberforged glows only in hairline seams between its plates and one line in the visor slit (no chest symbol)', () => {
+    const glowing = (f: string) =>
+      meshes(makeModel(f).root).filter((m) => {
+        const mat = m.material as THREE.MeshStandardMaterial;
+        return role(m) === 'glow' || (mat.emissive.getHex() !== 0 && mat.emissiveIntensity > 0);
+      });
+    // Every glowing part is made of thin horizontal strips: its heights fall into bands no thicker than a seam.
+    const thinStrips = (m: THREE.Mesh) => {
+      const pos = m.geometry.getAttribute('position');
+      const ys = Array.from({ length: pos.count }, (_, i) => pos.getY(i)).sort((a, b) => a - b);
+      let start = ys[0], worst = 0;
+      for (let i = 1; i < ys.length; i++) {
+        if (ys[i] - ys[i - 1] > 0.03) start = ys[i];
+        worst = Math.max(worst, ys[i] - start);
+      }
+      return worst;
+    };
+    const body = glowing('gear_body_plate_e');
+    expect(body.length).toBeGreaterThan(0);
+    for (const m of body) expect(thinStrips(m)).toBeLessThan(0.03);
+    const helm = glowing('gear_helm_full_e');
+    expect(helm.length).toBe(1);
+    expect(thinStrips(helm[0])).toBeLessThan(0.03);
+    expect(glowing('gear_gloves_e').length + glowing('gear_boots_e').length).toBe(0);
   });
   it('plate is a few bold blocks, not a pile of ridges, rivets and trim bands', () => {
-    // Part counts per plate piece (bronze/iron/steel share set p; Emberforged adds only horns and the slit).
+    // Part counts per plate piece (bronze/iron/steel share set p; Emberforged adds only horns, the slit and its
+    // three ember seam parts: the cuirass joints and one under each pauldron).
     const parts = (f: string) => meshes(makeModel(f).root).length;
     expect(parts('gear_body_plate_p')).toBeLessThanOrEqual(18);
     expect(parts('gear_helm_full_p')).toBeLessThanOrEqual(5);
     expect(parts('gear_gloves_p')).toBeLessThanOrEqual(6);
     expect(parts('gear_boots_p')).toBeLessThanOrEqual(8);
-    expect(parts('gear_body_plate_e')).toBeLessThanOrEqual(parts('gear_body_plate_p'));
+    expect(parts('gear_body_plate_e')).toBeLessThanOrEqual(parts('gear_body_plate_p') + 3);
   });
   it('the Scaleguard has nothing sweeping back off the shoulders (no horns)', () => {
     const root = makeModel('gear_u_scaleguard').root;

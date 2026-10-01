@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { applyCharPaint, applyGrade, applyGround, applySurface, CHAR_PAINTS, gradeRow, MODEL_GRADE, patchKeys, prepareCharGeometry, propSurface, setCharPaint, setPaintGain } from '../src/render/surface';
+import { applyCharPaint, applyGrade, applyGround, applySurface, CHAR_PAINTS, type CharPaint, gradeRow, MODEL_GRADE, patchKeys, prepareCharGeometry, propSurface, setCharPaint, setPaintGain } from '../src/render/surface';
 import { charTexture, groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
 import { makeOccludable } from '../src/world/worldView';
 
@@ -134,6 +134,7 @@ describe('character painting', () => {
       expect(Math.max(...p.w), k).toBeLessThanOrEqual(0.36);
       expect(Math.abs(p.edge), k).toBeLessThanOrEqual(0.3);
       expect(Math.abs(p.grad), k).toBeLessThanOrEqual(0.25);
+      expect((p as CharPaint).forge ?? 0, k).toBeLessThanOrEqual(1);
     }
     // Faces stay clean.
     expect(Math.max(...CHAR_PAINTS.skin.w)).toBeLessThanOrEqual(0.06);

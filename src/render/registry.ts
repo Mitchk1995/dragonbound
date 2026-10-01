@@ -141,7 +141,7 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
 }
 
 /** Geometry attributes merged parts keep (the painted shader's rest frame and face coordinates). */
-const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace']);
+const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace', 'aPart']);
 
 // ─── Painted albedo recipes ──────────────────────────────────────────────────
 
@@ -166,7 +166,8 @@ const PAINT_SIZE: Record<string, number> = { goblin: 0.8, kobold: 0.75, drakelin
 export function fixedPaint(model: string, c: THREE.Color, metallic: boolean, double = false): CharPaintKind | null {
   const { h, s, l } = c.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
   const hue = h * 360;
-  if (metallic) return 'metal';
+  // Scaleguard's oxblood plate under its big scales carries painted dragon scales of its own.
+  if (metallic) return model === 'gear_u_scaleguard' && l < 0.15 && s > 0.5 && (hue < 20 || hue > 340) ? 'dragonPlate' : 'metal';
   if (l < 0.09) return null; // eyes, pupils, visor slits stay clean
   if (model === 'golem') return 'stone';
   if (SCALY.has(model)) {
@@ -174,7 +175,6 @@ export function fixedPaint(model: string, c: THREE.Color, metallic: boolean, dou
     if (l > 0.72) return model === 'whelp' ? 'soft' : 'bone';
     return model === 'whelp' ? 'softScales' : 'scales';
   }
-  if (model === 'gear_u_scaleguard' && s > 0.45 && (hue < 20 || hue > 340)) return 'scales';
   if (l > 0.75 && s < 0.6) return model.startsWith('gear_') ? 'bone' : 'soft';
   if (hue >= 34 && hue <= 56 && s > 0.5 && l > 0.4 && l < 0.78) return 'trim';
   if (s < 0.14) return 'metal';

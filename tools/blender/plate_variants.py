@@ -459,24 +459,50 @@ VARIANTS['p'] = {'name': 'Plate', 'body_plate': body_plate, 'helm_full': helm_fu
 
 
 # ═══ E: Emberforged ══════════════════════════════════════════════════════════
-# The same bold, plain plate as set P, forged in obsidian (the ember palette's metal): a black knight. Its identity
-# is kept to a few strong notes and nothing fiddly: a crimson tabard (ROLE_dark) and belt, the great
-# helm with a crimson crest and two swept horns, and one ember glow: a thin line burning inside the visor's eye
-# slit. No chest symbol, scales, claws or trim edges. The orange trim colour is not used on the set at all.
+# The same bold, plain plate as set P, forged in blackened steel (the ember palette's gunmetal, textured like every
+# forged tier): a black knight. Its identity is kept to a few strong notes and nothing fiddly: a crimson cloth tabard
+# and crest, a belt, the great helm with two swept horns, a thin ember line burning inside the visor's eye slit, and
+# ONE dragon-forge accent: thin ember seams glowing in the gaps between the main plates (gorget/chest, chest/belly,
+# belly/fauld) and along each pauldron's lower edge, as if the plates were still hot from the forge. No chest symbol,
+# scales, claws or trim edges.
 SLIT_E = 0x0C0A0A
+CRIMSON = 0x6E1A18          # tabard and crest: fixed crimson cloth (painted as cloth, not as metal)
 
 
 def HORN_E():
     return metallic(0x8A7C76)
 
 
+SEAM = 0xA8300A            # ember seam: deep orange, glowing hot orange (fixed, so it never washes out to yellow)
+SEAM_GLOW = 0xFF4A0C
+
+
+def seam(p, size, pos, rot=(0, 0, 0)):
+    return box(p, size, pos, SEAM, rot=rot, bevel=0, emissive=SEAM_GLOW, strength=1.7)
+
+
+def ember_seams(S):
+    """Hairline glowing seams sitting in the chamfered gaps between the cuirass slabs and along the lower
+    edge of each pauldron cap. Each is a thin ring only a hair proud of the plates, so it reads as a glowing joint."""
+    c = S('sock_chest')
+    seam(c, (0.775, 0.02, 0.558), (0, -0.075, 0))                              # chest / belly
+    seam(c, (0.5, 0.018, 0.44), (0, 0.318, 0))                                # gorget / chest
+    seam(c, (0.76, 0.016, 0.55), (0, -0.252, 0))                              # belly / fauld (above the belt)
+    (size, (x, y), tilt) = CAP_SIDE
+    for sh, palm, s in (('sock_shoulderL', 'sock_handL', 1), ('sock_shoulderR', 'sock_gloveR', -1)):
+        fs = pivot(S(palm), 'pauldron_seam', (s * x, y + PALM, 0), (0, 0, -s * tilt))
+        w, hgt, d = size
+        seam(fs, (w + 0.008, 0.014, d + 0.008), (0, -hgt / 2 + 0.028, 0))
+
+
 def E_body(S):
     c = S('sock_chest')
     plate_torso(c)
-    plate_accent(c, tabard=R.dark, under=SLIT_E)
+    plate_accent(c, tabard=CRIMSON, under=SLIT_E)
     for s in (1, -1):
         block_pauldron(S, s, top=None, edge=None, rivets=None)
     upper_arm_plate(S, lames=False)
+    ember_seams(S)
 
 
 def chain(p, pts, widths, color, depth=None):
@@ -492,8 +518,8 @@ def E_helm(S):
     and back from the sides of the top block (short enough to stay a helm, not a mask)."""
     h = S('sock_head')
     # The slit stays dark; only a thin ember line burns inside it (eyes behind the visor, not a lit band).
-    great_helm(h, crest=R.dark, slit=SLIT_E)
-    box(h, (0.32, 0.016, 0.012), (0, 0.09, 0.315), R.glow, bevel=0)                               # ember slit
+    great_helm(h, crest=CRIMSON, slit=SLIT_E)
+    seam(h, (0.32, 0.016, 0.012), (0, 0.09, 0.315))                              # ember slit
     for s in (-1, 1):
         chain(h, [(s * 0.25, 0.2, 0.02), (s * 0.36, 0.28, -0.1), (s * 0.41, 0.38, -0.27), (s * 0.38, 0.5, -0.45)],
               ((0.11, 0.09), (0.09, 0.06), (0.06, 0.012)), HORN_E())
