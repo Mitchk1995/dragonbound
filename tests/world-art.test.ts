@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { chamferBox, octagon, prism, rockBlock, taper, wedge } from '../src/render/blocks';
+import { chamferBox, octagon, prism, rockBlock, slabBlock, taper, wedge } from '../src/render/blocks';
+import { rockAtlas } from '../src/render/rock';
 import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/paint';
 import { patchKeys } from '../src/render/surface';
 import { ZONES } from '../src/data/zones';
@@ -110,6 +111,81 @@ describe('painted albedo', () => {
     mat.onBeforeCompile(shader, null as any);
     expect(shader.fragmentShader).toContain('q.zy : q.xy');
     expect(shader.fragmentShader).not.toContain('normal = ');
+  });
+});
+
+describe('painted rock', () => {
+  const compile = (mat: THREE.Material) => {
+    const lib = THREE.ShaderLib.standard;
+    const shader = { uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader } as any;
+    mat.onBeforeCompile(shader, null as any);
+    return shader;
+  };
+  it('rock paint is the shared triplanar rock (strata, cracks, grain), colour only and NaN-safe', () => {
+    const mat = new THREE.MeshStandardMaterial();
+    applyPaint(mat, 'rock', 'world');
+    expect(patchKeys(mat)).toEqual(['rock:world']);
+    const s = compile(mat);
+    expect(s.fragmentShader).toContain('rockPaint(');
+    expect(s.fragmentShader).toContain('rockFaceN(vRockPos)');
+    expect(s.fragmentShader).not.toContain('normal = ');
+    expect(s.uniforms.uRockTex.value).toBe(rockAtlas());
+  });
+  it('code-built rock props (boulders, rubble, ore rocks) are painted as rock', () => {
+    for (const kind of ['boulder', 'rubble', 'rock_copper']) {
+      const keys = new Set<string>();
+      buildProp(kind).obj.traverse((o) => {
+        if (o instanceof THREE.Mesh) patchKeys(o.material as THREE.Material).forEach((k) => keys.add(k));
+      });
+      expect([...keys].some((k) => k.startsWith('rock:')), kind).toBe(true);
+    }
+  });
+  it('the rock atlas is seamless with real contrast in every channel', () => {
+    const img = rockAtlas().image as { data: Uint8Array; width: number };
+    const n = img.width;
+    for (let c = 0; c < 4; c++) {
+      const at = (x: number, y: number) => img.data[(y * n + x) * 4 + c];
+      let wrap = 0, inner = 0, min = 255, max = 0;
+      for (let y = 0; y < n; y++) {
+        wrap += Math.abs(at(n - 1, y) - at(0, y)) + Math.abs(at(y, n - 1) - at(y, 0));
+        inner += Math.abs(at(n / 2 - 1, y) - at(n / 2, y)) + Math.abs(at(y, n / 2 - 1) - at(y, n / 2));
+        for (let x = 0; x < n; x++) {
+          min = Math.min(min, at(x, y));
+          max = Math.max(max, at(x, y));
+        }
+      }
+      expect(wrap / (2 * n), `seam ${c}`).toBeLessThan((inner / (2 * n)) * 1.6 + 4);
+      expect(max - min, `contrast ${c}`).toBeGreaterThan(80);
+    }
+  });
+  it('strata slabs have a flat top and vertical sides (no big diagonal facets from above)', () => {
+    const g = slabBlock(31);
+    const pos = g.getAttribute('position'), nrm = g.getAttribute('normal');
+    let top = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getY(i) > 0.999) top++;
+      // Every face is the top, the bottom, a narrow bevel or a vertical side.
+      const ny = Math.abs(nrm.getY(i));
+      expect(ny < 0.02 || ny > 0.98 || pos.getY(i) > 0.9, `face normal ${ny}`).toBe(true);
+    }
+    expect(top).toBeGreaterThan(0);
+  });
+  it('mine puddles are soft-edged shallow water, not a hard disc', () => {
+    const p = buildProp('puddle', 0);
+    const water = p.obj.getObjectByName('puddle-water') as THREE.Mesh;
+    expect(water).toBeDefined();
+    const mat = water.material as THREE.MeshStandardMaterial;
+    expect(mat.transparent).toBe(true);
+    expect(mat.roughness).toBeLessThan(0.2);
+    const col = water.geometry.getAttribute('color');
+    expect(col.itemSize).toBe(4);
+    let zero = 0, solid = 0;
+    for (let i = 0; i < col.count; i++) {
+      if (col.getW(i) === 0) zero++;
+      if (col.getW(i) > 0.5) solid++;
+    }
+    expect(zero).toBeGreaterThan(0);
+    expect(solid).toBeGreaterThan(0);
   });
 });
 
@@ -225,6 +301,106 @@ describe('zones', () => {
       return r;
     });
     expect(Math.max(...reach) - Math.min(...reach)).toBeGreaterThan(6);
+  });
+  /** Walkable cells reachable from the entry (4-connected). */
+  const reachable = (L: ReturnType<typeof build>) => {
+    const seen = new Uint8Array(L.w * L.h), q = [Math.floor(L.entry.z) * L.w + Math.floor(L.entry.x)];
+    seen[q[0]] = 1;
+    while (q.length) {
+      const i = q.pop()!, x = i % L.w, z = (i - x) / L.w;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const j = (z + dz) * L.w + x + dx;
+        if (walk(L, x + dx, z + dz) && !seen[j]) {
+          seen[j] = 1;
+          q.push(j);
+        }
+      }
+    }
+    return seen;
+  };
+  it('every pack, ore rock and station can be reached from the entry', () => {
+    for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {
+      const L = build(id), seen = reachable(L);
+      const near = (t: { x: number; z: number }) => {
+        for (let z = Math.floor(t.z - 2.5); z <= t.z + 2.5; z++) for (let x = Math.floor(t.x - 2.5); x <= t.x + 2.5; x++) {
+          if (x >= 0 && z >= 0 && x < L.w && z < L.h && seen[z * L.w + x] && Math.hypot(x + 0.5 - t.x, z + 0.5 - t.z) <= 2.6) return true;
+        }
+        return false;
+      };
+      for (const p of L.packs) expect(near(p), `${id} pack at ${p.x},${p.z}`).toBe(true);
+      for (const n of L.nodes) expect(near(n), `${id} ${n.ore} at ${n.x},${n.z}`).toBe(true);
+      for (const s of L.stations) expect(near(s), `${id} ${s.kind} ${s.id}`).toBe(true);
+      if (L.boss) expect(near(L.boss), `${id} boss`).toBe(true);
+    }
+  });
+  /** How much of the walkable cells' bounding box (within rows z0..z1) is walkable, and how the west edge wanders. */
+  const outline = (L: ReturnType<typeof build>, z0: number, z1: number) => {
+    let x0 = L.w, x1 = 0, open = 0;
+    const firstOpen: number[] = [];
+    for (let z = z0; z < z1; z++) {
+      let first = -1;
+      for (let x = 0; x < L.w; x++) if (walk(L, x, z)) {
+        open++;
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+        if (first < 0) first = x;
+      }
+      if (first >= 0) firstOpen.push(first);
+    }
+    const mean = firstOpen.reduce((a, b) => a + b, 0) / firstOpen.length;
+    const sd = Math.sqrt(firstOpen.reduce((a, b) => a + (b - mean) ** 2, 0) / firstOpen.length);
+    return { fill: open / ((x1 - x0 + 1) * (z1 - z0)), sd };
+  };
+  it('the lair badlands are an organic chain of lobes, not a rectangle', () => {
+    const L = build('lair');
+    const { fill, sd } = outline(L, 64, 120);
+    expect(fill, 'fill of the bounding box').toBeLessThan(0.55);
+    expect(sd, 'west edge wander').toBeGreaterThan(4);
+    // The ravine up to the caldera stays open and lit by its ember vents.
+    expect(L.props.filter((p) => p.kind === 'ember_vent').length).toBeGreaterThanOrEqual(3);
+  });
+  it('the Foothills meadow sits in a rocky rim: bare rock terraces and outcrops, not a square of trees', () => {
+    const L = build('foothills');
+    const { fill } = outline(L, 30, L.h - 10);
+    expect(fill, 'fill of the bounding box').toBeLessThan(0.72);
+    let rockTop = 0, border = 0, borderRock = 0;
+    for (let z = 0; z < L.h; z++) for (let x = 0; x < L.w; x++) {
+      const i = z * L.w + x;
+      if (L.cells[i] === Cell.Cliff && L.ground[i] === Ground.Cave) rockTop++;
+      if (Math.min(x, z, L.w - 1 - x, L.h - 1 - z) < 6) {
+        border++;
+        if (L.cells[i] === Cell.Cliff) borderRock++;
+      }
+    }
+    expect(rockTop, 'bare rock terraces').toBeGreaterThan(2000);
+    expect(borderRock / border, 'the map edge is rock, not forest').toBeGreaterThan(0.8);
+    // Bare ground only where it means something: far less of the meadow is dirt than grass.
+    let dirt = 0, grass = 0;
+    for (let i = 0; i < L.w * L.h; i++) if (L.cells[i] === Cell.Ground) {
+      if (L.ground[i] === Ground.Dirt) dirt++;
+      if (L.ground[i] === Ground.Grass) grass++;
+    }
+    expect(dirt / grass).toBeLessThan(0.08);
+  });
+  it('the drowned market has its trade knocked down round the edges, with open floor to fight on', () => {
+    const L = build('ruin');
+    expect(L.props.filter((p) => p.kind === 'stall_ruin').length).toBe(2);
+    expect(L.props.some((p) => p.kind === 'well_ruin')).toBe(true);
+    expect(L.props.filter((p) => p.kind === 'amphorae').length).toBeGreaterThanOrEqual(3);
+    const pack = L.packs.find((p) => p.comp.includes('goblin'))!;
+    let open = 0, all = 0;
+    for (let z = Math.floor(pack.z - 3); z <= pack.z + 3; z++) for (let x = Math.floor(pack.x - 3); x <= pack.x + 3; x++) {
+      all++;
+      if (walk(L, x, z)) open++;
+    }
+    expect(open / all).toBeGreaterThan(0.9);
+  });
+  it('the keep plots stand clear of the bailey walls', () => {
+    const L = build('keep');
+    const byId = Object.fromEntries((L.buildings ?? []).map((b) => [b.id, b]));
+    // West curtain wall on x = 44, east on x = 106 (each two cells thick).
+    expect(byId.hatch_plot.x - 45, 'hatchery to the west wall').toBeGreaterThanOrEqual(2);
+    expect(105 - (byId.rune_plot.x + byId.rune_plot.w), 'rune house to the east wall').toBeGreaterThanOrEqual(2);
   });
   it('no walkable pocket is cut off from the entry (clicks never target one)', () => {
     for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {

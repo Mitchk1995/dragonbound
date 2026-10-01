@@ -51,7 +51,7 @@ export interface ZoneDef {
 }
 
 const FOOTHILLS_GROUND: ZoneTheme['ground'] = {
-  [Ground.Dirt]: [0x6e6048, 0x5a6a3c], [Ground.Path]: [0x9a8666, 0x8a7656],
+  [Ground.Dirt]: [0x76654a, 0x6a5a42], [Ground.Path]: [0x9a8666, 0x8a7656],
   [Ground.Scorch]: [0x5a4a3a, 0x4a3a2e], [Ground.Arena]: [0x3a2a24, 0x5a2a18],
   [Ground.Grass]: [0x5a7a3a, 0x6a8a44], [Ground.Camp]: [0x6a5a44, 0x5a4a38],
 };
@@ -87,7 +87,7 @@ export const ZONES: Record<string, ZoneDef> = {
       bg: 0x3a3440, fog: [46, 110], hemi: [0xb8c8e8, 0x5a4636, 1.25], sun: [0xffe2b8, 2.6], exposure: 1.05,
       ambient: 'embers', trees: 'pine', wall: 'cave', ground: FOOTHILLS_GROUND,
       forest: { pine: 0.55, grove: 0.3, ash: 0.15 },
-      reliefTrees: 0.22,
+      reliefTrees: 0.08,
       mesaTop: Ground.Grass,
       flowers: [0xf0c040, 0xd85a4a, 0xa888ff, 0xf4f0e0],
       cliff: [0x7a6a5a, 0x5a4e44],
@@ -112,8 +112,9 @@ export const ZONES: Record<string, ZoneDef> = {
       ambient: 'embers', trees: 'ash', wall: 'cave',
       ground: { [Ground.Arena]: [0x5a443c, 0x4a3832], [Ground.Path]: [0x5a4a40, 0x4a3e36], [Ground.Scorch]: [0x4a3a34, 0x3a2e2a] },
       splat: { [Ground.Arena]: 3, [Ground.Path]: 3 },
-      cliff: [0x3a2c28, 0x2a201e],
+      cliff: [0x523c32, 0x3e2e28],
       topShade: 0.55,
+      topRange: [2.5, 8],
       lava: 1,
     },
   },

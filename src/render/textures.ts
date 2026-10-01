@@ -335,6 +335,9 @@ export function groundTexture(): THREE.Texture {
   if (hit) return hit;
   // Painted, calm and large-scale: flat tonal patches, soft clumps, a few big pebbles. No speckle.
   const dirtN = fbm(201, 4, 3), pebbles = worley(202, 9), pebMask = fbm(207, 3, 2);
+  // Dirt detail: small pebbles (pale, with a dark rim where they sit in the soil) and a fine grain
+  // of light and dark flecks, so bare ground reads as earth rather than a smooth brown wash.
+  const stones = worley(209, 22), stoneMask = fbm(210, 4, 2), grainD = worley(211, 48);
   const grassN = fbm(203, 4, 3), grassClump = worley(204, 8);
   const stone = paving(205);
   const cave = floorStrata(208);
@@ -343,7 +346,12 @@ export function groundTexture(): THREE.Texture {
     for (let x = 0; x < SIZE; x++) {
       const [p1] = pebbles(x, y);
       const pebble = pebMask(x, y) > 0.55 ? Math.max(0, 1 - p1 / 5.5) : 0;
-      const dirt = paintSteps(0.25 + dirtN(x, y) * 0.5, 5) + (pebble > 0 ? 0.1 + pebble * 0.06 : 0);
+      const [s1, , sid] = stones(x, y);
+      const stoneR = 2.2 + sid * 1.6;
+      const rockBit = stoneMask(x, y) > 0.46 ? (s1 < stoneR ? 0.14 + (1 - s1 / stoneR) * 0.06 : s1 < stoneR + 1.2 ? -0.1 : 0) : 0;
+      const [g1, , gid] = grainD(x, y);
+      const fleck = g1 < 1.2 ? (gid > 0.5 ? 0.07 : -0.07) : 0;
+      const dirt = paintSteps(0.25 + dirtN(x, y) * 0.5, 5) + (pebble > 0 ? 0.1 + pebble * 0.06 : 0) + rockBit + fleck;
       const [c1] = grassClump(x, y);
       const clump = Math.max(0, 1 - c1 / 17);
       const grass = paintSteps(0.22 + grassN(x, y) * 0.5, 5) + clump * clump * 0.16;

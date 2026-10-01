@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng';
 import { addPatch, type SurfaceSpace } from './surface';
+import { applyRock } from './rock';
 import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
 
 /**
@@ -291,6 +292,8 @@ export const PAINT_TINT = 'mix(vec3(1.0), mix(vec3(0.94, 0.97, 1.06), vec3(1.05,
  */
 export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceSpace = 'object', scaleMul = 1) {
   if (!(mat instanceof THREE.MeshStandardMaterial)) return;
+  // Every rock surface shares one richer painted rock (strata blocks, cracks, grain, drift).
+  if (kind === 'rock') return applyRock(mat, space, scaleMul);
   const p = PAINTS[kind];
   const ch = new THREE.Vector4(0, 0, 0, 0).setComponent(p.channel, 1);
   const uniforms = {

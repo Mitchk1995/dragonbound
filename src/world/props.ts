@@ -75,6 +75,9 @@ export function cb(k: ModelKit, p: Obj, size: V3, pos: V3, color: number, rot?: 
 
 /** A faceted rock chunk (base at y = pos.y). */
 export function chunk(k: ModelKit, p: Obj, seed: number, size: V3, pos: V3, color: number, rotY = 0, em = 0, int = 1) {
+  // A rock chunk's colour paints as rock unless it is already claimed (warm browns would
+  // otherwise be judged wood and get plank grain).
+  if (!PAINT_OF.has(color) && !em) PAINT_OF.set(color, 'rock');
   return k.mesh(p, rockBlock(seed, size[0], size[1], size[2]), color, pos, [0, rotY, 0], em, int);
 }
 
@@ -103,6 +106,71 @@ function raggedDisc(seed: number, spokes: number, inner: number, outer: number, 
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.computeVertexNormals();
   fanCache.set(key, geo);
+  return geo;
+}
+
+/**
+ * A blocky clay amphora (about 0.9 tall, base at the pivot) under `parent`: foot, octagonal body,
+ * shoulder, neck, lip and two handles. `broken`: the shoulder and neck gone, sherds beside it.
+ */
+function amphora(k: ModelKit, parent: Obj, pos: V3, rot: V3, seed: number, broken = false) {
+  const p = new THREE.Group();
+  p.position.set(...pos);
+  p.rotation.set(...rot);
+  parent.add(p);
+  const clay = [0xa0583a, 0x9a6a44, 0x8a4a30][seed % 3], dark = 0x6a3a26;
+  k.mesh(p, taper(0.2, 0.2, 0.3, 0.3, 0.14), dark, [0, 0.07, 0]);
+  cb(k, p, [0.5, 0.42, 0.5], [0, 0.35, 0], clay, undefined, 0.14);
+  cb(k, p, [0.52, 0.05, 0.52], [0, 0.44, 0], dark, undefined, 0.14);
+  if (broken) {
+    for (let i = 0; i < 3; i++) cb(k, parent, [0.22, 0.05, 0.16], [pos[0] + Math.cos(i * 2.1 + seed) * 0.45, 0.03, pos[2] + Math.sin(i * 2.1 + seed) * 0.45], clay, [0, i + seed, 0.1], 0.01);
+    return p;
+  }
+  k.mesh(p, taper(0.5, 0.5, 0.2, 0.2, 0.2), clay, [0, 0.66, 0]);
+  cb(k, p, [0.16, 0.2, 0.16], [0, 0.85, 0], clay, undefined, 0.04);
+  cb(k, p, [0.24, 0.06, 0.24], [0, 0.96, 0], dark, undefined, 0.02);
+  for (const sx of [-1, 1]) cb(k, p, [0.06, 0.24, 0.06], [sx * 0.16, 0.78, 0], dark, [0, 0, sx * -0.5], 0.01);
+  return p;
+}
+
+/**
+ * A soft-edged flat patch facing up (puddles, damp ground): a centre fan and two rings with an
+ * irregular, lobed outline; colour `rgb` everywhere, alpha `a` over the inner part fading to 0 at
+ * the rim, so it has no hard outline.
+ */
+const softCache = new Map<string, THREE.BufferGeometry>();
+function softDisc(seed: number, r: number, rgb: [number, number, number], a: number) {
+  const key = `${seed},${r},${rgb},${a}`;
+  let geo = softCache.get(key);
+  if (geo) return geo;
+  const N = 28;
+  const rim = Array.from({ length: N }, (_, i) => {
+    const t = (i / N) * Math.PI * 2;
+    const lobe = 1 + 0.16 * Math.sin(t * 2 + seed) + 0.1 * Math.sin(t * 3 + seed * 1.7) + (hash01(seed, i) - 0.5) * 0.1;
+    return [Math.cos(t) * r * lobe, Math.sin(t) * r * lobe * 0.8];
+  });
+  const pos: number[] = [], col: number[] = [];
+  const P = (f: number, i: number, al: number) => {
+    const [x, z] = rim[i % N];
+    pos.push(x * f, 0, z * f);
+    col.push(...rgb, al);
+  };
+  for (let i = 0; i < N; i++) {
+    // Centre fan (full alpha), then the inner ring to 0.72, then the fade to the rim.
+    pos.push(0, 0, 0);
+    col.push(...rgb, a);
+    P(0.62, i + 1, a);
+    P(0.62, i, a);
+    for (const [f0, a0, f1, a1] of [[0.62, a, 0.86, a * 0.55], [0.86, a * 0.55, 1, 0]]) {
+      P(f0, i, a0); P(f0, i + 1, a0); P(f1, i + 1, a1);
+      P(f0, i, a0); P(f1, i + 1, a1); P(f1, i, a1);
+    }
+  }
+  geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+  softCache.set(key, geo);
   return geo;
 }
 
@@ -577,7 +645,9 @@ const BUILDERS: Record<string, Builder> = {
     for (let i = 0; i < 4; i++) chunk(k, g, 20 + i, [0.34, 0.24, 0.3], [Math.cos(i * 1.6) * 0.26, -0.04, Math.sin(i * 1.6) * 0.26], BLOCKS[i % 3], i);
     cb(k, g, [0.2, 2.3, 0.2], [0, 1.15, 0], WOOD_D, undefined, 0.03);
     k.mesh(g, taper(0.28, 0.28, 0.06, 0.06, 0.16), WOOD_D, [0, 2.38, 0]);
-    for (const [y, a, dir] of [[1.95, 0.08, 1], [1.5, 0.5, -1]] as [number, number, number][]) {
+    // Both boards on one line, pointing opposite ways: from above it reads as one straight
+    // fingerpost, never as a broken cross.
+    for (const [y, a, dir] of [[1.95, 0, 1], [1.5, 0, -1]] as [number, number, number][]) {
       const arm = new THREE.Group();
       arm.position.set(0, y, 0);
       arm.rotation.y = a;
@@ -1178,6 +1248,13 @@ const BUILDERS: Record<string, Builder> = {
       k.mesh(g, prism(w, h, 0.3), i % 2 ? 0xff8a3a : 0xff5a1a, [Math.cos(a) * r, 0.1, Math.sin(a) * r], [Math.sin(a) * 0.45 * (r > 0 ? 1 : 0.2), a, -Math.cos(a) * 0.45 * (r > 0 ? 1 : 0.2)], 0xff3a08, 1.5);
     }
   },
+  /** An ember vent at a wall's foot: glowing crystals in a cracked basalt knuckle that light the way. */
+  ember_vent: (k, g) => {
+    chunk(k, g, 186, [1.9, 0.6, 1.6], [0, -0.15, 0], BASALT_D, 0.7);
+    BUILDERS.ember_crystals(k, g, 2);
+    const l = light(g, 0xff7a3a, 4.2, 10, 1.6);
+    return { obj: g, light: l, tick: (t: number) => (l.intensity = 4.2 + Math.sin(t * 2.3 + g.id) * 0.5) };
+  },
   /**
    * Cinderwing's hoard ledge: a raised two-tier basalt shelf with steps down the front, heaped with
    * gold, a chest, skulls and swords of the fallen, ember crystals at its back corners.
@@ -1236,13 +1313,22 @@ const BUILDERS: Record<string, Builder> = {
   },
   /** A still puddle of seep water on the cave floor (dark, glossy). */
   puddle: (k, g, v) => {
-    // A damp dark rim, the water inside it, a few stones at the edge.
-    decal(k.mesh(g, raggedDisc(120 + (v ?? 0), 22, 1.18, 1.3, 0.25), 0x3a2e24, [0, 0.035, 0]));
-    decal(k.mesh(g, raggedDisc(125 + (v ?? 0), 22, 0.95, 1.05, 0.25), PUDDLE, [0, 0.045, 0]));
-    // A glint of lantern light on the surface.
-    const glint = decal(k.mesh(g, raggedDisc(127, 10, 0.2, 0.24, 0.2), 0x2e4a52, [0.3, 0.05, -0.28], undefined, 0x2a4a52, 0.25));
-    glint.scale.set(1.8, 1, 0.6);
-    for (let i = 0; i < 3; i++) chunk(k, g, 130 + (v ?? 0) * 3 + i, [0.3, 0.14, 0.24], [Math.cos(i * 2.2) * 1.2, -0.03, Math.sin(i * 2.2) * 1.0], 0x5a4a3c, i);
+    // Shallow seep water: a damp patch darkening the floor round it, and the water itself, both
+    // fading out to nothing at an irregular edge (no hard outline), glossy so it catches the
+    // lantern light. A few stones at the edge.
+    const s = v ?? 0;
+    const damp = new THREE.Mesh(softDisc(120 + s, 1.45, [0.02, 0.012, 0.008], 0.45), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+    damp.position.y = 0.03;
+    damp.name = 'puddle-damp';
+    const water = new THREE.Mesh(softDisc(125 + s, 1.05, [0.025, 0.055, 0.06], 0.85), new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: 0.05, metalness: 0, envMap: studioEnv(), envMapIntensity: 0.4 }));
+    water.position.y = 0.045;
+    water.name = 'puddle-water';
+    for (const m of [damp, water]) {
+      (m.material as THREE.Material).userData.decal = true;
+      m.renderOrder = 1;
+      g.add(m);
+    }
+    for (let i = 0; i < 3; i++) chunk(k, g, 130 + s * 3 + i, [0.3, 0.14, 0.24], [Math.cos(i * 2.2 + s) * 1.15, -0.03, Math.sin(i * 2.2 + s) * 0.95], 0x5a4a3c, i);
   },
   /** Loose ore chips on the floor (`v` = 0 copper, 1 tin, 2 iron, 3 coal). */
   ore_chips: (k, g, v) => {
@@ -1372,6 +1458,60 @@ const BUILDERS: Record<string, Builder> = {
       cb(k, g, [2.25, 0.6, 0.55], [Math.sin(a) * R, 0.3, Math.cos(a) * R], i % 2 ? 0x7a7870 : 0x6e6a66, [0, a, 0], 0.07);
     }
     k.cyl(g, R - 0.2, R - 0.2, 0.1, [0, 0.12, 0], PUDDLE, [0, Math.PI / 8, 0], 8);
+  },
+  /**
+   * A market stall the flood knocked down (faces +Z): its stone counter still standing but split,
+   * one post upright with a scrap of rotted awning, the other two fallen across the counter, the
+   * shelf board slid off and a spill of broken crates and pots at its foot (`v` varies the spill).
+   */
+  stall_ruin: (k, g, v) => {
+    const s = v ?? 0, side = s % 2 ? -1 : 1;
+    // Split stone counter: two blocks, the second tipped and sunk.
+    cb(k, g, [1.6, 0.8, 0.9], [-0.75 * side, 0.4, 0], 0x7a7870, [0, 0.05 * side, 0], 0.06);
+    cb(k, g, [1.3, 0.72, 0.9], [0.85 * side, 0.26, 0.05], 0x6e6a66, [0.08, -0.12 * side, 0.16 * side], 0.06);
+    cb(k, g, [1.7, 0.1, 1.0], [-0.72 * side, 0.85, 0], 0x5a3a22, [0, 0.05 * side, 0.03], 0.02);
+    // The standing post and its scrap of faded awning.
+    cb(k, g, [0.16, 2.3, 0.16], [-1.45 * side, 1.15, -0.55], WOOD_D, [0.04, 0, 0.05 * side], 0.02);
+    const cloth = s % 3 === 0 ? 0x7a3a34 : s % 3 === 1 ? 0x3e5a6e : 0x5a6a3a;
+    cb(k, g, [0.9, 0.05, 0.8], [-1.05 * side, 2.2, -0.3], cloth, [0.5, 0.2 * side, -0.25 * side], 0.01);
+    cb(k, g, [0.5, 0.05, 0.5], [-0.9 * side, 1.85, 0.2], cloth, [1.1, 0.3 * side, -0.2 * side], 0.01);
+    // Fallen posts across the counter and the shelf board slid to the ground.
+    cb(k, g, [0.16, 2.2, 0.16], [0.2 * side, 1.0, 0.2], WOOD_D, [0.25, 0.4 * side, 1.15 * side], 0.02);
+    cb(k, g, [0.16, 2.0, 0.16], [1.2 * side, 0.12, 0.9], WOOD_D, [Math.PI / 2, 0.9 * side, 0], 0.02);
+    cb(k, g, [1.4, 0.08, 0.4], [0.3 * side, 0.08, 0.85], WOOD_L, [0.1, 0.35 * side, 0.08], 0.02);
+    // The spill: a broken crate, a tipped jar and potsherds.
+    cb(k, g, [0.6, 0.45, 0.6], [1.7 * side, 0.2, -0.3], WOOD_L, [0.2, 0.6 + s, 0.15], 0.03);
+    amphora(k, g, [0.9 * side, 0.22, 1.35], [Math.PI / 2 - 0.2, s * 1.3, 0], s);
+    for (let i = 0; i < 4; i++) cb(k, g, [0.2, 0.05, 0.14], [(0.2 + hash01(s, i) * 1.4) * side, 0.03, 1.1 + hash01(s, i, 2) * 0.7], 0xa0583a, [0, hash01(s, i, 3) * 6, 0.1], 0.01);
+  },
+  /** A cluster of clay amphorae: some standing, one tipped over, one broken open (`v` varies it). */
+  amphorae: (k, g, v) => {
+    const s = v ?? 0;
+    const spots: [number, number][] = [[0, 0], [0.62, 0.2], [0.2, 0.62], [-0.45, 0.5]];
+    spots.forEach(([x, z], i) => {
+      if (i === 3 && s % 2) return;
+      if (i === 1) amphora(k, g, [x + 0.3, 0.24, z + 0.2], [Math.PI / 2 - 0.15, s * 1.7 + 0.6, 0], s + i);
+      else amphora(k, g, [x, 0, z], [0, s + i, 0], s + i, i === 2);
+    });
+  },
+  /** A broken well: an octagonal stone curb with a gap knocked in it, its winch beam fallen. */
+  well_ruin: (k, g) => {
+    const R = 0.95;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      if (i === 5) {
+        // The knocked-out block lies beside the gap.
+        cb(k, g, [0.8, 0.45, 0.4], [Math.sin(a) * (R + 0.75), 0.18, Math.cos(a) * (R + 0.75)], 0x6e6a66, [0.15, a + 0.6, 0.3], 0.05);
+        continue;
+      }
+      const hgt = i === 4 || i === 6 ? 0.55 : 0.8;
+      cb(k, g, [0.82, hgt, 0.36], [Math.sin(a) * R, hgt / 2, Math.cos(a) * R], i % 2 ? 0x7a7870 : 0x6e6a66, [0, a, 0], 0.05);
+    }
+    k.mesh(g, octagon(R - 0.1, 0.05), 0x10181a, [0, 0.5, 0], [0, 0, Math.PI / 2]);
+    // One upright of the winch frame still stands; the beam and the other lie in the court.
+    cb(k, g, [0.16, 1.6, 0.16], [-1.05, 0.8, 0], WOOD_D, [0, 0, 0.06], 0.02);
+    cb(k, g, [0.16, 1.6, 0.16], [1.5, 0.1, 0.8], WOOD_D, [Math.PI / 2, 0.7, 0], 0.02);
+    cb(k, g, [1.9, 0.14, 0.14], [0.6, 0.09, 1.55], WOOD_D, [0, 0.35, 0], 0.02);
   },
   /** Big paving slabs keeping a narrow way across a slumped causeway (along local Z; `arg` = span). */
   sunken_slabs: (k, g, arg) => {

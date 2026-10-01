@@ -70,8 +70,11 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   const noise = smoothNoise(seed + 3);
   const nV = VW * (h + 1);
   const pos = new Float32Array(nV * 3), col = new Float32Array(nV * 3), splat = new Float32Array(nV * 4);
+  // Colour per splat channel at each vertex (the average of the adjacent cells of that channel),
+  // so the shader can sharpen the blend between ground types without smearing their colours.
+  const chan = new Float32Array(nV * 12), chanN = new Float32Array(nV * 4);
   const count = new Float32Array(nV), raisedN = new Float32Array(nV), raisedH = new Float32Array(nV), fluidN = new Float32Array(nV);
-  const c = new THREE.Color(), c2 = new THREE.Color(), cliffC = new THREE.Color();
+  const c = new THREE.Color(), c2 = new THREE.Color(), cliffC = new THREE.Color(), stoneC = new THREE.Color();
   const cliffShades = theme.cliff ?? (theme.wall === 'cave' ? [0x4e4238, 0x3e342c] : [0x7a6e62, 0x5e544a]);
 
   for (let z = 0; z < h; z++) {
@@ -84,7 +87,8 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       // Large-scale colour drift (per-cell randomness reads as pixels).
       c.setHex(shades[0]).lerp(c2.setHex(shades[1]), noise(x * 0.09, z * 0.09));
       const relief = isRelief(cell, theme);
-      const mesaTop = relief && cell === Cell.Cliff && theme.mesaTop !== undefined;
+      // (Relief marked as bare rock ground keeps rock on top too: the high rim, the outcrops.)
+      const mesaTop = relief && cell === Cell.Cliff && theme.mesaTop !== undefined && g !== Ground.Cave;
       if (mesaTop) {
         const top = theme.ground[theme.mesaTop!] ?? shades;
         c.setHex(top[0]).lerp(c2.setHex(top[1]), noise(x * 0.09, z * 0.09));
@@ -95,12 +99,24 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const ch = bed ? (theme.wall === 'ruin' ? 2 : 3) : mesaTop ? (theme.splat?.[theme.mesaTop!] ?? SPLAT[theme.mesaTop!] ?? 1) : relief ? 3 : (theme.splat?.[g] ?? SPLAT[g] ?? 0);
       const elev = relief ? (layout.elev[i] || (cell === Cell.Wall ? CAVE_WALL_H : CLIFF_H)) : 0;
       const fluid = layout.fluid[i] !== Fluid.None;
+      // In the drowned city grass never covers the paving outright: it grows up between the old
+      // stones (half the cell stays paving, so the height blend lets the stones stand through).
+      const overgrown = theme.wall === 'ruin' && g === Ground.Grass && !relief && !bed;
+      const parts: [number, number, THREE.Color][] = overgrown
+        ? [[ch, 0.5, c], [2, 0.5, stoneC.setHex(theme.ground[Ground.Stone]?.[0] ?? 0x6a7070).lerp(c2.setHex(theme.ground[Ground.Stone]?.[1] ?? 0x5a6060), noise(x * 0.09 + 13, z * 0.09))]]
+        : [[ch, 1, c]];
       for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) {
         const k = vi(xx, zz);
-        col[k * 3] += c.r;
-        col[k * 3 + 1] += c.g;
-        col[k * 3 + 2] += c.b;
-        splat[k * 4 + ch] += 1;
+        for (const [pc, wt, cc] of parts) {
+          col[k * 3] += cc.r * wt;
+          col[k * 3 + 1] += cc.g * wt;
+          col[k * 3 + 2] += cc.b * wt;
+          splat[k * 4 + pc] += wt;
+          chan[k * 12 + pc * 3] += cc.r * wt;
+          chan[k * 12 + pc * 3 + 1] += cc.g * wt;
+          chan[k * 12 + pc * 3 + 2] += cc.b * wt;
+          chanN[k * 4 + pc] += wt;
+        }
         if (relief) {
           raisedN[k]++;
           raisedH[k] += elev;
@@ -110,6 +126,9 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       }
     }
   }
+  // The raw colour sums, before shading (AO, soot, tone) is folded in: the per-channel colours
+  // take the same shading as a ratio at the end.
+  const rawCol = col.slice();
   /** Distance from a grid vertex to the nearest dry (non-fluid, non-void) cell, searched out to 5. */
   const distToLand = (vx: number, vz: number) => {
     let best = 5;
@@ -242,7 +261,11 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
           raw[k] = y;
           y = terrace(y);
         } else {
-          y = top * (0.85 + noise(x * 0.35 + 9, z * 0.35) * 0.3) + (noise(x * 1.3, z * 1.3) - 0.5) * 0.5 + rise[k];
+          // Cliffs and rims outdoors: the same stacked-ledge rock as the cave walls (slow noise
+          // only, then terraced), so no zone has smooth, lumpy slopes or big diagonal facets.
+          y = top * (0.86 + noise(x * 0.2 + 9, z * 0.2) * 0.28) + (noise(x * 0.16 + 20, z * 0.16) - 0.5) * 1.2 + rise[k];
+          raw[k] = y;
+          y = terrace(y);
         }
       } else if (count[k] && fluidN[k] === count[k]) {
         // Under water: a long shallow shelf that deepens toward the middle, with noise shoals, so
@@ -283,6 +306,19 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     hgt.set(next);
   }
   for (let k = 0; k < nV; k++) pos[k * 3 + 1] = hgt[k];
+  // Per-channel colours, shaded like the blended vertex colour (a channel absent at a vertex takes
+  // the blended colour, so a sharpened blend never reaches for an undefined one).
+  const chanCol = [0, 1, 2, 3].map(() => new Float32Array(nV * 3));
+  for (let k = 0; k < nV; k++) {
+    const n = count[k] || 1;
+    for (let j = 0; j < 3; j++) {
+      const ratio = rawCol[k * 3 + j] > 1e-6 ? col[k * 3 + j] / (rawCol[k * 3 + j] / n) : 1;
+      for (let ch = 0; ch < 4; ch++) {
+        const m = chanN[k * 4 + ch];
+        chanCol[ch][k * 3 + j] = m ? (chan[k * 12 + ch * 3 + j] / m) * ratio : col[k * 3 + j];
+      }
+    }
+  }
 
   const flat: number[] = [], rough: number[] = [], caveCells: number[] = [];
   for (let z = 0; z < h; z++) {
@@ -291,7 +327,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const a = vi(x, z), b = vi(x + 1, z), cc = vi(x + 1, z + 1), d = vi(x, z + 1);
       const tris = (x + z) & 1 ? [a, d, b, b, d, cc] : [a, d, cc, a, cc, b];
       // Cave rock is rebuilt finer (caveRelief below): its cells leave the grid mesh entirely.
-      if (theme.wallRise && [a, b, cc, d].some((v) => hgt[v] > 0.6)) {
+      if ([a, b, cc, d].some((v) => hgt[v] > 0.6)) {
         caveCells.push(x, z);
         continue;
       }
@@ -307,6 +343,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('aSplat', new THREE.BufferAttribute(splat, 4));
+  chanCol.forEach((a, ch) => geo.setAttribute(`aCol${ch}`, new THREE.BufferAttribute(a, 3)));
   geo.setIndex([...flat, ...rough]);
   geo.computeVertexNormals();
   const wet = layout.fluid.some((f) => f === Fluid.Water);
@@ -359,12 +396,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     g.computeVertexNormals();
     return g;
   }
-  const make = (index: number[], name: string) => {
+  const make = (index: number[], name: string, sharp = true) => {
     const g = new THREE.BufferGeometry();
-    for (const k of ['position', 'normal', 'color', 'aSplat']) g.setAttribute(k, geo.getAttribute(k));
+    for (const k of ['position', 'normal', 'color', 'aSplat', ...(sharp ? ['aCol0', 'aCol1', 'aCol2', 'aCol3'] : [])]) g.setAttribute(k, geo.getAttribute(k));
     g.setIndex(index);
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
-    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange, !!theme.wallRise, wet ? WATER_Y : null, theme.water?.[1]);
+    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange, !!theme.wallRise, wet ? WATER_Y : null, theme.water?.[1], theme.mesaTop === undefined, sharp, theme.wall === 'ruin');
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
     // Towering cave walls would throw the whole floor into sun shadow (there is no sun
@@ -376,7 +413,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   const meshes = [make(flat, 'ground')];
   let relief = rough.length ? make(rough, 'relief') : null;
   if (caveCells.length) {
-    relief = make([], 'relief');
+    relief = make([], 'relief', false);
     relief.geometry.dispose();
     relief.geometry = caveRelief();
   }
@@ -600,12 +637,13 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
              // Foam: a broken rim where the bank meets the water, and a second line that laps
              // in and out a little way offshore.
              float n3 = fluidN(fp * 0.61 + vec2(uTime * 0.05, -uTime * 0.04));
-             float rim = (1.0 - smoothstep(0.0, 0.07, vDepth + (n2 - 0.5) * 0.05)) * smoothstep(0.28, 0.5, n3 + 0.12);
-             float lap = smoothstep(0.62, 0.92, 0.5 + 0.5 * sin(uTime * 0.8 - vDepth * 30.0 + n1 * 5.0));
-             float band = lap * (1.0 - smoothstep(0.06, 0.2, vDepth)) * smoothstep(0.4, 0.62, n3);
-             float foam = max(rim, band * 0.65);
-             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.94, 0.95), foam * 0.85);
-             diffuseColor.a = mix(0.38, 0.94, smoothstep(0.0, 0.6, vDepth)) + foam * 0.4;`}`,
+             // Thin and soft: a narrow, broken lace right at the waterline, never a white band.
+             float rim = (1.0 - smoothstep(0.0, 0.028, vDepth + (n2 - 0.5) * 0.03)) * smoothstep(0.4, 0.62, n3 + 0.08);
+             float lap = smoothstep(0.72, 0.95, 0.5 + 0.5 * sin(uTime * 0.8 - vDepth * 40.0 + n1 * 5.0));
+             float band = lap * (1.0 - smoothstep(0.03, 0.1, vDepth)) * smoothstep(0.48, 0.66, n3);
+             float foam = max(rim, band * 0.45);
+             diffuseColor.rgb = mix(diffuseColor.rgb, mix(uShallow, vec3(0.86, 0.92, 0.92), 0.7), foam * 0.55);
+             diffuseColor.a = mix(0.38, 0.94, smoothstep(0.0, 0.6, vDepth)) + foam * 0.2;`}`,
       )
       .replace(
         '#include <normal_fragment_maps>',

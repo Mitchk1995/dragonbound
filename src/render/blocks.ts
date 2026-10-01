@@ -88,6 +88,34 @@ export function rockBlock(seed: number, w = 1, h = 0.8, d = 1) {
   });
 }
 
+/**
+ * A flat rock slab for stacked strata (cave walls, cliff ledges): a unit footprint (±0.5) from
+ * y = 0 to 1, with vertical sides, a flat top and each corner knocked off by its own amount
+ * (some barely), and a narrow bevel round the top edge so every ledge has a crisp lit lip. Scaled
+ * freely per instance; unlike rockBlock it never shows big diagonal facets from above.
+ */
+export function slabBlock(seed: number) {
+  return cached(`sl${seed}`, () => {
+    const rng = mulberry32(seed * 6271 + 5);
+    const ring: [number, number][] = [];
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const cut = rng() < 0.3 ? 0.02 : 0.06 + rng() * 0.16, cut2 = cut * (0.6 + rng() * 0.8);
+      const x = sx * 0.5 * (0.94 + rng() * 0.06), z = sz * 0.5 * (0.94 + rng() * 0.06);
+      // Two points per corner, ordered round the ring (the hull sorts it out anyway).
+      ring.push([x - sx * cut, z], [x, z - sz * cut2]);
+    }
+    const pts: THREE.Vector3[] = [];
+    const bevel = 0.07;
+    for (const [x, z] of ring) {
+      pts.push(V(x, 0, z), V(x, 1 - bevel, z));
+      // The top ring pulled in a little: a narrow bevel all round.
+      const l = Math.hypot(x, z) || 1;
+      pts.push(V(x - (x / l) * bevel * 0.9, 1, z - (z / l) * bevel * 0.9));
+    }
+    return new ConvexGeometry(pts);
+  });
+}
+
 /** A square crystal prism with a pyramid tip; base on y = 0, total height h. */
 export function prism(w: number, h: number, tip = 0.3) {
   return cached(`pr${w},${h},${tip}`, () => {
