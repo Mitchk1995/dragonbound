@@ -225,19 +225,23 @@ function ring(k: Kit, g: THREE.Group, id: string, color: number) {
   glassy(put(k, g, bipyramid(0.05, 0.02, 0.04), pal?.trim ?? color, [0, 0.35, 0], undefined, pal?.trim ?? color, 0.4));
 }
 
-/** A pendant on its loop: a carved fang on a cord (bone), a stone disc in a gold bezel (jade). */
+/**
+ * A pendant hanging from its necklace loop, built facing +Z (the icon shows it face-on): a carved fang
+ * pointing down under a leather wrap (bone), a stone diamond in a gold bezel (jade). The loop stands in
+ * the same plane, above the pendant.
+ */
 function amulet(k: Kit, g: THREE.Group, id: string, color: number) {
   const pal = BASES[id]?.palette;
   const trim = pal?.trim ?? PAL.gold;
-  const loop = put(k, g, torus(0.15, 0.016, 12), trim, [0, 0.3, 0]);
+  const loop = put(k, g, torus(0.15, 0.016, 14), trim, [0, 0.31, 0]);
   if (id === 'bone_amulet') {
-    put(k, g, prism(0.09, 0.26, 0.55), color, [0, 0.16, 0], [Math.PI, 0.4, 0]);
-    put(k, g, chamferBox(0.1, 0.04, 0.1, 0.015), pal?.dark ?? 0x5a3a22, [0, 0.17, 0]);
+    put(k, g, prism(0.11, 0.3, 0.55), color, [0, 0.13, 0], [0, 0, Math.PI]);
+    put(k, g, chamferBox(0.14, 0.05, 0.14, 0.015), pal?.dark ?? 0x5a3a22, [0, 0.14, 0]);
     return;
   }
   forged(loop, 0.35);
-  forged(put(k, g, chamferBox(0.2, 0.2, 0.05, 0.05), trim, [0, 0.07, 0], [0, 0, Math.PI / 4]), 0.35);
-  glassy(put(k, g, chamferBox(0.15, 0.15, 0.07, 0.04), color, [0, 0.07, 0.01], [0, 0, Math.PI / 4], color, 0.25));
+  forged(put(k, g, chamferBox(0.2, 0.2, 0.05, 0.05), trim, [0, 0.02, 0], [0, 0, Math.PI / 4]), 0.35);
+  glassy(put(k, g, chamferBox(0.15, 0.15, 0.07, 0.04), color, [0, 0.02, 0.012], [0, 0, Math.PI / 4], color, 0.25));
 }
 
 /** The model for a material, quest item or trinket (`kind` from its base; `id` picks the variant). */

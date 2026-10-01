@@ -20,7 +20,7 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * instances (rocks, walls).
  */
 
-export type PaintKind = 'masonry' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles';
+export type PaintKind = 'masonry' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles' | 'foliage';
 
 interface PaintParams {
   atlas: 0 | 1 | 2;
@@ -43,6 +43,7 @@ export const PAINTS: Record<PaintKind, PaintParams> = {
   bark: { atlas: 2, channel: 0, scale: 1.0, amount: 0.4 },
   leaves: { atlas: 2, channel: 1, scale: 0.5, amount: 0.48 },
   needles: { atlas: 2, channel: 2, scale: 0.6, amount: 0.46 },
+  foliage: { atlas: 2, channel: 3, scale: 0.42, amount: 0.5 },
 };
 
 const smooth = (a: number, b: number, x: number) => {
@@ -172,6 +173,18 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
       const tip = smooth(0.6, 0.82, c.d) * (c.ly < 0 ? 1 : 0) * (1 - c.rim);
       return posterize(0.3 + c.light * 0.3 + (c.tone - 0.5) * 0.1 + tip * 0.12 - c.rim * 0.2 - c.tuck * 0.24 + (streak(x, y) - 0.5) * 0.16 + (blot(x, y) - 0.5) * 0.06, 5);
     });
+  },
+  foliage: () => {
+    // Leaf masses for block canopies: many small scalloped leaf clusters, each lit from its upper
+    // side with a pale leaf dab or two, tucked under its neighbours with only a soft shade (no
+    // hard outline, so a large flat face reads as foliage, not paving), over a slow light/dark
+    // drift so no two blocks look stamped.
+    const dabs = worley(612, 22), drift = fbm(613, 2, 2), blot = fbm(614, 5, 2);
+    return clumps(611, 8, (c, x, y) => {
+      const [f1] = dabs(x, y);
+      const dab = f1 < 2.6 ? (c.light > 0.5 ? 0.1 : -0.05) : 0;
+      return posterize(0.31 + c.light * 0.36 + (c.tone - 0.5) * 0.2 - c.rim * 0.08 - c.tuck * 0.15 + dab + (drift(x, y) - 0.5) * 0.24 + (blot(x, y) - 0.5) * 0.06, 6);
+    }, { size: [0.7, 1.25], lobes: 0.14, stretch: 0.25, turn: 0.7, order: 0.9 });
   },
 };
 

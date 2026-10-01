@@ -1,13 +1,15 @@
 /**
- * Inventory readability: each ore and gem is its own shape and colour, bars are real ingots, and the
- * skills tab's tiles and hover card show the right numbers.
+ * Inventory readability: each ore and gem is its own shape and colour, bars are real ingots, amulets face the
+ * viewer, and the skills tab's tiles and hover card show the right numbers.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BASES } from '../src/data/items';
 import { buildMaterialModel, ingot } from '../src/render/materialModels';
+import { iconSubject } from '../src/render/icons3d';
+import { makeItem } from '../src/loot/itemGen';
 import { MAX_LEVEL, xpForLevel } from '../src/progression/skills';
-import { skillTileInfo } from '../src/ui/skillGrid';
+import { skillTileInfo, xpDropLabel } from '../src/ui/skillGrid';
 
 const ORES = ['copper_ore', 'tin_ore', 'iron_ore', 'coal', 'emberite_ore'];
 const GEMS = ['uncut_sapphire', 'uncut_emerald', 'uncut_ruby'];
@@ -80,6 +82,26 @@ describe('material icons', () => {
   });
 });
 
+describe('trinket icons', () => {
+  // The owner: amulets looked rotated backwards, away from the camera. A pendant is flat, so face-on it is shallow
+  // along the view axis (Z) and tall on screen; tipped away it would be deep and squat.
+  for (const id of ['bone_amulet', 'jade_amulet']) {
+    it(`${id} shows its pendant face-on`, () => {
+      const { holder } = iconSubject(makeItem(id));
+      holder.updateMatrixWorld(true);
+      const size = new THREE.Box3().setFromObject(holder).getSize(new THREE.Vector3());
+      expect(size.z, id).toBeLessThan(size.y * 0.35);
+    });
+    it(`${id} hangs below its loop, upright`, () => {
+      const g = buildMaterialModel('amulet', BASES[id].palette!.main, id);
+      const loop = g.children[0] as THREE.Mesh;
+      const rest = new THREE.Box3();
+      for (const c of g.children.slice(1)) rest.expandByObject(c);
+      expect(rest.max.y).toBeLessThan(loop.position.y);
+    });
+  }
+});
+
 describe('skills tab tiles', () => {
   it('shows level out of 99 and the XP still needed', () => {
     const t = skillTileInfo(xpForLevel(10) + 100);
@@ -104,5 +126,14 @@ describe('skills tab tiles', () => {
     expect(max.nextAt).toBeNull();
     expect(max.remaining).toBe(0);
     expect(max.pct).toBe(100);
+  });
+
+  it('XP drops keep one decimal while small (combat XP comes in pieces), whole numbers from 10', () => {
+    expect(xpDropLabel(0.43)).toBe('0.4');
+    expect(xpDropLabel(0.01)).toBe('0.1');
+    expect(xpDropLabel(1.96)).toBe('2');
+    expect(xpDropLabel(8.75)).toBe('8.8');
+    expect(xpDropLabel(17.5)).toBe('18');
+    expect(xpDropLabel(1250)).toBe('1,250');
   });
 });

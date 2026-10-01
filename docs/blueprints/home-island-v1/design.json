@@ -1,0 +1,158 @@
+{
+  "status": "PROPOSAL - NOT IMPLEMENTED / OPUS-AUTHORED",
+  "castle_status": "CASTLE SITE PROVISIONAL - construction not approved",
+  "units": "1 cell = 1 world unit; x east, z south (+z toward the gameplay camera); h = elevation in world units above the portal-court datum (h 0)",
+  "concept": "Torn crown-spur fragment. Fresh angular tear faces on the north and west and one unbridged fresh fracture notch; older weathered lobes and headlands on the east and south. The castle-v2 footprint stands on the NW crown spur (h +11) whose SE gatehouse already faces down a two-stage ramp to a low central portal court, with the everyday services ringed close round the court.",
+  "outline_note": "Each vertex starts the edge that runs to the next vertex; 'torn' = fresh rupture face (angular, sheer), 'old' = older weathered edge (rounded lobes, headlands). Clockwise in screen space (x right, z down).",
+  "outline": [
+    [22, 40, "torn"], [30, 22, "torn"], [44, 14, "torn"], [58, 6, "torn"], [84, 4, "torn"], [100, 10, "torn"],
+    [118, 6, "torn"], [132, 12, "torn"], [138, 10, "torn"], [141, 30, "torn"], [144, 46, "torn"], [147, 30, "torn"],
+    [150, 10, "torn"], [166, 8, "torn"], [186, 14, "torn"], [204, 10, "torn"], [222, 20, "torn"], [236, 18, "old"],
+    [250, 30, "old"], [262, 46, "old"], [272, 64, "old"], [278, 86, "old"], [276, 104, "old"], [282, 122, "old"],
+    [280, 142, "old"], [270, 158, "old"], [256, 166, "old"], [248, 178, "old"], [252, 192, "old"], [240, 204, "old"],
+    [222, 206, "old"], [204, 198, "old"], [190, 200, "old"], [176, 206, "old"], [164, 214, "old"], [154, 220, "old"],
+    [146, 214, "old"], [140, 204, "old"], [126, 200, "old"], [112, 204, "old"], [96, 198, "old"], [74, 190, "old"],
+    [60, 184, "old"], [46, 170, "old"], [34, 158, "torn"], [28, 140, "torn"], [20, 124, "torn"], [24, 108, "torn"],
+    [14, 96, "torn"], [18, 80, "torn"], [12, 66, "torn"], [20, 54, "torn"]
+  ],
+  "fracture_note": "The notch between vertices (138,10)-(150,10) reaching to (144,46) is a fresh unbridged fracture; it separates the castle spur from the NE upland. No route crosses it.",
+  "height_patches": [
+    {"id": "island", "h": 0, "parent": null, "name": "lowland (portal-court datum)", "poly": "outline"},
+    {"id": "east_shelf", "h": 3, "parent": "island", "name": "East Shelf", "poly": [[206, 104], [262, 100], [270, 130], [256, 156], [214, 160], [206, 132]]},
+    {"id": "shoulder", "h": 5, "parent": "island", "name": "castle-rock shoulder", "poly": [[25, 46], [30, 26], [46, 16], [60, 8], [84, 7], [100, 11.5], [118, 10], [134, 18], [136, 40], [138, 60], [132, 84], [124, 100], [100, 108], [66, 108], [40, 100], [26, 86], [20, 66]]},
+    {"id": "ne_upland", "h": 7, "parent": "island", "name": "NE upland", "poly": [[156, 20], [186, 20], [220, 28], [232, 40], [226, 58], [200, 64], [170, 60], [156, 44]]},
+    {"id": "crown", "h": 11, "parent": "shoulder", "name": "crown spur (castle ground)", "poly": [[28, 44], [38, 24], [52, 14], [88, 10], [114, 20], [128, 40], [130, 60], [124, 74], [118, 80], [106, 92], [72, 98], [44, 88], [30, 74], [24, 58]]}
+  ],
+  "castle": {
+    "source": "references/castle-v2/design.json",
+    "source_sha256": "4cfd13c3d6f919429f8532167399d41d4c1dd545f7a50604284b2a34f93366c1",
+    "source_revision_note": "Current revised castle-v2 (curtain_thickness 2.2, cross_wall_thickness 1.8; curtain vertices, towers and outer arrangement unchanged from the initial 2.0-thickness snapshot sha256 98122f52...). Courtyard/W2/upper-wallwalk details stay with the separate castle-v2 task and are omitted here.",
+    "transform": {"rotation_deg": 0, "translate": [28, 12], "order": "rotate about castle origin, then translate; castle y -> world z; no scaling"},
+    "why_unrotated": "castle-v2 already turns its sheer back (donjon, hall) to the north/west tear and opens its outer gate on the SE; on this spur that faces the settlement and the south camera, so no rotation is needed.",
+    "omitted": "small internal yard furnishing (lists, muster, herb garden, kitchen yard, well, feast court) - the training-yard / diagonal-wall overlap is being corrected by a separate castle-v2 task",
+    "massing_heights": {"curtain": 7, "cross_wall": 7, "gatehouse": 10, "donjon": 13, "hall_eaves": 9, "hall_ridge": 12, "service_eaves": 9, "service_ridge": 11, "kitchen_eaves": 9, "kitchen_ridge": 11, "residence_eaves": 9, "residence_ridge": 11.5, "low_eaves": 4, "low_ridge": 6}
+  },
+  "portal_court": {"center": [150, 135], "radius": 14, "ring_radius": 10.5, "landing": [150, 141], "entry": [150, 139.2],
+    "note": "Ring radius 10.5, the six slot angles, landing offset (+6 z) and Warden offset (+6.5,+6) copied from zoneMaps.ts; portals face the court centre. Oval windows 2.2 x 3.0 with zone-coloured halo (portalFx.ts)."},
+  "portals": [
+    {"id": "mine", "name": "Emberdeep Mine", "angle": -150, "color": "#ffb050", "slot": "present current destination slot", "open_rule": "progression", "open_state": "Warden/progression controlled: open once s.portals.mine is set (dark until you speak with the Warden)", "short": "Warden/progression", "tag": "Warden-gated",
+     "glimpse": {"style": "cave", "skyTop": "#2a1c12", "skyLow": "#ffb468", "ground": "#a87e52", "sil": "#3a281c"}},
+    {"id": "foothills", "name": "Wyrmwood Foothills", "angle": -126, "color": "#ff6a2a", "slot": "present current destination slot", "open_rule": "progression", "open_state": "Warden/progression controlled: open once s.portals.foothills is set", "short": "Warden/progression", "tag": "Warden-gated",
+     "glimpse": {"style": "forest", "skyTop": "#3e4e80", "skyLow": "#f2a878", "ground": "#4a6a34", "sil": "#1e2e24"}},
+    {"id": "ruin", "name": "Sunken Ruin", "angle": -102, "color": "#6ad0c0", "slot": "present current destination slot", "open_rule": "quest", "open_state": "quest-dependent: dark before the cinder_seal quest, open while it is active, closes again once it is done", "short": "quest-dependent; closes when done", "tag": "quest; shuts after",
+     "glimpse": {"style": "water", "skyTop": "#1a2c3c", "skyLow": "#8ac0c0", "ground": "#184850", "sil": "#1c2a34"}},
+    {"id": "lair", "name": "Cinderwing's Lair", "angle": -78, "color": "#ff2a1a", "slot": "present current destination slot", "open_rule": "restore", "open_state": "dark until lair_arch is restored at the Restoration Board (direct path)", "short": "needs lair_arch restore", "tag": "restore lair_arch",
+     "glimpse": {"style": "lava", "skyTop": "#1a0604", "skyLow": "#c84a1c", "ground": "#1e1010", "sil": "#140808"}},
+    {"id": "mirefen", "name": "Mirefen", "angle": -54, "color": "#8a8f9c", "slot": "dormant chapter placeholder", "open_rule": "dormant", "dormant": "Mirefen: Chapter 2", "open_state": "dormant chapter placeholder, never opens in the current build ('Mirefen: Chapter 2')", "short": "dormant, Chapter 2", "tag": "dormant - Ch. 2"},
+    {"id": "frostspire", "name": "Frostspire", "angle": -30, "color": "#8a8f9c", "slot": "dormant chapter placeholder", "open_rule": "dormant", "dormant": "Frostspire: Chapter 3", "open_state": "dormant chapter placeholder, never opens in the current build ('Frostspire: Chapter 3')", "short": "dormant, Chapter 3", "tag": "dormant - Ch. 3"}
+  ],
+  "portal_state_source": "references/story.ts portalState (lines 141-159) and references/zone.ts stationArg/refreshStations (lines 111-139): a portal is lit only while portalState(id).open; otherwise a dark sealed membrane with grey title. Mechanics unchanged; no new unlock plan. Sheets draw slots 1-4 with representative lit windows for identity only - actual activation stays under current progression; the screenshot save state is not assumed.",
+  "portal_look_source": "portalFx.ts: oval 2.2 x 3.0, halo 1.14, destination glimpse (GLIMPSES colours), zone-colour energy rim, floating title 0.6 above; props.ts portal(): stepped 3.0 dais (top 0.62) with rune inlays and corner pylons. Drawings are a schematic stand-in, not the runtime shader.",
+  "status_vocab": {
+    "RELOCATED": "EXISTING FUNCTION RELOCATED",
+    "LOCKED": "EXISTING LOCKED/RESTORABLE PLOT",
+    "NEW": "NEW PROPOSAL",
+    "RESERVED": "RESERVED/UNDECIDED"
+  },
+  "buildings": [
+    {"id": "smelter", "label": "Smelter + forge yard", "status": "RELOCATED", "x": 106, "z": 126, "w": 17, "d": 13, "wallH": 3.9, "roof": "#9a5438", "doors": [[114.5, 139], [123, 132.5]], "source": "KEEP_BUILDINGS smelter 17x13, wallH 3.9, terracotta"},
+    {"id": "bank", "label": "Bank", "status": "RELOCATED", "x": 172, "z": 122, "w": 20, "d": 15, "wallH": 4.6, "roof": "#3e4450", "doors": [[182, 137]], "group": "bank", "source": "KEEP_BUILDINGS bank 20x15, wallH 4.6"},
+    {"id": "vault", "label": "Side vault", "status": "LOCKED", "x": 191, "z": 125, "w": 10, "d": 11, "wallH": 4.0, "roof": "#3e4450", "flat": true, "doors": [[191, 131.5]], "group": "bank", "source": "KEEP_BUILDINGS vault 10x11, restore vault_expanded; entered from the bank as now"},
+    {"id": "shop", "label": "Quartermaster", "status": "RELOCATED", "x": 162, "z": 150, "w": 15, "d": 11, "wallH": 3.7, "roof": "#4a6a48", "doors": [[169.5, 161]], "source": "KEEP_BUILDINGS shop 15x11, wallH 3.7, moss"},
+    {"id": "alchemy_plot", "label": "Alchemy lab plot", "status": "LOCKED", "x": 100, "z": 172, "w": 13, "d": 10, "wallH": 3.6, "roof": "#3e6a6a", "doors": [[106.5, 182]], "source": "KEEP_BUILDINGS alchemy_plot, restore alchemy_lab (Chapter 2)"},
+    {"id": "rune_plot", "label": "Rune altar plot", "status": "LOCKED", "x": 244, "z": 74, "w": 11, "d": 10, "wallH": 4.0, "roof": "#4a4a78", "doors": [[244, 79.5]], "source": "KEEP_BUILDINGS rune_plot, restore rune_altar (Chapter 3); moved out of the old bailey"},
+    {"id": "hatch_plot", "label": "Hatchery plot", "status": "LOCKED", "x": 180, "z": 30, "w": 14, "d": 12, "wallH": 4.2, "roof": "#7a4a34", "doors": [[194, 36.5]], "source": "KEEP_BUILDINGS hatch_plot, restore hatchery (Chapter 4); moved out of the old bailey"}
+  ],
+  "stations": [
+    {"id": "landing", "label": "Arrival landing", "status": "RELOCATED", "at": [150, 141], "r": 2.5},
+    {"id": "warden", "label": "Warden", "status": "RELOCATED", "at": [156.5, 141], "r": 0.6},
+    {"id": "board", "label": "Restoration board", "status": "RELOCATED", "at": [143.5, 141.5], "r": 0.8, "note": "now inside the keep (keep 13.2,16.45); proposed at the arrival court so it sits with the Warden"},
+    {"id": "furnace", "label": "Furnace", "status": "RELOCATED", "at": [114.5, 128.6], "r": 1.0, "in": "smelter"},
+    {"id": "anvil", "label": "Anvil", "status": "RELOCATED", "at": [109.4, 145.8], "r": 1.0},
+    {"id": "emberforge", "label": "Emberforge (restore)", "status": "LOCKED", "at": [108.9, 141.6], "r": 1.3},
+    {"id": "bank_counter", "label": "Bank counter", "status": "RELOCATED", "at": [182, 128.5], "r": 0.6, "in": "bank"},
+    {"id": "shop_counter", "label": "Quartermaster counter", "status": "RELOCATED", "at": [169.5, 154.5], "r": 0.6, "in": "shop"}
+  ],
+  "areas": [
+    {"id": "farm", "label": "Farm, fields + paddock", "status": "RELOCATED", "kind": "fields", "rects": [[42, 118, 18, 14], [62, 118, 20, 14], [44, 134, 16, 16], [62, 134, 20, 12]], "note": "current farm/fields/paddock (KEEP_VIEWS farm)"},
+    {"id": "orchard", "label": "Orchard", "status": "RELOCATED", "kind": "orchard", "poly": [[200, 68], [236, 70], [238, 92], [222, 96], [202, 90]]},
+    {"id": "green", "label": "Village green + well", "status": "RELOCATED", "kind": "green", "circle": [120, 158, 7]},
+    {"id": "memorial", "label": "Memorial garden", "status": "RELOCATED", "kind": "garden", "poly": [[140, 178], [160, 178], [161, 196], [141, 196]]},
+    {"id": "lookout", "label": "Lookout", "status": "RELOCATED", "kind": "paved", "circle": [153, 208, 3.2]},
+    {"id": "market", "label": "Market stalls", "status": "RELOCATED", "kind": "stalls", "points": [[153.8, 158], [161, 168], [175, 167.5]]},
+    {"id": "spring", "label": "Spring", "status": "RELOCATED", "kind": "spring", "circle": [92, 112, 2.6]}
+  ],
+  "reserved": [
+    {"id": "east_shelf", "label": "East Shelf - reserved growth", "reason": "largest flat terrace (h +3), well back from tear faces, reached by the east lane; no use chosen", "poly": [[209, 108], [258, 104], [265, 130], [253, 152], [216, 155], [209, 132]]},
+    {"id": "ne_upland", "label": "NE upland - reserved", "reason": "broad h +7 ground with one ramp; windward edge on the tear; hatchery plot only", "poly": [[160, 24], [176, 24], [176, 46], [202, 48], [222, 44], [226, 56], [200, 61], [172, 57], [160, 44]]},
+    {"id": "sw_terrace", "label": "SW terrace - reserved", "reason": "gentle low ground by the stream and pond; undecided", "poly": [[46, 160], [82, 160], [84, 178], [66, 182], [56, 172]]}
+  ],
+  "water": {
+    "stream": [[92, 112], [96, 124], [98, 138], [97, 152], [94, 166], [90, 176], [84, 186], [79, 194]],
+    "stream_width": 2.1,
+    "pond": [90, 176, 5],
+    "spill": "the stream leaves the old south edge at about (79,193) and falls into the sky void; local water only, no sea"
+  },
+  "routes": [
+    {"id": "approach", "label": "Castle approach (two-stage ramp)", "kind": "primary", "width": 4.0, "status": "NEW",
+     "points": [[137, 136], [133, 126], [130, 112], [128, 100], [123, 84], [117.5, 74.4], [112, 71]], "grade": [3, 4], "ends": ["court", "castle:G_outer"]},
+    {"id": "ore_lane", "label": "Ore lane to smelter east door", "kind": "service", "width": 2.5, "status": "NEW",
+     "points": [[137, 132], [126, 132.5], [123, 132.5]], "ends": ["court", "door:smelter"]},
+    {"id": "smithy_road", "label": "Smithy road", "kind": "primary", "width": 3.4, "status": "NEW",
+     "points": [[138, 139], [124, 142.5], [114.5, 142.5], [114.5, 139]], "ends": ["court", "door:smelter"]},
+    {"id": "farm_lane", "label": "Farm lane", "kind": "service", "width": 2.4, "status": "NEW",
+     "points": [[118, 142.5], [104, 151], [97, 152], [84, 148], [72, 142]], "bridges": [[97, 152]], "ends": ["route:smithy_road", "area:farm"]},
+    {"id": "spring_path", "label": "Spring path", "kind": "service", "width": 2.0, "status": "NEW",
+     "points": [[72, 132], [80, 122], [90, 113.5]], "ends": ["area:farm", "area:spring"]},
+    {"id": "bank_road", "label": "Bank road", "kind": "primary", "width": 3.4, "status": "NEW",
+     "points": [[163, 137], [174, 141], [182, 141], [182, 137]], "ends": ["court", "door:bank"]},
+    {"id": "market_lane", "label": "Market lane", "kind": "primary", "width": 3.0, "status": "NEW",
+     "points": [[155, 147], [158, 164], [169.5, 164], [169.5, 161]], "ends": ["court", "door:shop"]},
+    {"id": "alchemy_lane", "label": "Alchemy lane", "kind": "service", "width": 2.6, "status": "NEW",
+     "points": [[141, 145], [130, 160], [118, 180], [116, 186], [106.5, 186], [106.5, 182]], "ends": ["court", "door:alchemy_plot"]},
+    {"id": "memorial_path", "label": "Memorial path to lookout", "kind": "service", "width": 2.4, "status": "NEW",
+     "points": [[150, 147], [150, 170], [151, 186], [153, 205]], "ends": ["court", "area:lookout"]},
+    {"id": "east_lane", "label": "East lane (orchard, rune plot)", "kind": "service", "width": 2.6, "status": "NEW",
+     "points": [[166, 138.1], [167, 118], [198, 100], [218, 94], [230, 84], [240, 79.5], [244, 79.5]], "ends": ["route:bank_road", "door:rune_plot"]},
+    {"id": "upland_lane", "label": "Upland lane (hatchery)", "kind": "service", "width": 2.4, "status": "NEW",
+     "points": [[198, 100], [197, 84], [194, 74], [192, 56], [198, 44], [198, 36.5], [194, 36.5]], "grade": [2], "ends": ["route:east_lane", "door:hatch_plot"]},
+    {"id": "postern_stair", "label": "Postern cliff stair", "kind": "service", "width": 2.0, "status": "NEW",
+     "points": [[40.875, 68], [34, 76], [28, 90], [36, 104], [50, 116]], "grade": [1], "ends": ["castle:G_postern", "area:farm"]}
+  ],
+  "tree_belts": {
+    "note": "B-style block-canopy woods only on rim belts and the orchard; trees are skipped within 3 of the land edge and clear of routes, buildings, water, court and reserved ground",
+    "belts": [
+      [[240, 26], [252, 38], [264, 56], [270, 80], [262, 96], [250, 70], [238, 40]],
+      [[236, 166], [250, 166], [246, 190], [234, 198], [214, 196], [206, 188], [224, 178]],
+      [[96, 190], [124, 192], [136, 198], [112, 200], [98, 196]],
+      [[22, 100], [34, 104], [42, 112], [36, 128], [26, 126]]
+    ],
+    "spacing": 4.6
+  },
+  "current_access_points": {
+    "note": "from zoneMaps.ts: landing prop (75,101); bank south door (112,84); smelter south door (28.5,80); shop door (107.5,115); Warden (81.5,101); alchemy door (38.5,115)",
+    "landing": [75, 101], "bank": [112, 84], "smelter": [28.5, 80], "shop": [107.5, 115], "warden": [81.5, 101], "alchemy_plot": [38.5, 115]
+  },
+  "callouts": [
+    {"n": 1, "at": [78, 48], "text": "Castle on the NW crown spur (h +11). Tear faces on N and W and the fresh fracture on the E leave one approach. castle-v2 is NOT rotated: its gatehouse already faces SE, down to the settlement and the south camera."},
+    {"n": 2, "at": [126, 92], "text": "Two-stage ramp: court h 0 -> shoulder h +5 -> gatehouse h +11, about 75 cells. It leaves the court past the Emberdeep Mine slot, not through the portal ring."},
+    {"n": 3, "at": [150, 135], "text": "Portal court in the low centre: the six slots keep the current ring (r 10.5, same angles), the arrival landing, the Warden and the restoration board."},
+    {"n": 4, "at": [176, 150], "text": "Services ring the court. SERVICE ACCESS compares straight-line plan distances to the landing (a layout comparison, not walking/route lengths or gameplay proof)."},
+    {"n": 5, "at": [93, 128], "text": "Spring at the foot of the castle rock -> stream -> pond by the alchemy plot -> spills off the old south edge into the void. One plank bridge (farm lane)."},
+    {"n": 6, "at": [144, 22], "text": "Fresh fracture notch, unbridged and with no route: separates the castle spur from the NE upland."},
+    {"n": 7, "at": [234, 130], "text": "East Shelf (h +3): the largest flat ground away from tear faces, reached by the east lane. Reserved, use undecided."},
+    {"n": 8, "at": [151, 200], "text": "Old weathered south headland: memorial garden and lookout. Rounded old edges contrast with the angular N/W tear."}
+  ],
+  "clearances": {"building_to_edge_min": 4.0, "route_edge_to_land_edge_min": 1.5, "castle_curtain_to_crown_edge_min": 3.0, "route_to_building_min": 0.5, "portal_base_block_r": 2.13, "portal_base_note": "2.13 = half-diagonal of the 3.0 x 3.0 stepped dais in props.ts portal()"},
+  "current_island_basis": {
+    "source": "zoneMaps.ts buildKeep: 150x150 grid, Cell.Void outside; superellipse exponent 2.6 about (75,72), rim 64.5 +/-4.5 (broad noise) +/-2 (fine noise), plus forced-ground district rects and a lookout headland to z 136",
+    "center": [75, 72], "rim": 64.5, "exponent": 2.6
+  },
+  "open_decisions": [
+    "Is about 3.2x the nominal current land (44,938 cells vs a ~14,200-cell nominal superellipse) the right scale, or should the East Shelf be trimmed?",
+    "Accept the unrotated castle-v2 on the NW crown spur, or try the same footprint rotated toward the camera?",
+    "Restoration board: move to the arrival court beside the Warden (proposed) or keep it inside the castle?",
+    "Rune altar and hatchery plots leave the old bailey (castle-v2 has no room for them): accept the orchard-side and NE-upland plots?",
+    "What, if anything, grows on the East Shelf and NE upland? Nothing is assigned here."
+  ]
+}

@@ -10,6 +10,7 @@ import type { Game } from '../game';
 import type { Hazard } from '../systems/combat';
 import type { ZoneLayout } from './layout';
 import type { BuildingProp } from './buildingModel';
+import { stairDest, type BuildingSpec, type Floor } from './building';
 import { NavGrid } from './navgrid';
 import { buildWorldView, type WorldView } from './worldView';
 
@@ -23,7 +24,10 @@ const CUT_SPEED = 4;
 export class ZoneRuntime {
   readonly def: ZoneDef;
   readonly layout: ZoneLayout;
-  readonly nav: NavGrid;
+  private readonly groundNav: NavGrid;
+  private readonly upperNav: NavGrid | null;
+  floor: Floor = 0;
+  private floorBuilding: BuildingSpec | null = null;
   readonly group = new THREE.Group();
   readonly view: WorldView;
   enemies: Enemy[] = [];
@@ -40,10 +44,40 @@ export class ZoneRuntime {
   constructor(private g: Game, id: string, seed: number) {
     this.def = ZONES[id];
     this.layout = this.def.build(seed);
-    this.nav = new NavGrid(this.layout.w, this.layout.h, this.layout.cells);
+    this.groundNav = new NavGrid(this.layout.w, this.layout.h, this.layout.cells);
+    this.upperNav = this.layout.upper ? new NavGrid(this.layout.w, this.layout.h, this.layout.upper) : null;
     this.view = buildWorldView(this.layout, this.def.theme, seed + 7);
     this.group.add(this.view.group);
     this.enteredAt = g.time;
+  }
+
+  /** Movement and collision always use the floor the player can see. */
+  get nav() {
+    return this.floor && this.upperNav ? this.upperNav : this.groundNav;
+  }
+
+  get floorHeight() {
+    return this.floor ? this.floorBuilding?.storeyH ?? 0 : 0;
+  }
+
+  stairAt(x: number, z: number) {
+    if (!this.nav.isWalkable(x, z)) return null;
+    for (const building of this.layout.buildings ?? []) {
+      if (this.floor && building !== this.floorBuilding) continue;
+      const dest = stairDest(building, x, z, this.floor);
+      if (dest) return { ...dest, building };
+    }
+    return null;
+  }
+
+  /** Floor changes retain this zone, its stations and its restoration state. */
+  setFloor(floor: Floor, building?: BuildingSpec) {
+    if (floor && (!this.upperNav || !building?.upper || !building.storeyH || !this.layout.buildings?.includes(building))) return false;
+    this.floor = floor;
+    this.floorBuilding = floor ? building! : null;
+    for (const it of this.interactables) it.obj.visible = floor === 0;
+    for (const it of this.items) it.group.visible = floor === 0;
+    return true;
   }
 
   /** Spawn everything; called after the zone is registered on the game. */
@@ -128,7 +162,7 @@ export class ZoneRuntime {
       const cur = this.cut.get(b) ?? 0;
       const next = dt > 0 ? cur + Math.sign(want - cur) * Math.min(Math.abs(want - cur), dt * CUT_SPEED) : want;
       this.cut.set(b, next);
-      b.setCut(next);
+      b.setCut(next, b.spec === this.floorBuilding ? this.floor : 0);
       b.tick?.(this.g.time);
     }
     for (const pr of this.view.props) pr.tick?.(this.g.time);

@@ -1,7 +1,8 @@
 import { xpForLevel } from '../progression/skills';
-import { SKILLS, type Item, type SkillId, type Slot, type Stance } from '../types';
+import { SKILLS, type Item, type SkillId, type Slot } from '../types';
 
-export const SAVE_VERSION = 2;
+/** v3 dropped the combat stance (combat XP now follows the weapon style; see combatXpSplit). */
+export const SAVE_VERSION = 3;
 export const INVENTORY_SIZE = 28;
 export const BANK_BASE_SIZE = 120;
 
@@ -28,7 +29,6 @@ export interface SaveData {
   /** Null until character creation is finished. */
   character: Appearance | null;
   skills: Record<SkillId, number>;
-  stance: Stance;
   inventory: (Item | null)[];
   equipment: Record<Slot, Item | null>;
   bank: Item[];
@@ -66,7 +66,6 @@ export function newSave(): SaveData {
     character: null,
     // Hitpoints starts at level 10, as in OSRS.
     skills: { melee: 0, ranged: 0, magic: 0, defence: 0, hitpoints: xpForLevel(10), mining: 0, smithing: 0 },
-    stance: 'aggressive',
     inventory: Array(INVENTORY_SIZE).fill(null),
     equipment: emptyEquipment(),
     bank: [],
@@ -121,8 +120,9 @@ export function migrate(raw: any): SaveData {
     data.bank = [];
     data.tutorial = 0;
     data.potionMax = 3;
-    data.stance = 'aggressive';
   }
+  // v2 had an OSRS-style combat stance. There is no choice to make any more, so it just goes.
+  delete (data as { stance?: unknown }).stance;
   data.version = SAVE_VERSION;
   return data;
 }

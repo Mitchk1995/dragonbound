@@ -5,15 +5,15 @@ import { RESTORATIONS } from '../data/keep';
 import { QUESTS } from '../data/quests';
 import { masterworkChance, recipesFor, RECIPES, type Recipe } from '../data/recipes';
 import { SHOP } from '../data/shop';
+import { combatLevel } from '../combat/stats';
 import { XP_TUNING } from '../data/tuning';
 import { DROP_TABLES } from '../data/dropTables';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { generateItem, generateUnique, makeItem } from '../loot/itemGen';
 import { FUTURE_SKILLS, MAX_LEVEL, SKILL_INFO, xpForLevel } from '../progression/skills';
-import { itemIconUrl } from '../render/icons3d';
-import { SKILLS, SLOTS, type Item, type SkillId, type Slot, type Stance } from '../types';
-import { cap, esc, fmt, itemSlot } from './dom';
+import { SKILLS, SLOTS, type Item, type SkillId, type Slot } from '../types';
+import { cap, esc, fmt, itemImg, itemSlot } from './dom';
 import { DRAG_THRESHOLD, swapSlots } from './hudLayout';
 import { icon } from './icons';
 import { skillTileInfo } from './skillGrid';
@@ -45,6 +45,19 @@ const DOLL_FIG = `<svg class="doll-fig" viewBox="0 0 198 198" preserveAspectRati
 /** The OSRS "open in a window" button a compact side-panel tab carries. */
 const EXPAND = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 5V1.5H5M9 1.5h3.5V5M12.5 9v3.5H9M5 12.5H1.5V9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+const COMBAT_XP_SKILLS: SkillId[] = ['melee', 'ranged', 'magic', 'defence', 'hitpoints'];
+
+/** How each skill trains, for its hover card (the combat split is combat/stats combatXpSplit). */
+const SKILL_TRAINING: Record<SkillId, string> = {
+  melee: 'Trains whenever you fight with a sword or longsword.',
+  ranged: 'Trains whenever you fight with a bow.',
+  magic: 'Trains whenever you fight with a staff.',
+  defence: `Gets ${Math.round(XP_TUNING.defenceShare * 100)}% of all combat XP, plus XP for damage your armour absorbs.`,
+  hitpoints: 'Gets a third of all combat XP, whatever you fight with.',
+  mining: 'Trains by mining ore.',
+  smithing: 'Trains by smelting bars and smithing at the anvil.',
+};
+
 /** Everything that opens in a framed stone panel. */
 export class Panels {
   bankMode: 'bank' | 'deposit' | null = null;
@@ -60,26 +73,51 @@ export class Panels {
 
   // ─── Inventory (always-visible side panel tab) ──────────────────────────
 
+  /**
+   * The item last pressed in the inventory, rimmed in gold as the selection. Held by identity, never by slot, so it
+   * follows its item through sorting, swaps and redraws, and lapses once the item leaves the inventory.
+   */
+  private selected: Item | null = null;
+  /** The item being dragged: its slot dims under the ghost, wherever a redraw puts it. */
+  private dragItem: Item | null = null;
+  /** The slot whose card is showing, and the item it showed. */
+  private hoverAt: { i: number; it: Item } | null = null;
+  /** Ends the press in progress without acting on it (its ghost removed). */
+  private cancelPress: (() => void) | null = null;
+
   inventory() {
     const g = this.g, s = g.save;
     const el = this.ui.panel('inventory', 'Inventory');
     if (!el) return;
+    if (this.selected && !s.inventory.includes(this.selected)) this.selected = null;
     const inv = s.inventory.map((it, i) => itemSlot(it, `data-inv="${i}"`, it && BASES[it.base]?.kind === 'gear' && g.items.canEquip(it) ? 'unusable' : '')).join('');
     const mode = this.bankMode === 'bank' || this.bankMode === 'deposit' ? '<span class="modechip">Click to deposit</span>' : this.shopOpen ? '<span class="modechip">Click to sell</span>' : '';
     this.ui.body(el, `
       <div class="invgrid ${mode ? 'moded' : ''}">${inv}</div>
-      <div class="invfoot">${mode || `<span class="goldline">${icon('gold', 18)} ${fmt(s.gold)}</span>`}<button class="btn sm" data-act="sort">Sort</button></div>`);
+      <div class="invfoot">${mode || `<span class="goldline">${icon('gold', 18)}<span>${fmt(s.gold)}</span></span>`}<button class="sortbtn" data-act="sort">Sort</button></div>`);
+    this.markSlots();
+    // Redrawn under a showing card: it stays only while its slot still holds the item it describes.
+    if (this.hoverAt && s.inventory[this.hoverAt.i] !== this.hoverAt.it) {
+      this.hoverAt = null;
+      this.ui.tooltip.hide();
+    }
     el.querySelector('[data-act="sort"]')!.addEventListener('click', () => g.items.sort());
     el.querySelectorAll<HTMLElement>('[data-inv]').forEach((c) => {
       const i = Number(c.dataset.inv);
       c.addEventListener('mouseenter', () => {
-        const it = s.inventory[i];
-        if (it && !this.dragging) this.ui.tooltip.item(it, c.getBoundingClientRect(), true, this.invHint(it));
+        const it = g.save.inventory[i];
+        if (!it || this.dragItem) return;
+        this.hoverAt = { i, it };
+        this.ui.tooltip.item(it, c.getBoundingClientRect(), true, this.invHint(it));
       });
-      c.addEventListener('mouseleave', () => this.ui.tooltip.hide());
+      c.addEventListener('mouseleave', () => {
+        this.hoverAt = null;
+        this.ui.tooltip.hide();
+      });
       c.addEventListener('contextmenu', (e) => e.preventDefault());
       c.addEventListener('mousedown', (e) => {
-        if (!s.inventory[i]) return;
+        if (!g.save.inventory[i]) return;
+        this.hoverAt = null;
         this.ui.tooltip.hide();
         if (e.button === 2) {
           if (!this.bankMode && !this.shopOpen) g.items.dropFromInventory(i);
@@ -90,7 +128,22 @@ export class Panels {
     });
   }
 
-  private dragging = false;
+  /** Rim the selected item's slot and dim the dragged one's, wherever they sit now. */
+  private markSlots() {
+    const inv = this.g.save.inventory;
+    document.querySelectorAll<HTMLElement>('.sidepanel [data-inv]').forEach((c) => {
+      const it = inv[Number(c.dataset.inv)];
+      c.classList.toggle('sel', !!it && it === this.selected);
+      c.classList.toggle('dragfrom', !!it && it === this.dragItem);
+    });
+  }
+
+  /** The inventory folded or switched away from: forget the selection, end any press and its ghost. */
+  clearSelection() {
+    this.cancelPress?.();
+    this.selected = null;
+    this.hoverAt = null;
+  }
 
   private invHint(it: Item) {
     if (this.bankMode) return 'Click: deposit · Shift-click: deposit all of it';
@@ -99,46 +152,65 @@ export class Panels {
   }
 
   /**
-   * A left press on an inventory item: released in place it's a click (equip / deposit / sell);
-   * moved past DRAG_THRESHOLD it becomes an OSRS-style drag that swaps two slots on release.
+   * A left press on an inventory item selects it; released in place it's a click (equip / deposit / sell);
+   * moved past DRAG_THRESHOLD it becomes an OSRS-style drag that swaps two slots on release. The pressed item is
+   * looked up afresh on release, so a redraw or sort under the press never acts on whatever took its slot.
    */
   private press(i: number, e: MouseEvent) {
-    const g = this.g, s = g.save;
+    const g = this.g;
+    const it = g.save.inventory[i];
+    if (!it) return;
+    this.cancelPress?.();
+    this.selected = it;
+    this.markSlots();
     const x0 = e.clientX, y0 = e.clientY, shift = e.shiftKey;
     let ghost: HTMLElement | null = null;
+    const end = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      window.removeEventListener('blur', cancel);
+      ghost?.remove();
+      this.dragItem = null;
+      this.cancelPress = null;
+    };
+    // The window losing focus mid-press (its release may never arrive) or the inventory folding away.
+    const cancel = () => {
+      end();
+      this.markSlots();
+    };
     const move = (ev: MouseEvent) => {
       if (!ghost && Math.hypot(ev.clientX - x0, ev.clientY - y0) >= DRAG_THRESHOLD) {
-        const it = s.inventory[i];
-        if (!it) return;
-        this.dragging = true;
+        if (!g.save.inventory.includes(it)) return cancel();
+        this.dragItem = it;
         ghost = document.createElement('div');
         ghost.className = 'dragghost';
-        ghost.innerHTML = `<img src="${itemIconUrl(it)}" alt="">`;
+        ghost.innerHTML = itemImg(it);
         document.body.appendChild(ghost);
-        document.querySelector(`[data-inv="${i}"]`)?.classList.add('dragfrom');
+        this.markSlots();
+        this.hoverAt = null;
         this.ui.tooltip.hide();
       }
       if (ghost) ghost.style.transform = `translate(${ev.clientX}px, ${ev.clientY}px)`;
     };
     const up = (ev: MouseEvent) => {
-      window.removeEventListener('mousemove', move);
-      window.removeEventListener('mouseup', up);
-      if (ghost) {
-        ghost.remove();
-        this.dragging = false;
-        const to = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-inv]');
-        if (to && swapSlots(s.inventory, i, Number(to.dataset.inv))) g.dirty = true;
+      const dragged = !!ghost;
+      end();
+      const from = g.save.inventory.indexOf(it);
+      if (dragged) {
+        const to = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('.sidepanel [data-inv]');
+        if (from >= 0 && to && swapSlots(g.save.inventory, from, Number(to.dataset.inv))) g.dirty = true;
         this.ui.refresh();
         return;
       }
-      const it = s.inventory[i];
-      if (!it) return;
-      if (this.bankMode) g.items.deposit(i, shift);
-      else if (this.shopOpen) g.items.sell(i);
-      else if (BASES[it.base]?.kind === 'gear') g.items.equip(i);
+      if (from < 0) return;
+      if (this.bankMode) g.items.deposit(from, shift);
+      else if (this.shopOpen) g.items.sell(from);
+      else if (BASES[it.base]?.kind === 'gear') g.items.equip(from);
     };
+    this.cancelPress = cancel;
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
+    window.addEventListener('blur', cancel);
   }
 
   // ─── Equipment ───────────────────────────────────────────────────────────
@@ -207,20 +279,21 @@ export class Panels {
         <div class="si">${icon(f.icon, 26)}</div><div class="slv"><i>Ch. ${f.chapter}</i></div>
       </div>`).join('');
     const totalTile = `<div class="stile stotal"><span>Total</span><b>${total}</b></div>`;
-    const stances: [Stance, string, string][] = [['aggressive', 'Aggressive', 'All combat XP to your weapon style'], ['shared', 'Shared', 'Split between style and Defence'], ['defensive', 'Defensive', 'All combat XP to Defence']];
+    // Freed by the stance switch: the two numbers that sum the hero up.
+    const totalXp = SKILLS.reduce((t, k) => t + s.skills[k], 0);
     this.ui.body(el, `
-      <div class="sechead">Combat stance</div>
-      <div class="stances">${stances.map(([id, name]) => `<button class="stance ${s.stance === id ? 'on' : ''}" data-stance="${id}">${icon(id, 20)}<span>${name}</span></button>`).join('')}</div>
+      <div class="skillsum">
+        <div class="ssum" data-sum="combat">${icon('combat', 24)}<div><span>Combat level</span><b>${combatLevel(g.levels)}</b></div></div>
+        <div class="ssum" data-sum="xp">${icon('skills', 24)}<div><span>Total XP</span><b>${fmt(totalXp)}</b></div></div>
+      </div>
       <div class="sechead">Skills</div>
       <div class="skillgrid">${tiles}${locked}${totalTile}</div>`);
-    el.querySelectorAll<HTMLElement>('[data-stance]').forEach((b) => {
-      const st = stances.find(([id]) => id === b.dataset.stance)!;
-      b.addEventListener('click', () => {
-        s.stance = st[0];
-        g.dirty = true;
-        this.skills();
-      });
-      b.addEventListener('mouseenter', () => this.ui.tooltip.text(`<div class="tt-name">${st[1]}</div><div>${st[2]}.</div>`, b.getBoundingClientRect()));
+    const sumTips: Record<string, string> = {
+      combat: `<div class="tt-name">Combat level ${combatLevel(g.levels)}</div><div>Half your best weapon style, plus a quarter each of Defence and Hitpoints.</div><div class="tt-dim">Enemies show their level beside their name.</div>`,
+      xp: `<div class="tt-name">Total XP</div><div class="tt-row"><span>Combat</span><b>${fmt(COMBAT_XP_SKILLS.reduce((t, k) => t + s.skills[k], 0))}</b></div><div class="tt-row"><span>Mining &amp; Smithing</span><b>${fmt(s.skills.mining + s.skills.smithing)}</b></div>`,
+    };
+    el.querySelectorAll<HTMLElement>('[data-sum]').forEach((b) => {
+      b.addEventListener('mouseenter', () => this.ui.tooltip.text(sumTips[b.dataset.sum!], b.getBoundingClientRect()));
       b.addEventListener('mouseleave', () => this.ui.tooltip.hide());
     });
     el.querySelectorAll<HTMLElement>('[data-skill]').forEach((row) => {
@@ -236,6 +309,7 @@ export class Panels {
         this.ui.tooltip.text(`<div class="tt-name">${SKILL_INFO[k].name} <span class="tt-lv">${t.label}</span></div>
           <div class="tt-row"><span>XP</span><b>${fmt(t.xp)}</b></div>
           ${next}
+          <div class="tt-dim">${SKILL_TRAINING[k]}</div>
           ${ms.length ? `<div class="tt-cmp">${ms.map((m) => `<div><b>${m.level}</b> · ${esc(m.text)}</div>`).join('')}</div>` : ''}`, row.getBoundingClientRect());
       });
       row.addEventListener('mouseleave', () => this.ui.tooltip.hide());

@@ -321,10 +321,11 @@ export const CHAR_PAINTS = {
   soft: { w: [0.1, 0, 0, 0], edge: 0.04, grad: 0.06 },
   wood: { w: [0.05, 0.24, 0, 0], edge: 0.08, grad: 0.08 },
   bone: { w: [0.2, 0, 0, 0], edge: 0.1, grad: 0.24 },
+  // The legendary set's big bone plates: broadly mottled, pale worn edges, shadowed at the foot (no grain: it streaks).
+  wyrmbone: { w: [0.3, 0.03, 0, 0], edge: 0.18, grad: 0.25, scale: 1.3 },
   stone: { w: [0.3, 0, 0, 0], edge: 0.18, grad: 0.12, moss: 0.8 },
   scales: { w: [0.06, 0, 0, 0.34], edge: 0.1, grad: 0.1, scale: 1.6 },
   softScales: { w: [0.04, 0, 0, 0.2], edge: 0.08, grad: 0.08, scale: 1.6 },
-  dragonPlate: { w: [0.04, 0, 0, 0.36], edge: 0.26, grad: 0.14, scale: 1.4, forge: 0.4 },
   membrane: { w: [0.16, 0, 0.08, 0], edge: 0.1, grad: 0.1 },
 } satisfies Record<string, CharPaint>;
 

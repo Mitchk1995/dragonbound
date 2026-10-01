@@ -321,57 +321,6 @@ def mail_links(f, half_w, ys, color=R.dark, pitch=0.05, fill=0.55, hgt=0.009, z=
     return o
 
 
-def scale_rows(f, half_w, rows, colors, gap_color, w=0.1, lift=0.004, flare=0.026, gap=0.06, pattern=None, nm='scale',
-               shade=None):
-    """Overlapping rows of small flat scale plates on a flat face (frame from faces(): local +Z out). rows =
-    [(bottom y, top y)]; plates `w` wide, alternate rows shifted half a plate. Each plate lies on the face at its
-    top edge and stands `flare` off it at its bottom edge, so each row overlaps the top of the row below, and a
-    `gap_color` lip closes its bottom edge (the dark gap between rows). `pattern(i, j)` picks each plate's colour.
-    `shade` = (dark, light) paints each plate in three bands: dark where it tucks under the row above, its own colour,
-    and a light tip. One mesh per colour."""
-    polys = {}
-
-    def add(col, pts, want):
-        v = [Vector(p_) for p_ in pts]
-        nrm = (v[1] - v[0]).cross(v[2] - v[0])
-        polys.setdefault(col, []).append(pts if nrm.dot(Vector(want)) >= 0 else pts[::-1])
-    for j, (y0, y1) in enumerate(rows):
-        n = int(half_w * 2 / w) + 2
-        x0 = -half_w - (w / 2 if j % 2 else 0)
-        for i in range(n):
-            a, b = x0 + i * w + gap * w / 2, x0 + (i + 1) * w - gap * w / 2
-            a, b = max(a, -half_w), min(b, half_w)
-            if b - a < w * 0.3:
-                continue
-            col = colors[(pattern(i, j) if pattern else 0) % len(colors)]
-            cw, ch = (b - a) * 0.22, (y1 - y0) * 0.3                    # clipped lower corners: a scale, not a brick
-
-            def z(y):
-                return lift + flare * (y1 - y) / (y1 - y0)
-            outline = [(a, y1), (a, y0 + ch), (a + cw, y0), (b - cw, y0), (b, y0 + ch), (b, y1)]
-            if shade:
-                yt = y1 - (y1 - y0) * 0.4
-                for c_, pts_ in ((shade[0], [(a, y1), (a, yt), (b, yt), (b, y1)]),
-                                 (col, [(a, yt), (a, y0 + ch), (b, y0 + ch), (b, yt)]),
-                                 (shade[1], [(a, y0 + ch), (a + cw, y0), (b - cw, y0), (b, y0 + ch)])):
-                    add(c_, [(x, y, z(y)) for x, y in pts_], (0, flare, 1))
-            else:
-                add(col, [(x, y, z(y)) for x, y in outline], (0, flare, 1))
-            mid = Vector(((a + b) / 2, (y0 + y1) / 2, 0))
-            for (xa, ya), (xb, yb) in (outline[2:4],):                     # lip along the lower edge
-                out_ = Vector(((xa + xb) / 2, (ya + yb) / 2, 0)) - mid
-                add(gap_color, [(xa, ya, z(ya)), (xb, yb, z(yb)), (xb, yb, 0.0), (xa, ya, 0.0)], tuple(out_))
-    out = []
-    for col, ps in polys.items():
-        bm = bmesh.new()
-        for pts in ps:
-            bm.faces.new([bm.verts.new(p_) for p_ in pts])
-        o = _common._mesh_obj(bm, f, (0, 0, 0), (0, 0, 0), col)
-        o.name = nm
-        out.append(o)
-    return out
-
-
 def plate_gauntlet(g, s, cuff_rim=None):
     """Box gauntlet in three blocks: fist, square thumb and a flared cuff (optionally rimmed)."""
     box(g, (0.32, 0.27, 0.32), (0, -0.01, 0), R.metal, bevel=0.055)
@@ -627,166 +576,163 @@ def boots(S):
         rivet(f, (0, 0.2, 0.215), R.trim, 0.022)
 
 
-# ─── Uniques ─────────────────────────────────────────────────────────────────
-# Own authored colours; metal parts are metallic() so the game gives them the forged-metal finish.
+# ─── Uniques: the Wyrmbone set ───────────────────────────────────────────────
+# Every unique is cut from one dead wyrm: pale dragon BONE as the big shapes, OBSIDIAN-black plate under it, and one
+# ember glow per piece (the skull's eyes and mouth, the crown's gem, the fang's molten core, the burning string, the
+# staff's heart). The inverse of Emberforged (blackened steel with thin ember seams): light over dark, so the two
+# never read alike. One strong silhouette idea per piece, big clean shapes, no scales, pouches or tassets.
+# Own authored colours; obsidian parts are metallic() so the game gives them the forged-metal finish, and bone is
+# painted as bone (registry.ts fixedPaint).
+BONE = 0xDDCFAF           # pale dragon bone
+BONE_DK = 0xBCA987        # bone in shade: the lower jaw, horn roots
+OBSIDIAN = 0x2A2530       # the black plate under the bone
+GRIP = 0x3E2218           # dark oxblood leather grips and belt
+SOCKET = 0x140E0E         # eye sockets
 EMBER = 0xFF6A1A
 EMBER_HOT = 0xFFC050
-CHAR = 0x2A2326
-CHAR2 = 0x3E3436
-GOLD = 0xD9A640
-BRONZE = 0x9A6432
-MAIL = 0x5A5E66
-BONE = 0xEEE4CC
-SCALE = 0x8E1D16          # Scaleguard: deep dragon crimson scales ...
-SCALE_MID = 0x7A1712
-SCALE_DK = 0x3E0A0A       # ... shaded dark where they tuck under the row above ...
-SCALE_TIP = 0x9C3322      # ... and catching the light at their tips
-OXBLOOD = 0x3E0C0E        # the plate under the scales
-WING = 0x9A2218           # Emberstring's wing membranes
+MEMBRANE = 0x4A2024       # Emberstring's wings: dark wyrm hide
+
+
+def obsidian():
+    return metallic(OBSIDIAN)
+
+
+def dragon_skull(f):
+    """A dragon's skull on frame f with its snout along local +X: a broad cranium block, a snout tapering out of
+    it over a slightly open lower jaw with an ember glow between them, two fangs at the tip, heavy brows over
+    burning eye sockets on both sides and two horns swept back level along the cranium (upright horns read as ears)."""
+    box(f, (0.38, 0.24, 0.4), (0, 0, 0), BONE, bevel=0.06)                                          # cranium
+    beam(f, (0.13, -0.01, 0), (0.56, -0.06, 0), 0.16, BONE, w1=0.1, d=0.3, d1=0.2, bevel=0.03)     # snout
+    beam(f, (0.1, -0.13, 0), (0.5, -0.21, 0), 0.06, BONE_DK, w1=0.05, d=0.26, d1=0.16, bevel=0.015)  # lower jaw
+    beam(f, (0.16, -0.1, 0), (0.5, -0.15, 0), 0.035, EMBER, w1=0.06, d=0.22, d1=0.13, bevel=0,
+         emissive=EMBER, strength=3)                                                                # smoulder in the mouth
+    for z in (-0.07, 0.07):
+        beam(f, (0.5, -0.1, z), (0.52, -0.21, z), 0.035, BONE, w1=0.006, bevel=0)                    # fangs
+    for z in (-1, 1):
+        box(f, (0.12, 0.075, 0.02), (0.11, 0.03, z * 0.201), SOCKET, bevel=0)                        # eye socket
+        box(f, (0.07, 0.032, 0.02), (0.12, 0.028, z * 0.207), EMBER, bevel=0, emissive=EMBER, strength=4)  # eye
+        box(f, (0.2, 0.05, 0.07), (0.1, 0.1, z * 0.18), BONE, rot=(0, 0, -0.18), bevel=0.018)         # brow
+        beam(f, (0.06, 0.07, z * 0.13), (-0.27, 0.12, z * 0.19), 0.1, BONE_DK, w1=0.012, bevel=0.012)  # horn swept back
+
+
+def u_wyrmbone(S):
+    """Wyrmbone Harness: a bone breastplate over obsidian plate, and ONE strong idea: a dragon's skull over the left
+    shoulder, snout out over the arm, eyes and mouth smouldering. The right shoulder is a plain bone cap, the upper
+    arms obsidian, the forearms bone. Below the chest it is all obsidian (waist, belt, a plain under-skirt), so the
+    pale chest and skull carry the read; no tassets or front plates over the thighs."""
+    c = S('sock_chest')
+    obs = obsidian()
+    y, w, hgt, d = CHEST
+    box(c, (w + 0.02, hgt + 0.02, d + 0.02), (0, y, 0), BONE, taper=(1.06, 1.0), bevel=0.07)      # breastplate
+    y, w, hgt, d = WAIST
+    box(c, (w, hgt, d), (0, y, 0), obs, bevel=0.04)                                                   # waist
+    box(c, (0.79, 0.085, 0.58), (0, BELT_Y, 0), GRIP, bevel=0.02)                                     # belt
+    box(c, (0.12, 0.1, 0.03), (0, BELT_Y, 0.29), BONE, bevel=0.012)                                   # bone buckle
+    box(c, (0.52, 0.13, 0.46), (0, 0.37, 0), obs, bevel=0.035)                                        # gorget
+    box(c, (0.78, 0.26, 0.55), (0, -0.47, 0), obs, bevel=0.03)                                        # under-skirt
+    # Keep the skull's rear edge within the shoulder envelope (-0.22 in socket-local Z).
+    # A small forward seat preserves the skull and horn shapes without sweeping behind the hero.
+    dragon_skull(pivot(S('sock_shoulderL'), 'skull', (0.08, 0.05, 0.03), (0, 0, -0.22)))
+    block_pauldron(S, -1, color=BONE, top=None, edge=None, rivets=None)
+    for name, s in ARM_SOCKS:
+        g = S(name)
+        arm_box(g, s, (0.29, 0.36, 0.31), (0, -0.14, 0), obs, bevel=0.035)                          # rerebrace
+        arm_box(g, s, (0.265, 0.21, 0.285), (0, -0.41, 0), BONE, bevel=0.03)                         # vambrace
+
+
+def horn_point(h, a, r, base_y, ln, w):
+    """A dragon horn standing on the crown band at bearing a (radians from the front), r out from the centre:
+    two blocks, flaring outward from the band and then turning up to a point."""
+    out = Vector((math.sin(a), 0, math.cos(a)))
+    b = Vector((0, base_y, 0)) + out * r
+    m = b + Vector((0, ln * 0.45, 0)) + out * (ln * 0.3)
+    t = b + Vector((0, ln, 0)) + out * (ln * 0.42)
+    beam(h, tuple(b - Vector((0, 0.04, 0))), tuple(m), w, BONE, w1=w * 0.72, bevel=0.012)
+    beam(h, tuple(m - (m - b).normalized() * 0.025), tuple(t), w * 0.72, BONE, w1=0.01, bevel=0)
+
+
+def u_ashen_crown(S):
+    """The Ashen Crown: a crown of five dragon horns on a broad bone band (the tallest over the brow, a pair
+    flaring out at the front corners, a shorter pair behind), over a low obsidian cap with a neck guard and cheek
+    plates; a bone plate tops the cap, so the head reads pale inside the ring of horns from the gameplay camera. One ember gem in the band under the front horn. The face stays open."""
+    h = S('sock_head')
+    obs = obsidian()
+    box(h, (0.56, 0.2, 0.58), (0, 0.21, -0.005), obs, bevel=0.045)                                  # cap
+    box(h, (0.44, 0.06, 0.46), (0, 0.32, -0.005), BONE_DK, bevel=0.02)                              # bone crown plate on top
+    box(h, (0.56, 0.24, 0.07), (0, -0.03, -0.265), obs, bevel=0.022)                                # neck guard
+    for s in (-1, 1):
+        box(h, (0.07, 0.22, 0.25), (s * 0.28, -0.01, -0.075), obs, bevel=0.022)                     # cheek plate
+    box(h, (0.63, 0.12, 0.65), (0, 0.14, -0.005), BONE, bevel=0.03)                                 # crown band
+    for deg, ln, w in ((0, 0.42, 0.12), (52, 0.33, 0.1), (-52, 0.33, 0.1), (128, 0.22, 0.085), (-128, 0.22, 0.085)):
+        a = math.radians(deg)
+        ca, sa = math.cos(a), math.sin(a)
+        r = 1 / max(abs(sa) / 0.29, abs(ca) / 0.3)                                                   # onto the band's square
+        horn_point(h, a, r, 0.19, ln, w)
+    box(h, (0.12, 0.12, 0.03), (0, 0.14, 0.327), obs, rot=(0, 0, PI / 4), bevel=0.012)               # gem setting
+    facet_gem(h, 0.05, (0, 0.14, 0.345), EMBER_HOT, emissive=EMBER, strength=5)                     # ember gem
 
 
 def u_cinderfang(S):
-    """A broad black dragon-fang blade with a molten core, three bold notches down its back edge and a hooked tip,
-    over a jaw guard with swept horn quillons and one ember gem. Big, clean shapes that read in the hand."""
+    """Cinderfang: one great dragon fang for a blade, pale bone curving gently to its point with a molten ember core
+    showing down its middle, set in an obsidian jaw guard with two bone horn quillons and an ember gem; a bone claw
+    pommel. Big, clean shapes that read in the hand."""
     h = S('sock_handR')
-    grip(h, -0.21, 0.21, 0.1, 0x4A1614, (-0.13, -0.01, 0.11), metallic(CHAR))       # blood-red grip
-    beam(h, (0, -0.22, 0), (0, -0.4, 0), 0.14, metallic(CHAR2), w1=0.02)             # claw pommel
-    box(h, (0.22, 0.17, 0.17), (0, 0.24, 0), metallic(CHAR), bevel=0.04)             # jaw guard
+    obs = obsidian()
+    grip(h, -0.21, 0.21, 0.1, GRIP, (-0.13, -0.01, 0.11), obs)
+    beam(h, (0, -0.22, 0), (0, -0.4, 0), 0.14, BONE, w1=0.025)                                        # claw pommel
+    box(h, (0.24, 0.16, 0.18), (0, 0.24, 0), obs, bevel=0.04)                                         # jaw guard
     for s in (-1, 1):
-        prism(h, [(0, -0.06), (0.36, 0.02), (0.48, 0.24), (0.32, 0.12), (0, 0.08)], 0.1, (s * 0.06, 0.24, 0), metallic(CHAR2),
-              rot=(0, 0 if s > 0 else PI, 0), bevel=0.012)                           # horn quillons
-    facet_gem(h, 0.055, (0, 0.24, 0.09), EMBER, emissive=EMBER, strength=5)
-    blade = [(-0.14, 0.3), (0.14, 0.3), (0.17, 0.52), (0.1, 0.6), (0.17, 0.8), (0.1, 0.88), (0.16, 1.08), (0.09, 1.28),
-             (-0.03, 1.5), (-0.1, 1.3), (-0.14, 1.0), (-0.15, 0.7)]
-    prism(h, blade, 0.075, (0, 0, 0), metallic(CHAR2), bevel=0.014)
-    prism(h, [(-0.035, 0.33), (0.035, 0.33), (0.05, 0.9), (0.025, 1.2), (-0.03, 1.36), (-0.04, 1.0), (-0.045, 0.7)], 0.087,
-          (0, 0, 0), EMBER, emissive=EMBER, strength=4)                               # molten core
+        prism(h, [(0, -0.06), (0.32, -0.02), (0.44, 0.18), (0.29, 0.09), (0, 0.07)], 0.09, (s * 0.07, 0.24, 0), BONE,
+              rot=(0, 0 if s > 0 else PI, 0), bevel=0.012)                                           # horn quillons
+    facet_gem(h, 0.05, (0, 0.24, 0.095), EMBER, emissive=EMBER, strength=5)
+    fang = [(-0.15, 0.3), (0.15, 0.3), (0.17, 0.55), (0.16, 0.85), (0.12, 1.12), (0.05, 1.38), (-0.04, 1.58),
+            (-0.08, 1.35), (-0.12, 1.08), (-0.15, 0.8), (-0.16, 0.55)]
+    prism(h, fang, 0.08, (0, 0, 0), BONE, bevel=0.016)                                               # the fang
+    prism(h, [(-0.035, 0.33), (0.035, 0.33), (0.05, 0.8), (0.03, 1.1), (-0.015, 1.3), (-0.045, 1.05), (-0.05, 0.75)],
+          0.09, (0, 0, 0), EMBER, emissive=EMBER, strength=4)                                         # molten core
 
 
 def u_emberstring(S):
-    """A dragon-wing recurve: thick black horn limbs, each carrying a crimson wing membrane with a scalloped trailing
-    edge along its back, black horn tips and a burning string."""
+    """Emberstring: a dragon-wing recurve: pale bone limbs, each carrying a dark hide wing along its back, obsidian
+    horn tips and a burning string."""
     h = S('sock_handR')
+    obs = obsidian()
     b = pivot(h, 'bowbody', (0, 0, 0), (-PI / 2, 0, 0))
     z0 = BOW_Z
-    box(b, (0.12, 0.28, 0.14), (0, 0, z0), 0x4A1614, bevel=0.03)                     # grip
+    box(b, (0.12, 0.28, 0.14), (0, 0, z0), GRIP, bevel=0.03)                                          # grip
     facet_gem(b, 0.05, (0, 0, z0 - 0.075), EMBER, emissive=EMBER, strength=5, rot=(0, PI / 4, 0))
     for s in (-1, 1):
-        box(b, (0.13, 0.05, 0.15), (0, s * 0.15, z0), metallic(GOLD), bevel=0.015)
-        limb_chain(b, [(s * y, z + z0) for y, z in BOW_LIMB], 0.12, 0.09, CHAR2)
-        beam(b, (0, s * 0.72, z0 + 0.16), (0, s * 0.9, z0 + 0.06), 0.08, metallic(CHAR2), w1=0.015)   # horn tips
-        pts = [(0.16, 0.0), (0.4, 0.1), (0.62, 0.17), (0.7, 0.03), (0.58, -0.08), (0.49, 0.0), (0.37, -0.16),
-               (0.27, -0.06), (0.17, -0.1)]
-        prism(b, [(-(z + z0), s * y) for y, z in (pts if s < 0 else pts[::-1])], 0.024, (0, 0, 0), WING, rot=(0, PI / 2, 0))  # wing
+        box(b, (0.13, 0.05, 0.15), (0, s * 0.15, z0), obs, bevel=0.015)
+        limb_chain(b, [(s * y, z + z0) for y, z in BOW_LIMB], 0.12, 0.09, BONE)
+        beam(b, (0, s * 0.72, z0 + 0.16), (0, s * 0.9, z0 + 0.06), 0.08, obs, w1=0.015)               # horn tips
+        pts = [(0.16, 0.0), (0.4, 0.1), (0.62, 0.17), (0.7, 0.03), (0.55, -0.06), (0.42, -0.14), (0.27, -0.1),
+               (0.17, -0.08)]
+        prism(b, [(-(z + z0), s * y) for y, z in (pts if s < 0 else pts[::-1])], 0.024, (0, 0, 0), MEMBRANE,
+              rot=(0, PI / 2, 0))                                                                     # wing
     box(b, (0.026, 1.24, 0.026), (0, 0, z0 + 0.195), EMBER_HOT, emissive=EMBER, strength=6, bevel=0)  # burning string
 
 
 def u_kindled_ash(S):
-    """Pale ash staff; four blackened block claws rise from a collar and bend in around a dragon's ember heart."""
+    """Staff of Kindled Ash: a long dragon bone for a shaft, banded in obsidian; four obsidian claws rise from a
+    collar and bend in around a dragon's ember heart."""
     h = S('sock_handR')
+    obs = obsidian()
     b = pivot(h, 'staffbody', STAFF_GRIP, STAFF_LEAN)
-    box(b, (0.12, 1.72, 0.12), (0, 0.21, 0), 0x9A9088, taper=(0.8, 0.8), bevel=0.02)  # pale ash wood
-    for y in (-0.45, 0.35, 0.8):
-        box(b, (0.14, 0.05, 0.14), (0, y, 0), metallic(CHAR), bevel=0.012)
-    box(b, (0.14, 0.24, 0.14), (0, 0.0, 0), 0x4A1614, bevel=0.02)
-    beam(b, (0, -0.66, 0), (0, -0.84, 0), 0.12, metallic(CHAR), w1=0.02)
-    box(b, (0.18, 0.14, 0.18), (0, 1.12, 0), metallic(CHAR), taper=(1.3, 1.3), bevel=0.02)  # claw collar
-    box(b, (0.26, 0.04, 0.26), (0, 1.2, 0), metallic(BRONZE), bevel=0.01)
+    box(b, (0.12, 1.72, 0.12), (0, 0.21, 0), BONE, taper=(0.8, 0.8), bevel=0.02)                     # bone shaft
+    for y in (-0.45, 0.8):
+        box(b, (0.145, 0.05, 0.145), (0, y, 0), obs, bevel=0.012)
+    box(b, (0.14, 0.24, 0.14), (0, 0.0, 0), GRIP, bevel=0.02)
+    beam(b, (0, -0.66, 0), (0, -0.84, 0), 0.12, obs, w1=0.02)
+    box(b, (0.19, 0.14, 0.19), (0, 1.12, 0), obs, taper=(1.3, 1.3), bevel=0.02)                      # claw collar
     for i in range(4):
         a = i * PI / 2 + PI / 4
         d = Vector((math.cos(a), 0, math.sin(a)))
         pts = [d * 0.08 + Vector((0, 1.18, 0)), d * 0.18 + Vector((0, 1.32, 0)), d * 0.19 + Vector((0, 1.48, 0)), d * 0.07 + Vector((0, 1.64, 0))]
-        for k, (p0, p1, w0, w1) in enumerate(zip(pts, pts[1:], (0.075, 0.065, 0.05), (0.065, 0.05, 0.012))):
-            beam(b, tuple(p0 - (p1 - p0).normalized() * 0.02), tuple(p1), w0, metallic(CHAR), w1=w1)
+        for p0, p1, w0, w1 in zip(pts, pts[1:], (0.075, 0.065, 0.05), (0.065, 0.05, 0.012)):
+            beam(b, tuple(p0 - (p1 - p0).normalized() * 0.02), tuple(p1), w0, obs, w1=w1)
     facet_gem(b, 0.13, (0, 1.42, 0), EMBER, emissive=EMBER, strength=5, rot=corner_up(), depth=0.19)  # ember heart
     facet_gem(b, 0.06, (0, 1.45, 0.1), EMBER_HOT, emissive=EMBER_HOT, strength=6)
-    beam(b, (0, 1.5, 0), (0, 1.7, 0), 0.09, EMBER_HOT, w1=0.015, emissive=EMBER, strength=5)  # flame tongue
-
-
-def crown_point(f, w, hgt, color, lean=0.2):
-    """One crown point standing on a band face (frame local: +X along the band, +Y up, +Z out): a spearhead with
-    tapering shoulders, leaning outward."""
-    t = pivot(f, 'point', (0, 0, -0.012), (-lean, 0, 0))
-    prism(t, [(-w / 2, -0.03), (w / 2, -0.03), (w * 0.2, hgt * 0.55), (0, hgt), (-w * 0.2, hgt * 0.55)], 0.04, (0, 0, 0), color,
-          bevel=0.008)
-
-
-def u_ashen_crown(S):
-    """A war-crown: a charred black open helm ringed by a broad gold crown whose points rise tall and flare outward,
-    tall and short in turn round the head, the tallest over the brow above one ember gem. Big clean shapes only."""
-    h = S('sock_head')
-    gold = metallic(GOLD)
-    open_helm(h, shell=metallic(CHAR), rim=metallic(CHAR2), nasal=None, stud=None)
-    band_y, half_w, half_d = 0.14, 0.31, 0.32
-    box(h, (half_w * 2, 0.11, half_d * 2), (0, band_y, -0.005), gold, bevel=0.02)             # crown band
-    top = band_y + 0.055
-    for deg, w, hgt in ((0, 0.16, 0.36), (45, 0.1, 0.17), (90, 0.14, 0.27), (135, 0.1, 0.15), (180, 0.14, 0.22)):
-        for sgn in ((1,) if deg in (0, 180) else (1, -1)):
-            a = math.radians(deg) * sgn
-            ca, sa = math.cos(a), math.sin(a)
-            r = max(abs(sa) / half_w, abs(ca) / half_d)                                        # onto the band's square
-            f = pivot(h, 'point_at', (sa / r, top, ca / r - 0.005), (0, a, 0))
-            crown_point(f, w, hgt, gold)
-    box(h, (0.12, 0.12, 0.03), (0, band_y, 0.325), gold, rot=(0, 0, PI / 4), bevel=0.012)    # gem setting
-    facet_gem(h, 0.055, (0, band_y, 0.345), EMBER_HOT, emissive=EMBER, strength=5)           # ember gem
-
-
-def scale_plate(f, x, y, color, w=0.11, hgt=0.12, tilt=-0.28):
-    """Pointed dragon scale laid on a face frame (local +Z out), its lower point standing off the surface."""
-    pts = [(-w / 2, hgt * 0.42), (w / 2, hgt * 0.42), (w / 2, -hgt * 0.04), (0, -hgt * 0.62), (-w / 2, -hgt * 0.04)]
-    return prism(f, pts, 0.024, (x, y, 0.016), color, rot=(tilt, 0, 0))
-
-
-SCALE_GAP = 0x3A0E0A
-
-
-def _scale_mix(i, j):
-    """Two close reds scattered over the scales (no stripes or checks)."""
-    return 1 if (i * 7 + j * 3) % 5 < 2 else 0
-
-
-def u_scaleguard(S):
-    """Legendary dragon-scale armour: the bold plate cuirass forged in oxblood and faced front and back with rows of big
-    crimson scales, each dark where it tucks under the row above and light at its tip; gold edging on the collar,
-    belt and pauldrons; big layered pauldrons (a raised cap plate over the block cap, two lames stepping down the arm);
-    scaled sleeves over the upper arms and scaled vambraces down to the wrists (no bare shirt or forearm); long
-    layered scale tassets over the thighs. No horns or spikes: the power is in the broad shoulders and the scales."""
-    c = S('sock_chest')
-    ox, red, mid, gold = metallic(OXBLOOD), metallic(SCALE), metallic(SCALE_MID), metallic(GOLD)
-    shade = (metallic(SCALE_DK), metallic(SCALE_TIP))
-    plate_torso(c, color=ox, belt=metallic(CHAR))
-    box(c, (0.56, 0.05, 0.5), (0, 0.41, 0), gold, bevel=0.014)                                # gold collar
-    for dy in (-0.043, 0.043):                                                                 # gold belt edges
-        box(c, (0.79, 0.014, 0.58), (0, BELT_Y + dy, 0), gold, bevel=0.004)
-    box(c, (0.15, 0.12, 0.03), (0, BELT_Y, 0.29), gold, bevel=0.012)                          # buckle
-    box(c, (0.78, 0.28, 0.49), (0, -0.49, 0), metallic(CHAR), bevel=0.02)                      # under-skirt
-    rows = [(0.18, 0.33), (0.06, 0.21), (-0.06, 0.09)]
-    for f, hw in faces(c, 0.4, 0.29, sides=False):
-        scale_rows(f, hw - 0.05, rows, [red, mid], SCALE_GAP, w=0.2, flare=0.035, gap=0.05, pattern=_scale_mix, shade=shade)
-    for f, hw in faces(c, 0.37, 0.27, sides=False):
-        scale_rows(pivot(f, 'waist_face', (0, 0, 0.006)), hw - 0.04, [(-0.2, -0.06)], [red, mid], SCALE_GAP, w=0.2,
-                   flare=0.035, gap=0.05, pattern=lambda i, j: _scale_mix(i, j + 3), nm='waist_scale', shade=shade)
-    # Long layered tassets: a long pointed scale plate over each thigh (and the seat) under a shorter one.
-    for x, z, ry, rx in ((-0.19, 0.28, 0, -0.1), (0.19, 0.28, 0, -0.1), (0, -0.28, PI, -0.1)):
-        f = pivot(c, 'tasset', (x, -0.33, z), (rx, ry, 0))
-        w = 0.3 if x else 0.56
-        prism(f, [(-w / 2, 0), (-w / 2, -0.32), (0, -0.44), (w / 2, -0.32), (w / 2, 0)], 0.045, (0, 0, 0), shade[0], bevel=0.012)
-        prism(f, [(-w / 2 - 0.01, 0.01), (-w / 2 - 0.01, -0.16), (0, -0.25), (w / 2 + 0.01, -0.16), (w / 2 + 0.01, 0.01)], 0.045,
-              (0, 0, 0.035), red, bevel=0.012)
-    for s in (1, -1):
-        block_pauldron(S, s, color=red, top=mid, edge=gold, rivets=None)
-    for g, s in upper_arm_plate(S, color=ox, lames=False):
-        arm_lames(g, s, (red, mid), SCALE_GAP)                                                 # layered pauldron lames
-        for f, hw in faces(pivot(g, 'sleeve', (0, PALM - 0.14, 0)), 0.145, 0.155):           # scaled sleeve
-            scale_rows(f, hw - 0.012, [(-0.17, -0.08), (-0.11, -0.02), (-0.05, 0.04)], [red, mid], SCALE_GAP, w=0.1,
-                       flare=0.02, gap=0.06, pattern=_scale_mix, nm='sleeve_scale', shade=shade)
-        arm_box(g, s, (0.305, 0.035, 0.325), (0, -0.305, 0), gold, bevel=0.01)                # gold hem
-        arm_box(g, s, (0.25, 0.2, 0.27), (0, -0.41, 0), ox, bevel=0.025)                       # vambrace
-        for f, hw in faces(pivot(g, 'vambrace', (0, PALM - 0.41, 0)), 0.125, 0.135):
-            scale_rows(f, hw - 0.01, [(-0.07, 0.01), (-0.02, 0.06)], [red, mid], SCALE_GAP, w=0.09, flare=0.016,
-                       gap=0.06, pattern=_scale_mix, nm='vambrace_scale', shade=shade)
-        arm_box(g, s, (0.262, 0.03, 0.282), (0, -0.495, 0), gold, bevel=0.008)                # gold wrist rim
-
+    beam(b, (0, 1.5, 0), (0, 1.7, 0), 0.09, EMBER_HOT, w1=0.015, emissive=EMBER, strength=5)          # flame tongue
 
 GEAR = {
     'sword': sword, 'longsword': longsword, 'pickaxe': pickaxe, 'bow': bow, 'staff': staff,
@@ -794,7 +740,7 @@ GEAR = {
     'body_leather': body_leather,
     'gloves': gloves, 'boots': boots,
     'u_cinderfang': u_cinderfang, 'u_emberstring': u_emberstring, 'u_kindled_ash': u_kindled_ash,
-    'u_ashen_crown': u_ashen_crown, 'u_scaleguard': u_scaleguard,
+    'u_ashen_crown': u_ashen_crown, 'u_wyrmbone': u_wyrmbone,
 }
 
 
@@ -818,6 +764,7 @@ if globals().get('DB_RUN', True):
         scene = build(model)
         tris[model] = tri_count(scene)
         export(f'DB_gear_{model}', f'gear_{model}.glb')
-        preview_auto(f'gear_{model}.png')
+        if globals().get('DB_PREVIEW', True):   # DB_PREVIEW = False: export only (no EEVEE render)
+            preview_auto(f'gear_{model}.png')
         remove_preview_rig()
     result = {'ok': True, 'tris': tris}

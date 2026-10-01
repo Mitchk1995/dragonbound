@@ -9,14 +9,15 @@
  * skill it can afford, otherwise basic-attack the nearest enemy), and hits roll through the
  * game's own `rollHit` / `mitigate` / `computeStats`.
  *
- * Two pacings are modelled: `NOW` reads COMBAT_TUNING and MANA_TUNING, `PRE_D2` is the combat
- * speed from before the Diablo 2 pacing pass (#17, recorded from git history), when skills had
- * no mana cost. Comparing the two is how the XP values are tuned.
+ * Besides XP it counts what the hero would face: the raw damage enemies' attacks would deal
+ * (chasers and Cinderwing always connect, a lunge connects if it reaches, a kobold's stone and a
+ * cultist's fire circle are partly dodged: KITER_HITS / CASTER_HITS), which sets how much Defence
+ * XP armour absorption is worth, and melee swings that whiffed on the enemy they were aimed at.
  *
- * Deliberately left out: damage to the hero (the hero never dies or drinks), projectile flight
- * time, knockback, terrain. Those change absolute numbers a little but not the comparison.
+ * Deliberately left out: the hero never dies or drinks (damage is counted, not applied), projectile
+ * flight time, knockback, terrain. Those change absolute numbers a little, not the conclusions.
  */
-import { computeStats, castTime, swingTiming, type CastSkill, type PlayerStats } from '../../src/combat/stats';
+import { computeStats, castTime, swingConnects, swingTiming, swingTrackStep, type CastSkill, type PlayerStats } from '../../src/combat/stats';
 import { mitigate, rollHit } from '../../src/combat/damage';
 import { mulberry32, type Rng } from '../../src/core/rng';
 import { abilitiesFor, type AbilityDef } from '../../src/data/abilities';
@@ -39,6 +40,17 @@ const CLEARING = 7;
 const LOOT_WALK = 1.5;
 /** Seconds to portal out and back in (the keep round trip) after a full clear. */
 const RESET_SECS = 20;
+/** Share of kobold stones and cultist fire circles that land on a hero who mostly keeps attacking. */
+const KITER_HITS = 0.6;
+const CASTER_HITS = 0.35;
+/**
+ * Cinderwing (ai/boss.ts): an attack every telegraph plus 1.3-2.0 s (x0.7 in phase 2), and each one
+ * costs the hero about this long stepping out of its shape instead of attacking. Below half life it
+ * takes to the sky every 22 s for the flight and landing, out of reach.
+ */
+const BOSS_TELEGRAPH = 1.35;
+const BOSS_DODGE = 0.6;
+const BOSS_FLIGHT_EVERY = 22;
 
 export interface Pacing {
   name: string;
@@ -73,32 +85,6 @@ export const NOW: Pacing = {
   lunge: { windup: COMBAT_TUNING.enemy.lungeWindup, dash: COMBAT_TUNING.enemy.lungeDash, speed: COMBAT_TUNING.enemy.lungeSpeed, recover: COMBAT_TUNING.enemy.lungeRecover },
 };
 
-/** Weapon speeds before #17, by weapon family. */
-const OLD_WEAPON_SPEED: Record<string, number> = { sword: 1.5, longsword: 1.2, worn_bow: 1.4, hunter_bow: 1.4, recurve_bow: 1.35, drakebone_bow: 1.35, apprentice_staff: 1.2, oak_staff: 1.2, runed_staff: 1.15, ember_staff: 1.15 };
-/** Skill [animation length, impact fraction] before #17. */
-const OLD_CAST: Record<CastSkill, [number, number]> = {
-  cleave: [0.34, 0.45], war_cry: [0.3, 0.4], multishot: [0.3, 0.5], arrow_rain: [0.3, 0.5],
-  fireball: [0.32, 0.5], frost_nova: [0.28, 0.45], chain_lightning: [0.28, 0.5],
-};
-const OLD_ENEMY_SPEED: Record<string, number> = { goblin: 3.6, kobold: 3.2, drakeling: 4.2, cultist: 3.0, cinder_priest: 2.6, cinderwing: 3.2 };
-
-/** The combat speed before the Diablo 2 pacing pass (git 2f5629a): the XP values were set for this. */
-export const PRE_D2: Pacing = {
-  name: 'pre-D2',
-  mana: false,
-  stagger: false,
-  heroMove: 5.6,
-  weaponSpeed: (id) => OLD_WEAPON_SPEED[id] ?? OLD_WEAPON_SPEED[id.replace(/^[a-z]+_/, '')] ?? 1.2,
-  swing: (s) => {
-    const dur = Math.min(0.5, 0.8 / s);
-    return { dur, hitAt: dur * 0.5, interval: 1 / s };
-  },
-  cast: (id) => ({ dur: OLD_CAST[id][0], hitAt: OLD_CAST[id][0] * OLD_CAST[id][1] }),
-  leapDur: 0.45,
-  enemySpeed: (e) => OLD_ENEMY_SPEED[e.id] ?? e.speed,
-  lunge: { windup: 0.55, dash: 0.35, speed: 15, recover: 0.7 },
-};
-
 /** The weapon a hero of this style and level would carry (the best one they can wield). */
 export function weaponFor(style: Style, level: number): string {
   if (style === 'melee') {
@@ -118,8 +104,12 @@ interface Foe {
   stagger: number;
   slowT: number;
   atkCd: number;
-  lunge: { t: number; dx: number; dz: number } | null;
+  lunge: { t: number; dx: number; dz: number; hit?: boolean } | null;
   recover: number;
+  /** Cinderwing: seconds left in the air (untouchable), phase 2 reached, time to the next flight. */
+  away: number;
+  phase2: boolean;
+  flightCd: number;
 }
 
 interface Action {
@@ -128,6 +118,8 @@ interface Action {
   hitAt: number;
   fired: boolean;
   onHit: () => void;
+  /** Melee swings follow their target through the wind-up (Player.update). */
+  track?: { f: Foe; reach: number };
 }
 
 export interface PackResult {
@@ -145,6 +137,11 @@ export interface ClearResult {
   pacing: string;
   weapon: string;
   packs: PackResult[];
+  /** Raw damage enemies' attacks would deal per hour (before armour). */
+  incomingPerHour: number;
+  /** Melee basic attacks, and how many missed the enemy they were aimed at. */
+  swings: number;
+  whiffs: number;
   totalSecs: number;
   fightSecs: number;
   kills: number;
@@ -178,6 +175,10 @@ export interface SimOptions {
   mana?: { max: number; regen: number; ooc: number; costs?: Record<string, number> };
   /** Per-enemy XP to use instead of data/enemies.ts (the values from before a retune, say). */
   xp?: Record<string, number>;
+  /** No clearing edge: a retreating enemy can back off as far as it likes (open ground). */
+  openGround?: boolean;
+  /** Leave out the wind-up step after a retreating target (how melee swings worked before). */
+  noTrack?: boolean;
 }
 
 const levelsAt = (style: Style, level: number): Record<SkillId, number> => ({
@@ -219,6 +220,8 @@ export function simulateClear(o: SimOptions): ClearResult {
 
   let mana = maxMana;
   let casts = 0, spent = 0, wanted = 0, blocked = 0, dry = 0;
+  let incoming = 0, swings = 0, whiffs = 0;
+  const avgDmg = (e: EnemyDef) => (e.dmg[0] + e.dmg[1]) / 2;
   const packs: PackResult[] = [];
   let at = { ...o.entry };
   let fightTotal = 0, travelTotal = 0;
@@ -242,12 +245,12 @@ export function simulateClear(o: SimOptions): ClearResult {
       const a = (i / pk.comp.length) * Math.PI * 2 + rng() * 0.5;
       const r = 1.5 + rng() * 2.5;
       const def = ENEMIES[id];
-      return { def, x: pk.x + Math.cos(a) * r, z: pk.z + Math.sin(a) * r, hp: def.hp, dead: false, stagger: 0, slowT: 0, atkCd: rng() / def.atkSpeed, lunge: null, recover: 0 };
+      return { def, x: pk.x + Math.cos(a) * r, z: pk.z + Math.sin(a) * r, hp: def.hp, dead: false, stagger: 0, slowT: 0, atkCd: rng() / def.atkSpeed, lunge: null, recover: 0, away: 0, phase2: false, flightCd: 0 };
     });
     let action: Action | null = null;
     // Set from inside the skill closures, so TS can't see it change: keep the declared type.
     let dash = null as { t: number; dur: number; fx: number; fz: number; tx: number; tz: number; onEnd: () => void } | null;
-    let attackCd = 0, warCryT = 0;
+    let attackCd = 0, warCryT = 0, dodgeT = 0;
     const cds: Record<string, number> = {};
     const blockedAt: Record<string, number> = {};
     let t = 0, xp = 0, kills = 0;
@@ -255,7 +258,7 @@ export function simulateClear(o: SimOptions): ClearResult {
     const dist = (f: { x: number; z: number }) => Math.hypot(f.x - hero.x, f.z - hero.z);
 
     const hit = (f: Foe, mult: number, tick = false) => {
-      if (f.dead) return;
+      if (f.dead || f.away > 0) return;
       const st = warCryT > 0 ? cried : plain;
       const h = rollHit(rng, st.dmgMin, st.dmgMax, mult, st.critChance, st.critMult);
       const dealt = Math.min(f.hp, mitigate(h.amount, f.def.armor));
@@ -407,7 +410,10 @@ export function simulateClear(o: SimOptions): ClearResult {
         }
       }
       // ── Hero ──
-      if (dash) {
+      if (dodgeT > 0) {
+        // Stepping out of Cinderwing's telegraph: no attacking meanwhile.
+        dodgeT -= DT;
+      } else if (dash) {
         dash.t += DT;
         const k = Math.min(1, dash.t / dash.dur);
         hero.x = dash.fx + (dash.tx - dash.fx) * k;
@@ -420,6 +426,13 @@ export function simulateClear(o: SimOptions): ClearResult {
       } else {
         const act = action as Action | null;
         if (act) {
+          if (act.track && !act.fired && !act.track.f.dead && !o.noTrack) {
+            const f = act.track.f, d = dist(f), step = swingTrackStep(d, act.track.reach, DT);
+            if (step > 0) {
+              hero.x += ((f.x - hero.x) / d) * step;
+              hero.z += ((f.z - hero.z) / d) * step;
+            }
+          }
           act.t += DT;
           if (!act.fired && act.t >= act.hitAt) {
             act.fired = true;
@@ -444,15 +457,22 @@ export function simulateClear(o: SimOptions): ClearResult {
                   action = {
                     t: 0, dur: s.dur, hitAt: s.hitAt, fired: false, onHit: () => {
                       if (o.style === 'melee') {
+                        // Same rule as Combat.startBasicAttack: the cone from where the swing was
+                        // aimed, plus the target itself if it's still within the leeway.
                         const hits = inCone(dir, plain.range + 0.5, Math.PI * 0.6);
-                        if (!tg.dead && !hits.includes(tg) && dist(tg) <= plain.range + tg.def.radius + 0.8) hits.push(tg);
+                        if (!tg.dead && !hits.includes(tg) && swingConnects(dist(tg), plain.range, tg.def.radius)) hits.push(tg);
+                        swings++;
+                        if (!tg.dead && !hits.includes(tg)) whiffs++;
                         hits.forEach((f) => hit(f, 1));
                       } else if (!tg.dead) hit(tg, 1);
                     },
+                    track: o.style === 'melee' ? { f: tg, reach } : undefined,
                   };
                 }
               } else {
-                const d = dist(tg), step = Math.min(d - reach + 0.05, P.heroMove * DT);
+                // Walk straight at it, as Player.approach does (stopping short at the edge of
+                // reach would let a retreating kiter stay just out of it forever).
+                const d = dist(tg), step = Math.min(d - tg.def.radius - HERO_R, P.heroMove * DT);
                 hero.x += ((tg.x - hero.x) / d) * step;
                 hero.z += ((tg.z - hero.z) / d) * step;
               }
@@ -474,25 +494,54 @@ export function simulateClear(o: SimOptions): ClearResult {
         const move = (vx: number, vz: number, s: number, away = false) => {
           const nx = f.x + vx * s * DT, nz = f.z + vz * s * DT;
           // Packs sit in clearings ringed by trees and rock: backing off stops at the edge.
-          if (away && Math.hypot(nx - pk.x, nz - pk.z) > CLEARING && Math.hypot(nx - pk.x, nz - pk.z) > Math.hypot(f.x - pk.x, f.z - pk.z)) return;
+          if (away && !o.openGround && Math.hypot(nx - pk.x, nz - pk.z) > CLEARING && Math.hypot(nx - pk.x, nz - pk.z) > Math.hypot(f.x - pk.x, f.z - pk.z)) return;
           f.x = nx;
           f.z = nz;
         };
         const b = f.def.behavior;
-        if (b === 'chaser' || b === 'boss') {
+        if (b === 'boss') {
+          if (f.away > 0) {
+            f.away -= DT;
+            continue;
+          }
+          if (!f.phase2 && f.hp < f.def.hp * 0.5) f.phase2 = true;
+          if (f.phase2 && (f.flightCd -= DT) <= 0) {
+            f.away = COMBAT_TUNING.boss.flight + COMBAT_TUNING.boss.land;
+            f.flightCd = BOSS_FLIGHT_EVERY;
+            continue;
+          }
+        }
+        if (b === 'boss') {
           if (d > f.def.atkRange + f.def.radius + HERO_R) move(ux, uz, sp);
-          else if (f.atkCd <= 0) f.atkCd = 1 / f.def.atkSpeed;
+          else if (f.atkCd <= 0) {
+            f.atkCd = BOSS_TELEGRAPH + 1.65 * (f.phase2 ? 0.7 : 1);
+            incoming += avgDmg(f.def);
+            dodgeT = BOSS_DODGE;
+          }
+        } else if (b === 'chaser') {
+          if (d > f.def.atkRange + f.def.radius + HERO_R) move(ux, uz, sp);
+          else if (f.atkCd <= 0) {
+            f.atkCd = 1 / f.def.atkSpeed;
+            incoming += avgDmg(f.def);
+          }
         } else if (b === 'kiter' || b === 'caster') {
           const tooClose = b === 'kiter' ? 4.5 : 4;
           if (d < tooClose) move(-ux, -uz, sp * (b === 'kiter' ? 0.85 : 0.8), true);
           else if (d > f.def.atkRange) move(ux, uz, sp);
-          else if (f.atkCd <= 0) f.atkCd = 1 / f.def.atkSpeed;
+          else if (f.atkCd <= 0) {
+            f.atkCd = 1 / f.def.atkSpeed;
+            incoming += avgDmg(f.def) * (b === 'kiter' ? KITER_HITS : CASTER_HITS);
+          }
         } else if (b === 'lunger') {
           const L = P.lunge;
           if (f.lunge) {
             f.lunge.t += DT;
             if (f.lunge.t > L.windup) {
               if (d > f.def.radius + HERO_R + 0.3) move(f.lunge.dx, f.lunge.dz, L.speed);
+              else if (!f.lunge.hit) {
+                f.lunge.hit = true;
+                incoming += avgDmg(f.def);
+              }
               if (f.lunge.t >= L.windup + L.dash) {
                 f.lunge = null;
                 f.recover = L.recover;
@@ -547,6 +596,7 @@ export function simulateClear(o: SimOptions): ClearResult {
   const xp = packs.reduce((s, p) => s + p.xp, 0);
   return {
     style: o.style, level: o.level, pacing: P.name, weapon, packs, totalSecs, fightSecs: fightTotal, kills, xp,
+    incomingPerHour: incoming * (3600 / totalSecs), swings, whiffs,
     killsPerMin: kills / (totalSecs / 60),
     xpPerHour: xp * (3600 / totalSecs),
     castsPerMin: casts / (fightTotal / 60),

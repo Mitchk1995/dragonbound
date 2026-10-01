@@ -5,8 +5,10 @@ import type { Enemy } from '../entities/enemy';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { SKILL_INFO, levelProgress } from '../progression/skills';
+import { xpDropLabel } from './skillGrid';
 import type { Dialogue } from '../systems/story';
 import type { Item, SkillId, Style } from '../types';
+import { abilityArtUrl } from './approvedArt';
 import { el, esc, fmt } from './dom';
 import { SIDE_TABS, TAB_KEYS, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, type SideState, type SideTab } from './hudLayout';
 import { icon } from './icons';
@@ -27,33 +29,6 @@ const UI_SELECTOR = '.panel, .sidepanel, .console, .dlg, .objective, .slot';
 
 /** What kind of place a zone is, shown beside the zone plaque on arrival. */
 const ZONE_KIND: Record<string, string> = { hub: 'Sanctuary', gather: 'Gathering grounds', hunt: 'Hunting grounds', quest: 'Forgotten ruin', lair: "Dragon's lair" };
-
-/**
- * The carved seat an orb rests in: an iron cradle with claws gripping the globe, and a stone end cap
- * finishing the console's outer end (drawn for the left orb, mirrored for the right). Orb centre (80, 58), r 50.
- */
-const ORB_SEAT = `<svg class="seat" viewBox="0 0 150 126" aria-hidden="true">
-  <defs>
-    <linearGradient id="seat-stone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a5b61"/><stop offset="0.5" stop-color="#36373c"/><stop offset="1" stop-color="#1c1d21"/></linearGradient>
-    <linearGradient id="seat-iron" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74767d"/><stop offset="1" stop-color="#2a2b30"/></linearGradient>
-    <mask id="seat-cut"><rect width="150" height="126" fill="#fff"/><circle cx="80" cy="58" r="57" fill="#000"/></mask>
-  </defs>
-  <g mask="url(#seat-cut)">
-    <path d="M2 123 V94 Q4 80 18 72 Q34 64 56 62 H74 V123 Z" fill="url(#seat-stone)" stroke="#0c0c0e" stroke-width="2"/>
-    <path d="M7 119 V95 Q9 84 21 77 Q35 70 56 68" fill="none" stroke="#b08e4e" stroke-width="1.4" opacity="0.85"/>
-    <path d="M13 108 H40 M13 114 H44" stroke="#0c0c0e" stroke-width="1.2" opacity="0.55"/>
-    <path d="M17 97 l6 -6.5 l6 6.5 l-6 6.5 Z" fill="#7a1a12" stroke="#d8b25a" stroke-width="1.3"/>
-    <path d="M20.5 95.5 l2.5 -2.7" stroke="#ffb49a" stroke-width="1" opacity="0.7"/>
-  </g>
-  <path d="M28.1 86 A59 59 0 0 0 131.9 86" fill="none" stroke="#0c0c0e" stroke-width="10" stroke-linecap="round"/>
-  <path d="M28.1 86 A59 59 0 0 0 131.9 86" fill="none" stroke="url(#seat-iron)" stroke-width="7" stroke-linecap="round"/>
-  <path d="M25.3 86 A61.5 61.5 0 0 0 134.7 86" fill="none" stroke="#c8a560" stroke-width="1" opacity="0.7"/>
-  <path d="M22 89 Q15 67 25 45 Q28 60 35 72 Z" fill="url(#seat-iron)" stroke="#0c0c0e" stroke-width="1.8" stroke-linejoin="round"/>
-  <path d="M138 89 Q145 67 135 45 Q132 60 125 72 Z" fill="url(#seat-iron)" stroke="#0c0c0e" stroke-width="1.8" stroke-linejoin="round"/>
-  <circle cx="80" cy="117" r="3.4" fill="#d8b25a" stroke="#0c0c0e" stroke-width="1.2"/>
-  <circle cx="46.2" cy="106.3" r="2.5" fill="#b08a44" stroke="#0c0c0e" stroke-width="1"/>
-  <circle cx="113.8" cy="106.3" r="2.5" fill="#b08a44" stroke="#0c0c0e" stroke-width="1"/>
-</svg>`;
 
 /** A tiny mouse with its left button lit: the key cap of the basic-attack slot. */
 const MOUSE_LMB = `<svg width="11" height="15" viewBox="0 0 11 15"><rect x="0.8" y="0.8" width="9.4" height="13.4" rx="4.7" fill="#1a120a" stroke="#f3d98a" stroke-width="1.3"/><path d="M1.4 6.2V5.5a4.1 4.1 0 0 1 4.1-4.1v4.8Z" fill="#f3d98a"/></svg>`;
@@ -128,7 +103,7 @@ export class UI {
       <div class="death">Oh dear, you are dead!</div>
       <div class="castbar hidden"><div class="cb-fill"></div><span></span></div>
       <div class="console">
-        <div class="orbseat l"><div class="orb hp"><div class="fill"></div><div class="glass"></div><span></span></div>${ORB_SEAT}</div>
+        <div class="orbseat l"><div class="orb hp"><div class="fill"></div><div class="glass"></div><span></span></div></div>
         <div class="cbody">
           <div class="xpline"><div class="fill"></div><span></span></div>
           <div class="crow">
@@ -137,9 +112,9 @@ export class UI {
             <div class="skillrow"></div>
           </div>
         </div>
-        <div class="orbseat r"><div class="orb mana"><div class="fill"></div><div class="glass"></div><span></span></div>${ORB_SEAT}</div>
+        <div class="orbseat r"><div class="orb mana"><div class="fill"></div><div class="glass"></div><span></span></div></div>
       </div>
-      <div class="sidepanel frame"><div class="stabs">${tabs}</div><div class="pbody sbody"></div></div>
+      <div class="sidepanel"><div class="stitle"></div><div class="stabs">${tabs}</div><div class="pbody sbody"></div></div>
       <div class="fade"></div>`;
 
     // Potion belt: healing potion (1) and the Veilstone (T).
@@ -168,7 +143,7 @@ export class UI {
     });
     this.tipOn(this.$('.xpline'), () => {
       const st = this.g.stats, k = st.style, p = levelProgress(this.g.save.skills[k]);
-      return `<div class="tt-name" style="color:${SKILL_INFO[k].color}">${SKILL_INFO[k].name} ${p.level}</div><div>${fmt(this.g.save.skills[k])} XP${p.level < 99 ? ` · ${fmt(p.remaining)} to level ${p.level + 1}` : ''}</div><div class="tt-dim">Your weapon decides which style you train.</div>`;
+      return `<div class="tt-name" style="color:${SKILL_INFO[k].color}">${SKILL_INFO[k].name} ${p.level}</div><div>${fmt(this.g.save.skills[k])} XP${p.level < 99 ? ` · ${fmt(p.remaining)} to level ${p.level + 1}` : ''}</div><div class="tt-dim">Your weapon decides which style you train; Hitpoints and Defence get a share of every fight.</div>`;
     });
 
     const sp = this.$('.sidepanel');
@@ -206,7 +181,7 @@ export class UI {
     for (const k of consoleKeys(style)) {
       const d = el('div', 'sk');
       d.dataset.key = k;
-      d.innerHTML = `<img alt="" draggable="false"><div class="sweep"></div><div class="cdnum"></div><div class="key">${k}</div><div class="cost"></div><div class="lock">${icon('lock', 16)}</div>`;
+      d.innerHTML = `<img alt="" draggable="false"><img class="art" alt="" draggable="false"><div class="sweep"></div><div class="cdnum"></div><div class="key">${k}</div><div class="cost"></div><div class="lock">${icon('lock', 16)}</div>`;
       d.addEventListener('mouseenter', () => this.abilityTip(k, d));
       d.addEventListener('mouseleave', () => this.tooltip.hide());
       d.addEventListener('mousedown', (e) => {
@@ -258,14 +233,19 @@ export class UI {
     this.hud.querySelectorAll<HTMLElement>('.sk[data-key]').forEach((d) => {
       const def = abilityFor(style, d.dataset.key as AbilityKey);
       const img = d.querySelector('img') as HTMLImageElement;
+      const art = d.querySelector('img.art') as HTMLImageElement;
       if (!def) {
         d.className = 'sk empty';
         img.removeAttribute('src');
+        art.removeAttribute('src');
         return;
       }
       if (img.dataset.id !== def.id) {
         img.dataset.id = def.id;
         img.src = skillTileUrl(def.id);
+        const artUrl = abilityArtUrl(def.id);
+        if (artUrl) art.src = artUrl;
+        else art.removeAttribute('src');
         d.querySelector('.cost')!.textContent = String(def.mana);
       }
       const locked = st.styleLevel < def.unlock;
@@ -427,12 +407,14 @@ export class UI {
     })[id]();
   }
 
-  /** Sync the side panel's tab row and folded state, then draw the open tab. */
+  /** Sync the side panel's title, tab row and folded state, then draw the open tab. */
   private applySide() {
     const sp = this.$('.sidepanel');
     if (!sp) return;
     sp.classList.toggle('collapsed', this.side.collapsed);
+    sp.querySelector('.stitle')!.textContent = SIDE_TABS.find((t) => t.id === this.side.tab)!.label;
     sp.querySelectorAll<HTMLElement>('.stab').forEach((b) => b.classList.toggle('on', b.dataset.tab === this.side.tab));
+    if (this.side.collapsed || this.side.tab !== 'inventory') this.panels.clearSelection();
     this.tooltip.hide();
     if (!this.side.collapsed && this.g.mode === 'play') this.render(this.side.tab);
   }
@@ -603,13 +585,15 @@ export class UI {
   // ─── Messages, XP drops, banners ─────────────────────────────────────────
 
   xpDrop(skill: SkillId, amount: number) {
-    const acc = this.xpAcc.get(skill) ?? { amount: 0, t: 0.08 };
+    // Gather a moment's XP per skill (a swing that hits a pack, its Hitpoints and Defence shares)
+    // into one drop each, so a fight doesn't throw up a cloud of tiny numbers.
+    const acc = this.xpAcc.get(skill) ?? { amount: 0, t: 0.2 };
     acc.amount += amount;
     this.xpAcc.set(skill, acc);
   }
 
   private spawnXpDrop(skill: SkillId, amount: number) {
-    const d = el('div', 'xpdrop', `${icon(SKILL_INFO[skill].icon, 22)}<span>+${fmt(Math.max(1, amount))}</span>`);
+    const d = el('div', 'xpdrop', `${icon(SKILL_INFO[skill].icon, 22)}<span>+${xpDropLabel(amount)}</span>`);
     this.$('.xpdrops').appendChild(d);
     setTimeout(() => d.remove(), 1600);
   }

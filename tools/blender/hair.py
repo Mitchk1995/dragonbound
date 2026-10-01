@@ -286,11 +286,11 @@ def hair_1(h):
 # of the crown and the tied style's tie sits high, and the side hairline runs over the ear at the top of the ear.
 # Swept back: a clear forehead with the hairline sitting on it, temple fill to the top of the ear, over the ear and
 # down behind it to the nape.
-LINE_COMB = [(0, 0.172), (25, 0.165), (45, 0.112), (62, 0.064), (78, 0.058), (104, 0.058), (118, -0.04), (145, -0.1),
-             (180, -0.13)]
+LINE_COMB = [(0, 0.16), (14, 0.172), (30, 0.19), (45, 0.13), (62, 0.064), (78, 0.058), (104, 0.058), (118, -0.04),
+             (145, -0.1), (180, -0.13)]
 # Long and tied: parted in the middle, the hair frames the face down to the temples, runs back over the ear and falls
 # behind it to the jaw, then round to the nape and the tie.
-LINE_LONG = [(0, 0.175), (8, 0.15), (28, 0.11), (45, 0.072), (60, 0.058), (106, 0.058), (120, -0.2), (138, -0.2),
+LINE_LONG = [(0, 0.205), (7, 0.16), (28, 0.11), (45, 0.072), (60, 0.058), (106, 0.058), (120, -0.2), (138, -0.2),
              (165, -0.12), (180, -0.11)]
 
 
@@ -306,10 +306,12 @@ def hair_2(h):
         front = max(0.0, 1 - abs(math.degrees(math.atan2(q.x, q.z))) / 80) ** 0.8   # broad: the wave spans the brow
         # The combed-back wave: it rises from the hairline (a slope up off the forehead, not a brim over it), is
         # highest a little behind it and settles toward the crown.
-        rise = min(1.0, (1 - s) / 0.25)
-        wave = front * rise * rise * (3 - 2 * rise) * max(0.0, min(1.0, (s - 0.3) / 0.35)) * 0.078
-        o = n * (0.008 + ridge(i, s, 0.018) + wave * 0.35) + Vector((0, wave, -wave * 0.25))
-        return hug(q, o, m, keep=front * 0.6)
+        rise = min(1.0, (1 - s) / 0.3)
+        wave = front * rise * rise * (3 - 2 * rise) * max(0.0, min(1.0, (s - 0.3) / 0.35)) * 0.05
+        # The wave leans back (more back than up), so from the front the hair reads combed back over the crown
+        # instead of standing up as a tall rounded quiff; the sides lie flat to the head.
+        o = n * (0.006 + ridge(i, s, 0.017) + wave * 0.25) + Vector((0, wave * 0.8, -wave * 0.7))
+        return hug(q, o, m, keep=front * 0.45)
     build_mass(h, m, 48, nv, shape)
 
 
@@ -330,7 +332,7 @@ def hair_3(h):
     def cap_shape(i, j, psi, s, q, n):
         k = min(i % nu, nu - i % nu)                                                 # columns from the centre line
         front = facing(q, 0)
-        part = front * min(1.0, s / 0.3) * (-0.045 if k == 0 else 0.03 if k in (1, 2) else 0.012 if k == 3 else 0.0)  # centre parting
+        part = front * min(1.0, s / 0.25) * (-0.06 if k == 0 else 0.04 if k in (1, 2) else 0.015 if k == 3 else 0.0)  # centre parting
         side = max(facing(q, 125), facing(q, -125))                                 # the fall behind the ears
         o = n * (0.012 + part + ridge(i, s, 0.02, 0.2) + 0.03 * max(0, 0.45 - s) + 0.035 * side * min(1.0, s / 0.4))
         return hug(q, o, m)
@@ -431,7 +433,8 @@ if globals().get('DB_RUN', True):
         scene = build(name)
         tris[name] = tri_count(scene)
         export(f'DB_{name}', f'{name}.glb')
-        preview_auto(f'{name}.png')
+        if globals().get('DB_PREVIEW', True):   # DB_PREVIEW = False: export only (no EEVEE render)
+            preview_auto(f'{name}.png')
         remove_preview_rig()
     result = {'ok': True, 'tris': tris}
     print('HAIR', result)

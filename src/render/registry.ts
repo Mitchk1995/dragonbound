@@ -161,13 +161,12 @@ const PAINT_SIZE: Record<string, number> = { goblin: 0.8, kobold: 0.75, drakelin
 /**
  * The recipe for a fixed (authored) colour, from the model it belongs to and the colour itself:
  * dragons are scaled with bone horns and claws, the golem is mossy stone, NPC and unique parts
- * are judged by colour (gold trim, skin, dark browns as leather, the rest cloth).
+ * are judged by colour (bone, gold trim, skin, dark browns as leather, the rest cloth).
  */
 export function fixedPaint(model: string, c: THREE.Color, metallic: boolean, double = false): CharPaintKind | null {
   const { h, s, l } = c.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
   const hue = h * 360;
-  // Scaleguard's oxblood plate under its big scales carries painted dragon scales of its own.
-  if (metallic) return model === 'gear_u_scaleguard' && l < 0.15 && s > 0.5 && (hue < 20 || hue > 340) ? 'dragonPlate' : 'metal';
+  if (metallic) return 'metal';
   if (l < 0.09) return null; // eyes, pupils, visor slits stay clean
   if (model === 'golem') return 'stone';
   if (SCALY.has(model)) {
@@ -175,6 +174,8 @@ export function fixedPaint(model: string, c: THREE.Color, metallic: boolean, dou
     if (l > 0.72) return model === 'whelp' ? 'soft' : 'bone';
     return model === 'whelp' ? 'softScales' : 'scales';
   }
+  // The uniques are cut from dragon bone (light and shaded), painted as big bone plates.
+  if (model.startsWith('gear_u_') && l > 0.5 && s < 0.6 && hue >= 25 && hue <= 60) return 'wyrmbone';
   if (l > 0.75 && s < 0.6) return model.startsWith('gear_') ? 'bone' : 'soft';
   if (hue >= 34 && hue <= 56 && s > 0.5 && l > 0.4 && l < 0.78) return 'trim';
   if (s < 0.14) return 'metal';
@@ -502,6 +503,6 @@ export const MODEL_FILES = [
   'gear_sword', 'gear_longsword', 'gear_pickaxe', 'gear_bow', 'gear_staff', 'gear_helm_open', 'gear_helm_full',
   'gear_body_chain', 'gear_body_plate', 'gear_body_leather', 'gear_gloves', 'gear_boots',
   ...['p', 'e'].flatMap((v) => [`gear_body_plate_${v}`, `gear_helm_full_${v}`, `gear_gloves_${v}`, `gear_boots_${v}`]),
-  'gear_u_cinderfang', 'gear_u_emberstring', 'gear_u_kindled_ash', 'gear_u_ashen_crown', 'gear_u_scaleguard',
+  'gear_u_cinderfang', 'gear_u_emberstring', 'gear_u_kindled_ash', 'gear_u_ashen_crown', 'gear_u_wyrmbone',
   'hair_1', 'hair_2', 'hair_3', 'hair_4', 'beard_1', 'beard_2', 'beard_3',
 ];

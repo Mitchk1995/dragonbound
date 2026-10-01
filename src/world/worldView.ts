@@ -8,10 +8,10 @@ import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel'
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
-import { rockBlock, slabBlock, taper } from '../render/blocks';
+import { hash01, rockBlock, slabBlock, taper } from '../render/blocks';
 
-type TreeKind = ZoneTheme['trees'];
 import type { SurfaceKind } from '../render/textures';
+import { treeSet, type TreeKind, type TreeSet, type TreeStyle } from './trees';
 
 // ─── See-through occlusion ──────────────────────────────────────────────────
 
@@ -205,6 +205,63 @@ function grassClump() {
 /** World instancing tile size in cells (see inst()). */
 const CHUNK = 24;
 
+// ─── Scenery materials ──────────────────────────────────────────────────────
+
+/**
+ * The material every instanced scenery set uses: flat shaded, painted albedo (or an old surface),
+ * an optional shade toward the foot, cut away around the hero when `occlude`.
+ */
+function sceneryMaterial(instanceColors: boolean, color: number, occlude: boolean, surface?: SurfaceKind | PaintKind, grade?: Grade, setup?: (m: THREE.MeshStandardMaterial) => void) {
+  const mat = new THREE.MeshStandardMaterial({ color: instanceColors ? 0xffffff : color, flatShading: true, roughness: 0.9 });
+  // Painted albedo (hand-painted look) wherever a paint exists; the old surfaces otherwise.
+  if (surface && isPaintKind(surface)) applyPaint(mat, surface, 'world');
+  else if (surface) applySurface(mat, surface, 'world');
+  setup?.(mat);
+  if (grade) applyGrade(mat, grade, 'local');
+  if (occlude) makeOccludable(mat);
+  return mat;
+}
+
+function instanced(geo: THREE.BufferGeometry, mat: THREE.Material, mats: THREE.Matrix4[], cols: THREE.Color[] | null, shadow: boolean) {
+  const mesh = new THREE.InstancedMesh(geo, mat, mats.length);
+  mats.forEach((mm, i) => {
+    mesh.setMatrixAt(i, mm);
+    if (cols) mesh.setColorAt(i, cols[i]);
+  });
+  mesh.computeBoundingSphere();
+  mesh.castShadow = shadow;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/** Block canopies carry a painted vertex shade (trees.ts) under the instance colour. */
+const withVertexShade = (m: THREE.MeshStandardMaterial) => {
+  m.vertexColors = true;
+};
+
+type SceneryArgs = [color: number, occlude: boolean, surface?: SurfaceKind | PaintKind, shadow?: boolean, grade?: Grade, setup?: (m: THREE.MeshStandardMaterial) => void];
+
+/** Material arguments for a tree's trunk and canopy (shared by the world and the dev lineup). */
+function treeArgs(ts: TreeSet, k: TreeKind): [SceneryArgs, SceneryArgs] {
+  return [
+    [k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark'],
+    [0, true, ts.paint[k], true, ts.grade, ts.shaded && k !== 'ash' ? withVertexShade : undefined],
+  ];
+}
+
+/**
+ * Dev only: trees of one style as plain instanced meshes with the world's own materials (the
+ * inspect harness lines the styles up side by side).
+ */
+export function treeMeshes(style: TreeStyle, kind: TreeKind, mats: THREE.Matrix4[], cols: THREE.Color[], variant = 0) {
+  const ts = treeSet(style);
+  const [trunk, crown] = treeArgs(ts, kind);
+  const mk = (geo: THREE.BufferGeometry, c: THREE.Color[] | null, [color, occlude, surface, shadow = true, grade, setup]: SceneryArgs) =>
+    instanced(geo, sceneryMaterial(!!c, color, occlude, surface, grade, setup), mats, c, shadow);
+  const vs = ts.canopy[kind];
+  return [mk(ts.trunk[kind], null, trunk), mk(vs[variant % vs.length], cols, crown)];
+}
+
 // ─── Builder ────────────────────────────────────────────────────────────────
 
 export interface WorldView {
@@ -237,13 +294,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const e = new THREE.Euler();
   const inst = (geo: THREE.BufferGeometry, mats: THREE.Matrix4[], cols: THREE.Color[] | null, color: number, occlude: boolean, surface?: SurfaceKind | PaintKind, shadow = true, grade?: Grade, setup?: (m: THREE.MeshStandardMaterial) => void) => {
     if (!mats.length) return;
-    const mat = new THREE.MeshStandardMaterial({ color: cols ? 0xffffff : color, flatShading: true, roughness: 0.9 });
-    // Painted albedo (hand-painted look) wherever a paint exists; the old surfaces otherwise.
-    if (surface && isPaintKind(surface)) applyPaint(mat, surface, 'world');
-    else if (surface) applySurface(mat, surface, 'world');
-    setup?.(mat);
-    if (grade) applyGrade(mat, grade, 'local');
-    if (occlude) makeOccludable(mat);
+    const mat = sceneryMaterial(!!cols, color, occlude, surface, grade, setup);
     // Bucket instances into CHUNK×CHUNK-cell tiles so off-screen tiles are frustum-culled
     // (one map-wide InstancedMesh is always drawn in full, shadows included).
     const buckets = new Map<string, number[]>();
@@ -255,45 +306,16 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       b.push(i);
       buckets.set(key, b);
     });
-    for (const ids of buckets.values()) {
-      const mesh = new THREE.InstancedMesh(geo, mat, ids.length);
-      ids.forEach((id, i) => {
-        mesh.setMatrixAt(i, mats[id]);
-        if (cols) mesh.setColorAt(i, cols[id]);
-      });
-      mesh.computeBoundingSphere();
-      mesh.castShadow = shadow;
-      mesh.receiveShadow = true;
-      group.add(mesh);
-    }
+    const made: THREE.InstancedMesh[] = [];
+    for (const ids of buckets.values()) made.push(instanced(geo, mat, ids.map((id) => mats[id]), cols && ids.map((id) => cols[id]), shadow));
+    group.add(...made);
+    return made;
   };
 
   // ─── Scenery: trees, boulders, walls, undergrowth ─────────────────────────
-  // Foliage is flat-shaded facets and per-instance colour, no texture; undersides sit in shade.
-  const CANOPY_GRADE: Grade = { low: 0.62, from: 1.0, to: 2.7 };
-  const BUSH_GRADE: Grade = { low: 0.7, from: 0, to: 0.9 };
-  const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1.2, 5).translate(0, 0.6, 0);
-  const canopy: Record<TreeKind, THREE.BufferGeometry> = {
-    pine: mergeGeometries([
-      new THREE.ConeGeometry(0.95, 1.3, 6).translate(0, 1.5, 0),
-      new THREE.ConeGeometry(0.75, 1.1, 6).translate(0, 2.2, 0),
-      new THREE.ConeGeometry(0.5, 0.9, 6).translate(0, 2.8, 0),
-    ])!,
-    grove: mergeGeometries([
-      new THREE.IcosahedronGeometry(1.0, 0).translate(0, 2.1, 0),
-      new THREE.IcosahedronGeometry(0.7, 0).translate(0.5, 2.6, 0.2),
-      new THREE.IcosahedronGeometry(0.6, 0).translate(-0.5, 2.5, -0.3),
-    ])!,
-    // Dead, charred tree: a snapped-off upper trunk and a few stout forked limbs with blunt
-    // broken ends (branches, not needle spikes).
-    ash: mergeGeometries([
-      new THREE.CylinderGeometry(0.09, 0.13, 0.9, 5).translate(0.02, 1.62, 0),
-      new THREE.CylinderGeometry(0.05, 0.1, 1.0, 5).rotateZ(0.85).translate(0.4, 1.62, 0),
-      new THREE.CylinderGeometry(0.035, 0.06, 0.45, 4).rotateZ(0.2).translate(0.78, 2.0, 0.02),
-      new THREE.CylinderGeometry(0.05, 0.09, 0.85, 5).rotateZ(-0.95).translate(-0.34, 1.82, 0.08),
-      new THREE.CylinderGeometry(0.04, 0.07, 0.65, 4).rotateX(0.9).translate(0.02, 2.0, 0.28),
-    ])!,
-  };
+  // Foliage is flat-shaded facets, painted albedo and per-instance colour; undersides sit in shade.
+  // The tree models come from the active style (trees.ts).
+  const ts = treeSet();
   const leafPal: Record<TreeKind, number[]> = {
     pine: [0x3f6b34, 0x4b7a3a, 0x355c2e, 0x7a6a2a, 0x8a4a2a],
     grove: [0x5a9a44, 0x6aa84a, 0x4a8a3c, 0xc8a040, 0xb86a8a],
@@ -431,15 +453,24 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         rockCols.push(rockBase.clone().offsetHSL(0, 0, (rng() - 0.5) * 0.1));
       } else if (isRelief(cell, theme)) {
         const edge = nearWalkable(x, z);
-        if (edge && rng() < (cell === Cell.Wall ? 0.6 : 0.35)) {
-          // Boulders at the foot of cliffs / cave walls break up the faces.
-          const big = cell === Cell.Wall ? 1.4 + rng() * 1.2 : 1.1 + rng() * 1.3;
-          p.set(x + 0.5 + (rng() - 0.5) * 0.4, -0.35, z + 0.5 + (rng() - 0.5) * 0.4);
-          q.setFromEuler(e.set((rng() - 0.5) * 0.35, rng() * 6.3, (rng() - 0.5) * 0.35));
-          s.set(big, big * (0.8 + rng() * 0.8), big * (0.8 + rng() * 0.4));
-          rocks.push(m.compose(p, q, s).clone());
-          rockCols.push(new THREE.Color(cell === Cell.Wall ? 0x5e5044 : 0x6a5e52).offsetHSL(0, 0, (rng() - 0.5) * 0.1));
-        } else if (!edge && cell === Cell.Cliff && rng() < (theme.reliefTrees ?? 0)) addTree(x + 0.5, z + 0.5, 1.1);
+        if (edge && cell === Cell.Wall && theme.wallRise) {
+          // Cave walls: the stacked strata at their foot do this job (no tilted boulders).
+        } else if (edge && rng() < (cell === Cell.Wall ? 0.6 : 0.3)) {
+          // Fallen ledges at the foot of cliffs: one or two flat-topped slabs, stepping back, in the
+          // cliff's own rock (the same stacked-ledge language as the terraces above, never a
+          // tilted boulder with big sloped facets).
+          const wc = new THREE.Color(theme.cliff?.[0] ?? 0x6a5e52);
+          const big = 1.2 + rng() * 1.0, face = Math.floor(rng() * 4) * (Math.PI / 2) + (rng() - 0.5) * 0.4;
+          let y = -0.3;
+          for (let k = 0, n = rng() < 0.5 ? 2 : 1; k < n; k++) {
+            const th = 0.55 + rng() * 0.4, sc = big * (1 - k * 0.3);
+            p.set(x + 0.5 + (rng() - 0.5) * 0.4, y, z + 0.5 + (rng() - 0.5) * 0.4);
+            q.setFromEuler(e.set(0, face + (rng() - 0.5) * 0.3, 0));
+            strata.push(m.compose(p, q, s.set(sc, th, sc * (0.8 + rng() * 0.3))).clone());
+            strataCols.push(wc.clone().offsetHSL(0, 0, (k ? 0.03 : -0.02) + (rng() - 0.5) * 0.06));
+            y += th * 0.9;
+          }
+        } else if (!edge && cell === Cell.Cliff && rng() < (layout.canopy ? layout.canopy[i] / 100 : theme.reliefTrees ?? 0)) addTree(x + 0.5, z + 0.5, 1.1);
       } else if (cell === Cell.Wall) {
         if (!nearWalkable(x, z)) continue;
         const hgt = theme.wall === 'castle' ? 2.4 : 1.6 + rng() * 1.8;
@@ -561,9 +592,15 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   }
   for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) {
     if (!trees[k].m.length) continue;
-    inst(trunkGeo, trees[k].m, null, k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark');
+    const [trunk, crown] = treeArgs(ts, k);
     // Painted canopies: leaf clusters on broadleaves, needle tufts on pines, bark on dead ash.
-    inst(canopy[k], trees[k].m, trees[k].c, 0, true, k === 'pine' ? 'needles' : k === 'grove' ? 'leaves' : 'bark', true, CANOPY_GRADE);
+    // Each tree takes one of the style's canopy variants, picked from its position (no pattern
+    // along the rows, and the same tree every visit).
+    const vs = ts.canopy[k], tp = new THREE.Vector3();
+    const variant = trees[k].m.map((mm) => (tp.setFromMatrixPosition(mm), Math.floor(hash01(tp.x, tp.z) * vs.length)));
+    const pick = <T>(list: T[], v: number) => list.filter((_, i) => variant[i] === v);
+    const made = [...inst(ts.trunk[k], trees[k].m, null, ...trunk)!, ...vs.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), pick(trees[k].c, v), ...crown) ?? [])];
+    for (const mesh of made) mesh.name = 'tree';
   }
   // Rocks are chunky faceted blocks (two shapes, alternating) sunk into the ground.
   const half = <T>(list: T[], odd: number) => list.filter((_, i) => i % 2 === odd);
@@ -588,7 +625,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     new THREE.BoxGeometry(0.4, 0.2, 0.44).translate(0.26, 0.4, -0.22),
   ])!;
   inst(masonry, walls, wallCols, 0, true, 'masonry');
-  inst(new THREE.IcosahedronGeometry(0.7, 0).translate(0, 0.45, 0), bushes, bushCols, 0, false, 'leaves', true, BUSH_GRADE);
+  for (const mesh of inst(ts.bush, bushes, bushCols, 0, false, ts.paint.grove, true, ts.bushGrade, ts.shaded ? withVertexShade : undefined) ?? []) mesh.name = 'bush';
   inst(new THREE.ConeGeometry(0.035, 0.7, 3).translate(0, 0.35, 0), reeds, null, 0x6a7a3a, false, undefined, false);
   const flowerGeo = mergeGeometries([
     new THREE.CylinderGeometry(0.012, 0.012, 0.25, 3).translate(0, 0.125, 0).toNonIndexed(),

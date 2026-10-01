@@ -20,13 +20,14 @@
   --slot: 50px;
   --gap: 4px;
   --side-w: calc(4 * var(--slot) + 3 * var(--gap) + 12px + 24px);
-  --orb: 112px;
-  --sk: 54px;
+  --orb: 120px;
+  --sk: 56px;
+  --sk-gap: 13px;
   --belt: 42px;
-  --console-h: 122px;
+  --console-h: 132px;
 }
 @media (max-height: 820px), (max-width: 1440px) {
-  :root { --slot: 43px; --orb: 96px; --sk: 48px; --belt: 38px; --console-h: 108px; }
+  :root { --slot: 43px; --orb: 104px; --sk: 50px; --sk-gap: 11px; --belt: 38px; --console-h: 116px; }
 }
 
 * { box-sizing: border-box; }
@@ -86,6 +87,16 @@ svg { display: block; }
   display: grid; place-items: center; pointer-events: auto; cursor: pointer;
 }
 .slot img { width: 100%; height: 100%; image-rendering: auto; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.7)); }
+/* Approved painted artwork (approvedArt.ts) leaves a wider margin round its subject than the rendered icons fill to
+   (94%): shown a little larger so it carries the same weight in a slot. The file itself is drawn whole and untouched,
+   at its own aspect: the leather gloves and boots are 256×171, letterboxed across the slot's width. */
+.slot img.art, .dragghost img.art { object-fit: contain; transform: scale(1.1); }
+/* The steel gauntlets' subject spans ~71% of its canvas against ~92% for the other three tiers' gauntlets: drawn
+   larger so the pair is as wide in its slot as theirs. */
+.slot img.art[src$="/steel_gauntlets-v2.png"], .dragghost img.art[src$="/steel_gauntlets-v2.png"] { transform: scale(1.4); }
+/* The bows, staves, Emberforged Longsword, the five uniques and the two amulets fill ~93-97% of their canvas, tip to
+   tip: at full size they already carry the others' weight, and enlarged their tips would cross the slot's rim. */
+:is(.slot, .dragghost) img.art:is([src$="/ember_longsword-icon-v2.png"], [src$="/worn-bow-redesign-v2.png"], [src$="/hunter-bow-redesign-v2.png"], [src$="/recurve-bow-redesign-v2.png"], [src$="/drakebone-bow-redesign-v2.png"], [src$="/oak_staff-redesign-v3.png"], [src$="/apprentice_staff-redesign-v5.png"], [src$="/runed_staff-redesign-v5.png"], [src$="/ember_staff-redesign-v6.png"], [src$="/cinderfang-redesign-v1.png"], [src$="/ashen-crown-redesign-v1.png"], [src$="/wyrmbone-harness-redesign-v1.png"], [src$="/emberstring-aligned-v2.png"], [src$="/kindled-ash-aligned-v2.png"], [src$="/bone_amulet-icon-v1.png"], [src$="/jade_amulet-icon-v1.png"]) { transform: none; }
 .slot.empty { cursor: default; }
 .slot.empty svg { opacity: 0.9; }
 .slot .qty { position: absolute; left: 3px; top: 1px; font-size: 12px; font-weight: 700; color: #ffe86a; text-shadow: 0 1px 1px #000, 0 0 2px #000; }
@@ -256,33 +267,42 @@ svg { display: block; }
 .castbar span { position: absolute; inset: 0; text-align: center; font-size: 13px; line-height: 16px; text-shadow: 0 1px 2px #000; }
 
 /* ── Console (Diablo): life orb · potion belt | skills · mana orb ── */
-.console { position: absolute; left: 50%; bottom: calc(var(--orb) * 0.15); transform: translateX(-50%); display: flex; align-items: flex-end; pointer-events: auto; }
+.console { position: absolute; left: 50%; bottom: calc(var(--orb) * 0.1); transform: translateX(-50%); display: flex; align-items: flex-end; pointer-events: auto; }
+/* A raised dark-iron plate (lit top edge, shadowed foot) with a brass line inside; its ends tuck behind the orbs. */
 .cbody {
-  position: relative; z-index: 1; margin: 0 calc(var(--orb) * -0.2); padding: 7px calc(var(--orb) * 0.2 + 12px) 8px;
-  border: 10px solid transparent; border-image: var(--tex-frame) 16 round; border-bottom-width: 8px;
-  background: var(--tex-stone) repeat; background-clip: padding-box;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+  position: relative; z-index: 1; margin: 0 calc(var(--orb) * -0.16); padding: 6px calc(var(--orb) * 0.16 + 5px) 8px;
+  border: 7px solid transparent; border-radius: 6px;
+  background:
+    linear-gradient(#1c1c1f, #141417 40%, #0c0d0f) padding-box,
+    linear-gradient(#6a6458, #3e3b35 2px, #2b2925 45%, #1c1a17 80%, #100f0c) border-box;
+  box-shadow: 0 0 0 1px #070605, inset 0 0 0 1px #8a6a35, inset 0 1px 0 1px #00000080, inset 0 3px 6px #000a, 0 8px 20px #000b;
 }
-/* A carved gold rule under the XP bar. */
+/* The XP track: a sunken trough, the style's colour lit across its top. */
 .xpline {
   --c: var(--gold);
-  position: relative; height: 12px; margin-bottom: 7px; background: #0b0908; border: 1px solid #000; border-radius: 6px; overflow: hidden;
-  box-shadow: inset 0 2px 3px #000, 0 1px 0 rgba(255,255,255,0.08); pointer-events: auto;
+  position: relative; height: 13px; margin-bottom: 10px; border: 1px solid #030202; border-radius: 3px; overflow: hidden;
+  background: linear-gradient(#050404, #13110e);
+  box-shadow: 0 0 0 1px #4a4236, 0 1px 0 1px #ffffff0d, inset 0 2px 3px #000; pointer-events: auto;
 }
-.xpline .fill { height: 100%; background: linear-gradient(color-mix(in srgb, var(--c) 55%, #fff), var(--c) 55%, color-mix(in srgb, var(--c) 45%, #000)); transition: width 0.2s; }
-.xpline span { position: absolute; inset: 0; font-size: 11px; font-weight: 700; line-height: 11px; text-align: center; color: #f4ecd8; text-shadow: 0 1px 1px #000, 0 0 3px #000; }
-.crow { display: flex; align-items: center; gap: 6px; }
-.belt, .skillrow { display: flex; gap: 5px; align-items: center; }
-.cdiv { width: 2px; align-self: stretch; margin: 3px 5px; background: linear-gradient(transparent, var(--gold-dim), transparent); }
+.xpline .fill {
+  height: 100%; transition: width 0.2s;
+  background: linear-gradient(color-mix(in srgb, var(--c) 55%, #fff), color-mix(in srgb, var(--c) 80%, #fff) 40%, var(--c) 46%, color-mix(in srgb, var(--c) 55%, #000));
+  box-shadow: inset 0 -1px 0 #0006, 1px 0 0 #000a;
+}
+.xpline span { position: absolute; inset: 0; font-size: 11px; font-weight: 700; line-height: 11px; text-align: center; color: #fff; text-shadow: 0 1px 1px #000, 0 0 3px #000, 0 0 2px #000; }
+.crow { display: flex; align-items: center; gap: var(--sk-gap); }
+.belt, .skillrow { display: flex; gap: var(--sk-gap); align-items: center; }
+.cdiv { display: none; }
 
 /* Potion belt: small inset pockets. */
 .bslot {
-  position: relative; width: var(--belt); height: var(--belt); border-radius: 4px; cursor: pointer;
-  background: var(--tex-inset); border: 1px solid #0a0806; box-shadow: inset 0 3px 7px #000, 0 0 0 1px #4a4c52;
+  position: relative; width: var(--sk); height: var(--sk); border-radius: 4px; cursor: pointer;
+  background: radial-gradient(circle at 50% 40%, #1a1a1e, #0c0c0f 75%); border: 2px solid #0b0a08;
+  box-shadow: 0 -1px 0 1px #8a7552, 0 1px 0 1px #3a2e1e, inset 0 0 0 1px #c8aa6e30, inset 0 3px 6px #000c, 0 3px 5px #000a;
   display: grid; place-items: center;
 }
-.bslot:hover { box-shadow: inset 0 3px 7px #000, 0 0 0 1px var(--gold); }
-.bslot .ic svg { width: calc(var(--belt) - 8px); height: calc(var(--belt) - 8px); }
+.bslot:hover { border-color: var(--gold); }
+.bslot .ic svg { width: calc(var(--sk) - 10px); height: calc(var(--sk) - 10px); }
 .bslot .key { position: absolute; left: 3px; top: 0; font-size: 11px; font-weight: 700; color: var(--gold-hi); text-shadow: 0 1px 1px #000, 0 0 3px #000; }
 .bslot .count { position: absolute; right: 2px; bottom: 0; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px #000, 0 0 2px #000; }
 .bslot.spent .ic { filter: grayscale(1) brightness(0.45); }
@@ -292,13 +312,18 @@ svg { display: block; }
 .sk {
   --cd: 0;
   position: relative; width: var(--sk); height: var(--sk); border-radius: 4px; overflow: hidden; cursor: pointer; flex: none;
-  background: #0b0908; border: 2px solid #5a5c62;
-  box-shadow: 0 0 0 1px #0c0c0e, inset 0 0 0 1px rgba(0,0,0,0.6), 0 3px 6px rgba(0,0,0,0.6);
+  background: #0c0c0f; border: 2px solid #0b0a08;
+  box-shadow: 0 -1px 0 1px #8a7552, 0 1px 0 1px #3a2e1e, 0 3px 5px #000a;
 }
 .sk img { display: block; width: 100%; height: 100%; }
-.sk::after { content: ''; position: absolute; inset: 0; border-radius: 2px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 6px rgba(0,0,0,0.6); pointer-events: none; }
+/* Approved artwork laid over the tile's painted ground (ui.ts buildSkillRow); absent for skills without it. Before the
+   locked / no-mana rules so their filters still apply to it. */
+.sk img.art { position: absolute; inset: 0; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.6)); }
+.sk img.art:not([src]) { display: none; }
+/* Drawn over the painted tile so it sits sunk in the bezel: brass hairline, shadowed top, faint lit foot. */
+.sk::after { content: ''; position: absolute; inset: 0; border-radius: 2px; box-shadow: inset 0 0 0 1px #c8aa6e30, inset 0 3px 5px #000a, inset 0 0 6px #0008, inset 0 -1px 0 #ffffff1a; pointer-events: none; }
 .sk:hover { border-color: var(--gold); }
-.sk.basic { border-color: #7a6a4a; }
+.sk.basic { box-shadow: 0 -1px 0 1px #9a8156, 0 1px 0 1px #3a3122, 0 3px 5px #000a; }
 .sk .sweep { position: absolute; inset: 0; background: conic-gradient(rgba(6,4,8,0.74) calc(var(--cd) * 360deg), transparent 0); pointer-events: none; }
 .sk .cdnum { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--serif); font-weight: 800; font-size: 18px; color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }
 .sk .key { position: absolute; left: 3px; top: 1px; z-index: 1; font-size: 12px; font-weight: 700; color: var(--gold-hi); text-shadow: 0 1px 1px #000, 0 0 3px #000, 0 0 3px #000; }
@@ -314,16 +339,20 @@ svg { display: block; }
 .sk.nomana .cost { color: #ff8a7a; }
 .sk.empty { opacity: 0.35; }
 
-/* Orbs: glass globes in an iron ring, overlapping the console's ends, each gripped by a carved seat
-   (iron cradle + claws) with a stone end cap finishing the console's outer end (ui.ts ORB_SEAT). */
-.orbseat { position: relative; z-index: 2; flex: none; width: var(--orb); height: var(--orb); }
-.orbseat .seat { position: absolute; z-index: 3; width: calc(var(--orb) * 1.5); height: calc(var(--orb) * 1.26); top: calc(var(--orb) * -0.08); left: calc(var(--orb) * -0.3); pointer-events: none; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.6)); }
-.orbseat.r .seat { left: calc(var(--orb) * -0.2); transform: scaleX(-1); }
+/* The 10px rim: a near-black outer ring, a rounded brass ring lit from the top-left, and a dark inner lip (.orb's border). */
+.orbseat {
+  position: relative; z-index: 2; flex: none; width: var(--orb); height: var(--orb); padding: 5px;
+  border: 3px solid #0a0907; border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, transparent calc(100% - 5.5px), #00000070 calc(100% - 5px), #ffecbe38 calc(100% - 2.5px), #00000066 100%),
+    conic-gradient(#c9a35a, #9a7838 60deg, #6b4e22 120deg, #4e3818 150deg, #6b4e22 195deg, #a8853f 260deg, #e6c87e 315deg, #c9a35a);
+  box-shadow: 0 0 0 1px #2a2218, 0 6px 12px #000a;
+}
 .orb {
-  position: relative; z-index: 2; flex: none; width: var(--orb); height: var(--orb); border-radius: 50%; overflow: hidden;
+  position: relative; z-index: 2; flex: none; width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
   background: radial-gradient(circle at 50% 62%, #2e0e12, #0c0506 72%);
-  border: 5px solid #45474d; pointer-events: auto;
-  box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 4px #7a6a4a, 0 0 0 6px #0c0c0e, 0 8px 22px rgba(0,0,0,0.85), inset 0 0 18px rgba(0,0,0,0.9);
+  border: 2px solid #140d07; pointer-events: auto;
+  box-shadow: inset 0 0 18px #000e;
 }
 .orb.mana { background: radial-gradient(circle at 50% 62%, #101a3c, #05070f 72%); }
 .orb .fill { position: absolute; left: 0; right: 0; bottom: 0; transition: height 0.12s; }
@@ -334,25 +363,44 @@ svg { display: block; }
 .orb .glass { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(ellipse 34% 18% at 42% 17%, rgba(255,255,255,0.42), rgba(255,255,255,0.08) 65%, transparent 72%), radial-gradient(ellipse 30% 14% at 60% 88%, rgba(255,255,255,0.1), transparent 70%), radial-gradient(circle, transparent 56%, rgba(0,0,0,0.6)); }
 .orb span { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-weight: 700; font-size: 14px; color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 4px #000; }
 .orb.low { animation: pulse 0.6s infinite alternate; }
-@keyframes pulse { to { box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 4px #7a6a4a, 0 0 0 6px #0c0c0e, 0 0 30px #ff2a1a, inset 0 0 18px rgba(0,0,0,0.9); } }
+@keyframes pulse { to { box-shadow: 0 0 30px #ff2a1a, inset 0 0 18px #000e; } }
 .orb.mana.flash { animation: manaflash 0.45s ease-out; }
-@keyframes manaflash { 30% { box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 4px #7a6a4a, 0 0 0 6px #0c0c0e, 0 0 34px #6a9aff, inset 0 0 18px rgba(0,0,0,0.9); } }
+@keyframes manaflash { 30% { box-shadow: 0 0 34px #6a9aff, inset 0 0 18px #000e; } }
 
 /* ── Side panel (OSRS): always-visible tabs, inventory by default ── */
-.sidepanel { position: absolute; right: 8px; bottom: 8px; width: var(--side-w); display: flex; flex-direction: column; pointer-events: auto; border-width: 12px; }
-.stabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin: -3px -3px 6px; }
+/* The approved inventory panel: a dark case on a thin bronze rim, the open tab's name over its six tabs, then the
+   tab itself. The inventory fills it exactly: seven rows of slots (--inv-gap apart) and the footer (--inv-foot,
+   with .pbody's 2px top and bottom). */
+.sidepanel {
+  --inv-gap: 6px; --inv-foot: 48px;
+  position: absolute; right: 8px; bottom: 8px; width: var(--side-w); display: flex; flex-direction: column; pointer-events: auto;
+  padding: 7px 10px 9px; border: 1px solid #94743f; border-radius: 7px;
+  background: linear-gradient(rgba(26,21,16,0.9), rgba(15,12,9,0.95)), var(--tex-stone) repeat;
+  box-shadow: 0 0 0 1px #0a0705, inset 0 0 0 1px #0d0a07, inset 0 0 0 2px rgba(216,178,90,0.1), 0 14px 40px rgba(0,0,0,0.7);
+}
+.stitle { font-family: 'Palatino Linotype', Georgia, serif; font-size: 17px; line-height: 18px; color: #ecd7a4; text-shadow: 0 1px 2px #000; margin: 0 0 5px 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 7px; }
 .stab {
-  height: 34px; padding: 0; display: grid; place-items: center; border-radius: 4px 4px 2px 2px;
-  background: linear-gradient(#3e3b36, #221f1b); border: 1px solid #0c0a08;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -3px 5px rgba(0,0,0,0.5);
+  height: 32px; padding: 0; display: grid; place-items: center; border-radius: 4px;
+  background: linear-gradient(#2e2924, #1a1612); border: 1px solid #4a3e2e;
+  box-shadow: inset 0 1px 0 rgba(255,235,200,0.08), inset 0 -3px 5px rgba(0,0,0,0.5);
 }
 .stab svg { width: 24px; height: 24px; filter: saturate(0.55) brightness(0.78); transition: filter 0.1s; }
+.stab:hover { border-color: #7a6440; }
 .stab:hover svg { filter: none; }
 .stab.on { background: linear-gradient(#74401c, #3a1c0a); border-color: #c89a48; box-shadow: inset 0 1px 0 rgba(255,220,150,0.35), inset 0 0 10px rgba(255,160,60,0.3), 0 0 6px rgba(216,178,90,0.35); }
 .stab.on svg { filter: drop-shadow(0 0 3px rgba(255,200,120,0.5)); }
-.sbody { height: calc(7 * var(--slot) + 6 * var(--gap) + 48px); padding: 0 1px; overflow-x: hidden; }
+.sbody { height: calc(7 * var(--slot) + 6 * var(--inv-gap) + var(--inv-foot)); padding: 0 1px; overflow-x: hidden; }
+/* The inventory never scrolls, so the selected slot's glow may spill past its edge rather than be cut off. */
+.sidepanel[data-view="inventory"] .sbody { overflow: visible; }
 .sidepanel.collapsed .sbody { display: none; }
-.sidepanel.collapsed .stabs { margin-bottom: -3px; }
+.sidepanel.collapsed .stabs { margin-bottom: 0; }
+@media (max-height: 820px), (max-width: 1440px) {
+  .sidepanel { --inv-gap: 5px; --inv-foot: 42px; }
+  .stitle { font-size: 15px; line-height: 16px; margin-bottom: 4px; }
+  .stab { height: 30px; }
+  .stabs { margin-bottom: 6px; }
+}
 .sechead { font-family: var(--serif); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); margin: 2px 0 5px; padding-bottom: 2px; border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, var(--gold-dim), transparent) 1; }
 .sechead ~ .sechead { margin-top: 10px; }
 .sidepanel .slot { width: var(--slot); height: var(--slot); }
@@ -394,10 +442,38 @@ svg { display: block; }
 .p-book { width: 520px; }
 .p-debug { left: 14px; top: 130px; width: 340px; }
 
-.invgrid { display: grid; grid-template-columns: repeat(4, var(--slot)); gap: var(--gap); padding: 1px; border-radius: 5px; }
-.invgrid.moded { box-shadow: 0 0 0 1px rgba(216,178,90,0.55), 0 0 10px rgba(216,178,90,0.2); }
-.invfoot { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 8px; }
-.invfoot .goldline { margin: 0; font-size: 14px; }
+/* Inventory: 4×7 dark wells on a faint bronze rim, then the coins and Sort set apart in a sunken strip of their own. */
+.invgrid { display: grid; grid-template-columns: repeat(4, var(--slot)); gap: var(--inv-gap); justify-content: center; border-radius: 5px; }
+.invgrid.moded { outline: 1px solid rgba(216,178,90,0.55); outline-offset: 3px; box-shadow: 0 0 12px 3px rgba(216,178,90,0.15); }
+.invgrid .slot:is(.empty, .r-normal) { border-color: #3b3328; box-shadow: inset 0 3px 8px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(0,0,0,0.45), 0 1px 0 rgba(255,235,200,0.04); }
+.invgrid .slot:not(.empty):active { transform: translateY(1px); }
+/* The selection (the item last pressed): a lit gold rim, a soft glow past it and a warm well behind the picture. */
+.invgrid .slot.sel {
+  border-color: #e9bf62;
+  background: radial-gradient(circle at 50% 42%, rgba(160,104,44,0.55), rgba(58,36,16,0.6) 62%, rgba(20,14,9,0.4)), var(--tex-inset);
+  box-shadow: 0 0 0 1px #3a2408, 0 0 7px 1px rgba(255,186,84,0.5), inset 0 0 0 1px rgba(255,228,160,0.35), inset 0 0 12px rgba(255,170,70,0.3);
+}
+.invgrid .slot.sel:hover { outline: none; }
+.invfoot {
+  display: flex; justify-content: space-between; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 3px 3px 3px 8px; border: 1px solid #3f3527; border-radius: 5px;
+  background: linear-gradient(rgba(0,0,0,0.42), rgba(0,0,0,0.26));
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6), 0 1px 0 rgba(255,235,200,0.04);
+}
+.invfoot .goldline { margin: 0; gap: 7px; font-family: 'Palatino Linotype', Georgia, serif; font-size: 15px; color: #efdcb0; }
+.sortbtn {
+  flex: none; height: 28px; padding: 0 18px; border-radius: 4px;
+  font-family: var(--serif); font-weight: 600; font-size: 14px; letter-spacing: 1px; color: #eedcb0;
+  background: linear-gradient(#3a3027, #1d1814); border: 1px solid #8a6c3c;
+  box-shadow: inset 0 1px 0 rgba(255,228,170,0.16), inset 0 -2px 3px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.6);
+  text-shadow: 0 1px 1px #000;
+}
+.sortbtn:hover { border-color: #d0a654; color: #fff4d8; background: linear-gradient(#4a3c2e, #241d17); }
+.sortbtn:active { transform: translateY(1px); }
+@media (max-height: 820px), (max-width: 1440px) {
+  .invfoot { margin-top: 6px; }
+  .sortbtn { height: 24px; padding: 0 14px; font-size: 13px; }
+}
 .modechip { font-family: var(--serif); font-size: 11px; letter-spacing: 1px; color: #1a1006; background: linear-gradient(#f0d08a, #b08a44); border-radius: 8px; padding: 1px 8px; box-shadow: 0 1px 2px #000; }
 
 /* Equipment: an OSRS paper doll, then the numbers. */
@@ -424,10 +500,17 @@ svg { display: block; }
 .statgrid b { color: var(--text); text-align: right; }
 .statgrid i { color: var(--dim); font-style: normal; font-weight: 400; }
 
-/* Skills: stance switch, then OSRS's grid of icon + level tiles. */
-.stances { display: flex; gap: 4px; }
-.stance { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px 3px; font-size: 11.5px; background: var(--tex-inset); border: 1px solid #3a3a40; border-radius: 4px; color: var(--dim); }
-.stance.on { border-color: var(--gold); color: var(--gold-hi); box-shadow: 0 0 8px rgba(216,178,90,0.3), inset 0 0 8px rgba(216,178,90,0.15); }
+/* Skills: a two-number summary (combat level, total XP), then OSRS's grid of icon + level tiles. */
+.skillsum { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); margin-bottom: 8px; }
+.ssum {
+  display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 7px 5px 5px; pointer-events: auto;
+  background: linear-gradient(#2c2620, #17130f); border: 1px solid #4a3a20; border-radius: 4px; box-shadow: inset 0 1px 0 rgba(255,220,150,0.06);
+}
+.ssum:hover { border-color: var(--gold-dim); }
+.ssum svg { flex: none; }
+.ssum > div { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
+.ssum span { font-family: var(--serif); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+.ssum b { font-family: var(--serif); font-weight: 800; font-size: 15px; color: var(--gold-hi); text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Square tiles on the inventory's own grid: icon above, level out of 99 below. Hover for the XP. */
 .skillgrid { display: grid; grid-template-columns: repeat(4, var(--slot)); gap: var(--gap); }
 .stile {

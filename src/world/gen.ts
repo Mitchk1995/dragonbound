@@ -1,5 +1,5 @@
 import type { Vec2 } from '../types';
-import { cellRole, fitBlocks, type BuildingSpec } from './building';
+import { cellRole, footprint, walkable, type BuildingSpec } from './building';
 import { blockDisc, Cell, emptyLayout, Fluid, Ground, makeNoise, mulberry32, type PropSpawn, type ZoneLayout } from './layout';
 
 /**
@@ -15,15 +15,48 @@ export class Gen {
   readonly rng: () => number;
   readonly noise: (x: number, z: number) => number;
   /** 1 = hard (roads, stations: nothing may cover them), 3 = clearing (no scenery; lakes only when forced), 2 = verge (sparse scenery). */
-  readonly reserved: Uint8Array;
+  reserved: Uint8Array;
 
-  constructor(readonly w: number, readonly h: number, seed: number, fill: Cell = Cell.Ground, ground: Ground = Ground.Grass) {
+  constructor(public w: number, public h: number, seed: number, fill: Cell = Cell.Ground, ground: Ground = Ground.Grass) {
     this.l = emptyLayout(w, h);
     this.l.cells.fill(fill);
     this.l.ground.fill(ground);
     this.rng = mulberry32(seed);
     this.noise = makeNoise(this.rng);
     this.reserved = new Uint8Array(w * h);
+  }
+
+  /**
+   * Grow the map by `left`, `top`, `right` and `bottom` cells, moving everything already placed
+   * (cells, spawns, stations, props, burns, buildings) by (left, top). New cells take `fill` and
+   * `ground`, unreserved. Zones use it to wrap a finished play area in wide scenery.
+   */
+  pad(left: number, top: number, right: number, bottom: number, fill: Cell = Cell.Ground, ground: Ground = Ground.Grass) {
+    const ow = this.w, oh = this.h, w = ow + left + right, h = oh + top + bottom, L = this.l;
+    const grow = <T extends Uint8Array | Float32Array>(a: T, v: number): T => {
+      const b = (a instanceof Float32Array ? new Float32Array(w * h) : new Uint8Array(w * h)).fill(v) as T;
+      for (let z = 0; z < oh; z++) b.set(a.subarray(z * ow, (z + 1) * ow), (z + top) * w + left);
+      return b;
+    };
+    L.cells = grow(L.cells, fill);
+    L.ground = grow(L.ground, ground);
+    L.fluid = grow(L.fluid, Fluid.None);
+    L.elev = grow(L.elev, 0);
+    this.reserved = grow(this.reserved, 0);
+    this.w = L.w = w;
+    this.h = L.h = h;
+    const mv = (p: Vec2) => {
+      p.x += left;
+      p.z += top;
+    };
+    [L.entry, ...L.packs, ...L.nodes, ...L.stations, ...L.props, ...(L.boss ? [L.boss] : [])].forEach(mv);
+    for (const b of L.burns ?? []) {
+      mv(b);
+      if (b.x2 !== undefined) b.x2 += left;
+      if (b.z2 !== undefined) b.z2 += top;
+    }
+    for (const b of L.buildings ?? []) mv(b);
+    return { x: left, z: top };
   }
 
   idx(x: number, z: number) {
@@ -350,7 +383,8 @@ export class Gen {
    * placed inside block their own cells as usual.
    */
   building(b: BuildingSpec, apron = 2) {
-    for (let z = b.z - apron; z < b.z + b.d + apron; z++) for (let x = b.x - apron; x < b.x + b.w + apron; x++) {
+    const [x0, z0, x1, z1] = footprint(b);
+    for (let z = z0 - apron; z < z1 + apron; z++) for (let x = x0 - apron; x < x1 + apron; x++) {
       if (!this.inside(x, z)) continue;
       const i = this.idx(x, z), role = cellRole(b, x, z);
       if (role === 'out') {
@@ -361,7 +395,7 @@ export class Gen {
       this.reserved[i] = 1;
       this.l.fluid[i] = Fluid.None;
       this.l.ground[i] = Ground.Stone;
-      this.l.cells[i] = role === 'wall' || (role === 'floor' && fitBlocks(b, x, z)) ? Cell.Blocked : Cell.Ground;
+      this.l.cells[i] = walkable(b, x, z) ? Cell.Ground : Cell.Blocked;
     }
     (this.l.buildings ??= []).push(b);
     return b;

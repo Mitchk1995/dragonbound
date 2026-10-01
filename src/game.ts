@@ -313,6 +313,38 @@ export class Game {
     });
   }
 
+  /** Step onto a tower stair to change floors, emerging outside the other landing's trigger. */
+  private tryStairs(dt: number) {
+    const p = this.player, zone = this.zone;
+    if (dt <= 0 || this.traveling || p.dead || p.rooted) return;
+    const dest = zone.stairAt(p.x, p.z);
+    if (!dest) return;
+    p.stop();
+    this.skilling.stop();
+    this.mouse.down = false;
+    this.mouse.mode = 'none';
+    this.traveling = true;
+    this.ui.fade(() => {
+      // A portal trip or a new game must never apply a landing from the zone we left.
+      if (this.zone === zone && zone.setFloor(dest.floor, dest.building)) {
+        p.pos.set(dest.x, dest.y, dest.z);
+        p.queued = null;
+        p.kbx = p.kbz = 0;
+        this.camPos.copy(p.pos);
+        this.hovered = this.hoveredItem = this.hoveredThing = null;
+        this.text.clear();
+        this.ui.clearZoneState();
+        this.ui.zoneTitle(`${zone.def.name}: ${dest.floor ? 'Upper floor' : 'Ground floor'}`);
+        if (this.pet) {
+          const at = zone.nav.nearestWalkable(dest.x + 1, dest.z) ?? dest;
+          this.pet.pos.set(at.x, dest.y, at.z);
+        }
+        zone.update(0);
+      }
+      this.traveling = false;
+    });
+  }
+
   recall() {
     if (this.mode !== 'play' || this.player.dead || this.traveling) return;
     if (this.zone.def.kind === 'hub') {
@@ -415,6 +447,7 @@ export class Game {
     this.updateRecall(raw);
 
     this.player.update(dt, this);
+    this.tryStairs(dt);
     this.combat.updateMana(dt);
     if (this.player.dead) {
       this.deathT += raw;
@@ -500,9 +533,9 @@ export class Game {
     OCCLUDE.uOccOn.value = 1;
     OCCLUDE.uOccPlayer.value.copy(p);
     OCCLUDE.uOccCam.value.copy(this.camera.position);
-    this.sun.position.set(p.x + 14, 28, p.z + 10);
-    this.sun.target.position.set(p.x, 0, p.z);
-    this.fill.position.set(p.x - 18, 14, p.z - 6);
+    this.sun.position.set(p.x + 14, p.y + 28, p.z + 10);
+    this.sun.target.position.set(p.x, p.y, p.z);
+    this.fill.position.set(p.x - 18, p.y + 14, p.z - 6);
   }
 
   private buildTitleDragon() {
@@ -687,6 +720,7 @@ export class Game {
     this.ndc.set((this.mouse.x / w) * 2 - 1, -(this.mouse.y / h) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, this.camera);
     const ray = this.raycaster.ray;
+    this.groundPlane.constant = -this.zone.floorHeight;
     ray.intersectPlane(this.groundPlane, this.ground);
     const center = new THREE.Vector3();
     let best: Enemy | null = null;
@@ -710,7 +744,7 @@ export class Game {
     let bi: GroundItem | null = null;
     let bd = 0.8 * 0.8;
     for (const it of this.zone.items) {
-      if (it.gone || !it.landed) continue;
+      if (it.gone || !it.landed || !it.group.visible) continue;
       const d = ray.distanceSqToPoint(center.set(it.x, 0.2, it.z));
       if (d < bd) {
         bd = d;
@@ -723,6 +757,7 @@ export class Game {
     let bt: Interactable | null = null;
     bestD = Infinity;
     for (const it of this.zone.interactables) {
+      if (!it.obj.visible) continue;
       center.set(it.x, it.height * 0.45, it.z);
       const r = Math.max(it.radius, it.height * 0.4);
       if (ray.distanceSqToPoint(center) < r * r) {

@@ -1,8 +1,7 @@
 import * as THREE from 'three';
-import { computeStats, stanceSplit } from '../combat/stats';
+import { combatXpSplit, computeStats } from '../combat/stats';
 import { abilityFor } from '../data/abilities';
 import type { Game } from '../game';
-import { XP_TUNING } from '../data/tuning';
 import { MAX_XP, SKILL_INFO, levelForXp } from '../progression/skills';
 import { SKILLS, type SkillId } from '../types';
 
@@ -22,11 +21,9 @@ export class Progression {
     p.maxHp = g.stats.maxHp;
   }
 
-  /** Combat XP earned from an enemy, split by stance. Hitpoints always gets its share. */
+  /** Combat XP earned from an enemy: all of it to the weapon style, shares to Hitpoints and Defence. */
   combatXp(xp: number) {
-    const g = this.g;
-    for (const [skill, share] of stanceSplit(g.save.stance, g.stats.style, xp)) this.grant(skill, share);
-    this.grant('hitpoints', xp * XP_TUNING.hitpointsShare);
+    for (const [skill, share] of combatXpSplit(this.g.stats.style, xp)) this.grant(skill, share);
   }
 
   grant(skill: SkillId, amount: number) {

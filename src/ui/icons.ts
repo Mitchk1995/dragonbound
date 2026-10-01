@@ -832,21 +832,8 @@ const ICONS: Record<string, Draw> = {
     );
   },
 
-  aggressive: (c) =>
-    c.glow(P('M12 52 L50 14', 'stroke="#b02a1a" stroke-width="9" fill="none"'), 4, 0.7) +
-    c.at(32, 32, 45, 0.96) + swordPart(c, '#d9503a') + '</g>',
-
-  defensive: (c) =>
-    shieldPart(
-      c,
-      'wood',
-      c.hl(line('M24 11 V50 M32 9.5 V54 M40 11 V50', '#3a200e', 1.3, 0.8)) +
-        C(32, 30, 8, c.f('iron')) +
-        c.hl(C(30, 28, 2.2, `fill="${HI}" stroke="none" opacity=".7"`)),
-      'h',
-    ),
-
-  shared: (c) =>
+  // Combat level (the skills tab's summary): sword over a crossed shield.
+  combat: (c) =>
     c.at(35, 30, -45, 0.9) + swordPart(c) + '</g>' +
     c.at(22, 40, 0, 0.6) +
     shieldPart(c, 'blood', P('M29 13 H35 V25 H46.5 V31 H35 V50 L32 52.5 L29 50 V31 H17.5 V25 H29 Z', c.f('gold'))) +

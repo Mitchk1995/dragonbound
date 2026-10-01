@@ -3,7 +3,7 @@ import { levelForXp, levelProgress, xpForLevel } from '../src/progression/skills
 import { mulberry32 } from '../src/core/rng';
 import { rollDrops } from '../src/loot/drops';
 import { generateItem, makeMasterwork, rollAffixes, stacksInBank, makeItem } from '../src/loot/itemGen';
-import { computeStats, stanceSplit } from '../src/combat/stats';
+import { combatLevel, combatXpSplit, computeStats, swingConnects, swingTrackStep } from '../src/combat/stats';
 import { mitigate, rollHit } from '../src/combat/damage';
 import { migrate, newSave, SAVE_VERSION } from '../src/save/save';
 import { AFFIXES } from '../src/data/affixes';
@@ -63,10 +63,34 @@ describe('combat', () => {
     const st = computeStats(LV({ defence: 21 }), eq);
     expect(st.armor).toBe(10 + BASES.iron_platebody.armor!);
   });
-  it('stances split combat xp', () => {
-    expect(stanceSplit('aggressive', 'melee', 40)).toEqual([['melee', 40]]);
-    expect(stanceSplit('defensive', 'magic', 40)).toEqual([['defence', 40]]);
-    expect(stanceSplit('shared', 'ranged', 40)).toEqual([['ranged', 20], ['defence', 20]]);
+  it('combat xp goes to the weapon style, with fixed shares for Hitpoints and Defence (no stance)', () => {
+    for (const style of ['melee', 'ranged', 'magic'] as const) {
+      const split = Object.fromEntries(combatXpSplit(style, 60));
+      expect(split[style]).toBe(60);
+      expect(split.hitpoints).toBeCloseTo(60 * XP_TUNING.hitpointsShare);
+      expect(split.defence).toBeCloseTo(60 * XP_TUNING.defenceShare);
+      // The other two styles get nothing.
+      expect(Object.keys(split).sort()).toEqual([style, 'defence', 'hitpoints'].sort());
+    }
+    // Defence trails the weapon style but keeps up: armour tiers ask the same levels as weapons.
+    expect(XP_TUNING.defenceShare).toBeGreaterThanOrEqual(0.3);
+    expect(XP_TUNING.defenceShare).toBeLessThan(1);
+  });
+  it('combat level sits on the 1-99 scale: 3 for a new hero, 99 when maxed', () => {
+    expect(combatLevel(LV({ hitpoints: 10 }))).toBe(3);
+    expect(combatLevel(LV({ melee: 99, ranged: 99, magic: 99, defence: 99, hitpoints: 99 }))).toBe(99);
+    // Only the best weapon style counts.
+    expect(combatLevel(LV({ melee: 40, ranged: 10, defence: 30, hitpoints: 30 }))).toBe(35);
+  });
+  it('a melee swing steps after a target backing out of reach, and still lands a little past reach', () => {
+    const reach = 2.3;
+    expect(swingTrackStep(1.8, reach, 1 / 60)).toBe(0);
+    const step = swingTrackStep(2.6, reach, 1 / 60);
+    expect(step).toBeGreaterThan(0);
+    // Faster than a kobold backs off (85% of its walk), so the gap closes during the wind-up.
+    expect(step * 60).toBeGreaterThan(ENEMIES.kobold.speed * 0.85);
+    expect(swingConnects(2.3 + 0.7, 1.9, 0.4)).toBe(true);
+    expect(swingConnects(2.3 + 1.2, 1.9, 0.4)).toBe(false);
   });
 });
 
@@ -216,6 +240,13 @@ describe('save', () => {
     expect(partial.skills.hitpoints).toBe(1154);
     expect(partial.skills.mining).toBe(0);
     expect(partial.inventory.length).toBe(28);
+  });
+  it('drops the old combat stance from a v2 save and keeps everything else', () => {
+    const v2 = { ...JSON.parse(JSON.stringify(newSave())), version: 2, stance: 'defensive', gold: 42 };
+    const s = migrate(v2);
+    expect('stance' in s).toBe(false);
+    expect(s.version).toBe(SAVE_VERSION);
+    expect(s.gold).toBe(42);
   });
   it('migrates a v1 (combat demo) save: keeps levels and logs, retires old gear', () => {
     const v1 = { version: 1, skills: { melee: 5000, ranged: 0, magic: 0, hitpoints: 3000 }, gold: 77, kc: { goblin: 12 }, collection: { cinderfang: 1 }, inventory: [{ uid: 'a', base: 'rusty_sword', rarity: 'normal', ilvl: 1, affixes: [] }], equipment: { weapon: { uid: 'b', base: 'drakesteel_sword', rarity: 'normal', ilvl: 1, affixes: [] } } };

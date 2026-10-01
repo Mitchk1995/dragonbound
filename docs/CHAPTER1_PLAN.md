@@ -1,5 +1,7 @@
 # Dragonbound: Chapter 1 "The Hidden Keep"
 
+Latest brainstorming and feasibility decisions live in [WORKING_DESIGN_PLAN.md](WORKING_DESIGN_PLAN.md). The user now wants a complete cohesive levels 1-10 region before the proper playthrough; the chapter structure below records current content and the earlier plan, not a final layout for that region.
+
 ## Context
 v0.1 proved the combat feel, but it was a combat sandbox, not the game we planned. Your playtest feedback:
 - **Missing core:** professions, the home base, and progression goals.
@@ -25,7 +27,7 @@ The dragons hunt the last of the Dragonbound. You wake in **Dragonspire Keep**, 
 ## Chapter 1 Content
 **Skills (all to 99, OSRS XP curve):**
 - Melee, Ranged, Magic, Hitpoints.
-- **Defence (new):** armour requirements use Defence instead of Hitpoints. Train it with an OSRS-style stance toggle: Aggressive, Defensive or Shared XP.
+- **Defence:** armour requirements use Defence instead of Hitpoints. Combat automatically trains the equipped weapon style, Hitpoints and Defence; there is no stance selector. See [BALANCE.md](BALANCE.md) for the current XP shares and measured pacing.
 - **Mining and Smithing (new).**
 - Future skills stay visible but locked.
 
@@ -106,7 +108,7 @@ The dragons hunt the last of the Dragonbound. You wake in **Dragonspire Keep**, 
     - **Interaction:** a new `Player` command `{kind:'interact', target}` walks up to the target and triggers it. It covers rocks, furnace, anvil, bank, portal, NPCs and stations. Existing `approach()` logic is reused.
     - **Skilling actions:** run on an OSRS-style 0.6s tick (`src/systems/skilling.ts`). Mining: success roll per tick from level, ore and pickaxe. Smithing: make-X queue with per-item ticks.
 - **Data files:** `src/data/{ores,recipes,keep,quests,diary,zones,npcs,shop}.ts`. Extend `items.ts` with tiered crafted bases plus `tier` / `model` fields. Requirements move to Defence.
-- **Save v2** (`src/save/save.ts`): add appearance, bank, keep restorations, quests, diary, tutorial step, stance and new skills. `migrate()` upgrades v1 saves.
+- **Save v3** (`src/save/save.ts`): retains appearance, bank, keep restorations, quests, diary, tutorial step and new skills; removes the former combat stance. `migrate()` preserves v1 and v2 progress.
 - **Models:**
   - `registry.ts` gains gear attachment (`attachGear(heroModel, slot, item)`) and tier recolouring.
   - Runtime icon renderer: `src/render/icons3d.ts`.
