@@ -65,6 +65,10 @@ export const ZONES: Record<string, ZoneDef> = {
       bg: 0x0b0a1c, fog: [60, 140], hemi: [0x9a9ad8, 0x4a3a50, 1.25], sun: [0xffd6a8, 2.3], exposure: 1.1,
       ambient: 'void', trees: 'grove', wall: 'castle',
       ground: { [Ground.Grass]: [0x4a7a3a, 0x5a8a44], [Ground.Stone]: [0x8a8478, 0x7a7468], [Ground.Path]: [0x8a7a5e, 0x7a6a50], [Ground.Dirt]: [0x6e6048, 0x5e5240] },
+      // The castle rock and the upland: grey stone faces, grass growing over their tops.
+      cliff: [0x8a8274, 0x686052],
+      mesaTop: Ground.Grass,
+      reliefTrees: 0.04,
       forest: { grove: 0.75, pine: 0.25 },
       flowers: [0xf0d060, 0xe86a8a, 0xb0a0ff, 0xffffff],
       water: [0x4aa0b8, 0x1a4a62],
