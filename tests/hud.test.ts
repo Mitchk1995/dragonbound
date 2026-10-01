@@ -1,10 +1,12 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { canAfford, computeStats, manaRegenFor, maxManaFor } from '../src/combat/stats';
 import { ABILITIES, ABILITY_ELEMENT, abilityFor } from '../src/data/abilities';
 import { MANA_TUNING } from '../src/data/tuning';
 import { SKILLS, type SkillId, type Style } from '../src/types';
 import { tooltipPos } from '../src/ui/tooltip';
-import { SIDE_TABS, TAB_KEYS, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, swapSlots } from '../src/ui/hudLayout';
+import { SIDE_TABS, TAB_KEYS, tabArtUrl, consoleKeys, cooldownFrac, escapeAction, isSideTab, pressTab, showTab, swapSlots } from '../src/ui/hudLayout';
 
 const levels = (n: number, over: Partial<Record<SkillId, number>> = {}) =>
   Object.fromEntries(SKILLS.map((k) => [k, over[k] ?? n])) as Record<SkillId, number>;
@@ -58,6 +60,8 @@ describe('side panel tabs (OSRS)', () => {
     for (const t of SIDE_TABS) if (t.id !== 'help') expect(TAB_KEYS[t.key.toLowerCase()]).toBe(t.id);
     expect(TAB_KEYS.b).toBe('inventory');
     expect(isSideTab('journal')).toBe(true);
+    // Each tab shows its painted icon, shipped in public/.
+    for (const t of SIDE_TABS) expect(existsSync(join('public', tabArtUrl(t.id))), t.id).toBe(true);
     expect(isSideTab('bank')).toBe(false);
   });
 
