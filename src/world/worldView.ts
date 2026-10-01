@@ -504,10 +504,13 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         let rim = false;
         for (let dz = -1; dz <= 1 && !rim; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz) !== Cell.Void) rim = true;
         if (rim) {
+          // From the land's own level (a raised edge gets a taller face) down into the void.
+          let top = 0;
+          for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz) !== Cell.Void) top = Math.max(top, floorAt(x + dx + 0.5, z + dz + 0.5));
           const depth = 3 + rng() * 5;
-          p.set(x + 0.5, -depth / 2 + 0.1, z + 0.5);
+          p.set(x + 0.5, (top - depth) / 2 + 0.1, z + 0.5);
           q.setFromEuler(e.set(0, rng() * 3, 0));
-          s.set(1.6 + rng(), depth, 1.6 + rng());
+          s.set(1.6 + rng(), top + depth, 1.6 + rng());
           under.push(m.compose(p, q, s).clone());
         }
       } else if (cell === Cell.Ground && !layout.fluid[i]) {

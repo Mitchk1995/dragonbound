@@ -185,12 +185,14 @@ describe('Dragonspire Keep', () => {
     expect(bank.z + bd.at).toBe(vault.z + vd.at);
     expect(bd.w).toBe(vd.w);
   });
-  it('the bank counter, furnace, shop counter and Restoration Board stand inside their buildings', () => {
+  it('the bank counter, furnace and shop counter stand inside their buildings; the Board stands in the arrival court', () => {
     expect(inRoom(B.bank, station('bank', 'bank').x, station('bank', 'bank').z, 0)).toBe(true);
     expect(inRoom(B.smelter, station('furnace', 'furnace').x, station('furnace', 'furnace').z, 0)).toBe(true);
     expect(inRoom(B.shop, station('shop', 'shop').x, station('shop', 'shop').z, 0)).toBe(true);
     expect(inRoom(B.shop, station('npc', 'quartermaster').x, station('npc', 'quartermaster').z, 0)).toBe(true);
-    expect(inRoom(B.keep, station('restore', 'board').x, station('restore', 'board').z, 0)).toBe(true);
+    const board = station('restore', 'board'), warden = station('npc', 'warden');
+    expect(Math.hypot(board.x - L.entry.x, board.z - L.entry.z)).toBeLessThan(10);
+    expect(Math.hypot(board.x - warden.x, board.z - warden.z)).toBeLessThan(15);
   });
   it('every station is reachable from the arrival dais within the player\'s A* budget', () => {
     for (const s of L.stations) {

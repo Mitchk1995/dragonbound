@@ -438,12 +438,17 @@ describe('zones', () => {
     }
     expect(open / all).toBeGreaterThan(0.9);
   });
-  it('the keep plots stand clear of the bailey walls', () => {
+  it('every home-island building stands on one level (no footprint straddles a slope or cliff)', () => {
     const L = build('keep');
+    for (const b of L.buildings ?? []) {
+      const levels = new Set<number>();
+      for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) levels.add(L.level![z * L.w + x]);
+      expect([...levels], b.id).toHaveLength(1);
+    }
     const byId = Object.fromEntries((L.buildings ?? []).map((b) => [b.id, b]));
-    // West curtain wall on x = 44, east on x = 106 (each two cells thick).
-    expect(byId.hatch_plot.x - 45, 'hatchery to the west wall').toBeGreaterThanOrEqual(2);
-    expect(105 - (byId.rune_plot.x + byId.rune_plot.w), 'rune house to the east wall').toBeGreaterThanOrEqual(2);
+    // The hatchery is up on the north-east upland; the castle on the crown.
+    expect(L.level![byId.hatch_plot.z * L.w + byId.hatch_plot.x]).toBe(7);
+    expect(L.level![byId.keep.z * L.w + byId.keep.x]).toBe(11);
   });
   it('no walkable pocket is cut off from the entry (clicks never target one)', () => {
     for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {

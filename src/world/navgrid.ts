@@ -55,7 +55,9 @@ export class NavGrid {
   }
 
   /** A* over 8-connected cells (no corner cutting), then string-pulled. Returns waypoints excluding the start. */
-  findPath(sx: number, sz: number, tx: number, tz: number, maxNodes = 6000): Vec2[] | null {
+  // The default budget covers a click across the whole home island (into the castle's far rooms from
+  // the portal court); enemies pass their own, much smaller one.
+  findPath(sx: number, sz: number, tx: number, tz: number, maxNodes = 40000): Vec2[] | null {
     const target = this.nearestWalkable(tx, tz);
     if (!target) return null;
     if (this.lineClear(sx, sz, target.x, target.z)) return [target];
