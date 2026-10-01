@@ -443,11 +443,11 @@ def closeup(vid, file_name, pose='idle', views=(dict(yaw=0, pitch=8), dict(yaw=4
 # ═══ P: plate (bronze, iron, steel) ══════════════════════════════════════════
 # OSRS-style plate in a few bold blocks (gear.py plate kit), like a toy knight readable at ~100px: a chest block
 # over a waist block, belt, gorget and single-slab tassets; block pauldron caps and plain rerebraces; the cube-over-
-# cube full helm with a T visor; three-block gauntlets and sabatons. No lames, ridges, rivets or trim bands.
+# cube full helm with a T visor; thumbless two-block gauntlets and sabatons. No lames, ridges, rivets or trim bands.
 
 def P_gloves(S):
-    for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
-        plate_gauntlet(S(name), s)
+    for name in ('sock_handL', 'sock_gloveR'):
+        plate_gauntlet(S(name))
 
 
 def P_boots(S):
@@ -470,7 +470,7 @@ CRIMSON = 0x6E1A18          # tabard and crest: fixed crimson cloth (painted as 
 
 
 def HORN_E():
-    return metallic(0x8A7C76)
+    return _g['BONE']    # pale bone, as in the approved Emberforged helm icon
 
 
 SEAM = 0xA8300A            # ember seam: deep orange, glowing hot orange (fixed, so it never washes out to yellow)
@@ -526,8 +526,8 @@ def E_helm(S):
 
 
 def E_gloves(S):
-    for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
-        plate_gauntlet(S(name), s)
+    for name in ('sock_handL', 'sock_gloveR'):
+        plate_gauntlet(S(name))
 
 
 def E_boots(S):

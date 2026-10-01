@@ -196,7 +196,6 @@ def cultist():
         else:
             # Staff hand: the fist reaches forward so the shaft passes through its front, clear of the sleeve.
             box(a, (0.22, 0.2, 0.26), (0, -0.75, 0.1), 'skin', bevel=0.05)
-            box(a, (0.07, 0.1, 0.08), (0.05, -0.7, 0.2), 'skin', rot=(0.3, 0, 0), bevel=0.02)  # thumb against the shaft
             w = pivot(a, 'weapon', (-0.04, -0.75, 0.2), (0.12, 0, -0.05))   # leans forward, butt out to the side
             box(w, (0.09, 1.6, 0.09), (0, 0.47, 0), 0x3A2418, taper=(0.85, 0.85), bevel=0.018)  # dark wood shaft
             beam(w, (0, -0.31, 0), (0, -0.42, 0), 0.1, 'black', w1=0.02)                       # butt cap

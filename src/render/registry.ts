@@ -213,7 +213,7 @@ export function registerModelScene(name: string, scene: THREE.Group) {
     if (o instanceof THREE.Mesh) o.geometry = prepareCharGeometry(o.geometry, rest.multiplyMatrices(inv, o.matrixWorld));
   });
   // Bows stay unmerged: BowDraw finds the static string by its shape.
-  if (name !== 'gear_bow' && name !== 'gear_u_emberstring') mergeRigidParts(scene, name);
+  if (!name.startsWith('gear_bow_') && name !== 'gear_u_emberstring') mergeRigidParts(scene, name);
   const box = new THREE.Box3().setFromObject(scene);
   loaded.set(name, { scene, height: box.max.y - box.min.y });
 }
@@ -386,10 +386,11 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
   return parts;
 }
 
-const BOW_MODELS = new Set(['bow', 'u_emberstring']);
+const isBow = (model: string) => model.startsWith('bow_') || model === 'u_emberstring';
 const BLADE_MODELS = new Set(['sword', 'longsword', 'u_cinderfang']);
 
-const HAIR_HIDDEN_BY: Record<string, 'hair' | 'all'> = { helm_open: 'hair', helm_full: 'all', u_ashen_crown: 'hair' };
+/** Helms that cover the hair (and, for full helms, the beard). The Ashen Crown is an open circlet worn over the hair. */
+const HAIR_HIDDEN_BY: Record<string, 'hair' | 'all'> = { helm_open: 'hair', helm_full: 'all' };
 
 /**
  * Dresses a hero model: appearance colours, hair/beard, and visible gear per equipped slot.
@@ -444,7 +445,7 @@ export class HeroDresser {
         const parts = buildGear(gl.model, gl.palette);
         // Bows are authored with the string on the socket's +Y side; turn them so the string
         // faces the archer when shooting (verified: string sits behind the grip at full draw).
-        if (BOW_MODELS.has(gl.model)) parts.get('sock_handR')?.rotateX(Math.PI);
+        if (isBow(gl.model)) parts.get('sock_handR')?.rotateX(Math.PI);
         // Blades are authored flat across the socket; turn them edge-on so the edge leads a vertical swing
         // (verified: blade width axis stays in the swing plane in tests/poses.test.ts).
         if (BLADE_MODELS.has(gl.model)) parts.get('sock_handR')?.rotateY(Math.PI / 2);
@@ -500,7 +501,9 @@ export class HeroDresser {
 /** Every model file the game may use; missing ones fall back to placeholders. */
 export const MODEL_FILES = [
   'hero', 'goblin', 'kobold', 'cultist', 'drakeling', 'cinderwing', 'whelp', 'golem', 'warden', 'quartermaster',
-  'gear_sword', 'gear_longsword', 'gear_pickaxe', 'gear_bow', 'gear_staff', 'gear_helm_open', 'gear_helm_full',
+  'gear_sword', 'gear_longsword', 'gear_pickaxe', 'gear_helm_open', 'gear_helm_full',
+  ...['worn', 'hunter', 'recurve', 'drakebone'].map((b) => `gear_bow_${b}`),
+  ...['apprentice', 'oak', 'runed', 'ember'].map((s) => `gear_staff_${s}`),
   'gear_body_chain', 'gear_body_plate', 'gear_body_leather', 'gear_gloves', 'gear_boots',
   ...['p', 'e'].flatMap((v) => [`gear_body_plate_${v}`, `gear_helm_full_${v}`, `gear_gloves_${v}`, `gear_boots_${v}`]),
   'gear_u_cinderfang', 'gear_u_emberstring', 'gear_u_kindled_ash', 'gear_u_ashen_crown', 'gear_u_wyrmbone',

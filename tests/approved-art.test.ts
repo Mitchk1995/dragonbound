@@ -242,7 +242,7 @@ describe('approved item artwork', () => {
   });
 
   it('the bows and staves, leather and jewellery are exactly the bases of those models and slots', () => {
-    expect(Object.values(BASES).filter((b) => b.model === 'bow' || b.model === 'staff').map((b) => b.id).sort()).toEqual(Object.keys(BOWS_STAVES).sort());
+    expect(Object.values(BASES).filter((b) => b.model?.startsWith('bow_') || b.model?.startsWith('staff_')).map((b) => b.id).sort()).toEqual(Object.keys(BOWS_STAVES).sort());
     expect(Object.keys(BASES).filter((id) => id.startsWith('leather_')).sort()).toEqual(Object.keys(LEATHER).sort());
     expect(Object.values(BASES).filter((b) => b.slot === 'amulet' || b.slot === 'ring').map((b) => b.id).sort()).toEqual(Object.keys(JEWELLERY).sort());
   });
