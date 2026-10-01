@@ -368,30 +368,38 @@ svg { display: block; }
 .sidepanel {
   --inv-gap: 6px; --inv-foot: 48px;
   position: absolute; right: 8px; bottom: 8px; width: var(--side-w); display: flex; flex-direction: column; pointer-events: auto;
-  padding: 7px 10px 9px; border: 1px solid #94743f; border-radius: 0 0 7px 7px;
-  background: linear-gradient(rgba(26,21,16,0.9), rgba(15,12,9,0.95)), var(--tex-stone) repeat;
-  box-shadow: 0 0 0 1px #0a0705, inset 0 0 0 1px #0d0a07, inset 0 0 0 2px rgba(216,178,90,0.1), 0 14px 40px rgba(0,0,0,0.7);
+  padding: 8px 11px 10px; border-radius: 0 0 7px 7px;
+  /* Fixed to the screen, so the open tab (the same background) continues it without a seam. */
+  background: linear-gradient(rgba(22,18,13,0.92), rgba(22,18,13,0.92)), var(--tex-stone) repeat;
+  background-attachment: fixed;
+  box-shadow: 0 0 0 1px #0a0705, 0 14px 40px rgba(0,0,0,0.7);
 }
+/* The bronze rim is drawn inside the case's own edge, as each tab's is inside its edge: at any display scale the
+   tabs and the case share the same edges, so their rims line up to the pixel. */
+.sidepanel::before { content: ''; position: absolute; inset: 0; border: 1px solid #94743f; border-radius: inherit; pointer-events: none; }
 .stitle { font-family: 'Palatino Linotype', Georgia, serif; font-size: 17px; line-height: 22px; color: #ecd7a4; text-shadow: 0 1px 2px #000; margin: 0 0 1px 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The tabs stand on top of the case like folder tabs, spanning its full width, cut from the same stone with the same
-   bronze rim: the closed ones sit behind the case's rim, darker; the open one is taller and runs on into the case. */
-.stabs { position: absolute; left: -1px; right: -1px; bottom: calc(100% - 1px); display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; align-items: end; }
+   bronze rim and dark outline. The closed ones stand on the case's rim, darker; the open one comes down over the rim
+   and runs on into the case. */
+.stabs { position: absolute; left: 0; right: 0; bottom: 100%; display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; align-items: end; }
 .stab {
   position: relative; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 7px 7px 0 0;
-  background: linear-gradient(rgba(16,13,10,0.94), rgba(10,8,6,0.96)), var(--tex-stone) repeat;
-  border: 1px solid #6e5730; border-bottom: none;
-  box-shadow: inset 0 0 0 1px #0d0a07, inset 0 1px 0 1px rgba(216,178,90,0.08), inset 0 -6px 8px rgba(0,0,0,0.5);
+  background: linear-gradient(rgba(10,8,6,0.95), rgba(10,8,6,0.95)), var(--tex-stone) repeat;
+  background-attachment: fixed;
+  border: 1px solid #94743f; border-bottom: none;
+  /* The case's dark outline round the top and sides; never along the bottom. */
+  box-shadow: -1px 0 0 #0a0705, 1px 0 0 #0a0705, 0 -1px 0 #0a0705, inset 0 -6px 8px rgba(0,0,0,0.45);
 }
 .stab svg, .stab img { width: 32px; height: 32px; filter: saturate(0.5) brightness(0.62); transition: filter 0.1s; }
-.stab:hover { border-color: #94743f; }
 .stab:hover svg, .stab:hover img { filter: saturate(0.85) brightness(0.9); }
 .stab.on {
-  z-index: 1; height: 47px; top: 2px; border-color: #94743f;
-  background: linear-gradient(rgba(26,21,16,0.9), rgba(26,21,16,0.9)), var(--tex-stone) repeat;
-  /* Dark edge and gold hairline on the top and sides only: nothing along the bottom, where it opens into the case. */
-  box-shadow: inset 1px 0 0 #0d0a07, inset -1px 0 0 #0d0a07, inset 0 1px 0 #0d0a07, inset 0 2px 0 rgba(216,178,90,0.22), 0 -3px 10px rgba(0,0,0,0.5);
+  z-index: 1; height: 47px; top: 1px;
+  background: linear-gradient(rgba(22,18,13,0.92), rgba(22,18,13,0.92)), var(--tex-stone) repeat;
+  background-attachment: fixed;
+  box-shadow: -1px 0 0 #0a0705, 1px 0 0 #0a0705, 0 -1px 0 #0a0705;
 }
-.stab.on svg, .stab.on img { width: 34px; height: 34px; filter: drop-shadow(0 0 3px rgba(255,200,120,0.35)); }.sbody { height: calc(7 * var(--slot) + 6 * var(--inv-gap) + var(--inv-foot)); padding: 0 1px; overflow-x: hidden; }
+.stab.on svg, .stab.on img { width: 34px; height: 34px; filter: drop-shadow(0 0 3px rgba(255,200,120,0.35)); }
+.sbody { height: calc(7 * var(--slot) + 6 * var(--inv-gap) + var(--inv-foot)); padding: 0 1px; overflow-x: hidden; }
 /* The inventory never scrolls, so the selected slot's glow may spill past its edge rather than be cut off. */
 .sidepanel[data-view="inventory"] .sbody { overflow: visible; }
 .sidepanel.collapsed .sbody { display: none; }
@@ -399,7 +407,7 @@ svg { display: block; }
   .sidepanel { --inv-gap: 5px; --inv-foot: 42px; }
   .stitle { font-size: 15px; line-height: 20px; margin-bottom: 0; }
   .stab { height: 38px; }
-  .stab.on { height: 44px; }
+  .stab.on { height: 45px; }
   .stab svg, .stab img { width: 28px; height: 28px; }
   .stab.on svg, .stab.on img { width: 30px; height: 30px; }
 }
