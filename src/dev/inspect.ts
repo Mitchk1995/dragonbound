@@ -269,7 +269,7 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>, only?: st
         const p = L.props.find((q) => q.kind === kind);
         if (p) pois.push([label, p.x, p.z + dz]);
       };
-      if (L.buildings?.some((b) => b.id === 'keep')) pois.push(['facade-keep', 75, 51], ['behind-keep', 66, 19.6], ['behind-bank', 108, 67.6]);
+      if (L.buildings?.some((b) => b.id === 'keep')) pois.push(['facade-keep', 66, 50]);
       // The island's districts and landmarks outside the castle.
       if (id === 'keep') for (const v of KEEP_VIEWS) pois.push([`view-${v.label}`, v.x, v.z]);
       landmark('ritual_dais', 'landmark-shrine', 4);

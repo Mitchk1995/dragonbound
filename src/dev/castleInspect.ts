@@ -2,16 +2,15 @@ import type { Game } from '../game';
 import { cellRole, fitBlocks, fitsOf, footprint, type BuildingSpec, type Floor } from '../world/building';
 import { perf } from './inspect';
 
+/** The residence range's rooms on each floor: [id, label, x, z] in cells from its corner. */
 const ROOMS = [
   [
-    ['kitchen', 'Kitchen', 5.5, 5.5], ['pantry', 'Buttery / pantry', 5.5, 15],
-    ['great-hall', 'Great hall / dais', 18, 7.5], ['screens', 'Screens passage', 18, 17.5],
-    ['armoury', 'Armoury', 30.5, 5.5], ['guard-room', 'Guard room', 30.5, 15],
+    ['great-hall', 'Great hall / dais', 10, 7.5], ['screens', 'Screens passage', 20.5, 10],
+    ['buttery', 'Buttery', 24, 3], ['service', 'Service passage', 24, 7.5], ['pantry', 'Pantry', 24, 12],
   ],
   [
-    ['bedchamber', "Warden's chamber", 5.5, 5.5], ['library', 'Library', 5.5, 15],
-    ['solar', 'Solar', 18, 5.5], ['map-room', 'Map room', 18, 15],
-    ['chapel', 'Chapel', 30.5, 5.5], ['antechamber', 'Stair antechamber', 30.5, 15],
+    ['north-gallery', 'North gallery', 10, 1.5], ['west-gallery', 'West gallery', 1.5, 8],
+    ['minstrel-gallery', 'Minstrel gallery', 20.5, 9], ['steward', "Steward's chamber", 24, 8],
   ],
 ] as const;
 
@@ -31,17 +30,17 @@ function plan(b: BuildingSpec, floor: Floor) {
     const px = (b.x + x - x0) * tile, pz = (b.z + z - z0) * tile;
     shapes.push(`<rect x="${px - 82}" y="${pz - 13}" width="164" height="26" rx="4" fill="#171a20e8"/><text x="${px}" y="${pz + 5}" font-size="15" text-anchor="middle" fill="#f5edda">${label}</text>`);
   }
-  const header = floor ? 'Upper floor · 5.2 m above the hall' : 'Ground floor · north at the top';
+  const header = floor ? 'Upper floor · 5 m above the hall, open over it' : 'Ground floor · north at the top';
   return `<div style="position:fixed;inset:0;z-index:2100;background:#161b22;color:#eadcc1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Arial,sans-serif;gap:14px">
     <div style="font-size:30px">Dragonspire Keep — ${header}</div>
-    <div style="font-size:16px;color:#b8b5ac">36 × 20 tiles · corner towers 5 × 5 · one grid square = one metre</div>
+    <div style="font-size:16px;color:#b8b5ac">${b.w} × ${b.d} tiles · one grid square = one metre</div>
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="width:min(85vw,${width}px);max-height:70vh">${shapes.join('')}</svg>
-    <div style="font-size:16px">Dark: masonry · Sand: walkable floor / doors · Brown: furniture · Gold: tower stairs ${floor ? 'down' : 'up'}</div>
-    <div style="font-size:14px;color:#a29d92">Doorways and stairs match the playable navigation grid. Enter through the south screens passage.</div>
+    <div style="font-size:16px">Dark: masonry, open void, stair flight · Sand: walkable floor / doors · Brown: furniture · Gold: the stair ${floor ? 'down' : 'up'}</div>
+    <div style="font-size:14px;color:#a29d92">Doorways and stairs match the playable navigation grid. Enter by the great door or the screens door.</div>
   </div>`;
 }
 
-/** Dev-only audit: real floor plans, each room at gameplay height, and both spiral stairs. */
+/** Dev-only audit: the residence range's real floor plans and each room at gameplay height. */
 export async function castleSuite(g: Game, shot: (name: string) => Promise<void>) {
   g.travel('keep', true);
   g.debug.timeScale = 0;
@@ -59,7 +58,7 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
       const stand = g.zone.nav.nearestWalkable(keep.x + x, keep.z + z)!;
       g.player.pos.set(stand.x, g.zone.groundY(stand.x, stand.z), stand.z);
       g.camPos.copy(g.player.pos);
-      g.camZoom = id === 'great-hall' || id === 'map-room' ? 1.2 : 0.8;
+      g.camZoom = id === 'great-hall' || id === 'north-gallery' ? 1.2 : 0.8;
       g.update(0);
       const name = `castle-${floor ? 'upper' : 'ground'}-${id}`;
       const measured = await perf(g, 30);
