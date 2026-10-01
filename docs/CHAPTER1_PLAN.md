@@ -1,6 +1,6 @@
 # Dragonbound: Chapter 1 "The Hidden Keep"
 
-Latest brainstorming and feasibility decisions live in [WORKING_DESIGN_PLAN.md](WORKING_DESIGN_PLAN.md). The user now wants a complete cohesive levels 1-10 region before the proper playthrough; the chapter structure below records current content and the earlier plan, not a final layout for that region.
+The current design plan is [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md). The user now wants a complete cohesive levels 1-10 region before the proper playthrough; the chapter structure below records current content and the earlier plan, not a final layout for that region.
 
 ## Context
 v0.1 proved the combat feel, but it was a combat sandbox, not the game we planned. Your playtest feedback:

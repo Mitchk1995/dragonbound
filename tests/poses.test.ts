@@ -185,6 +185,11 @@ describe('pose audit: bow', () => {
     it(`${weapon}: upright, string toward the archer, arrow at the target, nock on the draw hand`, () => {
       const h = hero({ weapon });
       const hand = h.dresser.socket('sock_handL')!;
+      // The string stays in the draw hand through the whole draw, not only at release.
+      for (const t of [0.25, 0.35, 0.45]) {
+        h.pose('bow', t);
+        expect(bowFacts(h.root, hand)!.nockToHand!, `nock at t=${t}`).toBeLessThan(0.03);
+      }
       h.pose('bow', IMPACT - 0.03);
       const full = bowFacts(h.root, hand)!;
       expect(full.upright).toBe(true);

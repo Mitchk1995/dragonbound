@@ -6,6 +6,8 @@ const REST = new THREE.Vector3();
 
 /** The arrow looses at the attack's impact frame (COMBAT_TUNING.impact). */
 const RELEASE = COMBAT_TUNING.impact;
+/** Draw amount by which the hand has taken the string (the arrow shows from here on). */
+const GRAB = 0.1;
 
 /** Draw amount for the bow attack; must match the 'bow' case in anim.ts (full draw at release, then snap). */
 export function bowDrawAmount(a: number) {
@@ -111,20 +113,21 @@ export class BowDraw {
     if (!this.bow) return;
     const drawing = anim.attackKind === 'bow' && anim.attack >= 0;
     const pull = drawing ? bowDrawAmount(anim.attack) : 0;
-    // Nock point: from rest on the string toward the draw hand, in the bow's local space.
+    // Nock point, in the bow's local space. The hand takes the string in the first moments of the draw
+    // (GRAB of the pull) and holds it from then until release, so the string never floats between bow and hand.
     const nock = this.tmp.copy(this.rest);
     if (pull > 0 && drawHand) {
       this.root.updateMatrixWorld(true);
       const hand = drawHand.getWorldPosition(new THREE.Vector3());
       this.m.copy(this.bow.matrixWorld).invert();
       hand.applyMatrix4(this.m);
-      nock.lerp(hand, pull);
+      nock.lerp(hand, Math.min(1, pull / GRAB));
     }
     this.span(this.strings[0], this.top, nock);
     this.span(this.strings[1], this.bottom, nock);
     if (this.arrow) {
       // Visible from the moment the draw hand holds the nock until release.
-      this.arrow.visible = drawing && anim.attack < RELEASE && pull > 0.1;
+      this.arrow.visible = drawing && anim.attack < RELEASE && pull > GRAB;
       if (this.arrow.visible) {
         // Arrow lies from the nock through the grip and a little beyond.
         const dir = REST.copy(this.grip).sub(nock);

@@ -803,23 +803,24 @@ def horn_point(h, a, r, base_y, ln, w):
 
 
 def u_ashen_crown(S):
-    """The Ashen Crown, as in the approved icon: an open circlet worn over the hair. A black band between two bone
-    rims carries five dragon horns (the tallest over the brow, a pair flaring out at the front corners, a shorter
-    pair behind), a big ember gem under the front horn and a small one under each corner horn."""
+    """The Ashen Crown, as in the approved icon: an open circlet worn over the hair. A slim black band between two
+    bone rims carries five short dragon horns (the tallest over the brow, a pair at the front corners, a shorter pair
+    behind), an ember gem under the front horn and a small one under each corner horn. Sized to sit snugly on the
+    hair, not to tower over the head."""
     h = S('sock_head')
     obs = obsidian()
-    open_box(h, (0.7, 0.12, 0.72), (0, 0.14, -0.005), obs, inner=None, wall=0.06, bevel=0.02)       # band
-    for y in (0.075, 0.205):
-        open_box(h, (0.72, 0.03, 0.74), (0, y, -0.005), BONE, inner=None, wall=0.07, bevel=0.01)     # bone rims
-    for deg, ln, w in ((0, 0.42, 0.12), (52, 0.33, 0.1), (-52, 0.33, 0.1), (128, 0.22, 0.085), (-128, 0.22, 0.085)):
+    open_box(h, (0.64, 0.085, 0.66), (0, 0.15, -0.005), obs, inner=None, wall=0.05, bevel=0.015)    # band
+    for y in (0.1, 0.2):
+        open_box(h, (0.655, 0.02, 0.675), (0, y, -0.005), BONE, inner=None, wall=0.06, bevel=0.008)  # bone rims
+    for deg, ln, w in ((0, 0.25, 0.085), (52, 0.19, 0.07), (-52, 0.19, 0.07), (128, 0.13, 0.06), (-128, 0.13, 0.06)):
         a = math.radians(deg)
         ca, sa = math.cos(a), math.sin(a)
-        r = 1 / max(abs(sa) / 0.33, abs(ca) / 0.34)                                                  # onto the band's square
+        r = 1 / max(abs(sa) / 0.3, abs(ca) / 0.31)                                                    # onto the band's square
         horn_point(h, a, r, 0.19, ln, w)
-    box(h, (0.13, 0.13, 0.03), (0, 0.14, 0.357), obs, rot=(0, 0, PI / 4), bevel=0.012)               # gem setting
-    facet_gem(h, 0.055, (0, 0.14, 0.375), EMBER_HOT, emissive=EMBER, strength=5)                    # ember gem
-    for x in (-0.2, 0.2):
-        facet_gem(h, 0.032, (x, 0.14, 0.36), EMBER, emissive=EMBER, strength=4)                     # corner gems
+    box(h, (0.09, 0.09, 0.025), (0, 0.15, 0.325), obs, rot=(0, 0, PI / 4), bevel=0.01)               # gem setting
+    facet_gem(h, 0.038, (0, 0.15, 0.338), EMBER_HOT, emissive=EMBER, strength=5)                    # ember gem
+    for x in (-0.18, 0.18):
+        facet_gem(h, 0.024, (x, 0.15, 0.33), EMBER, emissive=EMBER, strength=4)                     # corner gems
 
 
 def u_cinderfang(S):
