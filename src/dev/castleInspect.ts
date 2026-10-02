@@ -177,7 +177,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('gatehouse-outer', [P.gate.x + 10, y0 + 6, P.gate.z + 22], [P.gate.x, y0 + 7, P.gate.z], 18);
   await view('gate-close', [P.gate.x + 14, y0 + 9, P.gate.z + 22], [P.gate.x, y0 + 6, P.gate.z - 1], 20);
   await view('tower-close', [43, y0 + 8, 76], [31, y0 + 7, 66], 14);
-  await view('donjon', [66, y0 + 14, 60], [50, y0 + 12, 33.5], 24);
+  await view('donjon', [33, y0 + 13, 60], [50.8, y0 + 10, 33.5], 24);
   await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 70], [P.gate.x, y0 + 6, 60], 60);
   await view('ivy-curtain', [38, y0 + 4, 48], [38, y0 + 4, 39], 12);
   await view('hall-door', [62, y0 + 5, 66], [54, y0 + 2.5, 60.5], 12);
@@ -188,7 +188,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   }
   // Through the gameplay camera: inside the gate looking up the yard, the centrepiece, the great door.
   await play('entry', P.gate.x, P.gate.z - 4, 1.3);
-  await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.35, true);
+  await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.2, true);
   await play('door', P.door.x, P.door.z + 3.5, 1.0);
   // The fountain and its water up close, low down.
   await view('fountain-close', [P.fountain.x + 7.5, y0 + 4.2, P.fountain.z + 14.5], [P.fountain.x, y0 + 4.4, P.fountain.z + 0.5], 14);
