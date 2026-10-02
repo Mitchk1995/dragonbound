@@ -119,6 +119,21 @@ export interface ZoneLayout {
   lawnCut?: { x: number; z: number; r: number }[];
   /** Walkable cells nobody could reach, sealed off by Gen.connect (a designed area should leave none). */
   sealed?: number[];
+  /**
+   * Roads and streams as centre lines (with their half widths): the ground, the grass carpet and the
+   * water draw their edges along these smooth curves instead of the cell grid.
+   */
+  strands?: Strand[];
+  /** Round pools (a spring, a pond): dished hollows with a soft, round shore. */
+  pools?: { x: number; z: number; r: number }[];
+}
+
+export interface Strand {
+  pts: Vec2[];
+  hw: number;
+  kind: 'path' | 'water';
+  /** The ground the strand is paved with (a road), or its banks' wet earth (a stream). */
+  ground: number;
 }
 
 export interface Burn {

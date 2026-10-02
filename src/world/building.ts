@@ -21,6 +21,8 @@ export interface Window {
   at: number;
   /** Storey: 0 = ground floor (default), 1 = the upper floor of a building with `storeyH`. */
   floor?: number;
+  /** A stable stall's opening on the facade (a half-door, a horse looking out), not a glazed window. */
+  stall?: boolean;
 }
 
 /**

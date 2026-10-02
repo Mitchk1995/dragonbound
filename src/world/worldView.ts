@@ -118,36 +118,50 @@ function occludeAll(root: THREE.Object3D) {
 
 // ─── Sky ────────────────────────────────────────────────────────────────────
 
-function voidSky(group: THREE.Group, rng: () => number) {
-  const skyGeo = new THREE.SphereGeometry(180, 32, 16);
+/**
+ * The Veil's sky at the golden hour (one time of day with the warm, low sun that lights the island):
+ * soft blue-lilac overhead warming to peach at the horizon, a few long cloud bands high up, and below
+ * the horizon a sea of soft cloud lit from above, deepening into lilac haze, so a view out from the
+ * island's edge looks over cloud, never into darkness. No stars: it is day.
+ */
+function voidSky(group: THREE.Group) {
+  const skyGeo = new THREE.SphereGeometry(180, 48, 24);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: { top: { value: new THREE.Color(0x1a1040) }, mid: { value: new THREE.Color(0x40204e) }, bot: { value: new THREE.Color(0x050510) } },
+    uniforms: {
+      top: { value: new THREE.Color(0x6c7ab8) }, mid: { value: new THREE.Color(0xf2b48e) },
+      low: { value: new THREE.Color(0xdcaaa6) }, sea: { value: new THREE.Color(0x86729e) },
+    },
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 mid; uniform vec3 bot;
-      void main(){ float h = vP.y; vec3 c = h > 0.0 ? mix(mid, top, h) : mix(mid, bot, -h * 1.5);
-      float band = exp(-pow((h + 0.05) * 6.0, 2.0)); c += vec3(0.46, 0.24, 0.3) * band * 0.5;
-      float glow = exp(-pow((h - 0.1) * 3.0, 2.0)); c += vec3(0.22, 0.1, 0.1) * glow * 0.35; gl_FragColor = vec4(c, 1.0); }`,
+    fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 sea;
+      float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }
+      void main() {
+        float h = vP.y;
+        vec3 c;
+        if (h > 0.0) {
+          c = mix(mid, top, pow(clamp(h * 1.6, 0.0, 1.0), 0.55));
+          vec2 q = vP.xz / (h + 0.3);
+          float cl = smoothstep(0.58, 0.86, vn(q * vec2(0.7, 2.2)) * 0.65 + vn(q * 3.1) * 0.35);
+          c = mix(c, vec3(1.0, 0.88, 0.8), cl * 0.32 * smoothstep(0.03, 0.3, h));
+        } else {
+          vec2 q = vP.xz / max(-h, 0.06) * 0.7;
+          float n = vn(q) * 0.55 + vn(q * 2.7 + 3.1) * 0.3 + vn(q * 6.3 + 7.7) * 0.15;
+          float d = clamp(-h * 2.0, 0.0, 1.0);
+          vec3 deep = mix(low, sea, d);
+          c = mix(deep, mix(mid, vec3(1.0, 0.93, 0.88), 0.35), smoothstep(0.42, 0.78, n) * (1.0 - d * 0.7));
+        }
+        c = mix(c, mid * 1.06, exp(-pow(h * 8.0, 2.0)) * 0.55);
+        gl_FragColor = vec4(c, 1.0);
+      }`,
   });
   const sky = new THREE.Mesh(skyGeo, skyMat);
   sky.renderOrder = -10;
   sky.name = 'sky';
   group.add(sky);
-  const starPos: number[] = [];
-  for (let i = 0; i < 1500; i++) {
-    // Stars only high in the sky: the horizon glows with the dusk.
-    const u = 0.3 + rng() * 0.7, a = rng() * Math.PI * 2;
-    const r = Math.sqrt(1 - u * u);
-    starPos.push(Math.cos(a) * r * 170, u * 170, Math.sin(a) * r * 170);
-  }
-  const stars = new THREE.Points(
-    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3)),
-    new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, sizeAttenuation: true, fog: false, transparent: true, opacity: 0.9 }),
-  );
-  stars.name = 'sky';
-  group.add(stars);
 }
 
 // ─── Grass ──────────────────────────────────────────────────────────────────
@@ -701,7 +715,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   if (theme.ambient === 'void') {
     const skyGroup = new THREE.Group();
-    voidSky(skyGroup, rng);
+    voidSky(skyGroup);
     followers.push(skyGroup);
     group.add(skyGroup);
     // Drifting debris islands in the distance: painted rock like the island's own underside, lit

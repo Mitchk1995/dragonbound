@@ -106,12 +106,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     await shot(`bailey-${name}`);
   };
   /** A free camera at `eye` looking at `look` (world units), no fog, shadows cast over `span`. */
-  const view = async (name: string, eye: number[], look: number[], span = 30, stars = true) => {
+  const view = async (name: string, eye: number[], look: number[], span = 30) => {
     const fog = g.scene.fog as THREE.Fog, sc = g.sun.shadow.camera;
-    // From straight above, the camera sits inside the star dome and stars would speckle the ground.
-    const sky: THREE.Object3D[] = [];
-    if (!stars) g.scene.traverse((o) => o.name === 'sky' && o instanceof THREE.Points && sky.push(o));
-    sky.forEach((o) => (o.visible = false));
     const keep = { near: fog.near, far: fog.far, l: sc.left, r: sc.right, t: sc.top, b: sc.bottom, f: sc.far };
     g.player.obj.visible = false;
     g.debug.hold = () => {
@@ -131,7 +127,6 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     };
     try { await shot(`bailey-${name}`); }
     finally {
-      sky.forEach((o) => (o.visible = true));
       g.debug.hold = null;
       Object.assign(fog, { near: keep.near, far: keep.far });
       Object.assign(sc, { left: keep.l, right: keep.r, top: keep.t, bottom: keep.b, far: keep.f });
@@ -141,7 +136,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
 
   // The whole castle: from high in the south-east, and as a plan from almost straight above.
   await view('overview', [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70);
-  await view('plan', [c.x, y0 + 160, c.z + 22], [c.x, y0, c.z + 1], 70, false);
+  await view('plan', [c.x, y0 + 160, c.z + 22], [c.x, y0, c.z + 1], 70);
   // The approach from below the rock: the ledge road climbing west under the south wall to the gate.
   await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
   // The spring's fall out of the castle rock into its pool and the stream leaving it, from below.
@@ -161,6 +156,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await play('bower', Z.bower.x, Z.bower.z, 1.0);
   await play('belvedere', Z.belvedere.x, Z.belvedere.z, 1.0);
   await play('kitchen-garden', Z.kitchen.x, Z.kitchen.z, 1.1);
+  await play('orchard', Z.orchard.x, Z.orchard.z, 1.0);
   await play('training', Z.training.x, Z.training.z, 1.2);
   await play('stables', Z.service.x, Z.service.z, 1.1);
   await play('paddock', Z.paddock.x, Z.paddock.z, 1.1);

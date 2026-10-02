@@ -8,7 +8,7 @@ import {
 } from './building';
 import { studioEnv } from '../render/env';
 import {
-  BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, finishProp, flame, IRON, IRON_L, light, masonry, PLASTER, PLOT_MARK, STONE, STONE_D, STONE_DD, STONE_L,
+  archPane, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, finishProp, flame, IRON, IRON_L, lancet, light, masonry, PLASTER, PLOT_MARK, pointedArch, spandrels, STONE, STONE_D, STONE_DD, STONE_L,
   WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
@@ -84,6 +84,20 @@ function wallFrame(b: BuildingSpec, side: Side) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(ns ? len : dep, h, ns ? dep : len), mat);
       m.position.set(ns ? u : c + off * out, y, ns ? c + off * out : u);
       p.add(m);
+    },
+    /**
+     * A shaped piece (built across X, up Y, its depth along Z centred on 0) set in the wall at (u, y):
+     * in the kit's colour, or as its own material (glass) when `mat` is given.
+     */
+    shape(k: ModelKit, p: Obj, geo: THREE.BufferGeometry, color: number, u: number, y: number, off: number, mat?: THREE.Material) {
+      const pos: [number, number, number] = ns ? [u, y, c + off * out] : [c + off * out, y, u];
+      const rot: [number, number, number] | undefined = ns ? undefined : [0, Math.PI / 2, 0];
+      if (!mat) return k.mesh(p, geo, color, pos, rot);
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(...pos);
+      if (rot) m.rotation.set(...rot);
+      p.add(m);
+      return m;
     },
   };
 }
@@ -205,7 +219,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   const face = (timber ? WALL_T - 0.08 : WALL_T) / 2;
   // (The castle's windows are tall narrow lancets, their upper ones' sills clear of the upper course.)
   // On a single tall storey (the wings) the upper row are clerestory lancets high in the wall.
-  const winDims = (wi: Window) => (keep ? { ww: 0.8, wh: 2.4, wy: wi.floor ? (multi ? storeyH + CUT_H + 0.3 : wallH * 0.58) : 1.7 } : wi.floor ? { ww: 1.1, wh: 2.1, wy: storeyH + 1.0 } : hall ? { ww: 1.3, wh: 2.3, wy: 1.9 } : { ww: 1.0, wh: 1.3, wy: 1.55 });
+  const winDims = (wi: Window) => (keep && wi.stall ? { ww: 1.5, wh: 3.0, wy: 0 } : keep ? { ww: 0.8, wh: 2.4, wy: wi.floor ? (multi ? storeyH + CUT_H + 0.3 : wallH * 0.58) : 1.7 } : wi.floor ? { ww: 1.1, wh: 2.1, wy: storeyH + 1.0 } : hall ? { ww: 1.3, wh: 2.3, wy: 1.9 } : { ww: 1.0, wh: 1.3, wy: 1.55 });
   for (const side of ['n', 's', 'e', 'w'] as Side[]) {
     if (shared.has(side)) continue;
     const W = wallFrame(b, side), fade = side === 's';
@@ -230,7 +244,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       W.box(k, built, len, 0.16, WALL_T + 0.1, u, CUT_H - 0.05, 0, STONE_L, 0, 0.03);
       // Upper wall with its window openings, and the wall plate / cornice on top. On a two-storey
       // camera side the upper storey's own course caps the cut there too.
-      const holes = wins.filter((o) => o.wi.at > a && o.wi.at < e).map((o) => ({ u0: o.wi.at - o.ww / 2, u1: o.wi.at + o.ww / 2, y0: o.wy, y1: o.wy + o.wh }));
+      const holes = wins.filter((o) => !o.wi.stall && o.wi.at > a && o.wi.at < e).map((o) => ({ u0: o.wi.at - o.ww / 2, u1: o.wi.at + o.ww / 2, y0: o.wy, y1: o.wy + o.wh }));
       band(fade, CUT_H, wallH, (kk, pp, y0, y1) => holed(W, kk, pp, a, e, y0, y1, face * 2, UPPER, holes));
       if (fade && multi) W.box(mk, mid, len, 0.16, WALL_T + 0.1, u, upCut - 0.08, 0, STONE_L, 0, 0.03);
       if (!keep) piece(len, wallH - 0.21, wallH + 0.03, WALL_T + 0.16, u, 0, TRIM);
@@ -279,20 +293,31 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       const top = wy + wh, tr = wy + wh * 0.66;
       const gm = !fade ? glass.still : wi.floor && multi ? glass.top : glass.mid;
       const [gk, gp] = at(fade, wy - 0.2);
-      W.glass(gp, gm.warm, ww, tr - wy, 0.04, wi.at, (wy + tr) / 2, 0);
-      W.glass(gp, gm.sky, ww, top - tr, 0.04, wi.at, (tr + top) / 2, 0);
       const MULL = timber ? TIMBER : STONE_L;
-      if (keep) {
-        // A castle lancet: the opening's head closes to a point (two springers leaning in from
-        // each side), deep reveals, a pointed hood mould outside and a plain sill.
-        for (const s of [-1, 1]) {
-          W.box(gk, gp, ww / 2 + 0.16, 0.34, WALL_T, wi.at + s * (ww / 4 - 0.02), top - 0.12, 0, UPPER, s * -0.55, 0.02);
-          W.box(gk, gp, ww / 2 + 0.5, 0.18, 0.2, wi.at + s * (ww / 4 + 0.02), top + 0.22, face + 0.08, STONE_L, s * -0.55, 0.02);
-        }
-        W.box(gk, gp, ww + 0.5, 0.14, 0.3, wi.at, wy - 0.07, face + 0.08, STONE_L, 0, 0.02);
-        for (const s of [-1, 1]) W.box(gk, gp, 0.14, wh - 0.2, 0.16, wi.at + s * (ww / 2 + 0.07), wy + (wh - 0.2) / 2, face + 0.04, STONE_L, 0, 0.02);
+      if (keep && wi.stall) {
+        stall(W, band, at, fade, face, wi.at, wy, ww, wh, wi.at < sideLen(b, side) / 2 ? 0 : 1);
         continue;
       }
+      if (keep) {
+        // A castle lancet: the opening closes to a true pointed head (the stone of the wall fills its
+        // upper corners right through), one warm leaded pane set deep in the middle of the wall, a
+        // slender mullion, pale jambs, a hood mould following the arch outside and a plain sill.
+        const { ys, arc } = pointedArch(ww, wh, 6);
+        W.shape(gk, gp, spandrels(ww, wh, WALL_T - 0.02), UPPER, wi.at, wy, 0);
+        W.shape(gk, gp, archPane(ww, wh, 0.04), 0, wi.at, wy, 0, gm.warm);
+        W.box(gk, gp, 0.06, ys, 0.08, wi.at, wy + ys / 2, 0.03, STONE_L, 0, 0.01);
+        W.box(gk, gp, ww + 0.5, 0.14, 0.3, wi.at, wy - 0.07, face + 0.08, STONE_L, 0, 0.02);
+        for (const s of [-1, 1]) W.box(gk, gp, 0.14, ys, 0.16, wi.at + s * (ww / 2 + 0.07), wy + ys / 2, face + 0.04, STONE_L, 0, 0.02);
+        for (const s of [-1, 1]) for (let i = 0; i < arc.length - 1; i++) {
+          const a = arc[i], e = arc[i + 1], len = Math.hypot(e[0] - a[0], e[1] - a[1]), ang = Math.atan2(e[1] - a[1], e[0] - a[0]);
+          const nx = Math.sin(ang) * 0.16, ny = -Math.cos(ang) * 0.16;
+          W.box(gk, gp, len + 0.05, 0.16, 0.2, wi.at + s * ((a[0] + e[0]) / 2 + nx), wy + (a[1] + e[1]) / 2 + ny, face + 0.08, STONE_L, s > 0 ? ang : Math.PI - ang, 0.01);
+        }
+        for (const s of [-1, 1]) W.box(gk, gp, 0.16, 0.2, 0.22, wi.at + s * (ww / 2 + 0.2), wy + ys - 0.1, face + 0.1, STONE_D, 0, 0.02);
+        continue;
+      }
+      W.glass(gp, gm.warm, ww, tr - wy, 0.04, wi.at, (wy + tr) / 2, 0);
+      W.glass(gp, gm.sky, ww, top - tr, 0.04, wi.at, (tr + top) / 2, 0);
       if (ww >= 1.05) W.box(gk, gp, 0.13, wh, 0.34, wi.at, wy + wh / 2, 0, MULL, 0, 0.02);
       W.box(gk, gp, ww, 0.12, 0.34, wi.at, tr, 0, MULL, 0, 0.02);
       for (const o of [1, -1]) {
@@ -434,6 +459,26 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
 
   // ─── The keep: entrance bay ────────────────────────────────────────────────
   if (keep) keepMasonry(band, b, face, [fk, lifted]);
+  // A stable range: the hay loft's door over its door, a hoist beam over that, and a lantern on a
+  // bracket either side of the door.
+  if (keep && b.windows.some((wi) => wi.stall)) {
+    const dr = b.doors.find((x) => x.side === 's');
+    if (dr) {
+      const W = wallFrame(b, 's'), uc = dr.at + dr.w / 2;
+      band(true, doorH + 0.6, doorH + 1.45, (kk, pp, a, e) => W.box(kk, pp, 1.1, e - a, 0.1, uc, (a + e) / 2, face + 0.02, DARK, 0, 0.01));
+      band(true, doorH + 0.62, doorH + 1.43, (kk, pp, a, e) => W.box(kk, pp, 0.5, e - a, 0.08, uc - 0.27, (a + e) / 2, face + 0.12, WOOD_D, 0, 0.01));
+      band(true, doorH + 0.55, doorH + 0.65, (kk, pp, a, e) => W.box(kk, pp, 1.4, e - a, 0.24, uc, (a + e) / 2, face + 0.1, STONE_L, 0, 0.01));
+      const [hk, hp] = at(true, wallH - 0.2);
+      W.box(hk, hp, 0.2, 0.2, 1.1, uc, wallH - 0.1, face + 0.5, WOOD_D, 0, 0.02);
+      for (const sx of [-1, 1]) {
+        const [lk, lp] = at(true, 2.6);
+        const lu = uc + sx * (dr.w / 2 + 0.75);
+        W.box(lk, lp, 0.08, 0.08, 0.5, lu, 3.05, face + 0.25, IRON, 0, 0.01);
+        W.box(lk, lp, 0.26, 0.34, 0.26, lu, 2.8, face + 0.5, IRON, 0, 0.02);
+        W.box(lk, lp, 0.18, 0.24, 0.18, lu, 2.8, face + 0.5, 0xffd080, 0, 0.01, 0xffb040, 2);
+      }
+    }
+  }
 
   // ─── Roof ─────────────────────────────────────────────────────────────────
   const roofTop = roof(fk, lifted, b, UPPER);
@@ -751,31 +796,46 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
       block(true, ub - ua, P, (ua + ub) / 2, zc, 0.45, BH, STONE, 0.04);
     }
     const uc = dr.at + dr.w / 2;
-    // Stepped (corbelled) arch: two courses stepping in over the opening, a keystone above.
-    block(true, dr.w, P, uc, zc, dh + 1.0, BH, STONE, 0.04);
-    for (const [y, inset] of [[dh + 0.2, 0.35], [dh + 0.6, 0.75]] as [number, number][]) {
-      for (const e of [-1, 1]) block(true, inset + 0.1, P + 0.12, uc + e * (dr.w / 2 - inset / 2 + 0.05), zc + 0.04, y - 0.2, y + 0.2, STONE_L, 0.03);
+    /** A whole piece (not split at the cuts), in the band its height `y` falls in. */
+    const whole = (y: number, put: (kk: ModelKit, pp: Obj) => void) => band(true, y - 0.003, y + 0.003, (kk, pp) => put(kk, pp));
+    // A pointed (two-centred) arch over the door: the bay's front closes in along the two arcs to the
+    // apex, dressed voussoirs and a keystone round it, a hood mould with its label stops over that;
+    // inside the arch, over the door's head, a carved tympanum with the lord's gold diamond.
+    const spring = 2.8, rise = 2.9, apex = spring + rise, { arc } = pointedArch(dr.w, apex, 10, rise);
+    const half = (y: number) => {
+      for (let i = 0; i < arc.length - 1; i++) if (y >= arc[i][1] && y <= arc[i + 1][1]) return arc[i][0] + ((arc[i + 1][0] - arc[i][0]) * (y - arc[i][1])) / (arc[i + 1][1] - arc[i][1] || 1);
+      return 0;
+    };
+    for (let y = spring; y < apex - 0.01; y += 0.2) {
+      const y1 = Math.min(apex, y + 0.2), hw = half((y + y1) / 2);
+      for (const e of [-1, 1]) block(true, dr.w / 2 - hw, P, uc + e * (hw + (dr.w / 2 - hw) / 2), zc, y, y1 + 0.01, STONE, 0);
     }
-    block(true, dr.w - 1.3, P + 0.14, uc, zc + 0.05, dh + 0.79, dh + 1.21, STONE_L, 0.03);
+    block(true, dr.w, P, uc, zc, apex, BH, STONE, 0.04);
+    const ring = (out: number, t: number, p: number, color: number) => {
+      for (const e of [-1, 1]) for (let i = 0; i < arc.length - 1; i += 2) {
+        const a = arc[i], b = arc[Math.min(arc.length - 1, i + 2)], len = Math.hypot(b[0] - a[0], b[1] - a[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+        const nx = Math.sin(ang) * (out + t / 2), ny = -Math.cos(ang) * (out + t / 2), y = (a[1] + b[1]) / 2 + ny;
+        whole(y, (kk, pp) => cb(kk, pp, [len + 0.05, t, p], [uc + e * ((a[0] + b[0]) / 2 + nx), y, zc + P / 2 + p / 2 - 0.05], i % 4 ? STONE_L : color, [0, 0, e > 0 ? ang : Math.PI - ang], 0.02));
+      }
+    };
+    ring(-0.12, 0.46, 0.16, STONE_L);
+    ring(0.48, 0.16, 0.26, STONE_D);
+    whole(apex + 0.2, (kk, pp) => cb(kk, pp, [0.42, 0.62, 0.24], [uc, apex + 0.2, zc + P / 2 + 0.07], STONE_L, undefined, 0.03));
+    for (const e of [-1, 1]) {
+      block(true, 0.3, P + 0.14, uc + e * (dr.w / 2 + 0.15), zc + 0.04, 0.45, spring, STONE_L, 0.03);
+      whole(spring, (kk, pp) => cb(kk, pp, [0.26, 0.3, 0.3], [uc + e * (dr.w / 2 + 0.62), spring, zc + P / 2 + 0.1], STONE_D, undefined, 0.02));
+    }
+    block(true, dr.w - 0.1, 0.1, uc, zf + 0.06, 3.8 + 0.36, apex - 0.05, STONE_D, 0.01);
+    whole((4.16 + apex) / 2, (kk, pp) => kk.box(pp, [0.7, 0.7, 0.05], [uc, (4.16 + apex) / 2, zf + 0.13], RUG_TRIM, [0, 0, Math.PI / 4]));
     const [ak, ap] = [fk, lifted];
-    for (const e of [-1, 1]) block(true, 0.3, P + 0.14, uc + e * (dr.w / 2 + 0.15), zc + 0.04, 0.45, dh + 0.2, STONE_L, 0.03);
-    band(true, dh + 1.1, dh + 1.8, (kk, pp) => kk.mesh(pp, taper(0.46, P + 0.2, 0.7, P + 0.2, 0.7), STONE_L, [uc, dh + 1.45, zc + 0.05]));
     // The gate tower: the bay rises on above the roofline as a square tower over the great door,
     // reaching back over the wall onto the roof deck, with a string course, a paired arched window,
     // a corbelled, crenellated parapet and a slate spire.
     const TWH = wallH + 4.6, zb0 = d - 3.4, zb1 = zf + P, tz = (zb0 + zb1) / 2, td = zb1 - zb0, tw = u1 - u0;
     cb(ak, ap, [tw, TWH - wallH + 0.1, td], [uc, (wallH - 0.1 + TWH) / 2, tz], STONE, undefined, 0.04);
     cb(ak, ap, [tw + 0.2, 0.24, td + 0.2], [uc, wallH + 0.05, tz], STONE_D, undefined, 0.03);
-    // Its window: two dark lights under a stepped head, a mullion and a sill.
-    const wy0 = wallH + 1.0, wy1 = wallH + 3.0;
-    cb(ak, ap, [1.4, wy1 - wy0, 0.1], [uc, (wy0 + wy1) / 2, zb1 + 0.01], DARK, undefined, 0.01);
-    cb(ak, ap, [0.2, wy1 - wy0, 0.2], [uc, (wy0 + wy1) / 2, zb1 + 0.04], STONE_L, undefined, 0.02);
-    for (const s of [-1, 1]) {
-      cb(ak, ap, [0.4, 0.3, 0.2], [uc + s * 0.55, wy1 - 0.15, zb1 + 0.04], STONE_L, undefined, 0.02);
-      cb(ak, ap, [0.2, 0.3, 0.2], [uc + s * 0.45, wy1 - 0.45, zb1 + 0.04], STONE_L, undefined, 0.02);
-    }
-    cb(ak, ap, [1.9, 0.14, 0.3], [uc, wy0 - 0.07, zb1 + 0.1], STONE_L, undefined, 0.02);
-    cb(ak, ap, [2.1, 0.2, 0.22], [uc, wy1 + 0.35, zb1 + 0.08], STONE_D, undefined, 0.03);
+    // Its window: a tall pointed lancet like the hall's.
+    lancet(ak, ap, uc, wallH + 0.9, zb1, 0.9, 2.4, false);
     // Corbels, parapet and merlons round a flat deck; the banner pole.
     for (let i = 0; i < 6; i++) {
       const t = -tw / 2 + 0.4 + (i * (tw - 0.8)) / 5;
@@ -796,6 +856,41 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     ak.box(ap, [0.7, 0.7, 0.04], [uc, (wallH + by) / 2 + 0.3, zb + 0.04], RUG_TRIM, [0, 0, Math.PI / 4]);
     for (const e of [-1, 1]) ak.box(ap, [0.1, wallH - 0.4 - by - 0.5, 0.04], [uc + e * 0.8, (wallH - 0.4 + by + 0.5) / 2, zb + 0.04], RUG_TRIM);
   }
+}
+
+/**
+ * A stable stall's opening on a facade (the wall frame's outer face, at u): a pointed recess in pale
+ * dressed stone, dark within, a timber half-door across its lower part and a horse looking out over
+ * it (`coat` 0 a chestnut with a white blaze, 1 a grey).
+ */
+function stall(W: WallFrame, band: Band, at: (lift: boolean, y: number) => KitAt, lift: boolean, face: number, u: number, y0: number, w: number, h: number, coat: number) {
+  const { ys, arc } = pointedArch(w, h, 6);
+  const [bk, bp] = at(lift, 0);
+  W.shape(bk, bp, archPane(w, h, 0.06), DARK, u, y0 + 0.02, face + 0.02);
+  for (const s of [-1, 1]) band(lift, y0, y0 + ys, (kk, pp, a, e) => W.box(kk, pp, 0.28, e - a, 0.24, u + s * (w / 2 + 0.14), (a + e) / 2, face + 0.1, STONE_L, 0, 0.02));
+  for (const s of [-1, 1]) for (let i = 0; i < arc.length - 1; i++) {
+    const a = arc[i], e = arc[i + 1], len = Math.hypot(e[0] - a[0], e[1] - a[1]), ang = Math.atan2(e[1] - a[1], e[0] - a[0]);
+    const nx = Math.sin(ang) * 0.17, ny = -Math.cos(ang) * 0.17, y = y0 + (a[1] + e[1]) / 2 + ny;
+    const [vk, vp] = at(lift, y);
+    W.box(vk, vp, len + 0.05, 0.3, 0.24, u + s * ((a[0] + e[0]) / 2 + nx), y, face + 0.1, i % 2 ? STONE_L : STONE, s > 0 ? ang : Math.PI - ang, 0.01);
+  }
+  // The half-door: boarded oak, a rail along its top, iron straps.
+  W.box(bk, bp, w - 0.1, 1.15, 0.1, u, y0 + 0.62, face + 0.07, WOOD_D, 0, 0.01);
+  W.box(bk, bp, w, 0.1, 0.18, u, y0 + 1.2, face + 0.1, WOOD_L, 0, 0.01);
+  for (const y of [0.35, 0.95]) W.box(bk, bp, w - 0.2, 0.07, 0.14, u, y0 + y, face + 0.12, IRON, 0, 0.005);
+  // The horse's head over it, looking out.
+  const hide = coat ? 0xb8aea2 : 0x8a5430, mane = coat ? 0x8a8278 : 0x2a1a12;
+  const [hk, hp] = at(lift, 1.4);
+  W.box(hk, hp, 0.34, 0.6, 0.42, u, y0 + 1.5, face + 0.12, hide, 0, 0.06);
+  W.box(hk, hp, 0.3, 0.32, 0.5, u, y0 + 1.68, face + 0.5, hide, 0, 0.06);
+  W.box(hk, hp, 0.24, 0.24, 0.3, u, y0 + 1.56, face + 0.82, hide, 0, 0.05);
+  W.box(hk, hp, 0.25, 0.08, 0.12, u, y0 + 1.46, face + 0.94, 0x2a1a12, 0, 0.02);
+  if (!coat) W.box(hk, hp, 0.08, 0.04, 0.5, u, y0 + 1.85, face + 0.6, 0xf0ece4, 0, 0.01);
+  for (const s of [-1, 1]) {
+    W.box(hk, hp, 0.07, 0.18, 0.08, u + s * 0.1, y0 + 1.92, face + 0.32, hide, 0, 0.02);
+    W.box(hk, hp, 0.04, 0.05, 0.05, u + s * 0.16, y0 + 1.74, face + 0.48, 0x1a1210, 0, 0.01);
+  }
+  W.box(hk, hp, 0.12, 0.22, 0.2, u, y0 + 1.86, face + 0.2, mane, 0, 0.02);
 }
 
 /**

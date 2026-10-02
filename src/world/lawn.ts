@@ -3,6 +3,7 @@ import type { ZoneTheme } from '../data/zones';
 import { addPatch } from '../render/surface';
 import { noiseTexture } from '../render/textures';
 import { Cell, Ground, Lawn, type ZoneLayout } from './layout';
+import { strandField } from './strands';
 
 /**
  * A full grass carpet over every lawn cell (layout.lawn): shell layers lifted off the terrain, each
@@ -60,7 +61,25 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
   const lawn = layout.lawn;
   if (!lawn) return [];
   const { w, h } = layout;
-  const kind = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= h ? 0 : lawn[z * w + x]);
+  const VW = w + 1;
+  // Along a road the carpet runs out over the road's edge cells and is cut back exactly along the
+  // road's true edge (strands.ts), and along a stream or pool it stops just short of the waterline;
+  // so those edges curve with the road or the water instead of stepping along the cells.
+  const sf = strandField(layout);
+  const edge = new Uint8Array(w * h);
+  if (sf) for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    const i = z * w + x;
+    if (lawn[i] || layout.cells[i] !== Cell.Ground || layout.fluid[i]) continue;
+    const near = [z * VW + x, z * VW + x + 1, (z + 1) * VW + x, (z + 1) * VW + x + 1].some((v) => sf.path[v] > -0.9 && sf.path[v] < 0.9);
+    if (!near) continue;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+      const xx = x + dx, zz = z + dz;
+      if (xx < 0 || zz < 0 || xx >= w || zz >= h || !lawn[zz * w + xx]) continue;
+      edge[i] = lawn[zz * w + xx];
+      break;
+    }
+  }
+  const kind = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= h ? 0 : lawn[z * w + x] || edge[z * w + x]);
   const pal = theme.ground[Ground.Grass] ?? [0x5a7a3a, 0x6a8a44];
   const mid = new THREE.Color(pal[0]).lerp(new THREE.Color(pal[1]), 0.5);
   const uniforms = {
@@ -225,12 +244,15 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
   // layout cuts a disc from the lawn (its border crosses one half exactly on the circle, else 1),
   // the share of garden lawn, and whether a hedge, bed or statue stands on one of its cells (the
   // grass grows long at its foot).
-  const VW = w + 1;
   const weight = new Float32Array(VW * (h + 1)), garden = new Float32Array(VW * (h + 1)), foot = new Float32Array(VW * (h + 1));
   const blocked = (x: number, z: number) => x >= 0 && z >= 0 && x < w && z < h && layout.cells[z * w + x] === Cell.Blocked && !!kind(x, z);
   for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
     let wt = 1;
     for (const c of layout.lawnCut ?? []) wt = Math.min(wt, Math.max(0, Math.min(1, 0.5 + (Math.hypot(x - c.x, z - c.z) - c.r) * 0.5)));
+    if (sf) {
+      const v = z * VW + x;
+      wt = Math.min(wt, Math.max(0, Math.min(1, 0.5 + sf.path[v] * 1.2)), Math.max(0, Math.min(1, 0.5 + (sf.wet[v] - 0.35) * 1.2)));
+    }
     weight[z * VW + x] = wt;
     let gd = 0, ft = 0;
     for (const [ax, az] of [[x - 1, z - 1], [x, z - 1], [x - 1, z], [x, z]]) {

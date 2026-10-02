@@ -731,12 +731,14 @@ function dragonBeast(k: ModelKit, g: THREE.Object3D, pose: BeastPose): THREE.Vec
   const lean = mix(0.45, 0.32, R);
   const spineAt = (t: number): V3 => [0, mix(0.5, mix(1.6, 2.05, R), t), mix(-0.58, -0.58 + lean, t)];
   chain([spineAt(0), spineAt(0.45), spineAt(0.8), spineAt(1)], [0.98, 0.9, 0.78, 0.62], B);
-  // Paler belly plates down the front of the body, each square to it.
+  // Paler belly scales down the front of the body: broad overlapping plates, each tapering to its
+  // lower edge and tucked under the one below, narrowing toward the throat.
   const tilt = Math.atan2(lean, spineAt(1)[1] - 0.5);
-  for (let i = 0; i < 10; i++) {
-    // Each plate sits proud of the body's flat front face (0.83 of its radius, squashed 0.9).
-    const t = 0.05 + i * 0.095, p = spineAt(t), r = mix(0.49, 0.31, t), half = r * 0.83 + 0.01;
-    cb(k, g, [r * 0.78, 0.11, 0.08], [0, p[1] - Math.sin(tilt) * half, p[2] + Math.cos(tilt) * half], BL, [tilt, 0, 0], 0.03);
+  const BELLY = 0x7e5e36;
+  round(k, g, [0, spineAt(0.04)[1] - Math.sin(tilt) * 0.4, spineAt(0.04)[2] + Math.cos(tilt) * 0.4], [0, spineAt(0.96)[1] - Math.sin(tilt) * 0.25, spineAt(0.96)[2] + Math.cos(tilt) * 0.25], 0.3, 0.18, BELLY, 0.45);
+  for (let i = 0; i < 8; i++) {
+    const t = 0.05 + i * 0.12, p = spineAt(t), r = mix(0.49, 0.29, t), half = r * 0.86;
+    k.mesh(g, taper(r * 0.62, 0.05, r * 1.0, 0.12, 0.3), i % 2 ? BELLY : BL, [0, p[1] - Math.sin(tilt) * half, p[2] + Math.cos(tilt) * half], [tilt + 0.16, 0, 0]);
   }
   // The neck in an S up from the shoulders, the head at its top.
   const top = spineAt(1), hu = pose.head;
@@ -856,6 +858,179 @@ function crown(k: ModelKit, g: THREE.Object3D, x: number, z: number, r: number, 
     if (i % 2 === 0) cb(k, g, [c * 0.82, 0.75, 0.54], [x + Math.sin(a) * (r + 0.05), P + 1.37, z + Math.cos(a) * (r + 0.05)], hash01(i, r) > 0.7 ? STONE_L : STONE, [0, a, 0], 0.05);
   }
   k.cyl(g, r - 0.2, r - 0.2, 0.1, [x, P + 0.05, z], 0x5e5850, undefined, N);
+}
+
+/**
+ * A pointed (two-centred) arch `w` wide whose apex stands `h` above its sill: straight jambs up to
+ * the springing, then two arcs meeting at the apex (an equilateral arch where the opening is tall
+ * enough). Returns the springing height, the arch's rise and the points of its right-hand arc from
+ * the springing to the apex (x across from the centre line, y up from the sill); the left-hand arc
+ * is its mirror.
+ */
+export function pointedArch(w: number, h: number, n = 7, rise?: number) {
+  const hw = w / 2, ah = rise ?? Math.min(w * 0.866, h * 0.62), ys = h - ah;
+  const c = (ah * ah - hw * hw) / w, R = hw + c, ta = Math.atan2(ah, c);
+  const arc: [number, number][] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = (ta * i) / n;
+    arc.push([-c + R * Math.cos(t), ys + R * Math.sin(t)]);
+  }
+  return { ys, ah, arc, c, R };
+}
+
+/** The opening of a pointed arch as a Shape (sill at y = 0, centred on x = 0). */
+export function archShape(w: number, h: number, n = 7) {
+  const { arc } = pointedArch(w, h, n), hw = w / 2;
+  const s = new THREE.Shape();
+  s.moveTo(-hw, 0);
+  s.lineTo(hw, 0);
+  for (const [x, y] of arc) s.lineTo(x, y);
+  for (let i = arc.length - 2; i >= 0; i--) s.lineTo(-arc[i][0], arc[i][1]);
+  s.closePath();
+  return s;
+}
+
+/**
+ * The two spandrels that fill a square-headed opening `w` wide and `h` tall down to a pointed arch
+ * inside it (so a rectangular hole in a wall reads as a pointed lancet), extruded `dep` deep and
+ * centred on z = 0.
+ */
+const spandrelCache = new Map<string, THREE.BufferGeometry>();
+export function spandrels(w: number, h: number, dep: number) {
+  const key = `${w},${h},${dep}`;
+  let g = spandrelCache.get(key);
+  if (g) return g;
+  const { arc } = pointedArch(w, h), hw = w / 2;
+  const parts: THREE.BufferGeometry[] = [];
+  for (const sx of [-1, 1]) {
+    const s = new THREE.Shape();
+    s.moveTo(sx * hw, arc[0][1] - 0.01);
+    s.lineTo(sx * (hw + 0.01), h + 0.01);
+    s.lineTo(0, h + 0.01);
+    for (let i = arc.length - 1; i >= 0; i--) s.lineTo(sx * arc[i][0], arc[i][1]);
+    s.closePath();
+    parts.push(new THREE.ExtrudeGeometry(s, { depth: dep, bevelEnabled: false }).translate(0, 0, -dep / 2));
+  }
+  g = mergeGeometries(parts.map((p) => p.toNonIndexed()))!;
+  g.computeVertexNormals();
+  spandrelCache.set(key, g);
+  return g;
+}
+
+/** A pane of glass in a pointed opening, `dep` thick, centred on z = 0. */
+const paneCache = new Map<string, THREE.BufferGeometry>();
+export function archPane(w: number, h: number, dep: number) {
+  const key = `${w},${h},${dep}`;
+  let g = paneCache.get(key);
+  if (!g) {
+    g = new THREE.ExtrudeGeometry(archShape(w, h), { depth: dep, bevelEnabled: false }).translate(0, 0, -dep / 2);
+    paneCache.set(key, g);
+  }
+  return g;
+}
+
+/**
+ * Stones laid round a pointed arch (`w` wide, apex `h` above the sill, sill at y0, centred on x), on a
+ * face at z (facing +Z): voussoirs `t` deep standing proud `p` of the face, `n` to each side, and a
+ * keystone; `out` sets them out from the opening's edge.
+ */
+export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, z: number, w: number, h: number, color: number, opt: { n?: number; t?: number; p?: number; out?: number; key?: number; rise?: number } = {}) {
+  const { n = 5, t = 0.26, p = 0.14, out = 0.12 } = opt;
+  const { arc } = pointedArch(w, h, n * 2, opt.rise);
+  for (const sx of [-1, 1]) for (let i = 0; i < n; i++) {
+    const a = arc[i * 2], b = arc[i * 2 + 2], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    // Out from the opening along the arc's outward normal.
+    const nx = Math.sin(ang), ny = -Math.cos(ang);
+    cb(k, g, [len + 0.04, t, p], [x + sx * (mx + nx * (out + t / 2)), y0 + my + ny * (out + t / 2), z + p / 2], color, [0, 0, sx > 0 ? ang : Math.PI - ang], 0.02);
+  }
+  if (opt.key !== undefined) cb(k, g, [0.3, 0.42, p + 0.04], [x, y0 + h + out + 0.12, z + p / 2], opt.key, undefined, 0.02);
+}
+
+/**
+ * A tall pointed lancet on a face at z (facing +Z), its sill at y: the opening sunk into a dressed
+ * surround (jambs to the springing, voussoirs round the head), a pane of glass glowing with the lit
+ * room behind it (or dark), a hood mould following the arch and a projecting sill.
+ */
+export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true) {
+  const { ys } = pointedArch(w, h);
+  k.mesh(g, archPane(w, h, 0.05), lit ? 0xffc870 : 0x1e2430, [x, y, z - 0.08], undefined, lit ? 0xffa040 : 0, lit ? 0.9 : 1);
+  // A slender mullion up to the springing, leading across it.
+  cb(k, g, [0.06, ys, 0.06], [x, y + ys / 2, z - 0.04], STONE_L, undefined, 0.01);
+  for (const sx of [-1, 1]) cb(k, g, [0.2, ys + 0.02, 0.24], [x + sx * (w / 2 + 0.1), y + ys / 2, z - 0.02], STONE_L, undefined, 0.02);
+  archRing(k, g, x, y, z - 0.14, w, h, STONE_L, { n: 4, t: 0.2, p: 0.24, out: 0 });
+  archRing(k, g, x, y, z - 0.04, w + 0.42, h + 0.26, STONE_D, { n: 4, t: 0.12, p: 0.16, out: 0 });
+  for (const sx of [-1, 1]) cb(k, g, [0.16, 0.22, 0.2], [x + sx * (w / 2 + 0.3), y + ys - 0.06, z + 0.06], STONE_D, undefined, 0.02);
+  cb(k, g, [w + 0.5, 0.14, 0.32], [x, y - 0.07, z + 0.06], STONE_L, undefined, 0.02);
+}
+
+/**
+ * A gate through a stretch of full-height curtain (built along local X, outer face toward -Z like
+ * the curtain): the passage `P` wide under a pointed arch, dressed voussoirs and a hood mould on both
+ * faces, pale jambs, the wall walk carried over it. Options: `door` folds two oak leaves back against
+ * the passage's sides, `steps` lays a stone stoop out from the outer face, `head` raises a crenellated
+ * head over the gate with the lord's crest on its inner face, `lanterns` hangs a lantern either side
+ * of the arch on the faces listed (-1 outer, 1 inner).
+ */
+function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: boolean; steps?: boolean; head?: boolean; lanterns?: number[] }) {
+  const L = P + 2.4, T = 2.2, H = 7, S = P >= 3 ? 3.0 : 2.4, rise = P >= 3 ? 1.9 : 1.25, apex = S + rise;
+  const { arc } = pointedArch(P, apex, 8, rise);
+  const half = (y: number) => {
+    if (y <= S) return P / 2;
+    for (let i = 0; i < arc.length - 1; i++) if (y >= arc[i][1] && y <= arc[i + 1][1]) {
+      const t = (y - arc[i][1]) / (arc[i + 1][1] - arc[i][1] || 1);
+      return arc[i][0] + (arc[i + 1][0] - arc[i][0]) * t;
+    }
+    return 0;
+  };
+  cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
+  for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2, S, T], [sx * (P / 2 + (L - P) / 4), S / 2, 0], STONE, undefined, 0.04);
+  for (let y = S; y < apex - 0.01; y += 0.2) {
+    const y1 = Math.min(apex, y + 0.2), hw = half((y + y1) / 2);
+    for (const sx of [-1, 1]) cb(k, g, [L / 2 - hw, y1 - y + 0.01, T], [sx * (hw + (L / 2 - hw) / 2), (y + y1) / 2, 0], STONE, undefined, 0);
+  }
+  cb(k, g, [L, H - apex, T], [0, apex + (H - apex) / 2, 0], STONE, undefined, 0.04);
+  for (const e of [-1, 1]) {
+    const f = new THREE.Group();
+    f.rotation.y = e > 0 ? 0 : Math.PI;
+    g.add(f);
+    const z = T / 2;
+    for (const sx of [-1, 1]) cb(k, f, [0.34, S, 0.16], [sx * (P / 2 + 0.17), S / 2, z + 0.08], STONE_L, undefined, 0.02);
+    archRing(k, f, 0, 0, z, P, apex, STONE_L, { n: 5, t: 0.4, p: 0.16, out: 0, key: STONE_L, rise });
+    archRing(k, f, 0, 0, z, P + 1.0, apex + 0.55, STONE_D, { n: 5, t: 0.14, p: 0.26, out: 0, rise: rise + 0.55 });
+    for (const sx of [-1, 1]) cb(k, f, [0.2, 0.3, 0.3], [sx * (P / 2 + 0.55), S + 0.02, z + 0.15], STONE_D, undefined, 0.02);
+    if (opt.lanterns?.includes(e)) for (const sx of [-1, 1]) {
+      const lx = sx * (P / 2 + 0.95);
+      cb(k, f, [0.08, 0.08, 0.5], [lx, S + 0.55, z + 0.25], IRON, undefined, 0.01);
+      cb(k, f, [0.28, 0.36, 0.28], [lx, S + 0.28, z + 0.5], IRON, undefined, 0.03);
+      k.box(f, [0.2, 0.26, 0.2], [lx, S + 0.28, z + 0.5], 0xffd080, undefined, 0xffb040, 2);
+    }
+    if (opt.head && e > 0) {
+      // The lord's crest over the arch: a red shield with the gold dragon diamond.
+      cb(k, f, [0.9, 1.0, 0.1], [0, apex + 0.95, z + 0.06], 0x7a2020, undefined, 0.02);
+      k.mesh(f, wedge(0.9, 0.4, 0.1), 0x7a2020, [0, apex + 0.25, z + 0.06], [Math.PI, 0, 0]);
+      k.box(f, [0.36, 0.36, 0.04], [0, apex + 0.85, z + 0.13], 0xd8b060, [0, 0, Math.PI / 4]);
+    }
+  }
+  // The wall walk carried over the gate: the outer parapet and merlons, the inner rail; a gate's head
+  // rises above it, crenellated on both faces.
+  if (opt.head) {
+    cb(k, g, [L + 0.5, 1.4, T + 0.36], [0, H + 0.7, 0], STONE, undefined, 0.04);
+    cb(k, g, [L + 0.6, 0.16, T + 0.46], [0, H + 1.42, 0], STONE_L, undefined, 0.03);
+    for (const e of [-1, 1]) for (let i = 0; i < 4; i++) cb(k, g, [0.7, 0.66, 0.5], [-L / 2 + 0.4 + (i * (L - 0.8)) / 3, H + 1.83, e * (T / 2 - 0.05)], i % 2 ? STONE_L : STONE, undefined, 0.04);
+    for (let i = 0; i < 6; i++) for (const e of [-1, 1]) cb(k, g, [0.32, 0.36, 0.4], [-L / 2 + 0.5 + (i * (L - 1.0)) / 5, H - 0.2, e * (T / 2 + 0.12)], STONE_D, undefined, 0.03);
+  } else {
+    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], STONE, undefined, 0.03);
+    for (let u = -L / 2 + 0.5; u < L / 2; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], STONE, undefined, 0.05);
+    cb(k, g, [L, 0.9, 0.3], [0, H + 0.45, T / 2 - 0.15], STONE_D, undefined, 0.03);
+  }
+  if (opt.door) for (const sx of [-1, 1]) {
+    const lw = P / 2 - 0.08;
+    cb(k, g, [0.1, S - 0.1, lw], [sx * (P / 2 - 0.08), (S - 0.1) / 2, -0.4 + lw / 2], WOOD_D, undefined, 0.02);
+    for (const y of [0.7, 1.8]) k.box(g, [0.12, 0.08, lw - 0.1], [sx * (P / 2 - 0.08), y, -0.4 + lw / 2], IRON);
+  }
+  if (opt.steps) for (let i = 0; i < 2; i++) cb(k, g, [P + 0.9 - i * 0.3, 0.16, 0.5], [0, 0.08 + i * 0.12, -T / 2 - 0.55 + i * 0.25], i ? STONE_L : STONE, undefined, 0.02);
+  k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], STONE_D);
 }
 
 /** The layer a pool's mirror draws (the fountain's own dragon, rock and jets). */
@@ -1237,6 +1412,11 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], STONE, undefined, 0.03);
     for (let u = -L / 2 + 0.5; u < L / 2 - 0.3; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], hash01(u, T) > 0.7 ? STONE_L : STONE, undefined, 0.05);
     cb(k, g, [L, 0.9, 0.3], [0, H + 0.45, T / 2 - 0.15], STONE_D, undefined, 0.03);
+    // On the inner face, the wall walk's ledge carried out on a row of corbels, a second string
+    // course below it.
+    cb(k, g, [L, 0.22, 0.42], [0, H - 0.08, T / 2 + 0.16], STONE_L, undefined, 0.02);
+    for (let u = -L / 2 + 0.6; u < L / 2 - 0.3; u += 1.2) cb(k, g, [0.32, 0.46, 0.34], [u, H - 0.42, T / 2 + 0.12], STONE_D, undefined, 0.02);
+    cb(k, g, [L, 0.16, T + 0.12], [0, 5.6, 0], STONE_D, undefined, 0.02);
     // Arrow slits in the outer face.
     for (let u = -L / 2 + 2; u < L / 2 - 1; u += 4) k.box(g, [0.16, 1.0, 0.1], [u, 4.6, -T / 2 - 0.01], DARK);
   },
@@ -1258,7 +1438,7 @@ const BUILDERS: Record<string, Builder> = {
    * outer face either side of the passage (`len` wide, their centres 5 either side of it), and
    * between them the gatehouse block, through the curtain's thickness and a storey higher than it:
    * the passage under a pointed arch of dressed voussoirs, the portcullis raised in the arch, a
-   * machicolated, crenellated parapet and the lord's banner over the arch. Built along local X,
+   * machicolated, crenellated parapet, the lord's banner over the arch and one on each drum. Built along local X,
    * outer face toward -Z.
    */
   outer_gatehouse: (k, g, arg) => {
@@ -1316,7 +1496,8 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [2 * bw, 1.0, 0.5], [0, GH + 0.5, zc + D / 2 - 0.25], STONE, undefined, 0.03);
     for (const sx of [-1, 1]) cb(k, g, [0.5, 1.0, D - 0.4], [sx * (bw - 0.25), GH + 0.5, zc], STONE, undefined, 0.03);
     cb(k, g, [2 * bw + 0.1, 0.14, 0.74], [0, GH + 1.06, zc - D / 2 - 0.15], STONE_L, undefined, 0.02);
-    k.box(g, [2 * bw - 0.6, 0.06, D - 0.8], [0, GH + 0.03, zc], 0x5e5850);
+    // The roof deck stands nearly flush with the parapet, so the block reads as one solid mass.
+    cb(k, g, [2 * bw - 0.5, 0.7, D - 0.7], [0, GH + 0.35, zc], STONE_D, undefined, 0.02);
     for (let i = 0; i < 4; i++) {
       const u = -bw + 0.5 + (i * (2 * bw - 1.0)) / 3;
       cb(k, g, [0.8, 0.75, 0.62], [u, GH + 1.5, zc - D / 2 - 0.15], i % 2 ? STONE_L : STONE, undefined, 0.04);
@@ -1328,44 +1509,12 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [1.6, 2.4, 0.06], [0, GH - 2.3, bz], 0x7a2020, undefined, 0.01);
     k.mesh(g, wedge(1.6, 0.45, 0.06), 0x7a2020, [0, GH - 3.72, bz], [Math.PI, 0, 0]);
     k.box(g, [0.6, 0.6, 0.04], [0, GH - 2.2, bz - 0.05], 0xd8b060, [0, 0, Math.PI / 4]);
-    cb(k, g, [0.12, 2.6, 0.12], [0, GH + 2.3, zc], IRON, undefined, 0.02);
-    cb(k, g, [1.3, 0.8, 0.04], [0.67, GH + 3.1, zc], 0x7a2020, undefined, 0.01);
-    k.box(g, [P - 0.1, 0.04, D], [0, 0.02, zc], STONE_D);
-  },
-  /**
-   * The postern: a narrow gate `len` wide through a short stretch of full-height curtain, under a
-   * pointed arch of pale dressed stone on both faces, an iron lantern either side on the inside,
-   * the oak door set back in the passage.
-   */
-  postern: (k, g, arg) => {
-    const P = lenOf(arg) ?? 2, L = P + 2.4, T = 2.2, H = 7, S = 2.6;
-    cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
-    for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2, S, T], [sx * (P / 2 + (L - P) / 4), S / 2, 0], STONE, undefined, 0.04);
-    // The arch head: courses closing in to a point over the passage, solid above.
-    for (let y = S; y < S + 1.2; y += 0.2) {
-      const hw = (P / 2) * (1 - (y + 0.1 - S) / 1.2);
-      for (const sx of [-1, 1]) cb(k, g, [L / 2 - hw, 0.21, T], [sx * (hw + (L / 2 - hw) / 2), y + 0.1, 0], STONE, undefined, 0);
-    }
-    cb(k, g, [L, H - S - 1.2, T], [0, S + 1.2 + (H - S - 1.2) / 2, 0], STONE, undefined, 0.04);
-    for (const e of [-1, 1]) {
-      const fz = e * (T / 2 + 0.06);
-      for (const sx of [-1, 1]) {
-        cb(k, g, [0.32, S, 0.18], [sx * (P / 2 + 0.16), S / 2, fz], STONE_L, undefined, 0.02);
-        cb(k, g, [0.34, 1.5, 0.18], [sx * (P / 4 + 0.08), S + 0.6, fz], STONE_L, [0, 0, sx * 0.72], 0.02);
-      }
-      cb(k, g, [0.4, 0.5, 0.2], [0, S + 1.32, fz], STONE_L, undefined, 0.02);
-    }
-    // Inside: an iron lantern on a bracket either side of the arch.
+    // A banner on each drum (none over the passage, so the view up the avenue stays clear).
     for (const sx of [-1, 1]) {
-      cb(k, g, [0.08, 0.08, 0.5], [sx * (P / 2 + 0.75), 3.3, T / 2 + 0.25], IRON, undefined, 0.01);
-      cb(k, g, [0.26, 0.34, 0.26], [sx * (P / 2 + 0.75), 3.05, T / 2 + 0.48], IRON, undefined, 0.03);
-      k.box(g, [0.18, 0.24, 0.18], [sx * (P / 2 + 0.75), 3.05, T / 2 + 0.48], 0xffd080, undefined, 0xffb040, 2);
+      cb(k, g, [0.12, 2.6, 0.12], [sx * cx, H + 1.3, tz], IRON, undefined, 0.02);
+      cb(k, g, [1.3, 0.8, 0.04], [sx * cx + sx * 0.67, H + 2.1, tz], 0x7a2020, undefined, 0.01);
     }
-    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], STONE, undefined, 0.03);
-    for (let u = -L / 2 + 0.5; u < L / 2; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], STONE, undefined, 0.05);
-    cb(k, g, [P - 0.1, S + 0.6, 0.12], [0, (S + 0.6) / 2, -0.55], WOOD_D, undefined, 0.02);
-    for (const y of [0.8, 2.0]) k.box(g, [P - 0.1, 0.1, 0.06], [0, y, -0.63], IRON);
-    k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], STONE_D);
+    k.box(g, [P - 0.1, 0.04, D], [0, 0.02, zc], STONE_D);
   },
   /**
    * A solid masonry stair against a wall's inner face (on its -Z side), climbing toward +X over
@@ -1397,24 +1546,16 @@ const BUILDERS: Record<string, Builder> = {
       cb(k, g, [c, 0.8, 0.6], [x, H + 0.9, z], STONE, [0, a, 0], 0.03);
       if (i % 2 === 0) cb(k, g, [c * 0.8, 0.7, 0.62], [x, H + 1.65, z], hash01(i, r) > 0.7 ? STONE_L : STONE, [0, a, 0], 0.05);
     }
-    // Tall pointed lancets, each centred on a face of the drum and set back in a deep dressed
-    // surround (jambs, a pointed head and a sill standing proud of the wall, the glass behind them),
-    // stacked one per storey in columns either side of the south, mirrored east and west.
+    // Tall pointed lancets, each centred on a face of the drum (the same window as the halls'), stacked
+    // one per storey in columns either side of the south, mirrored east and west.
     const ap = r * Math.cos(Math.PI / N), step = (Math.PI * 2) / N;
     for (const col of [3, 6]) for (const sgn of [-1, 1]) {
-      const a = sgn * (col + 0.5) * step, at = (d: number): [number, number] => [Math.sin(a) * d, Math.cos(a) * d];
-      for (const y of col === 3 ? [2.4, 6.2, 9.8] : [6.2, 9.8]) {
-        const [gx, gz] = at(ap + 0.03), [fx, fz] = at(ap + 0.12);
-        k.box(g, [0.7, 1.9, 0.06], [gx, y + 0.95, gz], 0xffc870, [0, a, 0], 0xffa040, 1.0);
-        for (const s of [-1, 1]) {
-          const ox = Math.cos(a) * s * 0.47, oz = -Math.sin(a) * s * 0.47;
-          cb(k, g, [0.24, 2.0, 0.26], [fx + ox, y + 1.0, fz + oz], STONE_L, [0, a, 0], 0.02);
-          const hx = Math.cos(a) * s * 0.2, hz = -Math.sin(a) * s * 0.2;
-          cb(k, g, [0.62, 0.26, 0.26], [fx + hx, y + 2.15, fz + hz], STONE_L, [0, a, s * -0.62], 0.02);
-        }
-        cb(k, g, [1.1, 0.16, 0.36], [fx, y - 0.05, fz], STONE_L, [0, a, 0], 0.02);
-        k.box(g, [0.06, 1.9, 0.08], [gx + Math.sin(a) * 0.04, y + 0.95, gz + Math.cos(a) * 0.04], STONE_L, [0, a, 0]);
-      }
+      const a = sgn * (col + 0.5) * step;
+      const face = new THREE.Group();
+      face.position.set(Math.sin(a) * ap, 0, Math.cos(a) * ap);
+      face.rotation.y = a;
+      g.add(face);
+      for (const y of col === 3 ? [2.2, 6.0, 9.6] : [6.0, 9.6]) lancet(k, face, 0, y, 0.02, 0.72, 2.3);
     }
     cb(k, g, [0.14, 3.2, 0.14], [0, H + 2.5, 0], IRON, undefined, 0.02);
     cb(k, g, [1.6, 1.0, 0.05], [0.82, H + 3.4, 0], 0x7a2020, undefined, 0.01);
@@ -1596,14 +1737,20 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [L + 0.06, 0.16, 0.96], [0, H + 0.08, -0.25], STONE_L, undefined, 0.03);
     cb(k, g, [L + 0.02, 0.5, 0.5], [0, H + 0.41, -0.4], STONE, undefined, 0.03);
   },
-  /** A low stone parapet along local X (`arg` = length): a plinth, a solid breast wall, a coping. */
+  /**
+   * A low stone parapet along local X (`arg` = length): a plinth, a solid breast wall, a coping; under
+   * it, on its open (+Z) side, a cut-stone course down over the lip of the drop, so the edge it
+   * stands on is finished in dressed stone.
+   */
   parapet: (k, g, arg) => {
     const L = Math.max(2, arg ?? 6);
+    cb(k, g, [L + 0.08, 1.5, 0.7], [0, -0.62, 0.42], STONE_D, undefined, 0.03);
+    cb(k, g, [L + 0.1, 0.14, 0.82], [0, -1.32, 0.46], STONE_DD, undefined, 0.02);
     cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], STONE_DD, undefined, 0.04);
     cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], STONE, undefined, 0.04);
     cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], STONE_L, undefined, 0.03);
     const n = Math.max(1, Math.round(L / 2.6));
-    for (let i = 0; i <= n; i++) cb(k, g, [0.7, 0.32, 0.86], [-L / 2 + (i * L) / n, 1.12, 0], STONE_D, undefined, 0.04);
+    for (let i = 0; i < n; i++) cb(k, g, [0.7, 0.32, 0.86], [-L / 2 + ((i + 0.5) * L) / n, 1.12, 0], STONE_D, undefined, 0.04);
   },
   /** A clipped box hedge along local X, `len` long, with leafy lumps on top. */
   hedge: (k, g, arg) => {
@@ -1630,7 +1777,7 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [0.5, 0.46, 0.46], [0.3, 1.01, 0.1], 0xa08a60, [0, -0.2, 0], 0.18);
     cb(k, g, [0.5, 0.45, 0.5], [-0.2, 1.0, 0.5], WOOD_L, [0, 0.2, 0], 0.04);
   },
-  /** A straw archery butt on an easel, rings facing +Z. */
+  /** A straw archery butt on an easel, rings facing +Z, a pennant flying beside it. */
   target: (k, g) => {
     for (const x of [-0.45, 0.45]) cb(k, g, [0.1, 1.6, 0.1], [x, 0.8, -0.2], WOOD_D, undefined, 0.02);
     cb(k, g, [0.1, 1.5, 0.1], [0, 0.7, -0.6], WOOD_D, [-0.4, 0, 0], 0.02);
@@ -1640,32 +1787,46 @@ const BUILDERS: Record<string, Builder> = {
       k.mesh(g, octagon(r, 0.04), c, [0, 1.15, 0.17 + i * 0.03], [0, Math.PI / 2, 0]);
     });
     for (const [x, y] of [[0.12, 1.25], [-0.2, 1.05]]) cb(k, g, [0.03, 0.03, 0.5], [x, y, 0.45], WOOD_L, [0.1, 0.1, 0], 0.01);
+    // A pennant on a pole beside it, so the archers can read the wind.
+    cb(k, g, [0.06, 2.4, 0.06], [0.7, 1.2, -0.2], WOOD_D, undefined, 0.01);
+    k.mesh(g, wedge(0.04, 0.32, 0.6), 0xa03030, [0.7, 2.22, 0.1], [0, Math.PI / 2, 0]);
   },
   // ─── Castle gardens ───────────────────────────────────────────────────────────
-  /** A flower bed `len` long: a low stone kerb round dark soil, rows of flowers (`v` picks the colours). */
+  /**
+   * A flower bed `len` long: a low stone kerb round dark soil, planted in drifts of one colour each
+   * (`v` picks the colours): tall flower spikes down the middle, rounded clusters of bloom either side
+   * and low trailing clumps along the edges, their leaves spilling over the kerb.
+   */
   flower_bed: (k, g, arg) => {
     const L = lenOf(arg) ?? 3.2, v = vOf(arg), W = 1.3;
     const sets = [[0xd84a6a, 0xf0c848, 0xf4ece0], [0x8a5ac8, 0xe86aa8, 0xf4ece0], [0xe85a3a, 0xf0a030, 0xf0d860], [0x5a8ad8, 0xf4ece0, 0xd8a0e0]];
     const cols = sets[v % sets.length], LEAF = [0x3e6e2e, 0x4a7a34, 0x56883c];
     cb(k, g, [L, 0.24, W], [0, 0.12, 0], STONE_L, undefined, 0.04);
     k.box(g, [L - 0.24, 0.06, W - 0.24], [0, 0.25, 0], 0x3a2a1e);
-    // Plants in three loose rows, in drifts of one colour and one shape each (spires, round
-    // clusters, low daisies), the outer rows leaning out over the kerb.
-    const n = Math.max(3, Math.round((L - 0.3) / 0.36));
-    for (let r = 0; r < 3; r++) for (let i = 0; i < n; i++) {
-      const t = (i + 0.5) / n, x = -L / 2 + 0.15 + t * (L - 0.3) + (hash01(i, r, v) - 0.5) * 0.12;
-      const z = (r - 1) * 0.48 + (hash01(i, r, 7) - 0.5) * 0.1;
-      const drift = Math.floor(t * 3 + r * 0.7 + hash01(r, v) * 0.6) % 3, col = cols[drift];
-      const shape = (r + drift) % 3, h = 0.18 + hash01(i, r, 3) * 0.1;
-      cb(k, g, [0.32, h, 0.32], [x, 0.26 + h / 2, z], LEAF[(i + r) % 3], [0, i * 1.7 + r, 0], 0.09);
-      if (shape === 0) {
-        k.mesh(g, taper(0.1, 0.1, 0.03, 0.03, 0.3), col, [x, 0.26 + h + 0.15, z], [0, i, 0]);
-      } else if (shape === 1) {
-        for (const [dx, dz] of [[-0.06, 0], [0.07, 0.04], [0, -0.07]]) cb(k, g, [0.11, 0.09, 0.11], [x + dx, 0.26 + h + 0.05, z + dz], col, [0, i, 0], 0.03);
-      } else {
-        k.mesh(g, octagon(0.11, 0.035), col, [x, 0.26 + h + 0.02, z], [0, 0, Math.PI / 2]);
-        cb(k, g, [0.06, 0.04, 0.06], [x, 0.26 + h + 0.05, z], 0xf0c848, undefined, 0.01);
-      }
+    const drift = (x: number) => cols[Math.min(2, Math.floor(((x + L / 2) / L) * 3))];
+    // Tall spikes down the middle: a stem of buds narrowing up it.
+    const nS = Math.max(2, Math.round(L / 0.55));
+    for (let i = 0; i < nS; i++) {
+      const x = -L / 2 + 0.3 + (i * (L - 0.6)) / Math.max(1, nS - 1) + (hash01(i, 1, v) - 0.5) * 0.1, z = (hash01(i, 2, v) - 0.5) * 0.12;
+      const h = 0.5 + hash01(i, 3, v) * 0.22, c = drift(x);
+      ball(k, g, 0.16, [x, 0.36, z], LEAF[i % 3], [1, 0.8, 1]);
+      cb(k, g, [0.03, h, 0.03], [x, 0.3 + h / 2, z], LEAF[1], undefined, 0.005);
+      for (let j = 0; j < 4; j++) k.gem(g, 0.075 - j * 0.012, [x + (j % 2 ? 0.02 : -0.02), 0.5 + (h - 0.25) * (j / 3) + 0.08, z], c);
+    }
+    // Rounded clusters of bloom either side of the spikes.
+    const nR = Math.max(3, Math.round(L / 0.42));
+    for (const sz of [-1, 1]) for (let i = 0; i < nR; i++) {
+      const x = -L / 2 + 0.22 + ((i + (sz > 0 ? 0.5 : 0)) * (L - 0.44)) / nR, z = sz * 0.3 + (hash01(i, sz, v) - 0.5) * 0.08;
+      const c = drift(x), y = 0.36 + hash01(i, 4, v) * 0.06;
+      ball(k, g, 0.17, [x, y, z], LEAF[(i + 1) % 3], [1.1, 0.75, 1]);
+      for (const [dx, dz] of [[-0.06, 0.02], [0.06, 0.03], [0, -0.05], [0.02, 0.07]]) k.gem(g, 0.065, [x + dx, y + 0.12, z + dz], c);
+    }
+    // Low trailing clumps along both edges, spilling over the kerb, a few small flowers in them.
+    const nT = Math.max(3, Math.round(L / 0.5));
+    for (const sz of [-1, 1]) for (let i = 0; i < nT; i++) {
+      const x = -L / 2 + 0.25 + (i * (L - 0.5)) / Math.max(1, nT - 1), z = sz * (W / 2 - 0.02);
+      ball(k, g, 0.16, [x, 0.27, z], LEAF[i % 3], [1.3, 0.5, 1.1]);
+      if ((i + (sz > 0 ? 1 : 0)) % 2 === 0) k.gem(g, 0.05, [x + 0.04, 0.36, z + sz * 0.04], cols[2]);
     }
   },
   /** Clipped topiary in a square stone planter (`len`: 0 a ball, 1 a cone). */
@@ -1805,6 +1966,196 @@ const BUILDERS: Record<string, Builder> = {
       },
     };
   },
+  /**
+   * One of the two pavilions framing the great door, standing forward of the hall's facade (its back
+   * at -Z runs into the hall's wall): a square tower 4 wide rising a storey above the hall's parapet,
+   * a lancet on each storey of its front, string courses level with the hall's, quoined corners and a
+   * corbelled, crenellated top. Its twin across the axis is identical, so the door stands between two
+   * equal masses.
+   */
+  pavilion: (k, g) => {
+    const W = 4, D0 = -1.0, D1 = 2.1, H = 13.6, d = D1 - D0, zc = (D0 + D1) / 2;
+    cb(k, g, [W + 0.6, 0.62, d + 0.3], [0, 0.31, zc + 0.15], STONE_DD, undefined, 0.05);
+    cb(k, g, [W + 0.3, 0.34, d + 0.15], [0, 0.79, zc + 0.08], STONE_D, undefined, 0.04);
+    cb(k, g, [W, H - 0.62, d], [0, 0.62 + (H - 0.62) / 2, zc], STONE, undefined, 0.04);
+    for (const y of [5.0, 9.0]) cb(k, g, [W + 0.18, 0.24, d + 0.12], [0, y, zc + 0.06], STONE_D, undefined, 0.03);
+    for (const sx of [-1, 1]) for (let y = 1.0, i = 0; y < H - 1.2; y += 0.56, i++) {
+      cb(k, g, i % 2 ? [0.62, 0.5, 0.44] : [0.44, 0.5, 0.62], [sx * (W / 2 - 0.2), y + 0.25, D1 - (i % 2 ? 0.2 : 0.29)], i % 2 ? STONE_L : STONE_D, undefined, 0.03);
+    }
+    for (const y of [1.7, 6.1, 10.1]) lancet(k, g, 0, y, D1, 0.82, 2.5);
+    // Corbels, the parapet standing out on them, merlons, and the leads behind.
+    for (let i = 0; i < 5; i++) cb(k, g, [0.34, 0.42, 0.5], [-W / 2 + 0.4 + (i * (W - 0.8)) / 4, H - 0.24, D1 + 0.14], STONE_D, undefined, 0.03);
+    for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(k, g, [0.5, 0.42, 0.34], [sx * (W / 2 + 0.14), H - 0.24, D0 + 0.8 + i * 0.9], STONE_D, undefined, 0.03);
+    cb(k, g, [W + 0.6, 0.85, d + 0.4], [0, H + 0.42, zc + 0.2], STONE, undefined, 0.04);
+    cb(k, g, [W + 0.7, 0.14, d + 0.5], [0, H + 0.9, zc + 0.2], STONE_L, undefined, 0.03);
+    k.box(g, [W - 0.4, 0.06, d - 0.4], [0, H + 0.98, zc], 0x6e685f);
+    for (let i = 0; i < 3; i++) cb(k, g, [0.78, 0.72, 0.5], [-W / 2 + 0.55 + i * ((W - 1.1) / 2), H + 1.33, D1 + 0.15], i === 1 ? STONE_L : STONE, undefined, 0.04);
+    for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) cb(k, g, [0.5, 0.72, 0.72], [sx * (W / 2 + 0.05), H + 1.33, D0 + 0.6 + i * 1.5], STONE, undefined, 0.04);
+  },
+  /**
+   * A gate through a stretch of full-height curtain (the ward's gates in the inner curtain), the
+   * passage `len` wide under a pointed arch of dressed voussoirs with a hood mould on both faces, the
+   * oak leaves folded back inside, a lantern either side of the arch on both faces and a raised,
+   * crenellated head over the gate with the lord's crest on its inner (+Z) face.
+   */
+  ward_gate: (k, g, arg) => gateway(k, g, lenOf(arg) ?? 4, { head: true, lanterns: [-1, 1] }),
+  /**
+   * The postern: a narrow gate `len` wide through a stretch of full-height curtain under a pointed
+   * arch of pale dressed stone on both faces, the oak door set back in the passage, three steps out
+   * onto the belvedere and a lantern either side of the arch on both faces.
+   */
+  postern: (k, g, arg) => gateway(k, g, lenOf(arg) ?? 2, { door: true, steps: true, lanterns: [-1, 1] }),
+  /**
+   * A shallow arched niche against a wall (its back at -Z): dressed jambs and a pointed head standing
+   * proud of the wall, the recess panel behind, a paved pad before it for a seat.
+   */
+  wall_niche: (k, g) => {
+    const W = 2.4, H = 3.3;
+    cb(k, g, [W + 1.2, 0.08, 1.6], [0, 0.04, 0.55], STONE_L, undefined, 0.02);
+    k.mesh(g, archPane(W, H, 0.1), STONE_DD, [0, 0.08, -0.1]);
+    for (const sx of [-1, 1]) cb(k, g, [0.42, H - 0.95, 0.5], [sx * (W / 2 + 0.21), (H - 0.95) / 2 + 0.08, 0.1], STONE_L, undefined, 0.03);
+    archRing(k, g, 0, 0.08, -0.15, W, H, STONE_L, { n: 4, t: 0.42, p: 0.5, out: 0, key: STONE_L });
+    archRing(k, g, 0, 0.08, 0.05, W + 0.95, H + 0.5, STONE_D, { n: 4, t: 0.14, p: 0.34, out: 0 });
+    cb(k, g, [W + 1.0, 0.2, 0.62], [0, 0.18, 0.12], STONE_D, undefined, 0.03);
+  },
+  /**
+   * The paddock's field shelter `len` wide (open to +Z, its back to -Z): a stone lean-to under a flat stone roof
+   * behind a low crenellated parapet, like the stable range; three open bays between stone piers, a
+   * hay rack along the back wall, straw on the floor.
+   */
+  field_shelter: (k, g, arg) => {
+    const W = lenOf(arg) ?? 6.8, D = 2.6, H = 3.0;
+    cb(k, g, [W, H, 0.5], [0, H / 2, -D / 2 + 0.25], STONE, undefined, 0.04);
+    for (const sx of [-1, 1]) cb(k, g, [0.5, H, D], [sx * (W / 2 - 0.25), H / 2, 0], STONE, undefined, 0.04);
+    for (const sx of [-1, 1]) cb(k, g, [0.5, H, 0.5], [sx * 1.15, H / 2, D / 2 - 0.25], STONE, undefined, 0.04);
+    cb(k, g, [W + 0.3, 0.34, D + 0.3], [0, H + 0.12, 0.05], STONE_D, undefined, 0.03);
+    cb(k, g, [W + 0.4, 0.5, 0.36], [0, H + 0.5, D / 2 + 0.05], STONE, undefined, 0.03);
+    for (const sx of [-1, 1]) cb(k, g, [0.36, 0.5, D + 0.3], [sx * (W / 2 + 0.02), H + 0.5, 0.05], STONE, undefined, 0.03);
+    for (let i = 0; i < 6; i++) cb(k, g, [0.6, 0.5, 0.4], [-W / 2 + 0.3 + (i * (W - 0.6)) / 5, H + 1.0, D / 2 + 0.05], i % 2 ? STONE_L : STONE, undefined, 0.04);
+    for (const sx of [-1, 1]) cb(k, g, [W - 0.8, 0.22, 0.12], [0, sx > 0 ? 0.9 : 0.12, -D / 2 + 0.56], WOOD_D, undefined, 0.02);
+    // The hay rack: slats leaning out from the back wall over a manger, hay heaped in it.
+    for (let i = 0; i < 12; i++) cb(k, g, [0.06, 1.0, 0.06], [-W / 2 + 0.9 + (i * (W - 1.8)) / 11, 1.6, -D / 2 + 0.75], WOOD, [0.35, 0, 0], 0.01);
+    cb(k, g, [W - 1.6, 0.1, 0.1], [0, 2.1, -D / 2 + 0.95], WOOD_D, undefined, 0.02);
+    for (let i = 0; i < Math.floor((W - 1.6) / 1.05); i++) chunk(k, g, 950 + i, [1.1, 0.5, 0.5], [-W / 2 + 1.3 + i * 1.05, 1.35, -D / 2 + 0.68], 0xd8b45a, i);
+    cb(k, g, [W - 1.0, 0.5, 0.5], [0, 0.25, -D / 2 + 0.75], WOOD_D, undefined, 0.03);
+    for (let i = 0; i < 3; i++) chunk(k, g, 960 + i, [1.3, 0.12, 0.9], [-1.5 + i * 1.5, 0.06, 0.4], 0xc8a048, i * 0.7);
+  },
+  /**
+   * A field gate between two square stone piers (2.5 apart, centred on x = 0) with ball finials; the
+   * timber gate stands open, swung in toward +Z.
+   */
+  gate_piers: (k, g) => {
+    for (const sx of [-1, 1]) {
+      cb(k, g, [0.7, 0.2, 0.7], [sx * 1.25, 0.1, 0], STONE_D, undefined, 0.03);
+      cb(k, g, [0.56, 1.5, 0.56], [sx * 1.25, 0.95, 0], STONE_L, undefined, 0.04);
+      cb(k, g, [0.7, 0.14, 0.7], [sx * 1.25, 1.75, 0], STONE, undefined, 0.03);
+      ball(k, g, 0.24, [sx * 1.25, 2.02, 0], STONE_L);
+    }
+    const leaf = new THREE.Group();
+    leaf.position.set(-0.95, 0, 0.05);
+    leaf.rotation.y = -1.2;
+    g.add(leaf);
+    for (const y of [0.35, 0.75, 1.1]) cb(k, leaf, [1.9, 0.1, 0.07], [0.95, y, 0], WOOD, undefined, 0.02);
+    for (const x of [0.05, 1.85]) cb(k, leaf, [0.1, 1.2, 0.09], [x, 0.7, 0], WOOD_D, undefined, 0.02);
+    cb(k, leaf, [0.1, 1.9, 0.07], [0.95, 0.72, 0], WOOD, [0, 0, Math.atan2(0.75, 1.8)], 0.02);
+  },
+  /**
+   * A rose pergola over a seat (facing +Z): three pointed timber arches on posts, joined by rails and
+   * slats, climbing roses in pink and white clusters over the top and down the posts, a lantern hung
+   * under the middle arch, a seat inside at the back with a trellis behind it.
+   */
+  pergola: (k, g) => {
+    const W = 3.2, D = 1.6, H = 2.3, LEAF = [0x3e6e2e, 0x4a7a34, 0x56883c], ROSE = [0xe0507a, 0xf08aa8, 0xf6eee2];
+    // Each arch springs from its posts' tops and rises a unit to its point.
+    const { arc, ys } = pointedArch(W, 1 / 0.62, 6), lift = H - ys;
+    for (const z of [-D / 2, 0, D / 2]) {
+      for (const sx of [-1, 1]) {
+        cb(k, g, [0.3, 0.14, 0.3], [sx * W / 2, 0.07, z], STONE_L, undefined, 0.03);
+        cb(k, g, [0.14, H + 0.02, 0.14], [sx * W / 2, H / 2, z], WOOD_D, undefined, 0.02);
+        for (let i = 0; i < arc.length - 1; i++) {
+          const a = arc[i], b = arc[i + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+          cb(k, g, [len + 0.05, 0.13, 0.13], [sx * (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + lift, z], WOOD_D, [0, 0, sx > 0 ? ang : Math.PI - ang], 0.01);
+        }
+      }
+    }
+    const top = (x: number) => lift + (() => {
+      const ax = Math.abs(x);
+      for (let i = 0; i < arc.length - 1; i++) if (ax <= arc[i][0] && ax >= arc[i + 1][0]) {
+        const t = (arc[i][0] - ax) / (arc[i][0] - arc[i + 1][0] || 1);
+        return arc[i][1] + (arc[i + 1][1] - arc[i][1]) * t;
+      }
+      return arc[arc.length - 1][1];
+    })();
+    for (let i = 0; i < 7; i++) {
+      const x = -W / 2 + 0.2 + (i * (W - 0.4)) / 6;
+      cb(k, g, [0.07, 0.07, D + 0.3], [x, top(x) + 0.06, 0], WOOD, undefined, 0.01);
+    }
+    for (const sx of [-1, 1]) cb(k, g, [0.08, 0.08, D], [sx * W / 2, H - 0.05, 0], WOOD, undefined, 0.01);
+    // The seat at the back and a trellis behind it.
+    for (const z of [-0.5, -0.32]) cb(k, g, [2.3, 0.08, 0.16], [0, 0.48, z], WOOD_L, undefined, 0.02);
+    for (const x of [-1.05, 1.05]) cb(k, g, [0.12, 0.46, 0.4], [x, 0.23, -0.4], WOOD_D, undefined, 0.02);
+    for (let i = 0; i < 7; i++) cb(k, g, [0.05, H - 0.3, 0.05], [-W / 2 + 0.3 + (i * (W - 0.6)) / 6, (H - 0.3) / 2 + 0.15, -D / 2], WOOD, undefined, 0.01);
+    for (const y of [0.9, 1.5, 2.0]) cb(k, g, [W - 0.2, 0.05, 0.05], [0, y, -D / 2], WOOD, undefined, 0.01);
+    // Roses: soft leafy masses along the arches' crowns and twining up the posts, bloom clusters in them.
+    for (let i = 0; i < 9; i++) {
+      const x = -W / 2 + 0.15 + (i * (W - 0.3)) / 8, z = (hash01(i, 3) - 0.5) * (D + 0.2);
+      ball(k, g, 0.42 + hash01(i, 5) * 0.12, [x, top(x) + 0.2, z], LEAF[i % 3], [1.2, 0.7, 1.1]);
+    }
+    for (const sx of [-1, 1]) for (const z of [-D / 2, D / 2]) for (let j = 0; j < 3; j++) ball(k, g, 0.24, [sx * (W / 2 + 0.06), 0.5 + j * 0.62, z + 0.05], LEAF[j % 3], [1, 1.4, 1]);
+    for (let i = 0; i < 26; i++) {
+      const x = (hash01(i, 1) - 0.5) * (W + 0.2), z = (hash01(i, 2) - 0.5) * (D + 0.5);
+      const c = ROSE[i % 3];
+      for (let j = 0; j < 3; j++) k.gem(g, 0.075, [x + (j - 1) * 0.08, top(x) + 0.42 + hash01(i, j) * 0.14, z + ((j * 7) % 3 - 1) * 0.06], c);
+    }
+    for (const sx of [-1, 1]) for (let j = 0; j < 5; j++) k.gem(g, 0.08, [sx * (W / 2 + 0.2), 0.6 + j * 0.42, D / 2 + 0.12 - (j % 2) * 0.24], ROSE[(j + (sx > 0 ? 1 : 0)) % 3]);
+    // The lantern under the middle arch, warm.
+    cb(k, g, [0.03, 0.4, 0.03], [0, top(0) - 0.25, 0], IRON, undefined, 0.01);
+    cb(k, g, [0.24, 0.3, 0.24], [0, top(0) - 0.6, 0], IRON, undefined, 0.02);
+    k.box(g, [0.17, 0.22, 0.17], [0, top(0) - 0.6, 0], 0xffd080, undefined, 0xffb040, 2.2);
+  },
+  /** Reeds in a clump at the waterline: slim leaning blades, a few with brown cattail heads. */
+  reeds: (k, g) => {
+    for (let i = 0; i < 11; i++) {
+      const a = hash01(i, 1) * Math.PI * 2, r = hash01(i, 2) * 0.6, h = 0.9 + hash01(i, 3) * 0.8;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r, lean = (hash01(i, 4) - 0.5) * 0.4;
+      limb(k, g, [x, -0.1, z], [x + lean, h, z + lean * 0.6], [0.06, 0.04, 0.01, 0.01], i % 3 ? 0x5a7a34 : 0x6e8a3e);
+      if (i % 4 === 0) cb(k, g, [0.08, 0.26, 0.08], [x + lean * 0.8, h * 0.82, z + lean * 0.5], 0x6a4a2a, [lean * 0.4, 0, 0], 0.02);
+    }
+  },
+  /**
+   * Where a stream spills off the island's edge (flowing toward +Z): the water curls over the lip in a
+   * widening sheet and falls away into the Veil, fading as it drops, mist drifting up off it.
+   */
+  edge_fall: (k, g) => {
+    const time = { value: 0 };
+    const pts = pour(new THREE.Vector3(0, -0.25, -0.6), new THREE.Vector3(0, -18, 4.5), 0.05, 30);
+    const { geo, len } = crossedRibbons(pts, 2.2, 4.2);
+    const fall = new THREE.Mesh(geo, fallingWaterMaterial(time, 83, len, 4.2, true));
+    fall.name = 'waterfall';
+    fall.renderOrder = 2;
+    g.add(fall);
+    for (const sx of [-1, 1]) chunk(k, g, 970 + sx, [0.9, 0.5, 0.8], [sx * 1.5, -0.35, -0.2], 0x6a5e52, sx);
+    const mist: THREE.Sprite[] = [];
+    for (let i = 0; i < 6; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistTexture(), color: 0xf2f4f8, transparent: true, depthWrite: false, opacity: 0.3 }));
+      sp.name = 'spray';
+      sp.renderOrder = 4;
+      g.add(sp);
+      mist.push(sp);
+    }
+    return {
+      obj: g,
+      tick: (t) => {
+        time.value = t;
+        mist.forEach((sp, i) => {
+          const p = (t * 0.12 + i / mist.length) % 1;
+          sp.position.set(Math.sin(i * 2.3) * 1.2, -3 - i * 2.2 + p * 2.5, 1.2 + i * 0.5);
+          sp.scale.setScalar(2.5 + p * 3);
+          sp.material.opacity = 0.32 * Math.sin(p * Math.PI);
+        });
+      },
+    };
+  },
   /** A low clipped box hedge along local X, `len` long, 0.5 high and 0.5 thick (parterre edging). */
   box_hedge: (k, g, arg) => {
     const L = Math.max(0.6, arg ?? 3);
@@ -1812,21 +2163,21 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [L - 0.06, 0.1, 0.42], [0, 0.46, 0], 0x4a7a34, undefined, 0.05);
   },
   /**
-   * An ornamental garden tree on a straight clean trunk, its crown a cluster of rounded leaf masses
-   * (`v`: 0 clipped green, 1 pink blossom, 2 golden), in a square stone planter when `len` is 1.
-   * About 4.6 tall, the crown about 3 across.
+   * An ornamental garden tree on a straight clean trunk, its crown a cluster of smooth rounded masses
+   * (`v`: 0 clipped green, 1 pink blossom, 2 golden, 3 a fruit tree hung with apples), in a square
+   * stone planter when `len` is 1. About 4.6 tall, the crown about 3 across. Blossom drops a few
+   * petals on the ground round its foot.
    */
   garden_tree: (k, g, arg) => {
-    const v = vOf(arg) % 3, potted = lenOf(arg) === 1;
-    const pal = [[0x3e6e2e, 0x4a7a34, 0x56883c], [0xe08aa8, 0xf0b2c6, 0xc86a8c], [0xd8a840, 0xe8c058, 0xb88a32]][v];
-    const leaf = [0x4a7a34, 0x56883c][v % 2];
+    const v = vOf(arg) % 4, potted = lenOf(arg) === 1;
+    const pal = [[0x3e6e2e, 0x4a7a34, 0x56883c], [0xe48aac, 0xf2b4c8, 0xd27298], [0xdcae46, 0xeac460, 0xc8983a], [0x44742f, 0x4f8036, 0x5a8c3e]][v];
     const y0 = potted ? 0.62 : 0;
     if (potted) {
       cb(k, g, [1.5, 0.55, 1.5], [0, 0.28, 0], STONE_L, undefined, 0.05);
       cb(k, g, [1.62, 0.12, 1.62], [0, 0.58, 0], STONE, undefined, 0.03);
       k.box(g, [1.25, 0.05, 1.25], [0, 0.6, 0], 0x3a2a1e);
     }
-    cb(k, g, [0.26, 2.3, 0.26], [0, y0 + 1.15, 0], WOOD_D, undefined, 0.05);
+    k.mesh(g, taper(0.3, 0.3, 0.18, 0.18, 2.3), WOOD_D, [0, y0 + 1.15, 0]);
     cb(k, g, [0.4, 0.22, 0.4], [0, y0 + 0.11, 0], WOOD_D, [0, 0.4, 0], 0.08);
     const cy = y0 + 3.1;
     if (v === 0) {
@@ -1834,11 +2185,26 @@ const BUILDERS: Record<string, Builder> = {
       ball(k, g, 1.2, [0, cy, 0], pal[1], [1, 0.9, 1]);
       ball(k, g, 0.85, [0.35, cy + 0.35, 0.3], pal[2], [1, 0.85, 1]);
       ball(k, g, 0.8, [-0.4, cy + 0.2, -0.3], pal[0], [1, 0.85, 1]);
-    } else {
-      // Blossom: lobes of bloom round the head, a little leaf showing between them.
-      const lobes: V3[] = [[0, 0.35, 0], [0.75, 0, 0.2], [-0.7, 0.05, 0.3], [0.2, 0.05, -0.75], [-0.3, -0.2, 0.75], [0.1, 0.75, 0.1]];
-      lobes.forEach(([x, y, z], i) => chunk(k, g, 810 + i + v * 10, [1.35, 1.15, 1.35], [x, cy + y, z], pal[i % 3], i * 1.3));
-      for (const [x, y, z] of [[0.6, -0.45, -0.4], [-0.55, -0.4, -0.45], [0.05, -0.55, 0.6]] as V3[]) chunk(k, g, 830 + x * 10, [0.9, 0.7, 0.9], [x, cy + y, z], leaf, x * 3);
+      return;
+    }
+    // A full rounded head of bloom (or leaf): one big soft mass with smaller ones swelling out of it,
+    // each its own shade, a little leaf showing under the blossom.
+    ball(k, g, 1.25, [0, cy + 0.1, 0], pal[0], [1.05, 0.88, 1.05]);
+    const lobes: V3[] = [[0.8, -0.1, 0.35], [-0.75, 0.0, 0.4], [0.25, 0.05, -0.8], [-0.35, -0.2, 0.85], [0.1, 0.62, 0.1], [-0.6, 0.35, -0.5], [0.65, 0.4, -0.35]];
+    lobes.forEach(([x, y, z], i) => ball(k, g, 0.72 + hash01(i, v) * 0.18, [x, cy + y, z], pal[(i % 2) + 1], [1, 0.86, 1]));
+    if (v !== 3) for (const [x, y, z] of [[0.7, -0.62, -0.3], [-0.6, -0.58, -0.4], [0.05, -0.7, 0.62]] as V3[]) ball(k, g, 0.5, [x, cy + y, z], 0x4f8036, [1, 0.7, 1]);
+    if (v === 3) {
+      // Apples on the outside of the crown.
+      for (let i = 0; i < 16; i++) {
+        const a = hash01(i, 11) * Math.PI * 2, b = (hash01(i, 12) - 0.35) * 1.2, r = 1.32;
+        k.gem(g, 0.11, [Math.cos(a) * Math.cos(b) * r, cy + Math.sin(b) * r * 0.85, Math.sin(a) * Math.cos(b) * r], i % 3 ? 0xc8342a : 0xe8a030);
+      }
+      return;
+    }
+    // Fallen petals on the ground (or the planter's soil) round its foot.
+    for (let i = 0; i < (potted ? 5 : 12); i++) {
+      const a = hash01(i, 21) * Math.PI * 2, r = potted ? 0.25 + hash01(i, 22) * 0.35 : 0.5 + hash01(i, 22) * 1.2;
+      k.box(g, [0.12, 0.02, 0.09], [Math.cos(a) * r, y0 + 0.03, Math.sin(a) * r], pal[1 + (i % 2)], [0, a, 0]);
     }
   },
   /** A garden bench (facing +Z): an oak seat and back on stone ends. */
@@ -1883,40 +2249,6 @@ const BUILDERS: Record<string, Builder> = {
       k.mesh(leaf, octagon(0.14, 0.04), IRON_L, [hw - 0.3, 1.6, 0.1], [0, Math.PI / 2, 0]);
     }
   },
-  /**
-   * A rose arbour (facing +Z): four oak posts on stone pads carrying a slatted top, climbing roses
-   * over it and up its posts, a seat inside at the back looking out, rose bushes at its feet.
-   */
-  arbour: (k, g) => {
-    const W = 3.2, D = 1.5, H = 2.6;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      cb(k, g, [0.34, 0.16, 0.34], [sx * W / 2, 0.08, sz * D / 2], STONE_L, undefined, 0.03);
-      cb(k, g, [0.16, H, 0.16], [sx * W / 2, H / 2, sz * D / 2], WOOD_D, undefined, 0.02);
-    }
-    for (const sz of [-1, 1]) cb(k, g, [W + 0.5, 0.16, 0.16], [0, H, sz * D / 2], WOOD, undefined, 0.02);
-    for (let i = 0; i < 7; i++) cb(k, g, [0.1, 0.1, D + 0.6], [-W / 2 + (i * W) / 6, H + 0.12, 0], WOOD, undefined, 0.01);
-    // The seat at the back, a lattice behind it.
-    for (const z of [-0.45, -0.28]) cb(k, g, [2.4, 0.08, 0.16], [0, 0.48, z], WOOD_L, undefined, 0.02);
-    for (const x of [-1.1, 1.1]) cb(k, g, [0.12, 0.46, 0.4], [x, 0.23, -0.36], WOOD_D, undefined, 0.02);
-    for (let i = 0; i < 6; i++) cb(k, g, [0.05, H - 0.4, 0.05], [-W / 2 + 0.3 + (i * (W - 0.6)) / 5, (H - 0.4) / 2 + 0.2, -D / 2], WOOD, undefined, 0.01);
-    for (const y of [0.9, 1.6]) cb(k, g, [W, 0.05, 0.05], [0, y, -D / 2], WOOD, undefined, 0.01);
-    // Roses: leafy masses over the top and twining up the posts, blooms in them.
-    const LEAF = [0x3e6e2e, 0x4a7a34], ROSE = [0xd8486a, 0xe87a9a, 0xf4ece0];
-    for (let i = 0; i < 7; i++) {
-      const x = -W / 2 + 0.1 + (i * (W - 0.2)) / 6, z = (hash01(i, 3) - 0.5) * 0.9;
-      chunk(k, g, 860 + i, [0.9, 0.5, 0.9], [x, H + 0.32, z], LEAF[i % 2], i);
-    }
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) for (let j = 0; j < 3; j++) chunk(k, g, 870 + j + sx * 3 + sz * 7, [0.45, 0.6, 0.45], [sx * W / 2, 0.5 + j * 0.75, sz * D / 2], LEAF[j % 2], j);
-    for (let i = 0; i < 18; i++) {
-      const x = (hash01(i, 1) - 0.5) * (W + 0.4), z = (hash01(i, 2) - 0.5) * (D + 0.4), y = H + 0.42 + hash01(i, 4) * 0.2;
-      cb(k, g, [0.18, 0.14, 0.18], [x, y, z], ROSE[i % 3], [0, i, 0], 0.05);
-    }
-    for (const sx of [-1, 1]) for (let j = 0; j < 4; j++) cb(k, g, [0.16, 0.13, 0.16], [sx * (W / 2 + 0.18), 0.7 + j * 0.5, D / 2 + 0.05], ROSE[j % 3], [0, j, 0], 0.04);
-    for (const sx of [-1, 1]) {
-      chunk(k, g, 890 + sx, [1.0, 0.7, 0.9], [sx * (W / 2 + 0.75), 0.35, 0.1], LEAF[0], sx);
-      for (let j = 0; j < 4; j++) cb(k, g, [0.17, 0.14, 0.17], [sx * (W / 2 + 0.55 + (j % 2) * 0.4), 0.72, -0.1 + j * 0.15], ROSE[j % 2], [0, j, 0], 0.04);
-    }
-  },
   /** A sundial: a dressed stone baluster with a bronze dial and its gnomon. */
   sundial: (k, g) => {
     cb(k, g, [1.1, 0.2, 1.1], [0, 0.1, 0], STONE_D, undefined, 0.03);
@@ -1932,26 +2264,44 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [L, 0.08, 0.26], [0, 0.04, 0], 0xb8a07a, undefined, 0.01);
     for (let u = -L / 2 + 0.3; u < L / 2; u += 1.5) cb(k, g, [0.12, 0.18, 0.12], [u, 0.09, 0], WOOD_D, undefined, 0.02);
   },
-  /** A horse (facing +Z): standing, or grazing with its head down when `len` is 1; `v` its coat. */
+  /**
+   * A horse (facing +Z), standing, or grazing with its head down when `len` is 1; `v` its coat. A
+   * rounded barrel of a body between a deep chest and the rump, slim legs with their joints and dark
+   * hooves, an arched neck under a mane, a long head with its ears pricked, a full tail.
+   */
   horse: (k, g, arg) => {
-    const graze = lenOf(arg) === 1, coat = [0x7a4a2a, 0x4a3024, 0xa89e92][vOf(arg) % 3], dark = 0x241812;
-    cb(k, g, [0.72, 0.78, 1.75], [0, 1.28, 0], coat, undefined, 0.2);
-    cb(k, g, [0.66, 0.6, 0.6], [0, 1.32, 0.72], coat, undefined, 0.2);
-    cb(k, g, [0.7, 0.66, 0.66], [0, 1.36, -0.68], coat, undefined, 0.2);
-    for (const sx of [-1, 1]) for (const z of [0.66, -0.64]) {
-      limb(k, g, [sx * 0.22, 1.05, z], [sx * 0.22, 0.42, z + 0.04], [0.2, 0.22, 0.13, 0.14], coat);
-      limb(k, g, [sx * 0.22, 0.42, z + 0.04], [sx * 0.22, 0.1, z], [0.12, 0.13, 0.11, 0.12], coat);
-      cb(k, g, [0.15, 0.12, 0.18], [sx * 0.22, 0.06, z + 0.02], dark, undefined, 0.02);
-    }
-    const neck0: V3 = [0, 1.5, 0.8], neck1: V3 = graze ? [0, 0.85, 1.35] : [0, 2.05, 1.15], head1: V3 = graze ? [0, 0.22, 1.55] : [0, 1.72, 1.6];
-    limb(k, g, neck0, neck1, [0.34, 0.5, 0.24, 0.32], coat);
-    limb(k, g, neck1, head1, [0.24, 0.34, 0.16, 0.2], coat);
-    limb(k, g, [0, neck0[1] + 0.22, neck0[2] - 0.1], [0, neck1[1] + 0.16, neck1[2] - 0.06], [0.08, 0.12, 0.08, 0.1], dark);
+    const graze = lenOf(arg) === 1, coat = [0x8a5430, 0x4a3024, 0xb8aea2][vOf(arg) % 3], dark = 0x231812;
+    const shade = new THREE.Color(coat).multiplyScalar(0.82).getHex();
+    round(k, g, [0, 1.3, -0.62], [0, 1.32, 0.62], 0.4, 0.42, coat, 0.82);
+    ball(k, g, 0.43, [0, 1.36, 0.66], coat, [0.86, 1.0, 1.0]);
+    ball(k, g, 0.44, [0, 1.38, -0.66], coat, [0.9, 0.95, 1.0]);
     for (const sx of [-1, 1]) {
-      k.box(g, [0.05, 0.06, 0.06], [sx * 0.13, neck1[1] + (head1[1] - neck1[1]) * 0.25, neck1[2] + (head1[2] - neck1[2]) * 0.25], dark);
-      k.mesh(g, prism(0.06, 0.16, 0.3), coat, [sx * 0.08, neck1[1] + 0.2, neck1[2] - 0.02]);
+      // Shoulder and haunch masses, then the legs: forearm and cannon in front, gaskin and cannon
+      // behind (the hock bending back), a dark hoof under each.
+      ball(k, g, 0.24, [sx * 0.2, 1.18, 0.62], shade, [0.8, 1.2, 1]);
+      ball(k, g, 0.28, [sx * 0.2, 1.22, -0.62], shade, [0.8, 1.15, 1]);
+      round(k, g, [sx * 0.2, 1.05, 0.66], [sx * 0.19, 0.55, 0.7], 0.11, 0.075, coat);
+      round(k, g, [sx * 0.19, 0.55, 0.7], [sx * 0.19, 0.12, 0.68], 0.06, 0.055, coat);
+      round(k, g, [sx * 0.21, 1.1, -0.66], [sx * 0.2, 0.6, -0.8], 0.13, 0.08, coat);
+      round(k, g, [sx * 0.2, 0.6, -0.8], [sx * 0.19, 0.12, -0.7], 0.065, 0.055, coat);
+      for (const z of [0.69, -0.7]) cb(k, g, [0.13, 0.12, 0.17], [sx * 0.19, 0.06, z + 0.02], dark, undefined, 0.03);
     }
-    limb(k, g, [0, 1.5, -0.86], [0, 0.72, -1.08], [0.14, 0.16, 0.08, 0.1], dark);
+    const neck0: V3 = [0, 1.55, 0.78], neck1: V3 = graze ? [0, 0.9, 1.32] : [0, 2.05, 1.12], head1: V3 = graze ? [0, 0.22, 1.48] : [0, 1.66, 1.62];
+    round(k, g, neck0, neck1, 0.27, 0.17, coat, 0.7);
+    ball(k, g, 0.18, neck1, coat, [0.75, 1, 1]);
+    round(k, g, neck1, head1, 0.15, 0.09, coat, 0.75);
+    ball(k, g, 0.1, head1, shade, [0.9, 0.8, 1.1]);
+    // The mane along the neck's crest, the forelock, ears, eyes and nostrils.
+    const along = (t: number): V3 => [0, neck0[1] + (neck1[1] - neck0[1]) * t + 0.2, neck0[2] + (neck1[2] - neck0[2]) * t - 0.12];
+    for (let i = 0; i < 5; i++) cb(k, g, [0.08, 0.2, 0.18], along(i / 4), dark, [Math.atan2(neck1[2] - neck0[2], neck1[1] - neck0[1]), 0, 0], 0.03);
+    for (const sx of [-1, 1]) {
+      k.mesh(g, prism(0.06, 0.18, 0.4), coat, [sx * 0.07, neck1[1] + 0.2, neck1[2] - 0.02], [graze ? 0.6 : -0.2, 0, sx * 0.15]);
+      k.box(g, [0.04, 0.05, 0.05], [sx * 0.1, neck1[1] + (head1[1] - neck1[1]) * 0.22, neck1[2] + (head1[2] - neck1[2]) * 0.22], dark);
+      k.box(g, [0.03, 0.03, 0.03], [sx * 0.05, head1[1] + (graze ? 0.02 : -0.02), head1[2] + 0.08], dark);
+    }
+    // The tail falling from the rump.
+    round(k, g, [0, 1.48, -1.02], [0, 0.95, -1.18], 0.09, 0.12, dark, 0.7);
+    round(k, g, [0, 0.95, -1.18], [0, 0.55, -1.12], 0.12, 0.05, dark, 0.7);
   },
   /**
    * The spring's fall: a stone culvert mouth in the castle rock (`len` above the pool, its back to
@@ -1974,14 +2324,16 @@ const BUILDERS: Record<string, Builder> = {
     fall.renderOrder = 2;
     g.add(fall);
     // Wet rock either side of the fall, darker where the spray reaches.
-    for (const [x, y, z, s] of [[-1.0, 1.0, -0.2, 0.9], [1.1, 0.7, -0.1, 1.0], [-0.8, 3.2, -0.6, 0.7], [0.9, 5.0, -0.8, 0.6]] as [number, number, number, number][]) chunk(k, g, 900 + x * 10 + y, [s, s * 0.8, s], [x, y, z], 0x5a5048, x);
-    const foamMat = new THREE.MeshStandardMaterial({ color: 0xeaf4f4, roughness: 0.7, emissive: 0x3a5a60, flatShading: true });
-    foamMat.userData.noOcclude = true;
+    for (const [x, y, z, s] of [[-1.0, 0.4, -0.2, 0.9], [1.1, 0.3, -0.1, 1.0]] as [number, number, number, number][]) chunk(k, g, 900 + x * 10 + y, [s, s * 0.8, s], [x, y, z], 0x5a5048, x);
+    // Churning water where the fall lands: soft white discs of foam that swell and shrink out of
+    // step, round a brighter heart.
     const foam: THREE.Mesh[] = [];
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2, r = 0.25 + hash01(i, 6) * 0.5;
-      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16 + hash01(i, 4) * 0.14, 0), foamMat);
-      f.position.set(Math.sin(a) * r, -0.24, 0.6 + Math.cos(a) * r * 0.7);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2, r = i ? 0.45 : 0;
+      const f = new THREE.Mesh(softDisc(80 + i, 0.55 + hash01(i, 4) * 0.3, [0.94, 0.98, 0.98], 0.8), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+      f.position.set(Math.sin(a) * r, -0.22 + i * 0.002, 0.7 + Math.cos(a) * r * 0.7);
+      f.material.userData.decal = f.material.userData.noOcclude = true;
+      f.renderOrder = 3;
       f.name = 'foam';
       g.add(f);
       foam.push(f);
@@ -2003,10 +2355,7 @@ const BUILDERS: Record<string, Builder> = {
       obj: g,
       tick: (t) => {
         time.value = t;
-        foam.forEach((f, i) => {
-          const s = 0.8 + 0.35 * Math.sin(t * 3.3 + i * 1.9);
-          f.scale.set(s * 1.2, s * (0.6 + 0.25 * Math.sin(t * 4.1 + i)), s * 1.2);
-        });
+        foam.forEach((f, i) => f.scale.setScalar(0.8 + 0.3 * Math.sin(t * 3.3 + i * 1.9)));
         spread.scale.setScalar(1 + 0.07 * Math.sin(t * 2.1));
         mist.forEach((sp, i) => {
           const p = (t * 0.4 + i / mist.length) % 1;
@@ -2213,6 +2562,12 @@ const BUILDERS: Record<string, Builder> = {
     }
     cb(k, g, [0.07, 1.2, 0.07], [0.2, 0.6, 0.28], WOOD, [0.3, 0, 0.05], 0.01);
     cb(k, g, [0.36, 0.3, 0.05], [0.28, 1.05, 0.12], IRON, [0.3, 0, 0.05], 0.02);
+    // Two kite shields leaning on its front, painted in the lord's colours.
+    for (const [x, c] of [[-0.55, 0x7a2020], [0.45, 0x2f4f8a]] as [number, number][]) {
+      cb(k, g, [0.56, 0.62, 0.06], [x, 0.62, 0.42], c, [-0.22, 0, 0], 0.02);
+      k.mesh(g, wedge(0.56, 0.36, 0.06), c, [x, 0.13, 0.52], [Math.PI - 0.22, 0, 0]);
+      k.box(g, [0.18, 0.18, 0.03], [x, 0.66, 0.46], 0xd8b060, [-0.22, 0, Math.PI / 4]);
+    }
   },
   campfire: (k, g) => {
     // Read from above: a dark ash bed inside a ring of grey stones, two charred logs crossed over
@@ -2942,7 +3297,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'outer_gatehouse', 'postern', 'wall_flight', 'donjon', 'forge_canopy', 'dragon_fountain', 'great_doors', 'arbour', 'garden_tree']);
+export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'outer_gatehouse', 'postern', 'ward_gate', 'wall_flight', 'donjon', 'pavilion', 'forge_canopy', 'dragon_fountain', 'great_doors', 'pergola', 'garden_tree']);
 
 /** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
 export const PROP_KINDS = Object.keys(BUILDERS);

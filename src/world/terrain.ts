@@ -4,6 +4,7 @@ import { applyGround, CAVE_TERRACE, GROUND_TIME } from '../render/surface';
 import { noiseTexture } from '../render/textures';
 import { planarReflection } from './water';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
+import { strandField } from './strands';
 
 /**
  * Terrain for a zone: one continuous height grid (vertices at cell corners) split into
@@ -349,6 +350,16 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     }
     hgt.set(next);
   }
+  // Streams and pools drawn along their true outlines (strands.ts): every corner inside the
+  // waterline sinks into a bed that deepens toward the middle (a pool is a dished hollow), and the
+  // banks rise out of the water in an even slope instead of the cell grid's steps.
+  const sf = layout.lawn ? strandField(layout) : null;
+  if (sf) for (let k = 0; k < nV; k++) {
+    if (raisedN[k]) continue;
+    const d = sf.wet[k];
+    if (d < 0) hgt[k] = Math.min(hgt[k], WATER_Y - 0.12 - 0.7 * sf.deep[k]);
+    else if (d < 1.4 && fluidN[k] < count[k]) hgt[k] = WATER_Y + 0.05 + d * 0.2;
+  }
   for (let k = 0; k < nV; k++) pos[k * 3 + 1] = base[k] + hgt[k];
   // Per-channel colours, shaded like the blended vertex colour (a channel absent at a vertex takes
   // the blended colour, so a sharpened blend never reaches for an undefined one).
@@ -364,6 +375,53 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     }
   }
 
+  // Roads drawn along their centre lines: each corner near a road takes the road's ground in
+  // proportion to how far inside its edge it lies (a soft band either side of the true edge), so the
+  // sharpened blend draws the edge as a smooth curve, not a staircase along the cells. The banks of
+  // streams and pools are wet, dark earth down to the waterline.
+  if (sf) {
+    const groundCol = (g: number, x: number, z: number) => {
+      const sh = theme.ground[g as Ground] ?? [0x6e6048, 0x5a5040];
+      return c.setHex(sh[0]).lerp(c2.setHex(sh[1]), noise(x * 0.09, z * 0.09));
+    };
+    const GRASS = SPLAT[Ground.Grass], EARTH = SPLAT[Ground.Dirt];
+    const setCh = (k: number, ch: number, col3: THREE.Color) => {
+      chanCol[ch][k * 3] = col3.r;
+      chanCol[ch][k * 3 + 1] = col3.g;
+      chanCol[ch][k * 3 + 2] = col3.b;
+    };
+    /** Give channel `ch` the share `wt` of a corner's weight, the other channels the rest. */
+    const share = (k: number, ch: number, wt: number, x: number, z: number) => {
+      let tot = 0;
+      for (let j = 0; j < 4; j++) tot += splat[k * 4 + j];
+      if (tot <= 0) return;
+      const others = tot - splat[k * 4 + ch], rest = (1 - wt) * tot;
+      if (others > 1e-6) for (let j = 0; j < 4; j++) {
+        if (j !== ch) splat[k * 4 + j] *= rest / others;
+      }
+      else if (ch !== GRASS) {
+        splat[k * 4 + GRASS] = rest;
+        setCh(k, GRASS, groundCol(Ground.Grass, x, z).multiplyScalar(layout.lawn ? LAWN_ROOT : 1));
+      }
+      splat[k * 4 + ch] = wt * tot;
+    };
+    for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+      const k = vi(x, z);
+      if (raisedN[k] || !count[k]) continue;
+      const pd = sf.path[k];
+      if (pd < 1.2 && sf.pathGround[k] >= 0) {
+        const g = sf.pathGround[k], ch = theme.splat?.[g as Ground] ?? SPLAT[g] ?? 0;
+        if (!chanN[k * 4 + ch]) setCh(k, ch, groundCol(g, x, z));
+        share(k, ch, 1 - sstep(-0.3, 0.3, pd), x, z);
+        continue;
+      }
+      const wd = sf.wet[k];
+      if (wd < 1.3 && fluidN[k] < count[k]) {
+        setCh(k, EARTH, c.setHex(0x3e3224).lerp(c2.setHex(0x4e4030), sstep(0, 1.3, wd)));
+        share(k, EARTH, 1 - sstep(0.5, 1.3, wd), x, z);
+      }
+    }
+  }
   const flat: number[] = [], rough: number[] = [], caveCells: number[] = [];
   for (let z = 0; z < h; z++) {
     for (let x = 0; x < w; x++) {

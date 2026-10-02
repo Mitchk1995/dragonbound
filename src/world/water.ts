@@ -55,7 +55,7 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
     uReflOn: mirror?.on ?? { value: 0 },
     ...WATER_SKY,
   };
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.08, metalness: 0, transparent: true, depthWrite: false });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0, transparent: true, depthWrite: false });
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -128,19 +128,23 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
           // Fresnel (Schlick, water's 0.04 at normal incidence) between the depth tint and the sky
           // the rippled surface reflects; sun glints where the ripples catch it.
           vec3 vdir = normalize(vViewPosition);
-          float ndv = clamp(dot(vdir, normal), 0.0, 1.0);
+          // The reflection sees a calmer surface than the lighting (the ripples soften what it shows,
+          // as roughness blurs it): sky as a smooth gradient, never blotches.
+          vec3 flatV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+          vec3 calm = normalize(mix(flatV, normal, 0.35));
+          float ndv = clamp(dot(vdir, calm), 0.0, 1.0);
           float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
-          vec3 rw = (vec4(reflect(-vdir, normal), 0.0) * viewMatrix).xyz;
+          vec3 rw = (vec4(reflect(-vdir, calm), 0.0) * viewMatrix).xyz;
           vec3 sky = mix(uSkyLow, uSkyHigh, smoothstep(-0.1, 0.9, rw.y));
-          sky *= 0.85 + 0.3 * poolN(rw.xz / max(0.25, rw.y) * 0.08 + vPoolW.xz * 0.02);
+          sky *= 0.95 + 0.1 * poolN(rw.xz / max(0.25, rw.y) * 0.05 + vPoolW.xz * 0.02);
           vec3 envC = sky * (fres * 1.3 + 0.03);
           ${mirror ? `// The statue mirrored over the pool, wavering with the ripples; the sky round it.
           vec4 rc = uReflMat * vec4(vPoolW, 1.0);
           vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-          vec4 mir = texture2D(uRefl, rc.xy / rc.w + (normal.xy - flatN.xy) * 0.1);
+          vec4 mir = texture2D(uRefl, rc.xy / rc.w + (normal.xy - flatN.xy) * 0.035);
           float cover = clamp(mir.a, 0.0, 1.0) * uReflOn;
-          envC = mix(envC, mir.rgb * (0.8 + 0.5 * fres), cover * 0.85);
-          diffuseColor.rgb *= 1.0 - cover * 0.75;` : ''}
+          envC = mix(envC, mir.rgb * (0.75 + 0.4 * fres), cover * 0.8);
+          diffuseColor.rgb *= 1.0 - cover * 0.6;` : ''}
           diffuseColor.rgb *= (1.0 - fres) * 0.7;
           totalEmissiveRadiance += poolTint * 0.18 + envC;
           // Caustic light over the shallow floor near the kerb.
@@ -151,7 +155,7 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
           vec3 sunDir = normalize(vec3(0.25, 0.5, -0.83));
           float sd = max(dot(normalize(rw), sunDir), 0.0);
           float twinkle = smoothstep(0.42, 0.62, poolN(vPoolW.xz * 1.13 + vec2(uPoolT * 0.11, -uPoolT * 0.07)) * poolN(mat2(0.8, 0.6, -0.6, 0.8) * vPoolW.xz * 1.71 - vec2(uPoolT * 0.05, uPoolT * 0.09)));
-          totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * (pow(sd, 350.0) * twinkle * 0.9 + pow(sd, 24.0) * 0.08);
+          totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * min(pow(sd, 350.0) * twinkle * 0.45 + pow(sd, 24.0) * 0.06, 0.5);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.94, 0.95), poolFoam * 0.85);
           totalEmissiveRadiance += vec3(0.25, 0.3, 0.32) * poolFoam;
           diffuseColor.a = clamp(0.8 + fres * 0.5 + poolFoam * 0.4, 0.0, 1.0);
@@ -168,9 +172,10 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
  * Falling water: streaks stretched along the fall (1:8) pouring down at two speeds, edges broken up
  * by noise, a bright lip at the top, white aeration growing toward the foot and a slight sideways
  * wobble. UV v runs 1 at the top to 0 at the foot; `len` and `width` are the fall's size in world
- * units (so streaks keep their scale on any sheet). Never casts a shadow.
+ * units (so streaks keep their scale on any sheet); with `fade` it thins away toward its foot (a
+ * fall into the void). Never casts a shadow.
  */
-export function fallingWaterMaterial(time: { value: number }, seed: number, len: number, width: number) {
+export function fallingWaterMaterial(time: { value: number }, seed: number, len: number, width: number, fade = false) {
   const uniforms = {
     uFallT: time,
     uNoise: { value: noiseTexture() },
@@ -216,11 +221,12 @@ export function fallingWaterMaterial(time: { value: number }, seed: number, len:
           float white = clamp(streak * 0.65 + aer * (0.45 + 0.4 * s2) + lip * 0.6, 0.0, 1.0);
           diffuseColor.rgb = mix(vec3(0.16, 0.42, 0.5), vec3(0.88, 0.96, 0.98), white);
           diffuseColor.a = clamp((0.5 + 0.35 * streak + 0.3 * aer + 0.3 * lip) * edge, 0.0, 0.95);
+          ${fade ? 'diffuseColor.a *= 1.0 - smoothstep(0.45, 1.0, vFallUv.y);' : ''}
         }`,
       )
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= 1.0 + 2.0 * diffuseColor.r;');
   };
-  mat.customProgramCacheKey = () => 'fall2';
+  mat.customProgramCacheKey = () => (fade ? 'fall2-fade' : 'fall2');
   mat.userData.decal = true;
   mat.userData.noOcclude = true;
   return mat;
