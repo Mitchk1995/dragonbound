@@ -17,7 +17,7 @@ import { Particles } from './fx/particles';
 import { Sfx } from './fx/sfx';
 import { Rig, newAnimState } from './render/anim';
 import { PAL } from './render/kit';
-import { zoneLighting } from './render/env';
+import { steadyShadows, zoneLighting } from './render/env';
 import { makeModel } from './render/registry';
 import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
 import { Combat } from './systems/combat';
@@ -109,6 +109,7 @@ export class Game {
   private titleDragon: { obj: THREE.Group; rig: Rig; anim: ReturnType<typeof newAnimState> } | null = null;
 
   constructor(public canvas: HTMLCanvasElement) {
+    steadyShadows();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -129,8 +130,12 @@ export class Game {
     sc.right = sc.top = 28;
     sc.near = 1;
     sc.far = 90;
-    this.sun.shadow.bias = -0.0005;
-    this.sun.shadow.normalBias = 0.04;
+    // (Enough normal offset that faces turned from the sun never speckle with their own shadow.)
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.07;
+    // (A wide, even filter: where a shadow edge lies along a face the sun only grazes, its texels
+    // stretch into long steps; spread over a few texels they blend into a soft edge, not a stipple.)
+    this.sun.shadow.radius = 2.2;
     this.fill.target = this.sun.target;
     this.scene.add(this.sun, this.sun.target, this.fill, this.particles.mesh, this.glow.mesh, this.player.obj);
     this.player.bind(this);
