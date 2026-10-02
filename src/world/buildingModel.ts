@@ -294,7 +294,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       const u0 = dr.at, u1 = dr.at + dr.w, uc = (u0 + u1) / 2;
       const castle = keep && dr.w < 4 && !shared.has(side), stable = b.windows.some((wi) => wi.stall);
       const rise = Math.min(dr.w * 0.62, 1.7), sp = castle ? doorH - rise : doorH;
-      for (const uj of [u0 + 0.12, u1 - 0.12]) piece(0.34, 0, sp, WALL_T + 0.2, uj, 0, FRAME, 0.04);
+      // (A castle door's jambs stand just outside the opening, right under the voussoir ring's feet, so
+      // the ring springs straight off them over moulded imposts and the two share one span.)
+      for (const uj of castle ? [u0 - 0.17, u1 + 0.17] : [u0 + 0.12, u1 - 0.12]) piece(0.34, 0, sp, WALL_T + 0.2, uj, 0, FRAME, 0.04);
       if (!castle) {
         piece(dr.w + 0.8, doorH, doorH + 0.36, WALL_T + 0.22, uc, 0, FRAME, 0.04);
         if (hall || !timber) piece(0.5, doorH + 0.05, doorH + 0.55, WALL_T + 0.3, uc, 0, S.light, 0.04);
@@ -321,11 +323,13 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         const [kk2, kp2] = at(fade, doorH);
         W.box(kk2, kp2, 0.34, 0.5, 0.26, uc, doorH + 0.2, face + 0.11, ASHLAR_L, 0, 0.02);
         for (const s of [-1, 1]) W.box(hk, hp, 0.22, 0.24, 0.3, uc + s * (dr.w / 2 + 0.47), sp - 0.1, face + 0.13, TRIM, 0, 0.02);
+        for (const s of [-1, 1]) W.box(hk, hp, 0.48, 0.16, WALL_T + 0.3, uc + s * (dr.w / 2 + 0.17), sp - 0.06, 0, TRIM, 0, 0.02);
         if (!stable) {
           for (const s of [-1, 1]) {
             const [lk, lp] = at(fade, 2.4);
-            // A navy wall lantern with warm glass and a gold finial, on the plain wall beside the door.
-            const lu = uc + s * (dr.w / 2 + 0.75);
+            // A navy wall lantern with warm glass and a gold finial, on the plain wall beside the door,
+            // midway between its hood and the next window's (clear of both).
+            const lu = uc + s * (dr.w / 2 + 1.06);
             W.box(lk, lp, 0.2, 0.3, 0.08, lu, 3.1, face + 0.04, LAMP_NAVY, 0, 0.01);
             W.box(lk, lp, 0.07, 0.07, 0.5, lu, 3.2, face + 0.25, LAMP_NAVY, 0, 0.01);
             W.box(lk, lp, 0.26, 0.36, 0.26, lu, 2.8, face + 0.5, 0xffcf86, 0, 0.01, 0xffa038, 1.4);
@@ -345,7 +349,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         // The leaves: the lord's blue planks with gold straps, standing open into the room from the
         // inner face's jambs (not on the camera side, where they would go with the cut wall).
         if (!fade) for (const [hinge, dir] of [[u0 + 0.05, 1], [u1 - 0.05, -1]] as [number, number][]) {
-          const th = 1.25, lw = dr.w / 2 - 0.08, c0 = side === 'n' || side === 'w' ? 0.5 : ns ? b.d - 0.5 : b.w - 0.5;
+          // (Swung right back, square to the wall against the reveal, so each leaf hangs on its jamb.)
+          const th = 1.5, lw = dr.w / 2 - 0.08, c0 = side === 'n' || side === 'w' ? 0.5 : ns ? b.d - 0.5 : b.w - 0.5;
           const cIn = c0 - (face + 0.08) * W.out;
           const dx = ns ? dir * Math.cos(th) : -W.out * Math.sin(th), dz = ns ? -W.out * Math.sin(th) : dir * Math.cos(th);
           const leaf = new THREE.Group();
@@ -1067,18 +1072,24 @@ function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
   cb(fk, p, [w - 0.3, 0.3, d - 0.3], [w / 2, wallH + 0.05, d / 2], DECK, undefined, 0.03);
   for (const side of ['n', 's', 'e', 'w'] as Side[]) {
     if (shared.has(side) || joined.has(side)) continue;
-    const W = wallFrame(b, side), L = sideLen(b, side), o = WALL_T / 2 + 0.05, ns = side === 'n' || side === 's';
+    // The parapet is corbelled out over the wall face (its front flush with the corbels' fronts, a
+    // blue-grey course along its foot), so the corbels plainly carry it from every side.
+    const W = wallFrame(b, side), L = sideLen(b, side), o = WALL_T / 2 + 0.25, ns = side === 'n' || side === 's';
     // Along the north and south walls the ends at a shared wall stop short of it (the neighbour's
     // parapet runs there); the east and west walls leave the corner merlons to the north and south.
     const lo = ns && shared.has('w') ? 0.9 : 0, hi = ns && shared.has('e') ? L - 0.9 : L;
-    for (let t = lo + 0.5; t < hi - 0.3; t += 0.95) W.box(fk, p, 0.36, 0.4, 0.5, t, wallH - 0.22, WALL_T / 2 + 0.15, TRIM, 0, 0.03);
-    W.box(fk, p, hi - lo + 0.2, 1.0, 0.7, (lo + hi) / 2, wallH + 0.5, o, ASHLAR_B, 0, 0.03);
-    W.box(fk, p, hi - lo + 0.3, 0.16, 0.84, (lo + hi) / 2, wallH + 1.05, o, TRIM, 0, 0.03);
+    // (The north and south runs reach round the corners, so the projecting parapets meet without a notch.)
+    const open0 = ns && !shared.has('w') && !joined.has('w'), open1 = ns && !shared.has('e') && !joined.has('e');
+    const r0 = lo - (open0 ? 0.6 : 0.1), r1 = hi + (open1 ? 0.6 : 0.1), rl = r1 - r0, rc = (r0 + r1) / 2;
+    for (let t = lo + 0.5; t < hi - 0.3; t += 0.95) W.box(fk, p, 0.36, 0.42, 0.7, t, wallH - 0.33, WALL_T / 2 + 0.25, TRIM, 0, 0.03);
+    W.box(fk, p, rl, 0.16, 0.76, rc, wallH - 0.04, o - 0.03, TRIM, 0, 0.02);
+    W.box(fk, p, rl, 1.0, 0.7, rc, wallH + 0.54, o, ASHLAR_B, 0, 0.03);
+    W.box(fk, p, rl + 0.1, 0.16, 0.84, rc, wallH + 1.09, o, TRIM, 0, 0.03);
     const a = lo + 0.41, e = hi - 0.41, n = Math.max(1, Math.round((e - a) / 1.6));
     for (let i = 0; i <= n; i++) {
       const end = i === 0 || i === n;
       if (end && (!ns || (i === 0 && (shared.has('w') || joined.has('w'))) || (i === n && (shared.has('e') || joined.has('e'))))) continue;
-      W.box(fk, p, 0.82, 0.74, 0.7, a + (i * (e - a)) / n, wallH + 1.5, o, ASHLAR_B, 0, 0.04);
+      W.box(fk, p, 0.82, 0.74, 0.7, a + (i * (e - a)) / n, wallH + 1.54, o, ASHLAR_B, 0, 0.04);
     }
   }
   // The leads: slate-navy lead (the spires' slate) laid on the diagonal in a subtle two-tone diamond

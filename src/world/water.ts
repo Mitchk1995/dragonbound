@@ -150,12 +150,12 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
           vec4 mir = vec4(0.0);
           for (int j = 0; j < 7; j++) {
             float a = float(j) * 2.39996;
-            vec2 o = j == 0 ? vec2(0.0) : vec2(cos(a), sin(a)) * (0.007 + 0.0024 * float(j));
+            vec2 o = j == 0 ? vec2(0.0) : vec2(cos(a), sin(a)) * (0.012 + 0.004 * float(j));
             mir += texture2D(uRefl, ruv + o);
           }
           mir /= 7.0;
           float glance = 1.0 - ndv;
-          float cover = smoothstep(0.15, 0.85, mir.a) * uReflOn * 0.65 * smoothstep(0.3, 0.62, glance) * (1.0 - smoothstep(0.93, 1.0, glance));
+          float cover = smoothstep(0.15, 0.85, mir.a) * uReflOn * 0.55 * smoothstep(0.45, 0.78, glance) * (1.0 - smoothstep(0.93, 1.0, glance));
           envC = mix(envC, mix(mir.rgb, mir.rgb * poolTint * 2.2, 0.35) * (0.85 + 0.3 * fres), cover);
           diffuseColor.rgb *= 1.0 - cover * 0.5;` : ''}
           diffuseColor.rgb *= (1.0 - fres) * 0.7;

@@ -548,11 +548,15 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
           // Their lengths follow a broad noise round the rim, so neighbours merge into a few big
           // tapering masses of clearly different depths (one hanging deep, others short), never a
           // comb of equal prisms; the long ones are the broad ones.
+          // (Only every other rim cell or so hangs one, each a broad rounded mass, so they never line
+          // up as a row of prisms; the skirt shows between them.)
           const mass = underNoise(x * 0.055, z * 0.055), deep = mass * mass;
-          const bot = Math.min(top, 0) - 2.5 - deep * 16 - rng() * 1.5;
-          p.set(x + 0.5, (top + bot) / 2, z + 0.5);
-          q.setFromEuler(e.set(0, rng() * 3, 0));
-          s.set(1.8 + deep * 2.2 + rng() * 0.5, top - bot, 1.8 + deep * 2.2 + rng() * 0.5);
+          if (rng() < 0.45 - deep * 0.3) continue;
+          const bot = Math.min(top, 0) - 2.5 - deep * 16 - rng() * 2.5;
+          p.set(x + 0.5 + (rng() - 0.5) * 0.8, (top + bot) / 2, z + 0.5 + (rng() - 0.5) * 0.8);
+          q.setFromEuler(e.set((rng() - 0.5) * 0.16, rng() * 6.3, (rng() - 0.5) * 0.16));
+          const wd = 2.6 + deep * 3.4 + rng() * 1.6;
+          s.set(wd * (0.8 + rng() * 0.4), top - bot, wd * (0.8 + rng() * 0.4));
           under.push(m.compose(p, q, s).clone());
           underCols.push(underA.clone().lerp(underB, rng()).offsetHSL(0, 0, (rng() - 0.5) * 0.06));
         }
@@ -604,6 +608,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   // road or paving, or near a prop (the parapets and the falls keep their own faces).
   const crags: THREE.Matrix4[] = [], cragCols: THREE.Color[] = [];
   const ledgeTufts: THREE.Matrix4[] = [], ledgeTuftCols: THREE.Color[] = [];
+  const cushions: THREE.Matrix4[] = [], cushionCols: THREE.Color[] = [];
   if (rockCells.length) {
     const propNear = new Uint8Array(w * h), cragAt = new Uint8Array(w * h);
     // Room kept round props by kind (parapets and lamps stand above the rock, not in front of it).
@@ -646,7 +651,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       if (fx >= 0 && ol > 0.01 && !propNear[i]) {
         ox /= ol;
         oz /= ol;
-        const tx = -oz, tz = ox, faceH = top - foot;
+        // The face's real height runs from its foot to the lip behind the cell (a cliff cell's own
+        // centre lies halfway down the drop), so the crags can rise to the top of the rock.
+        const lip = Math.max(top, heightAt(cx - ox * 0.75, cz - oz * 0.75));
+        const tx = -oz, tz = ox, faceH = lip - foot;
         // Crags out of the taller faces, in clusters, none crowding the last.
         let clear = true;
         for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (cragAt[(z + dz) * w + x + dx]) clear = false;
@@ -655,10 +663,14 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         const low = faceH <= 2.4;
         if (faceH > 1.0 && clear && rng() < (low ? 0.6 : 0.5)) {
           cragAt[i] = 1;
-          // (Under the crown most crags rise nearly to the lip, so the rock meets the road's talus.)
-          const tall = !low && rng() < (top > 9 ? 0.6 : 0.3), broad = !low && rng() < 0.3;
+          // Their heights follow a broad noise along the rock, so neighbouring crags gather into
+          // masses whose tops wander: some rise almost to the lip (lapping over a road's talus),
+          // others stop well short with the bare face above, never one common crown line.
+          const mass = pocketNoise(cx * 0.13 + 11.3, cz * 0.13 - 4.7);
+          const tall = !low && rng() < (lip > 9 ? 0.45 + mass * 0.4 : 0.3), broad = !low && rng() < 0.3 + mass * 0.25;
           for (let k = 0, nk = rng() < 0.45 ? 2 : 1; k < nk; k++) {
-            const H = Math.min(faceH - (low ? 0.25 : 0.5), Math.max(low ? 0.7 : 1.6, faceH * (tall && !k ? 0.86 + rng() * 0.08 : 0.38 + rng() * 0.45) * (k ? 0.75 : 1)));
+            const f = tall && !k ? 0.62 + mass * 0.34 + (rng() - 0.5) * 0.12 : 0.25 + mass * 0.3 + rng() * 0.3;
+            const H = Math.min(faceH - (low ? 0.25 : 0.12), Math.max(low ? 0.7 : 1.6, faceH * f * (k ? 0.55 + rng() * 0.3 : 1)));
             // Stout masses, never needles: at least about half as broad (the column is ~0.9 across) as
             // tall, from narrow pillars to broad buttresses four times as wide.
             const W = Math.max(Math.min(broad ? 5.2 : 3.6, (broad ? 2.6 : 0.9) + faceH * 0.14 + rng() * (broad ? 2.0 : 1.4)) * (k ? 0.7 : 1), H * 0.62), D = W * (0.75 + rng() * 0.35);
@@ -698,6 +710,25 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       }
       // Plants rooted on the rock wherever it lies flat (grassy country only).
       if (!grassy) continue;
+      // Where a lawn or meadow meets the top of the rock, the turf rolls over the lip: a ragged
+      // fringe of tufts along the edge leaning out over the drop, so no lawn ends in a crisp cut.
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, nz = z + dz;
+        if (!walkable(nx, nz)) continue;
+        const j = nz * w + nx;
+        if (layout.ground[j] !== Ground.Grass || layout.fluid[j] || propNear[j]) continue;
+        const fl = floorAt(nx + 0.5, nz + 0.5);
+        // (Only on the high side: the lawn the face drops away from.)
+        if (!(fl > foot + 1.0)) continue;
+        for (let k = 0, nk = 2 + Math.floor(rng() * 3); k < nk; k++) {
+          const t = (rng() - 0.5) * 0.9, px = cx + dx * 0.42 + (dz ? t : 0), pz = cz + dz * 0.42 + (dx ? t : 0);
+          const sc = 0.8 + rng() * 0.7, lean = 0.3 + rng() * 0.35;
+          p.set(px, Math.max(fl, heightAt(px, pz)) - 0.05, pz);
+          q.setFromEuler(e.set(-dz * lean, rng() * 0.4 - 0.2, dx * lean));
+          ledgeTufts.push(m.compose(p, q, s.set(sc, sc * (0.9 + rng() * 0.5), sc)).clone());
+          ledgeTuftCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(grassPal0[1]), rng()).multiplyScalar(1.1).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.05));
+        }
+      }
       for (let k = 0; k < 3; k++) {
         const px = x + 0.1 + rng() * 0.8, pz = z + 0.1 + rng() * 0.8;
         const y = terrain.ledge(px, pz, 0.4);
@@ -707,13 +738,14 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         // Trees only in a few pockets (where a broad noise is high), bare rock between: never a row
         // of trees along every ledge.
         if (r < treeP(i) * 6 && pocketNoise(px * 0.07, pz * 0.07) > 0.62 && terrain.ledge(px, pz, 1.1) !== null) addTree(wx, wz, 0.65 + rng() * 0.25, y);
-        else if (r < 0.2 && pocketNoise(px * 0.07, pz * 0.07) > 0.5) {
-          // Shrubs only in the planted pockets, full and rounded (never flat tiles along a crest).
-          const sc = 0.45 + rng() * 0.45;
-          p.set(wx, y - 0.12, wz);
-          q.setFromEuler(e.set(0, rng() * 6.3, 0));
-          bushes.push(m.compose(p, q, s.set(sc, sc, sc)).clone());
-          bushCols.push(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]).offsetHSL(0, 0.04, -0.03));
+        else if (r < 0.22 && pocketNoise(px * 0.07, pz * 0.07) > 0.5) {
+          // In the planted pockets, moss: low soft cushions moulded to the ledge (sunk into it, of
+          // different sizes and turned every way), never blocky shrubs or tiles along a crest.
+          const sc = 0.35 + rng() * 0.55;
+          p.set(wx, y - 0.06 - sc * 0.05, wz);
+          q.setFromEuler(e.set((rng() - 0.5) * 0.25, rng() * 6.3, (rng() - 0.5) * 0.25));
+          cushions.push(m.compose(p, q, s.set(sc * (0.9 + rng() * 0.6), sc * (0.7 + rng() * 0.4), sc * (0.8 + rng() * 0.4))).clone());
+          cushionCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]), 0.3 + rng() * 0.4).offsetHSL((rng() - 0.5) * 0.03, 0.02, (rng() - 0.5) * 0.06));
         } else if (r < 0.85) {
           const sc = 0.7 + rng() * 0.6;
           p.set(wx, y - 0.03, wz);
@@ -809,6 +841,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   ])!;
   inst(masonry, walls, wallCols, 0, true, 'masonry');
   for (const mesh of inst(ts.bush, bushes, bushCols, 0, false, ts.paint.grove, true, ts.bushGrade, ts.shaded ? withVertexShade : undefined) ?? []) mesh.name = 'bush';
+  // Moss cushions on the rock: a few soft lobes run together, flattened onto the ledge.
+  if (cushions.length) {
+    const lobe = (r: number, x: number, z: number) => new THREE.IcosahedronGeometry(r, 1).scale(1, 0.42, 1).translate(x, r * 0.12, z);
+    inst(mergeGeometries([lobe(0.55, 0, 0), lobe(0.42, 0.5, 0.18), lobe(0.36, -0.38, 0.3), lobe(0.3, 0.1, -0.45)])!, cushions, cushionCols, 0, false, ts.paint.grove, true);
+  }
   inst(new THREE.ConeGeometry(0.05, 0.7, 3).translate(0, 0.35, 0), reeds, null, 0x7e9446, false, undefined, false);
   const flowerGeo = mergeGeometries([
     new THREE.CylinderGeometry(0.012, 0.012, 0.25, 3).translate(0, 0.125, 0).toNonIndexed(),
@@ -816,7 +853,12 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   ])!;
   inst(flowerGeo, flowers, flowerCols, 0, false, undefined, false);
   if (under.length) {
-    inst(taper(0.3, 0.3, 1.3, 1.3, 1), under, underCols, 0, false, 'rock');
+    // Hanging masses: a crag column turned upside down (broad and broken at the top, tapering to a
+    // blunt point), four shapes so neighbours never repeat.
+    for (let v = 0; v < 4; v++) {
+      const hang = cragColumn(61 + v).clone().rotateX(Math.PI).translate(0, 0.5, 0).scale(1.5, 1, 1.5);
+      inst(hang, under.filter((_, i) => i % 4 === v), underCols.filter((_, i) => i % 4 === v), 0, false, 'rock');
+    }
     // A solid core under the whole island so it reads as one mass, in the same rock as its side.
     const coreMat = new THREE.MeshStandardMaterial({ color: underB.clone(), flatShading: true });
     applyPaint(coreMat, 'rock', 'world', 0.5);

@@ -126,7 +126,7 @@ export function cragColumn(seed: number) {
   return cached(`cg${seed}`, () => {
     const rng = mulberry32(seed * 4243 + 17);
     const n = 5 + Math.floor(rng() * 3), a0 = rng() * Math.PI * 2;
-    const tilt = rng() * Math.PI * 2, slope = 0.12 + rng() * 0.22;
+    const tilt = rng() * Math.PI * 2, slope = 0.22 + rng() * 0.4;
     const lean = [(rng() - 0.5) * 0.18, (rng() - 0.5) * 0.18];
     const pts: THREE.Vector3[] = [];
     const radii = Array.from({ length: n }, () => 0.36 + rng() * 0.16);
@@ -135,7 +135,9 @@ export function cragColumn(seed: number) {
         const a = a0 + (i / n) * Math.PI * 2 + (rng() - 0.5) * 0.35, r = radii[i] * shrink * (0.92 + rng() * 0.14);
         const x = Math.cos(a) * r + lean[0] * off, z = Math.sin(a) * r + lean[1] * off;
         // The top ring is broken off at a slant.
-        const yy = y < 0.8 ? y : y + Math.cos(a - tilt) * slope * 0.5 + 0.04;
+        // (Its high side just reaches the top, the rest falling away by up to `slope` below it,
+        // chipped a little point by point, so no two crowns are flat or alike.)
+        const yy = y < 0.8 ? y : 1 - (1 - Math.cos(a - tilt)) * slope * 0.5 - rng() * 0.05;
         pts.push(V(x, Math.min(1, yy), z));
       }
     }

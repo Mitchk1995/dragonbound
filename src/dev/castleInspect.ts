@@ -81,7 +81,7 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
  * centrepiece and a lawn up close, the island beyond and the camera-side wall dissolving round the
  * hero. Every position comes from CASTLE_PLAN, so the shots follow the layout.
  */
-export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false) {
+export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false, only?: string[]) {
   g.travel('keep', true);
   await new Promise((r) => setTimeout(r, 400));
   document.body.classList.add('inspect-clean');
@@ -95,6 +95,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
 
   /** The hero standing at (x, z), seen through the game's own camera at `zoom`. */
   const play = async (name: string, x: number, z: number, zoom: number, measure = false) => {
+    if (only && !only.includes(name)) return;
     const at = g.zone.nav.nearestWalkable(x, z)!;
     g.player.obj.visible = true;
     g.player.pos.set(at.x, g.zone.groundY(at.x, at.z), at.z);
@@ -107,6 +108,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   };
   /** A free camera at `eye` looking at `look` (world units), no fog, shadows cast over `span`. */
   const view = async (name: string, eye: number[], look: number[], span = 30) => {
+    if (only && !only.includes(name)) return;
     const fog = g.scene.fog as THREE.Fog, sc = g.sun.shadow.camera;
     const keep = { near: fog.near, far: fog.far, l: sc.left, r: sc.right, t: sc.top, b: sc.bottom, f: sc.far };
     g.player.obj.visible = false;
