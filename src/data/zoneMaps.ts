@@ -184,7 +184,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     // its front on the court's axis, an arched stall opening either side of it at equal distances
     // (half-doors, a horse looking out), the hay loft's door over the middle; hay, the trough and
     // straw along the north wall.
-    id: 'stables', style: 'keep', interior: 'keep', x: 105, z: 70, w: 12, d: 5, wallH: 5.6, roof: ROOF.terracotta,
+    id: 'stables', style: 'keep', interior: 'keep', x: 105, z: 70, w: 12, d: 5, wallH: 6.9, roof: ROOF.terracotta,
     doors: [{ side: 's', at: 5, w: 2 }],
     windows: [{ side: 's', at: 2.5, stall: true }, { side: 's', at: 9.5, stall: true }],
     fits: [
@@ -467,6 +467,11 @@ const GATE_HALF = GATEHOUSE.cx + Math.sqrt(GATEHOUSE.R ** 2 - (CURTAIN_WALL.T / 
 const FOUNTAIN = { x: AXIS, z: CROSS_AXIS };
 /** The fountain plaza's radius, and the radius of the box arcs that close the parterre round it. */
 const PLAZA_R = 9, ARC_R = 10;
+/**
+ * How far off the axis the parterre's lawns end along the terrace walks: there each lawn's corner is
+ * cut square across (the circle alone would run out to a sharp wedge along the walk).
+ */
+const LAWN_CORNER = 6;
 /** The bower: a rose arbour at the head of the west walk, in the open under the north-west wall. */
 const BOWER = { x: 37.5, z: 39 };
 /** The service ward's own axis (x) through the kitchen garden, and the stable court's (the stables' door). */
@@ -644,11 +649,11 @@ export function buildKeep(seed: number): ZoneLayout {
       if (d < CLIMB_KERB) G.l.ground[i] = Ground.Stone;
     }
   }
-  // The gate terrace before the gatehouse, and the belvedere outside the postern: paved, level with
-  // the crown.
+  // The gate terrace before the gatehouse, the belvedere outside the postern and the landing at the
+  // head of the climb (stopping on the line of the climb's east wall): paved, level with the crown.
   // (The gate terrace is paved up to the curtain only between the gate's drums; either side of them
   // the verge's lawn runs straight from the road to the wall.)
-  for (const [x0, z0, x1, z1] of [[56, 104, 76, 109], [60, 101, 72, 104], [20.5, 49.5, 28, 56.5], [27.5, 52, 30.2, 54], [117, 104, 127, 109.5]]) {
+  for (const [x0, z0, x1, z1] of [[56, 104, 76, 109], [60, 101, 72, 104], [20.5, 49.5, 28, 56.5], [27.5, 52, 30.2, 54], [117, 104, 125.5, 109.5]]) {
     G.floor((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2, 0, Ground.Stone);
     G.rect((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2, 0, (i) => (level[i] = 11));
   }
@@ -1304,9 +1309,12 @@ export function buildKeep(seed: number): ZoneLayout {
   // embroidery) between a blossom or gold tree in each outer corner, its inner half a curved bed of
   // flowers following the arc, with clipped cones at the arc's two ends.
   const panelN = 69.5, panelS = CROSS_AXIS - 2.5;
-  /** The plaza arc of the north-west panel: from its south edge (z panelS) round to where it meets the north hedge. */
+  /**
+   * The plaza arc of the north-west panel: from its south edge (z panelS) round to where it turns
+   * square up to the north hedge, just outside the lawn's square corner (LAWN_CORNER).
+   */
   const arcPts = (() => {
-    const a0 = Math.asin((CROSS_AXIS - panelS) / ARC_R), a1 = Math.asin((CROSS_AXIS - panelN) / ARC_R), n = 5;
+    const a0 = Math.asin((CROSS_AXIS - panelS) / ARC_R), a1 = Math.acos((LAWN_CORNER + 0.4) / ARC_R), n = 5;
     return Array.from({ length: n + 1 }, (_, k) => {
       const a = a0 + ((a1 - a0) * k) / n;
       return [AXIS - ARC_R * Math.cos(a), CROSS_AXIS - ARC_R * Math.sin(a)];
@@ -1318,7 +1326,7 @@ export function buildKeep(seed: number): ZoneLayout {
     // Two borders, open only where the statue walk passes through: the outer one round three sides,
     // the inner one along the north edge, round the arc and back along the south edge.
     border(P2([[49.5, panelN], [39.5, panelN], [39.5, panelS], [49.5, panelS]]));
-    border(P2([[52.5, panelN], ...[...arcPts].reverse(), [52.5, panelS]]));
+    border(P2([[52.5, panelN], [arcNorth, panelN], ...[...arcPts].reverse(), [52.5, panelS]]));
     const north = Z(0) === 0, face = X(0) === 0 ? Math.PI / 2 : -Math.PI / 2, mid = Z((panelN + panelS) / 2);
     place('champion', X(51), mid, face, { s: 1.05, block: 1.3 });
     // The embroidery: a lozenge of clipped box round a flower bed (the ground inside it planted, so
@@ -1331,12 +1339,12 @@ export function buildKeep(seed: number): ZoneLayout {
         const i = G.idx(qx, qz);
         if (Math.abs(qx + 0.5 - c) / rx + Math.abs(qz + 0.5 - z) / rz <= 1.05 && G.l.cells[i] === Cell.Ground && G.l.ground[i] === Ground.Grass) G.l.cells[i] = Cell.Blocked;
       }
-      bed(c, z, 0, 3.0, north ? 0 : 2);
+      bed(c, z, 0, 2.6, north ? 0 : 2);
     }
     for (const z of [panelN + 1.1, panelS - 1.1]) tree(X(41.2), Z(z), north ? 1 : 2, 0.9);
     // The inner half: a curved flower bed along the arc, a clipped cone at each of the arc's ends
-    // (each inside the border, clear of the arc).
-    bed(X(55.6), Z(72.0), 0, 3.0, north ? 1 : 3);
+    // (each inside the border, clear of the arc and a clear step from the bed's end).
+    bed(X(55.1), Z(72.0), 0, 2.6, north ? 1 : 3);
     cone(X(57.2), Z(panelN + 1.0));
     cone(X(arcSouth - 1.1), Z(panelS - 0.9));
     // The panel's lawn inside its borders is planted ground, not walked on (only the statue walk's
@@ -1370,11 +1378,13 @@ export function buildKeep(seed: number): ZoneLayout {
   // feast court before the great door. (Every lawn's edge against paving is kerbed below, once the
   // lawns are laid.)
   {
-    // (Each quarter's curved kerb runs from the cross walk's kerb to the terrace walk's, on the lawn's
-    // circle: the lawns' straight edges are the walks' at z 76 / 80 and 69 / 87.)
-    const ring = G.prop('kerb_ring', FOUNTAIN.x, FOUNTAIN.z), rk = ARC_R - 0.55;
-    ring.len = rk;
-    ring.opt = { a0: Math.asin((CROSS_AXIS - 76 - 0.08) / rk), a1: Math.asin((CROSS_AXIS - 69) / (ARC_R - 0.3)) };
+    // (Each quarter's kerb turns off the cross walk's kerb onto the lawn's circle and back onto the
+    // terrace walk's: the lawns' straight edges are the walks' at z 76 / 80 and 69 / 87, their kerbs
+    // set 0.08 onto the paving.)
+    const ring = G.prop('kerb_ring', FOUNTAIN.x, FOUNTAIN.z);
+    ring.len = ARC_R - 0.5;
+    // (The cross walk's straight kerbs stop at the last whole lawn cell, ARC_R off the axis.)
+    ring.opt = { d0: CROSS_AXIS - 76 - 0.08, d1: CROSS_AXIS - 69 + 0.08, x0: ARC_R, xc: LAWN_CORNER - 0.08, x1: LAWN_CORNER + 0.6 };
     for (const z of [46.4, 98.4]) {
       const band = G.prop('kerb', AXIS, z, 0);
       band.len = 6;
@@ -1391,7 +1401,8 @@ export function buildKeep(seed: number): ZoneLayout {
   for (const X of [(x: number) => x, mx]) {
     // (One border round the lawn, open in the middle of its avenue side.)
     border([[X(62.4), 54.6], [X(62.4), 46.8], [X(57.6), 46.8], [X(57.6), 65.2], [X(62.4), 65.2], [X(62.4), 57.4]]);
-    for (const x of [58.5, 61.5]) for (const z of [51, 61]) bed(X(x), z, Math.PI / 2, 6, x < 60 ? 1 : 3);
+    // (A clear step in from the border on either side, and from the standards between them.)
+    for (const x of [58.7, 61.3]) for (const z of [51, 61]) bed(X(x), z, Math.PI / 2, 6, x < 60 ? 1 : 3);
     cone(X(60), 50.2);
     place('topiary', X(60), 56, 0, { len: 2, block: 0.5 });
     cone(X(60), 61.8);
@@ -1401,14 +1412,14 @@ export function buildKeep(seed: number): ZoneLayout {
   // champions and a pair of great urns flanking the steps, the door's oak leaves standing open; the
   // well on the kitchen door's axis, the kitchen's woodpile against its south wall.
   for (const X of [(x: number) => x, mx]) {
-    // (Each from the entrance bay out past the range's front corner, so no stub of the range's
-    // front shows between a pavilion and the round mass beyond it.)
-    place('pavilion', X(59.4), 40.0, 0, { len: 6.2, block: 0 });
-    blockRect(G, X(59.4), 41.0, 3.05, 0.95, 0);
+    // (Each from the entrance bay a square tower's width out along the front, so the donjon's drum
+    // beyond the west one stands clear of it, with the range's front between them.)
+    place('pavilion', X(60.3), 40.0, 0, { len: 4.6, block: 0 });
+    blockRect(G, X(60.3), 41.0, 2.25, 0.95, 0);
     // (The nook between the east pavilion and the stair turret is closed off.)
     if (X(0) !== 0) G.l.cells[G.idx(76, 40)] = Cell.Blocked;
     place('champion', X(61.5), 44.2, 0, { s: 1.3, block: 1.6 });
-    place('urn', X(63.3), 41.7, 0, { block: 0.6 });
+    place('urn', X(63.6), 41.7, 0, { block: 0.6 });
   }
   G.prop('great_doors', AXIS, BUILDING.keep.z + BUILDING.keep.d - 0.95, 0).len = 4;
   // East of the door, where the donjon's drum stands on the west, a round stair turret against the
@@ -1551,7 +1562,8 @@ export function buildKeep(seed: number): ZoneLayout {
   bed(103.0, 86, Math.PI / 2, 3.6, 2);
   rail('fence', 102.6, 90.5, STABLE_AXIS - 1.4, 90.5);
   rail('fence', STABLE_AXIS + 1.4, 90.5, 118.4, 90.5);
-  place('gate_piers', STABLE_AXIS, 90.5, 0, { block: 0 });
+  // (Turned so its leaf stands open into the paddock.)
+  place('gate_piers', STABLE_AXIS, 90.5, Math.PI, { block: 0 });
   for (const sx of [-1, 1]) blockDisc(G.l, STABLE_AXIS + sx * 1.25, 90.5, 0.35);
   place('fit_trough', STABLE_AXIS, 92.4, 0, { block: [0.9, 0.35] });
   place('field_shelter', 116.8, 93.7, -Math.PI / 2, { len: 4.8, block: [2.4, 1.4] });
@@ -1723,6 +1735,13 @@ export function buildKeep(seed: number): ZoneLayout {
       const pv = G.prop('ramp_paving', cx, cz, 0);
       pv.y = 0;
       pv.opt = { pts: pts.map(([x, z]) => [x - cx, z - cz]), ys: pts.map(([x, z]) => climbAt(x, z) + 0.03), w: 2 * CLIMB_KERB - 0.3 };
+      // A pale threshold band across its head between the walls, where the climb's paving meets the
+      // landing's, so the change of paving is a laid edge.
+      const [ax, az] = ramp[ramp.length - 2], [bx, bz] = ramp[ramp.length - 1], l = Math.hypot(bx - ax, bz - az);
+      const th = G.prop('kerb', bx, bz, Math.atan2((bx - ax) / l, (bz - az) / l));
+      th.len = 2 * CLIMB_KERB - 0.7;
+      th.v = 1;
+      th.y = climbAt(bx, bz) + 0.06;
     }
     const cp = G.prop('parapet_pier', corner.x, corner.z, Math.atan2(-(landing1[1] - landing0[1]), landing1[0] - landing0[0]));
     cp.v = 2;
@@ -1736,6 +1755,11 @@ export function buildKeep(seed: number): ZoneLayout {
     p.v = gt.z - L / 2 - 101.1;
     for (const sz of [-1, 1]) blockRect(G, gt.x, gt.z + sz * (gt.P / 2 + 0.6), 1.1, 0.6, 0);
     blockRect(G, gt.x, (101.1 + gt.z - L / 2) / 2, 1.1, (gt.z - L / 2 - 101.1) / 2 + 0.1, 0);
+    // (No banner on the curtain where the wing comes on to it.)
+    for (const w of G.l.props.filter((q) => q.kind === 'castle_wall')) {
+      const r = w.rot ?? 0, u = (gt.x - w.x) * Math.cos(r) - (gt.z - w.z) * Math.sin(r), across = (gt.x - w.x) * Math.sin(r) + (gt.z - w.z) * Math.cos(r);
+      if (Math.abs(u) < (w.len ?? 0) / 2 && Math.abs(across) < 8) w.opt = { ...(w.opt ?? {}), clear: [[u - 1.1, u + 1.1]] };
+    }
   }
   // The spring's water comes out of the castle rock: a culvert under the ledge road spills a fall
   // down the rock face into the spring pool.
@@ -1887,6 +1911,12 @@ export function buildKeep(seed: number): ZoneLayout {
     const panel = Math.abs(px - AXIS) > 3 && Math.abs(pz - CROSS_AXIS) > 2 && pz > 69 && pz < 87;
     if (!panel || r >= ARC_R + 0.6 || (G.l.cells[i] !== Cell.Ground && G.l.cells[i] !== Cell.Blocked)) continue;
     if (r < ARC_R) G.l.ground[i] = Ground.Stone;
+    // (The wedge past each lawn's square corner is the plaza's paving.)
+    if (Math.abs(px - AXIS) < LAWN_CORNER && Math.abs(pz - CROSS_AXIS) > 7) {
+      G.l.ground[i] = Ground.Stone;
+      lawn[i] = Lawn.None;
+      continue;
+    }
     if (r >= PLAZA_R - 0.2) lawn[i] = Lawn.Clipped;
   }
   // (The spring's round terrace too: its paving lies flush to the kerb with no grass through it.)
@@ -1928,6 +1958,25 @@ export function buildKeep(seed: number): ZoneLayout {
           s = -1;
         }
       }
+    }
+    // Where the ring kerb turns square across a lawn's corner and out along the terrace walk, it is
+    // the only kerb there: the cell kerbs stop where it ends.
+    const owned = (x: number, z: number) => Math.abs(x - FOUNTAIN.x) < LAWN_CORNER + 0.6 - 0.01 && Math.abs(z - FOUNTAIN.z) > 7.5 && Math.abs(z - FOUNTAIN.z) < 9.6;
+    for (let k = kerbs.length - 1; k >= 0; k--) {
+      const kb = kerbs[k], ux = Math.cos(kb.rot), uz = -Math.sin(kb.rot), N = Math.max(2, Math.ceil(kb.len / 0.02));
+      const keep: [number, number][] = [];
+      let s: number | null = null;
+      for (let j = 0; j <= N; j++) {
+        const t = -kb.len / 2 + (kb.len * j) / N, ok = j < N && !owned(kb.x + ux * t, kb.z + uz * t);
+        if (ok && s === null) s = t;
+        if (!ok && s !== null) {
+          keep.push([s, t]);
+          s = null;
+        }
+      }
+      if (keep.length === 1 && Math.abs(keep[0][1] - keep[0][0] - kb.len) < 0.03) continue;
+      kerbs.splice(k, 1);
+      for (const [a, e] of keep) if (e - a > 0.05) kerbs.push({ x: kb.x + ux * (a + e) / 2, z: kb.z + uz * (a + e) / 2, rot: kb.rot, len: e - a });
     }
     // The straight kerbs that reach the fountain's circle stop on it, where the curved kerb takes
     // over (the lawn's edge there is the circle, not the cell's).

@@ -400,7 +400,10 @@ describe('building models', () => {
       const glass = hits.find((h) => (h.object as THREE.Mesh).material instanceof THREE.Material && ((h.object as THREE.Mesh).material as THREE.Material).transparent);
       expect(glass, `${b.id} has glass in the opening`).toBeDefined();
       expect(((glass!.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.5);
-      const solid = hits.find((h) => !((h.object as THREE.Mesh).material as THREE.Material).transparent);
+      // (A castle window shows its lit room painted on a plate just behind the glass, seen from
+      // outside only; past it the ray goes on into the room.)
+      if (b.style === 'keep') expect(hits.some((h) => h.object.name === 'room'), `${b.id} shows its lit room behind the glass`).toBe(true);
+      const solid = hits.find((h) => !((h.object as THREE.Mesh).material as THREE.Material).transparent && h.object.name !== 'room');
       // The first solid thing the ray meets is inside the room, not the wall around the window.
       expect(solid ? solid.point.z : Infinity, b.id).toBeGreaterThan(b.z + 1.1);
     }
