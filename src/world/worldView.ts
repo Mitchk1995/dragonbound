@@ -345,8 +345,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   // Foliage is flat-shaded facets, painted albedo and per-instance colour; undersides sit in shade.
   // The tree models come from the active style (trees.ts).
   const ts = treeSet();
+  // (Round the castle the turning conifers go gold, never rust, so no red fights its blue and gold.)
   const leafPal: Record<TreeKind, number[]> = {
-    pine: [0x3f6b34, 0x4b7a3a, 0x355c2e, 0x7a6a2a, 0x8a4a2a],
+    pine: theme.wall === 'castle' ? [0x3f6b34, 0x4b7a3a, 0x355c2e, 0x7a6a2a, 0xa07e2e] : [0x3f6b34, 0x4b7a3a, 0x355c2e, 0x7a6a2a, 0x8a4a2a],
     grove: [0x5a9a44, 0x6aa84a, 0x4a8a3c, 0xc8a040, 0xb86a8a],
     ash: [0x2a2420, 0x3a3028, 0x1e1a18],
   };
@@ -354,7 +355,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const mix: Partial<Record<TreeKind, number>> = theme.forest ?? { [theme.trees]: 1 };
   const kinds = (Object.keys(mix) as TreeKind[]).filter((k) => (mix[k] ?? 0) > 0);
   const totalW = kinds.reduce((a, k) => a + (mix[k] ?? 0), 0);
-  const speciesNoise = smoothNoise(seed + 71);
+  const speciesNoise = smoothNoise(seed + 71), underNoise = smoothNoise(seed + 83), pocketNoise = smoothNoise(seed + 91);
   const speciesAt = (x: number, z: number): TreeKind => {
     let v = speciesNoise(x * 0.06, z * 0.06) * 0.8 + rng() * 0.2;
     for (const k of kinds) {
@@ -544,10 +545,14 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
           let top = Infinity;
           for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz) !== Cell.Void) top = Math.min(top, floorAt(x + dx + 0.5, z + dz + 0.5));
           top -= 3.2;
-          const bot = Math.min(top, 0) - 3 - rng() * 6;
+          // Their lengths follow a broad noise round the rim, so neighbours merge into a few big
+          // tapering masses of clearly different depths (one hanging deep, others short), never a
+          // comb of equal prisms; the long ones are the broad ones.
+          const mass = underNoise(x * 0.055, z * 0.055), deep = mass * mass;
+          const bot = Math.min(top, 0) - 2.5 - deep * 16 - rng() * 1.5;
           p.set(x + 0.5, (top + bot) / 2, z + 0.5);
           q.setFromEuler(e.set(0, rng() * 3, 0));
-          s.set(1.6 + rng(), top - bot, 1.6 + rng());
+          s.set(1.8 + deep * 2.2 + rng() * 0.5, top - bot, 1.8 + deep * 2.2 + rng() * 0.5);
           under.push(m.compose(p, q, s).clone());
           underCols.push(underA.clone().lerp(underB, rng()).offsetHSL(0, 0, (rng() - 0.5) * 0.06));
         }
@@ -645,13 +650,18 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         // Crags out of the taller faces, in clusters, none crowding the last.
         let clear = true;
         for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (cragAt[(z + dz) * w + x + dx]) clear = false;
-        if (faceH > 2.4 && clear && rng() < 0.5) {
+        // (Low faces, a storey or less, take a broken rock rim too, so no grass plateau ends in a bare
+        // cut; tall faces take buttresses of very different widths, some merged into broad masses.)
+        const low = faceH <= 2.4;
+        if (faceH > 1.0 && clear && rng() < (low ? 0.6 : 0.5)) {
           cragAt[i] = 1;
-          const tall = rng() < 0.3;
+          // (Under the crown most crags rise nearly to the lip, so the rock meets the road's talus.)
+          const tall = !low && rng() < (top > 9 ? 0.6 : 0.3), broad = !low && rng() < 0.3;
           for (let k = 0, nk = rng() < 0.45 ? 2 : 1; k < nk; k++) {
-            const H = Math.min(faceH - 0.5, Math.max(1.6, faceH * (tall && !k ? 0.86 + rng() * 0.08 : 0.38 + rng() * 0.45) * (k ? 0.75 : 1)));
-            // Stout masses, never needles: at least about half as broad (the column is ~0.9 across) as tall.
-            const W = Math.max(Math.min(3.6, 1.2 + faceH * 0.14 + rng() * 1.2) * (k ? 0.7 : 1), H * 0.62), D = W * (0.75 + rng() * 0.35);
+            const H = Math.min(faceH - (low ? 0.25 : 0.5), Math.max(low ? 0.7 : 1.6, faceH * (tall && !k ? 0.86 + rng() * 0.08 : 0.38 + rng() * 0.45) * (k ? 0.75 : 1)));
+            // Stout masses, never needles: at least about half as broad (the column is ~0.9 across) as
+            // tall, from narrow pillars to broad buttresses four times as wide.
+            const W = Math.max(Math.min(broad ? 5.2 : 3.6, (broad ? 2.6 : 0.9) + faceH * 0.14 + rng() * (broad ? 2.0 : 1.4)) * (k ? 0.7 : 1), H * 0.62), D = W * (0.75 + rng() * 0.35);
             const along = k ? (rng() < 0.5 ? -1 : 1) * W * 0.75 : (rng() - 0.5) * 0.4;
             const back = W / 2 - 0.7 + (k ? 0.25 : 0);
             p.set(cx - ox * back + tx * along, foot - 0.3, cz - oz * back + tz * along);
@@ -694,12 +704,15 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         if (y === null || y - floorAt(px, pz) < 0.7) continue;
         const [wx, wz] = terrain.warp(px, y, pz);
         const r = rng();
-        if (r < treeP(i) * 4 && terrain.ledge(px, pz, 1.1) !== null) addTree(wx, wz, 0.65 + rng() * 0.25, y);
-        else if (r < 0.2) {
-          const sc = 0.35 + rng() * 0.45;
-          p.set(wx, y - 0.05, wz);
+        // Trees only in a few pockets (where a broad noise is high), bare rock between: never a row
+        // of trees along every ledge.
+        if (r < treeP(i) * 6 && pocketNoise(px * 0.07, pz * 0.07) > 0.62 && terrain.ledge(px, pz, 1.1) !== null) addTree(wx, wz, 0.65 + rng() * 0.25, y);
+        else if (r < 0.2 && pocketNoise(px * 0.07, pz * 0.07) > 0.5) {
+          // Shrubs only in the planted pockets, full and rounded (never flat tiles along a crest).
+          const sc = 0.45 + rng() * 0.45;
+          p.set(wx, y - 0.12, wz);
           q.setFromEuler(e.set(0, rng() * 6.3, 0));
-          bushes.push(m.compose(p, q, s.set(sc, sc * 0.75, sc)).clone());
+          bushes.push(m.compose(p, q, s.set(sc, sc, sc)).clone());
           bushCols.push(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]).offsetHSL(0, 0.04, -0.03));
         } else if (r < 0.85) {
           const sc = 0.7 + rng() * 0.6;

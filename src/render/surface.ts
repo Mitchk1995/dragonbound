@@ -794,11 +794,21 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
             diffuseColor.rgb *= 1.0 - 0.32 * smoothstep(0.45, 0.75, streak) * face;
             float drift2 = texture2D(uMixTex, vSurfPos.xz * 0.021 + vec2(vSurfPos.y * 0.017, 0.4)).r;
             diffuseColor.rgb *= mix(vec3(0.92, 0.97, 1.06), vec3(1.12, 1.0, 0.8), smoothstep(0.3, 0.75, drift2) * face + (1.0 - face) * 0.5);
+            // One big weathering gradient up every face: warmer and darker toward the damp foot,
+            // cooler and lighter toward the sunlit crown; the faces lifted a little overall so those
+            // turned from the sun read as shaded rock, never black.
+            float hk = smoothstep(-1.0, 13.0, vSurfPos.y);
+            diffuseColor.rgb *= mix(mix(vec3(1.0), vec3(0.9, 0.86, 0.8), face), mix(vec3(1.0), vec3(1.04, 1.06, 1.12), face), hk) * (1.0 + 0.12 * face);
             ${rockTops ? '' : `float mossN = texture2D(uMixTex, vSurfPos.xz * 0.19 + vec2(0.13, 0.77)).r;
-            // Only in patches on the upward ledges (a broad mask), never a line along every bed.
-            float mossP = texture2D(uMixTex, vSurfPos.xz * 0.045 + vec2(0.52, 0.31)).r;
-            float moss = smoothstep(0.7, 0.92, fn.y) * smoothstep(0.5, 0.68, mossN + fn.y * 0.1) * smoothstep(0.5, 0.66, mossP) * rockK;
-            diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.16, 0.25, 0.09), vec3(0.27, 0.36, 0.13), mossN), moss * 0.85);`}`}
+            // Moss laid from straight above in world space: only on faces that truly face up (the
+            // geometry's own normal, not the painted facets, so it never traces the strata), in a few
+            // broad patches with a ragged edge, soil and grit speckled through it.
+            float mossP = texture2D(uMixTex, vSurfPos.xz * 0.035 + vec2(0.52, 0.31)).r;
+            float edgeN = texture2D(uMixTex, vSurfPos.xz * 0.6 + vec2(0.21, 0.44)).r;
+            float moss = smoothstep(0.78, 0.95, gn.y) * smoothstep(0.6, 0.72, mossP + (edgeN - 0.5) * 0.22) * rockK;
+            vec3 mossC = mix(vec3(0.13, 0.2, 0.07), vec3(0.21, 0.3, 0.1), mossN);
+            mossC = mix(mossC, vec3(0.24, 0.2, 0.15), smoothstep(0.62, 0.8, edgeN) * 0.6);
+            diffuseColor.rgb = mix(diffuseColor.rgb, mossC, moss * 0.8);`}`}
           }
           ${cave && topShade < 1 ? CAVE_RISERS : ''}
           ${topShade < 1 ? `// Rock falls away into darkness as it climbs (eased in caves, so the first ledges stay readable).

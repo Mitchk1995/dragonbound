@@ -173,7 +173,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('gatehouse-outer', [P.gate.x + 10, y0 + 6, P.gate.z + 22], [P.gate.x, y0 + 7, P.gate.z], 18);
   await view('gate-close', [P.gate.x + 14, y0 + 9, P.gate.z + 22], [P.gate.x, y0 + 6, P.gate.z - 1], 20);
   await view('tower-close', [43, y0 + 8, 76], [31, y0 + 7, 66], 14);
-  await view('donjon', [66, y0 + 14, 66], [50, y0 + 12, 40], 24);
+  await view('donjon', [66, y0 + 14, 60], [50, y0 + 12, 33.5], 24);
   await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 70], [P.gate.x, y0 + 6, 60], 60);
   await view('ivy-curtain', [38, y0 + 4, 48], [38, y0 + 4, 39], 12);
   await view('hall-door', [62, y0 + 5, 66], [54, y0 + 2.5, 60.5], 12);

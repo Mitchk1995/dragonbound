@@ -142,18 +142,20 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
           vec4 rc = uReflMat * vec4(vPoolW, 1.0);
           vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
           // A soft, coherent image: sampled through the calm surface (only a gentle waver, never
-          // torn by the impact rings), blurred over a small disc of taps, and only as strong as the
-          // angle allows (faint seen from above, clearer at a glancing look), tinted by the water.
+          // torn by the impact rings), blurred over a disc of taps into a soft glow, and only as
+          // strong as the angle allows: gone when looked down on from the play camera (the pool then
+          // shows its sky and teal) and at the most grazing looks, clearest at a low oblique view.
+          // Tinted by the water.
           vec2 ruv = rc.xy / rc.w + (calm.xy - flatN.xy) * 0.012;
           vec4 mir = vec4(0.0);
           for (int j = 0; j < 7; j++) {
             float a = float(j) * 2.39996;
-            vec2 o = j == 0 ? vec2(0.0) : vec2(cos(a), sin(a)) * (0.0035 + 0.0012 * float(j));
+            vec2 o = j == 0 ? vec2(0.0) : vec2(cos(a), sin(a)) * (0.007 + 0.0024 * float(j));
             mir += texture2D(uRefl, ruv + o);
           }
           mir /= 7.0;
           float glance = 1.0 - ndv;
-          float cover = smoothstep(0.15, 0.85, mir.a) * uReflOn * (0.3 + 0.45 * glance * glance);
+          float cover = smoothstep(0.15, 0.85, mir.a) * uReflOn * 0.65 * smoothstep(0.3, 0.62, glance) * (1.0 - smoothstep(0.93, 1.0, glance));
           envC = mix(envC, mix(mir.rgb, mir.rgb * poolTint * 2.2, 0.35) * (0.85 + 0.3 * fres), cover);
           diffuseColor.rgb *= 1.0 - cover * 0.5;` : ''}
           diffuseColor.rgb *= (1.0 - fres) * 0.7;

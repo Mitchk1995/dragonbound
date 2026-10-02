@@ -18,7 +18,7 @@ import { strandField } from './strands';
  */
 
 /** Blade height per lawn kind, in world units. */
-const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.05, [Lawn.Garden]: 0.12 };
+const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.04, [Lawn.Garden]: 0.07 };
 /** Shells per graphics preset. */
 export const LAWN_SHELLS = { high: 8, medium: 6, low: 4 } as const;
 const MAX_SHELLS = 8;
@@ -174,8 +174,9 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
         {
           vec2 wp = vLawnPos.xz;
           bool clipped = vLawn.y < 0.2;
-          // Fine blades on clipped lawns (a couple of hundred to a cell, mown short), coarser in meadows.
-          float bladeScale = clipped ? 15.0 : 7.5;
+          // Fine blades on clipped lawns (several hundred to a cell, mown short into a dense turf),
+          // coarser in meadows.
+          float bladeScale = clipped ? 40.0 : 7.5;
           vec2 p1 = wp * bladeScale;
           // How small a blade is on screen: tiny blades shimmer, so the far lawn settles into one
           // layer and loses its upper shells.
@@ -224,7 +225,9 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           tip *= 0.86 + 0.28 * n2 + (tint - 0.5) * 0.26;
           tip *= mix(vec3(1.06, 1.02, 0.86), vec3(0.9, 1.0, 1.06), fract(tint * 7.13));
           tip *= 1.0 - 0.22 * foot;
-          vec3 col = mix(uLawnRoot, tip, pow(clamp(t, 0.0, 1.0), 0.85));
+          // (Mown turf is close and even: its blades shade from a lighter root, so it reads as one
+          // velvet surface, not tufts.)
+          vec3 col = mix(clipped ? mix(uLawnRoot, tip, 0.45) : uLawnRoot, tip, pow(clamp(t, 0.0, 1.0), 0.85));
           // The far lawn (one layer): the carpet's average painted with the grain of its blades
           // (two scales of mipmapped noise), never one flat green.
           if (lowest && t < 0.0) {
@@ -233,7 +236,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           }
           if (bloom.x >= 0.0) col = bloom;
           // Mower stripes on clipped lawns; broad lighter and darker drifts across meadows.
-          col *= clipped ? 1.0 + 0.1 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
+          col *= clipped ? 1.0 + 0.2 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
           diffuseColor.rgb = col;
         }`,
       );
