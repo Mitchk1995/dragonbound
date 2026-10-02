@@ -79,9 +79,11 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
  * Dev-only audit of the bailey (`npm run inspect -- bailey`): the whole castle from above and as a
  * plan, the approach, every yard through the gameplay camera with the hero standing in it, the
  * centrepiece and a lawn up close, the island beyond and the camera-side wall dissolving round the
- * hero. Every position comes from CASTLE_PLAN, so the shots follow the layout.
+ * hero. Every position comes from CASTLE_PLAN, so the shots follow the layout. With `angles`
+ * (`bailey-angles:hall-door+landing`) each named view is also shot from three orbits round the same
+ * focus: the far side (`-opp`), low at the hero's eye height (`-low`) and close up (`-close`).
  */
-export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false, only?: string[]) {
+export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false, only?: string[], angles = false) {
   g.travel('keep', true);
   await new Promise((r) => setTimeout(r, 400));
   document.body.classList.add('inspect-clean');
@@ -105,10 +107,58 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     g.update(0);
     if (measure) out[`perf-${name}`] = await perf(g, 40);
     await shot(`bailey-${name}`);
+    if (angles) {
+      const look = g.player.pos.clone().setY(g.player.pos.y + 1.2);
+      await orbits(name, g.camera.position.toArray(), look.toArray(), 16);
+    }
   };
   /** A free camera at `eye` looking at `look` (world units), no fog, shadows cast over `span`. */
   const view = async (name: string, eye: number[], look: number[], span = 30) => {
     if (only && !only.includes(name)) return;
+    await free(name, eye, look, span);
+    if (angles) await orbits(name, eye, look, span);
+  };
+  /**
+   * True when nothing but the focus itself stands between `eye` and `look` (tested both ways, so an
+   * eye shut inside a building's walls, which only face outward, is caught too).
+   */
+  const ray = new THREE.Raycaster();
+  ray.camera = g.camera;
+  const blocked = (from: THREE.Vector3, to: THREE.Vector3, skipFrom: number, skipTo: number) => {
+    const dir = to.clone().sub(from), d = dir.length();
+    ray.set(from, dir.normalize());
+    ray.near = skipFrom;
+    ray.far = Math.max(skipFrom + 0.01, d - skipTo);
+    return ray.intersectObjects(g.scene.children, true).some((h) => h.object.visible && (h.object as THREE.Mesh).isMesh);
+  };
+  const clear = (eye: THREE.Vector3, look: THREE.Vector3) => !blocked(eye, look, 0, 1.2) && !blocked(look, eye, 1.2, 0);
+  /**
+   * Three more angles on the same focus: swung round to the far side (the first swing from 180°
+   * towards 60° with a clear line of sight, so a facade is never shot from inside its building),
+   * low at the hero's eye height and close up.
+   */
+  const orbits = async (name: string, eye: number[], look: number[], span: number) => {
+    const L = new THREE.Vector3(...look), E = new THREE.Vector3(...eye), off = E.clone().sub(L);
+    const at = (v: THREE.Vector3) => v.toArray();
+    let opp = L.clone().add(off.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+    for (const deg of [180, 135, -135, 100, -100, 70, -70]) {
+      const cand = L.clone().add(off.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), (deg * Math.PI) / 180));
+      if (clear(cand, L)) { opp = cand; break; }
+    }
+    await free(`${name}-opp`, at(opp), look, span);
+    // Low: the hero's eye height on the same side (or swung round), nearer in until the line is clear.
+    let low: THREE.Vector3 | null = null;
+    for (const deg of [0, 30, -30, 60, -60, 180]) for (const k of [0.7, 0.5, 0.35, 0.2]) {
+      if (low) break;
+      const p = L.clone().add(new THREE.Vector3(off.x, 0, off.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), (deg * Math.PI) / 180).multiplyScalar(k));
+      p.y = g.zone.groundY(p.x, p.z) + 1.6;
+      if (clear(p, L)) low = p;
+    }
+    low ??= L.clone().add(new THREE.Vector3(off.x, 0, off.z).multiplyScalar(0.35)).setY(L.y);
+    await free(`${name}-low`, at(low), look, span);
+    await free(`${name}-close`, at(L.clone().add(off.clone().multiplyScalar(0.35))), look, Math.max(8, span * 0.5));
+  };
+  const free = async (name: string, eye: number[], look: number[], span: number) => {
     const fog = g.scene.fog as THREE.Fog, sc = g.sun.shadow.camera;
     const keep = { near: fog.near, far: fog.far, l: sc.left, r: sc.right, t: sc.top, b: sc.bottom, f: sc.far };
     g.player.obj.visible = false;
