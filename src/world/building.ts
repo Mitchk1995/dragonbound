@@ -74,6 +74,8 @@ export interface BuildingSpec {
   windows: Window[];
   /** Sides whose wall belongs to a neighbour sharing it (not drawn twice; still blocks). */
   shared?: Side[];
+  /** Sides built hard against the curtain: the curtain's foot runs there, so they take no base course. */
+  backs?: Side[];
   fits?: Fit[];
   /** Roof: a gable (ridge along the longer side) or a flat crenellated deck. */
   roofKind?: 'gable' | 'flat';

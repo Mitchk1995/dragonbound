@@ -624,6 +624,15 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const cushions: THREE.Matrix4[] = [], cushionCols: THREE.Color[] = [];
   if (rockCells.length) {
     const propNear = new Uint8Array(w * h), massAt = new Uint8Array(w * h);
+    /** Round every prop, the height it stands at: no rock mass may rise over it there. */
+    const propFoot = new Float32Array(w * h).fill(-Infinity);
+    for (const pr of layout.props) {
+      const py = pr.y ?? Math.max(floorAt(pr.x, pr.z), heightAt(pr.x, pr.z));
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = Math.floor(pr.x) + dx, zz = Math.floor(pr.z) + dz;
+        if (xx >= 0 && zz >= 0 && xx < w && zz < h) propFoot[zz * w + xx] = Math.max(propFoot[zz * w + xx], py);
+      }
+    }
     // Room kept round props by kind (parapets and lamps stand above the rock, not in front of it).
     const room: Record<string, number> = { spring_fall: 3, edge_fall: 3, parapet: -1, lamp_post: -1 };
     for (const pr of layout.props) {
@@ -665,6 +674,38 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
      * left. Its crown takes moss, and its front shoulder, where it stands clear of the face, may root
      * a pine, ferns or a moss cushion.
      */
+    const fitRay = new THREE.Raycaster(), fitDown = new THREE.Vector3(0, -1, 0), fitMesh = new THREE.Mesh();
+    fitMesh.matrixAutoUpdate = false;
+    /**
+     * The height (scale) a rock mass of variant `v` placed at p/q (W across, `dr` deep) may keep so
+     * its top, moss and all, never stands above the walkable ground it reaches over: under paving,
+     * walks, kept lawns and the cells a building or prop stands on by a hair, over a meadow by its turf.
+     */
+    const fitUnder = (v: number, W: number, T: number, dr: number, reach: (R: number) => number) => {
+      fitMesh.geometry = rockMassMoss(v);
+      const R = reach((W * Math.max(1, dr)) / 2);
+      for (let pass = 0; pass < 3; pass++) {
+        fitMesh.matrix.compose(p, q, s.set(W, T, W * dr));
+        fitMesh.matrixWorld.copy(fitMesh.matrix);
+        let worst = 1;
+        for (let zi = Math.floor(p.z - R); zi <= Math.floor(p.z + R); zi++) for (let xi = Math.floor(p.x - R); xi <= Math.floor(p.x + R); xi++) {
+          const j = zi * w + xi, foot = xi >= 0 && zi >= 0 && xi < w && zi < h ? propFoot[j] : -Infinity;
+          if (!walkable(xi, zi) && foot === -Infinity) continue;
+          const soft = layout.cells[j] === Cell.Ground && layout.ground[j] === Ground.Grass && (!layout.lawn || layout.lawn[j] === Lawn.None || layout.lawn[j] === Lawn.Meadow) && foot === -Infinity;
+          for (const [fx, fz] of [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]]) {
+            const sx = xi + fx, sz = zi + fz, cap = (walkable(xi, zi) ? Math.max(floorAt(sx, sz), foot) : foot) + (soft ? 0.15 : -0.05);
+            fitRay.set(new THREE.Vector3(sx, p.y + T * 1.5 + 2, sz), fitDown);
+            const hit = fitRay.intersectObject(fitMesh, false)[0];
+            if (!hit || hit.point.y <= cap) continue;
+            if (cap - p.y < 0.05) return 0;
+            worst = Math.max(worst, (hit.point.y - p.y) / (cap - p.y));
+          }
+        }
+        if (worst <= 1) return T;
+        T /= worst * 1.01;
+      }
+      return 0;
+    };
     const seatMass = (cx: number, cz: number, ox: number, oz: number, foot: number, base: number, H: number, W: number, along: number, front: number, low: boolean) => {
       const dr = 0.75 + rng() * 0.3, yaw = rng() * 6.3, tx = -oz, tz = ox, T0 = foot + H - base;
       let T = T0, ok = false, px = 0, pz = 0;
@@ -695,6 +736,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       const v = Math.floor(rng() * ROCK_MASSES);
       p.set(px, base, pz);
       q.setFromEuler(e.set((rng() - 0.5) * 0.14, yaw, (rng() - 0.5) * 0.14));
+      // The mass as it will stand (its moss included), tested where it reaches over the ground round
+      // it: wherever it would rise through a walk, paving, a lawn or a building's foot, it is lowered
+      // until it stays under them (a meadow's turf may still roll over its crown), or left out.
+      T = fitUnder(v, W, T, dr, (R) => R * 1.15 + 0.5);
+      if (T < (low ? 1.1 : 1.6)) return;
       rockMasses[v].push(m.compose(p, q, s.set(W, T, W * dr)).clone());
       rockMassCols[v].push(cliffA.clone().lerp(cliffB, rng() * 0.6).offsetHSL((rng() - 0.5) * 0.02, 0, (rng() - 0.45) * 0.07));
       mossCols[v].push(mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.06));
@@ -904,8 +950,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   }
   // Rocks are chunky faceted blocks (two shapes, alternating) sunk into the ground.
   const half = <T>(list: T[], odd: number) => list.filter((_, i) => i % 2 === odd);
-  inst(rockBlock(7, 1.25, 1.0, 1.1), half(rocks, 0), half(rockCols, 0), 0, true, 'rock');
-  inst(rockBlock(8, 1.1, 1.05, 1.2), half(rocks, 1), half(rockCols, 1), 0, true, 'rock');
+  /** Rock lying on the land (the geometry audit checks none of it rises through a walk or the masonry). */
+  const rocky = (made: THREE.InstancedMesh[] | undefined) => made?.forEach((m) => (m.userData.rock = true));
+  rocky(inst(rockBlock(7, 1.25, 1.0, 1.1), half(rocks, 0), half(rockCols, 0), 0, true, 'rock'));
+  rocky(inst(rockBlock(8, 1.1, 1.05, 1.2), half(rocks, 1), half(rockCols, 1), 0, true, 'rock'));
   inst(rockBlock(9, 1.1, 1.0, 1.0), rims, rimCols, 0, false, 'rock');
   // Cave slabs fade into the dark with height exactly like the rock mass behind them.
   const caveShade = (mat: THREE.MeshStandardMaterial) => {
@@ -918,10 +966,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   inst(slabBlock(34), half(mass, 0), half(massCols, 0), 0, true, 'rock', false, undefined, caveShade);
   inst(slabBlock(35), half(mass, 1), half(massCols, 1), 0, true, 'rock', false, undefined, caveShade);
   inst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), crevices, null, 0x120e0b, true, undefined, false);
-  inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false);
+  rocky(inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false));
   for (let v = 0; v < ROCK_MASSES; v++) {
-    inst(rockMass(v), rockMasses[v], rockMassCols[v], 0, true, 'rock');
-    inst(rockMassMoss(v), rockMasses[v], mossCols[v], 0, true, ts.paint.grove, false);
+    rocky(inst(rockMass(v), rockMasses[v], rockMassCols[v], 0, true, 'rock'));
+    rocky(inst(rockMassMoss(v), rockMasses[v], mossCols[v], 0, true, ts.paint.grove, false));
   }
   if (ferns.length) {
     // A fern: a ring of long, narrow fronds arching up and out from the root.
@@ -1107,8 +1155,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   const props: Prop[] = [];
   for (const pr of layout.props) {
-    const prop = pr.kind.startsWith('fit_') ? buildFitProp(pr.kind.slice(4), pr.len) : buildProp(pr.kind, pr.v === undefined && pr.bend === undefined ? pr.len : { len: pr.len, v: pr.v, bend: pr.bend });
-    prop.obj.position.set(pr.x, Math.max(floorAt(pr.x, pr.z), heightAt(pr.x, pr.z)), pr.z);
+    const prop = pr.kind.startsWith('fit_') ? buildFitProp(pr.kind.slice(4), pr.len) : buildProp(pr.kind, pr.v === undefined && pr.bend === undefined && !pr.opt ? pr.len : { len: pr.len, v: pr.v, bend: pr.bend, opt: pr.opt });
+    prop.obj.position.set(pr.x, pr.y ?? Math.max(floorAt(pr.x, pr.z), heightAt(pr.x, pr.z)), pr.z);
     prop.obj.rotation.y = pr.rot ?? 0;
     if (pr.s) prop.obj.scale.setScalar(pr.s);
     if (OCCLUDING_PROPS.has(pr.kind)) occludeAll(prop.obj);

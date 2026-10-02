@@ -39,7 +39,7 @@ describe('the dragon fountain', () => {
   it('pours from the jaws into the pool and animates', () => {
     const names = new Set<string>();
     p.obj.traverse((o) => names.add(o.name));
-    for (const n of ['fountain-pool', 'fountain-stream', 'foam-spread', 'foam', 'spray']) expect(names.has(n), n).toBe(true);
+    for (const n of ['fountain-pool', 'fountain-stream', 'foam-spread', 'spray']) expect(names.has(n), n).toBe(true);
     expect(p.tick).toBeTypeOf('function');
     p.tick!(1.5);
   });

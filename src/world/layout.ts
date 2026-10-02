@@ -57,6 +57,10 @@ export interface PropSpawn {
   v?: number;
   /** The radius of a curved face the prop hugs (a climber on a round tower's drum); none = a flat wall. */
   bend?: number;
+  /** A builder's own options (a tower's doorways, a border's outline…). */
+  opt?: Record<string, unknown>;
+  /** The height it stands at, where that is not the ground under it (a wall following a road's grade). */
+  y?: number;
 }
 
 /** Liquid in a cell: rendered as a lowered bed with an animated surface. Bridges are walkable cells over it. */

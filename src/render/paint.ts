@@ -71,14 +71,16 @@ const hash = (a: number, b: number, seed: number) => {
  */
 export const PAINTERS: Record<PaintKind, () => Gen> = {
   masonry: () => {
-    // Four courses per tile, blocks of varied length in running bond, painted mortar, a lighter
-    // top edge on each block and a soft shadow under it.
+    // Four courses per tile, dressed blocks in running bond as a mason lays them: each block between
+    // one and a half and three times as long as its course is high (never a square or upright
+    // block), each course's joints falling over the middle of the blocks below, painted mortar, a
+    // lighter top edge on each block and a soft shadow under it.
     const rows = 4, rowH = SIZE / rows, rng = mulberry32(501);
-    const layout = Array.from({ length: rows }, () => {
-      const off = Math.floor(rng() * SIZE), edges: number[] = [];
+    const layout = Array.from({ length: rows }, (_, r) => {
+      const off = (r * 76 + Math.floor(rng() * 24)) % SIZE, edges: number[] = [];
       for (let x = 0; x < SIZE;) {
-        let l = 48 + Math.floor(rng() * 4) * 16;
-        if (SIZE - x - l < 40) l = SIZE - x;
+        let l = 104 + Math.floor(rng() * 5) * 16;
+        if (SIZE - x - l < 96) l = SIZE - x;
         edges.push(x);
         x += l;
       }
