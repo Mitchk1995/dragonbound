@@ -400,5 +400,5 @@ export function planarReflection(level: number | (() => number), layer?: number)
     busy = false;
     on.value = 1;
   };
-  return { texture: rt.texture, texMat, on, render };
+  return { texture: rt.texture, texMat, on, render, dispose: () => rt.dispose() };
 }

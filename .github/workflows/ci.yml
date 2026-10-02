@@ -25,15 +25,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Unit tests
-        run: npm test
-      - name: Production build
-        run: npx vite build
-      - name: No mojibake or BOMs in sources
-        run: |
-          set +e
-          bad=$(LC_ALL=C grep -rlP '^\xEF\xBB\xBF' src tests electron tools index.html package.json --include='*.ts' --include='*.css' --include='*.py' --include='*.cjs' --include='*.html' --include='*.json')
-          moj=$(grep -rlE 'â€|â”|âˆ|Ã[©¨ª]' src tests electron tools --include='*.ts' --include='*.css' --include='*.py' --include='*.cjs')
-          if [ -n "$bad$moj" ]; then echo "BOM or mojibake found in:"; echo "$bad"; echo "$moj"; exit 1; fi
+      - name: Typecheck, tests, production build and encoding
+        run: npm run check

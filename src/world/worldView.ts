@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from '../render/resources';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
@@ -107,7 +108,7 @@ export function makeOccludable(mat: THREE.Material, shadow = false) {
 let occDepth: THREE.MeshDepthMaterial | null = null;
 function occludedDepth() {
   if (!occDepth) {
-    occDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    occDepth = shareResource(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
     makeOccludable(occDepth, true);
   }
   return occDepth;

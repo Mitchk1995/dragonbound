@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from './resources';
 
 export type V3 = [number, number, number];
 
@@ -42,7 +43,7 @@ const geoCache = new Map<string, THREE.BufferGeometry>();
 function cachedGeo(key: string, make: () => THREE.BufferGeometry) {
   let g = geoCache.get(key);
   if (!g) {
-    g = make();
+    g = shareResource(make());
     geoCache.set(key, g);
   }
   return g;

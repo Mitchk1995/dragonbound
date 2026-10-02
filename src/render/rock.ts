@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from './resources';
 import { mulberry32 } from '../core/rng';
 import { addPatch, type SurfaceSpace } from './surface';
 import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
@@ -216,7 +217,7 @@ export function rockAtlas(kind: RockKind = 'natural'): THREE.DataTexture {
   tex.anisotropy = 8;
   tex.needsUpdate = true;
   tex.name = `rock-${kind}`;
-  atlases[kind] = tex;
+  atlases[kind] = shareResource(tex);
   return tex;
 }
 

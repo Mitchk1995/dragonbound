@@ -11,10 +11,12 @@
     "dev": "concurrently -k -n vite,electron \"vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "tsc --noEmit && vite build",
     "start": "electron .",
-    "play": "vite build && electron .",
+    "play": "node tools/play.cjs",
     "dist": "npm run build && electron-builder --win portable",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "check:encoding": "node tools/check-encoding.cjs",
+    "check": "npm run typecheck && npm test && vite build && npm run check:encoding",
     "inspect": "node tools/inspect.mjs"
   },
   "build": {

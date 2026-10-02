@@ -2,11 +2,13 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { createSaveStore } = require('./save-store.cjs');
 
 // Inspect mode (npm run inspect): the dev build drives itself through every zone, model, pose
 // and panel and saves full-window captures + a metrics report to inspect/. It uses a throwaway
 // save directory so the real save is never touched.
 const INSPECT = process.env.DRAGONBOUND_INSPECT || '';
+const ownsSave = !!INSPECT || app.requestSingleInstanceLock();
 const inspectDir = path.join(__dirname, '..', 'inspect');
 if (INSPECT) {
   // One temp profile per run so parallel inspect runs (separate checkouts) never wipe each other.
@@ -44,35 +46,9 @@ if (INSPECT) {
 
 const saveDir = () => app.getPath('userData');
 const savePath = () => path.join(saveDir(), 'save.json');
-const backupPath = () => path.join(saveDir(), 'save.backup.json');
-
-function readGoodSave(file) {
-  try {
-    const text = fs.readFileSync(file, 'utf8');
-    const parsed = JSON.parse(text);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? text : null;
-  } catch {
-    return null;
-  }
-}
-
-ipcMain.handle('save:read', async () => {
-  for (const p of [savePath(), backupPath()]) {
-    const text = readGoodSave(p);
-    if (text) return text;
-  }
-  return null;
-});
-
-ipcMain.handle('save:write', async (_e, json) => {
-  fs.mkdirSync(saveDir(), { recursive: true });
-  // Keep the previous good save as a backup, then write atomically.
-  if (readGoodSave(savePath())) fs.copyFileSync(savePath(), backupPath());
-  const tmp = savePath() + '.tmp';
-  fs.writeFileSync(tmp, json, 'utf8');
-  fs.renameSync(tmp, savePath());
-  return true;
-});
+const saves = createSaveStore(saveDir);
+ipcMain.handle('save:read', () => saves.read());
+ipcMain.handle('save:write', (_e, json) => saves.write(json));
 
 ipcMain.handle('save:path', async () => savePath());
 
@@ -110,6 +86,20 @@ function createWindow() {
       zoomFactor: 1,
     },
   });
+  if (!INSPECT) {
+    app.on('second-instance', () => { if (win.isMinimized()) win.restore(); win.focus(); });
+    let closing = false;
+    win.on('close', (event) => {
+      if (win.webContents.isDestroyed() || win.webContents.isCrashed()) return;
+      event.preventDefault();
+      if (closing) return;
+      closing = true;
+      win.webContents.executeJavaScript('window.__game ? window.__game.flushSave() : true')
+        .then((saved) => { if (saved) win.destroy(); })
+        .catch((error) => console.error('Could not finish saving:', error.message))
+        .finally(() => { closing = false; });
+    });
+  }
   if (INSPECT) {
     // Shown without activation (no focus steal), then parked off-screen again in case the OS
     // clamped the initial position onto a display.
@@ -129,5 +119,6 @@ function createWindow() {
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 }
 
-app.whenReady().then(createWindow);
+if (ownsSave) app.whenReady().then(createWindow);
+else app.quit();
 app.on('window-all-closed', () => app.quit());

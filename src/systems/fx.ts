@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from '../render/resources';
 import type { Game } from '../game';
 import { PAL } from '../render/kit';
 
@@ -26,13 +27,7 @@ export class Fx {
   }
 
   private dispose(obj: THREE.Object3D) {
-    obj.removeFromParent();
-    obj.traverse((o) => {
-      if (o instanceof THREE.Mesh || o instanceof THREE.Line) {
-        o.geometry.dispose();
-        (o.material as THREE.Material).dispose();
-      }
-    });
+    disposeObject(obj);
   }
 
   update(dt: number) {

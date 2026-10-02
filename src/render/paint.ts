@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from './resources';
 import { mulberry32 } from '../core/rng';
 import { addPatch, type SurfaceSpace } from './surface';
 import { applyRock } from './rock';
@@ -302,7 +303,7 @@ export function paintAtlas(atlas: 0 | 1 | 2): THREE.DataTexture {
   tex.anisotropy = 8;
   tex.needsUpdate = true;
   tex.name = `paint${atlas}`;
-  atlases[atlas] = tex;
+  atlases[atlas] = shareResource(tex);
   return tex;
 }
 
