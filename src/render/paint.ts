@@ -311,10 +311,13 @@ export const PAINT_TINT = 'mix(vec3(1.0), mix(vec3(0.94, 0.97, 1.06), vec3(1.05,
 const ASHLAR_FOOT = 'diffuseColor.rgb *= mix(vec3(0.84, 0.83, 0.87), vec3(1.03), smoothstep(0.0, 5.0, vPaintPos.y));';
 
 /**
- * Paint a material. Box projection: top/bottom faces take (x, z), side faces take (z or x, y),
- * so the texture's V always runs up the side of a model.
+ * Paint a material. Top and bottom faces take (x, z); side faces take the distance along the face
+ * itself (its horizontal tangent) and y, so the texture's V always runs up the side of a model and
+ * its blocks keep one size on a face turned at any angle. `wrap` paints a drum (a round tower
+ * centred on its model's origin): its side faces take the arc length round the axis instead, so the
+ * courses run on round it at one block size with no seam between its facets.
  */
-export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceSpace = 'object', scaleMul = 1) {
+export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceSpace = 'object', scaleMul = 1, wrap = false) {
   if (!(mat instanceof THREE.MeshStandardMaterial)) return;
   // Every rock surface shares one richer painted rock (strata blocks, cracks, grain, drift).
   if (kind === 'rock') return applyRock(mat, space, scaleMul);
@@ -328,7 +331,7 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
   };
   const ashlar = kind === 'ashlar';
   addPatch(mat, {
-    key: ashlar ? `paint:${space}:ashlar` : `paint:${space}`,
+    key: `paint:${space}${ashlar ? ':ashlar' : ''}${wrap ? ':wrap' : ''}`,
     slot: 'surface',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
@@ -360,7 +363,13 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           float paintSample() {
             vec3 n = abs(vPaintNrm);
             vec3 q = vPaintPos * uPaintScale;
-            vec2 uv = n.y >= max(n.x, n.z) ? q.xz : (n.x > n.z ? q.zy : q.xy);
+            vec2 uv;
+            if (n.y >= max(n.x, n.z)) uv = q.xz;
+            else {
+              ${wrap
+                ? 'uv = vec2(atan(vPaintPos.x, vPaintPos.z) * length(vPaintPos.xz) * uPaintScale, q.y);'
+                : 'uv = vec2(dot(q.xz, normalize(vec2(-vPaintNrm.z, vPaintNrm.x))), q.y);'}
+            }
             return dot(texture2D(uPaintTex, uv), uPaintCh);
           }`,
         )

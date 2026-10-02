@@ -6,7 +6,7 @@ import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/pa
 import { patchKeys } from '../src/render/surface';
 import { ZONES } from '../src/data/zones';
 import { Cell, Ground } from '../src/world/layout';
-import { buildProp, PROP_KINDS } from '../src/world/props';
+import { buildProp, PROP_KINDS, spread } from '../src/world/props';
 
 const finite = (geo: THREE.BufferGeometry) => {
   for (const name of ['position', 'normal']) {
@@ -35,6 +35,22 @@ describe('block shapes', () => {
 });
 
 describe('world props', () => {
+  it('runs of merlons and plants are spread evenly, the same distance in from both ends', () => {
+    for (const [L, step, clear] of [[10, 1.4, 0.75], [6.2, 1.45, 0.55], [3.2, 0.3, 0.25]]) {
+      const u = spread(L, step, clear);
+      expect(u[0]).toBeCloseTo(-L / 2 + clear);
+      expect(u.at(-1)!).toBeCloseTo(L / 2 - clear);
+      for (let i = 1; i < u.length; i++) expect(u[i] - u[i - 1]).toBeCloseTo(u[1] - u[0]);
+    }
+    expect(spread(1, 1, 0.8)).toEqual([]);
+  });
+  it('round towers paint their courses round the drum at one block size', () => {
+    const keys = new Set<string>();
+    buildProp('round_tower', { len: 3.2, v: 9 }).obj.traverse((o) => {
+      if (o instanceof THREE.Mesh) patchKeys(o.material as THREE.Material).forEach((k) => keys.add(k));
+    });
+    expect([...keys]).toContain('paint:object:ashlar:wrap');
+  });
   it('every prop builds with finite geometry and no bumped materials', () => {
     for (const kind of [...PROP_KINDS, 'portal', 'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_emberite']) {
       const p = buildProp(kind, kind === 'portal' ? 0xff6a2a : undefined);
@@ -109,7 +125,8 @@ describe('painted albedo', () => {
     const lib = THREE.ShaderLib.standard;
     const shader = { uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader } as any;
     mat.onBeforeCompile(shader, null as any);
-    expect(shader.fragmentShader).toContain('q.zy : q.xy');
+    // Side faces take the distance along the face and y, so blocks keep one size at any turn.
+    expect(shader.fragmentShader).toContain('dot(q.xz, normalize(vec2(-vPaintNrm.z, vPaintNrm.x))), q.y');
     expect(shader.fragmentShader).not.toContain('normal = ');
   });
 });

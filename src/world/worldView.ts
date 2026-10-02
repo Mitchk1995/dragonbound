@@ -30,11 +30,12 @@ export const OCCLUDE = {
 };
 
 /**
- * Patch a material so fragments between the camera and the player, inside a small
- * screen-space circle around the player and above the hero's knees, are cut away (no dither
- * stipple). The rim of the opening fades out over its last fifth through alpha-to-coverage, so with
- * multisampling the edge is a soft feathered ring, not a hard disc. Trees and walls never hide the
- * hero; a low stub of what was cut stays in place.
+ * Patch a material so fragments between the camera and the player, inside a soft upright window
+ * round the hero (a rounded rectangle on screen, a little wider than the hero and as tall as them
+ * with room over their head, reaching down to their feet), are cut away; the rest of the wall stays
+ * solid. Its edges feather out over half a metre through alpha-to-coverage, so with multisampling
+ * the window fades softly into the wall instead of ending on a hard or stippled edge. Trees and
+ * walls never hide the hero.
  */
 export function makeOccludable(mat: THREE.Material, shadow = false) {
   if (!shadow && !mat.transparent) mat.alphaToCoverage = true;
@@ -82,10 +83,19 @@ export function makeOccludable(mat: THREE.Material, shadow = false) {
           toF = vOccWorld - uOccSun * (lift / max(uOccSun.y, 0.05)) - uOccCam;
           along = dot(toF, dirP);
           float feet = dot(uOccPlayer - uOccCam, dirP);
-          if (uOccOn > 0.5 && lift > 0.4 && along > 0.5 && along < feet + 0.3) {` : `if (uOccOn > 0.5 && along > 0.5 && along < lenP - 0.8 && vOccWorld.y > uOccPlayer.y + 0.4) {`}
-            float perp = length(toF - dirP * along);
-            if (perp / along * 1.25 < uOccRadius * 0.85) discard;
-            occFade = smoothstep(0.8, 1.0, perp / along / (uOccRadius * 0.85));
+          if (uOccOn > 0.5 && lift > 0.1 && along > 0.5 && along < feet + 0.3) {` : `if (uOccOn > 0.5 && along > 0.5 && along < lenP - 0.8 && vOccWorld.y > uOccPlayer.y + 0.08) {`}
+            // The fragment's offset from the hero as it appears on screen, in metres at the hero's
+            // distance (across and up the screen), tested against the rounded rectangle.
+            vec3 occRight = normalize(cross(dirP, vec3(0.0, 1.0, 0.0)));
+            vec3 occUp = cross(occRight, dirP);
+            vec2 q = vec2(dot(toF, occRight), dot(toF, occUp) * (lenP / along) - 0.7);
+            q.x *= lenP / along;
+            vec2 hb = vec2(1.45, 2.6) * (uOccRadius / 0.16);
+            float cr = 0.9, feather = 0.7;
+            vec2 dq = abs(q) - hb + cr;
+            float sd = length(max(dq, 0.0)) + min(max(dq.x, dq.y), 0.0) - cr;
+            if (sd < -feather) discard;
+            occFade = smoothstep(-feather, 0.0, sd);
           }
         }`,
       )
@@ -780,8 +790,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       // Plants rooted on the rock wherever it lies flat (grassy country only).
       if (!grassy) continue;
       // Where a lawn or meadow meets the top of the rock, the turf rolls over the lip: a ragged
-      // fringe of tufts along the edge leaning out over the drop, so no lawn ends in a crisp cut.
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      // fringe of tufts along the edge leaning out over the drop, so no lawn ends in a crisp cut
+      // (not where the land is carpeted in lawn: its own blades run to the lip).
+      if (!layout.lawn) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, nz = z + dz;
         if (!walkable(nx, nz)) continue;
         const j = nz * w + nx;
@@ -815,6 +826,14 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
           q.setFromEuler(e.set((rng() - 0.5) * 0.25, rng() * 6.3, (rng() - 0.5) * 0.25));
           cushions.push(m.compose(p, q, s.set(sc * (0.9 + rng() * 0.6), sc * (0.7 + rng() * 0.4), sc * (0.8 + rng() * 0.4))).clone());
           cushionCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]), 0.3 + rng() * 0.4).offsetHSL((rng() - 0.5) * 0.03, 0.02, (rng() - 0.5) * 0.06));
+        } else if (r < 0.85 && layout.lawn) {
+          // Where the land is carpeted in lawn, the ledges carry low pads of the same short turf
+          // (no loose tufts of long blades).
+          const sc = 0.4 + rng() * 0.45;
+          p.set(wx, y - 0.05, wz);
+          q.setFromEuler(e.set((rng() - 0.5) * 0.15, rng() * 6.3, (rng() - 0.5) * 0.15));
+          cushions.push(m.compose(p, q, s.set(sc * (1.1 + rng() * 0.6), sc * 0.32, sc * (0.9 + rng() * 0.5))).clone());
+          cushionCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(grassPal0[1]), rng()).multiplyScalar(1.05).offsetHSL((rng() - 0.5) * 0.02, 0, (rng() - 0.5) * 0.04));
         } else if (r < 0.85) {
           const sc = 0.7 + rng() * 0.6;
           p.set(wx, y - 0.03, wz);
@@ -979,7 +998,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const tufts: THREE.Matrix4[] = [], tuftCols: THREE.Color[] = [];
   const grassPal = theme.ground[Ground.Grass] ?? [0x5a7a3a, 0x6a8a44];
   const tuftNoise = smoothNoise(seed + 91);
-  for (let i = 0; i < w * h * 0.7; i++) {
+  // (Loose tufts only where the land has no lawn carpet: where it has one, its blades are the grass.)
+  for (let i = 0; i < (lawn ? 0 : w * h * 0.7); i++) {
     const x = rng() * w, z = rng() * h;
     const gi = Math.floor(z) * w + Math.floor(x);
     const g = layout.ground[gi];

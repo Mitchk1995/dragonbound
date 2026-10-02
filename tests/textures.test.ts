@@ -179,7 +179,7 @@ describe('shader patches compose', () => {
     expect(mat.customProgramCacheKey()).toBe('occlude|surface:world');
     const s = compile(mat);
     // A clean cut-away: a hard discard, never a dither stipple.
-    expect(s.fragmentShader).toContain('uOccRadius * 0.85) discard');
+    expect(s.fragmentShader).toContain('if (sd < -feather) discard');
     expect(s.fragmentShader).not.toMatch(/Bayer/i);
     expect(s.fragmentShader).toContain('surfSample(surfGrad)');
     expect(s.fragmentShader).toContain('surfBump(normal');

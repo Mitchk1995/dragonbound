@@ -86,6 +86,11 @@ export interface BuildingSpec {
    * no parapet stands on them, so the two roofs read as one.
    */
   joined?: Side[];
+  /**
+   * Stretches of a side's roof parapet (from..to along it, in cells) where it runs into a drum or
+   * pavilion standing against the face: plain, with no merlons, so no merlon stands half in it.
+   */
+  plainParapet?: { side: Side; from: number; to: number }[];
   /** Height of the ground storey of a multi-storey building (upper-floor windows sit above it). */
   storeyH?: number;
   /** Stairs between the ground and upper floors (a building with an `upper` floor). */
