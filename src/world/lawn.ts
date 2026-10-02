@@ -2,19 +2,22 @@ import * as THREE from 'three';
 import type { ZoneTheme } from '../data/zones';
 import { addPatch } from '../render/surface';
 import { noiseTexture } from '../render/textures';
-import { Ground, Lawn, type ZoneLayout } from './layout';
+import { Cell, Ground, Lawn, type ZoneLayout } from './layout';
 
 /**
  * A full grass carpet over every lawn cell (layout.lawn): shell layers lifted off the terrain, each
  * cut by a dense field of tapering blades in the fragment shader (about a hundred to a cell on a
  * clipped lawn), dark at the root and light at the tip, swaying with the wind. Each shell traces the
- * view ray down to the next, so a blade reads as one solid blade even from low down. Clipped castle lawns are short with mower
- * stripes; meadows grow taller. The carpet ends cleanly on the lawn's own outline (paths, beds,
- * water), and far away it settles into one flat layer in the lawn's average colour.
+ * view ray down to the next, so a blade reads as one solid blade even from low down. Blades vary in
+ * height, lean and hue; clipped castle lawns are short with soft mower stripes, private gardens
+ * (Lawn.Garden) are scattered with daisies and clover, and the grass grows longer and darker at
+ * the foot of hedges, beds and statues; meadows grow taller. The carpet ends exactly on the lawn's
+ * own cells (a straight, square edge against paving; a true circle where the layout cuts one), and
+ * far away it settles into one layer painted with the blades' own grain.
  */
 
 /** Blade height per lawn kind, in world units. */
-const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.14 };
+const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.14, [Lawn.Garden]: 0.16 };
 /** Shells per graphics preset. */
 export const LAWN_SHELLS = { high: 8, medium: 6, low: 4 } as const;
 const MAX_SHELLS = 8;
@@ -23,7 +26,7 @@ const LOWEST = 0.08;
 /** Chunk size in cells (each chunk frustum-culls on its own). */
 const CHUNK = 32;
 /** Beyond this distance from the camera the blades settle into one flat layer. */
-const FADE: [number, number] = [46, 62];
+const FADE: [number, number] = [52, 72];
 
 /**
  * Shell heights 0..1 shared by every lawn of a kind; only the first `count` are drawn. Meadows
@@ -77,10 +80,12 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
         `#include <common>
         attribute float aShell;
         attribute vec2 aLawn;
+        attribute vec2 aLawnX;
         uniform float uWindT;
         uniform vec2 uLawnFade;
         varying float vShell;
         varying vec3 vLawn;
+        varying vec2 vLawnX;
         varying vec3 vLawnPos;`,
       )
       .replace(
@@ -95,6 +100,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           transformed.xz += vec2(0.3, 0.18) * sway * aShell * aShell * aLawn.y * fade;
           vShell = aShell;
           vLawn = vec3(aLawn, fade);
+          vLawnX = aLawnX;
           vLawnPos = vec3(position.x, position.y + 0.012 + lift, position.z);
         }`,
       );
@@ -107,6 +113,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
         uniform sampler2D uLawnNoise;
         varying float vShell;
         varying vec3 vLawn;
+        varying vec2 vLawnX;
         varying vec3 vLawnPos;
         uniform vec2 uLawnGap;
         vec3 lawnHash(vec2 p) {
@@ -129,7 +136,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           float t = s / max(hb, 1e-3);
           // Flat, narrow blades, each turned its own way, curving over as they rise and narrowing
           // to a point near the tip.
-          vec2 c = 0.5 + (r.xy - 0.5) * 0.5 + ((r.yz - 0.5) * lean0.z + lean0.xy) * t * t;
+          vec2 c = 0.5 + (r.xy - 0.5) * 0.78 + ((r.yz - 0.5) * lean0.z + lean0.xy) * t * t;
           vec2 dir = normalize(fract(r.zx * 7.31) - 0.5 + 1e-3);
           vec2 o = f - c, side = vec2(-dir.y, dir.x);
           float rad = (1.0 - t * t * t) * (0.7 + 0.2 * r.y);
@@ -151,70 +158,87 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           // Fine blades on clipped lawns (about a hundred to a cell), coarser in meadows.
           float bladeScale = clipped ? 10.0 : 7.5;
           vec2 p1 = wp * bladeScale;
-          // How small a blade is on screen: tiny blades shimmer, so the far lawn settles into its
-          // average colour and loses its upper shells.
+          // How small a blade is on screen: tiny blades shimmer, so the far lawn settles into one
+          // layer and loses its upper shells.
           vec2 fw = fwidth(p1);
           float lod = max(smoothstep(0.35, 0.9, sqrt(fw.x * fw.y)), 1.0 - vLawn.z);
-          float weight = vLawn.x;
-          // The lawn's outline: halfway between a lawn corner and a bare one (corners are cut, so
-          // the edge rounds off instead of stepping along the cell grid).
-          if (weight < 0.5) discard;
+          // vLawn.x: the lawn's outline where the layout cuts a circle from it (else 1); the carpet
+          // otherwise covers exactly its own cells. vLawnX: x the share of garden lawn (daisies and
+          // clover), y how close a hedge, bed or statue stands (the grass grows long at its foot).
+          if (vLawn.x < 0.5) discard;
           bool lowest = vShell < ${(LOWEST + 0.01).toFixed(3)};
           if (!lowest && vShell > 1.0 - lod) discard;
-          float stripe = clipped ? mod(floor(wp.x * 0.5), 2.0) * 2.0 - 1.0 : 0.0;
-          // Blades shorten toward the edge, so the carpet thins out softly against paving, and
-          // drift a little taller and shorter across the lawn.
+          // Soft mower stripes two cells wide, north to south.
+          float stripe = clipped ? clamp(sin(wp.x * 1.5708) * 2.5, -1.0, 1.0) : 0.0;
           float n2 = texture2D(uLawnNoise, wp * 0.13 + vec2(0.41, 0.17)).r;
-          float tall = (0.6 + 0.4 * smoothstep(0.5, 0.8, weight)) * (0.82 + 0.36 * n2);
-          // Clipped lawns stand up straight (leaning with the mower's stripe); meadow grass flops.
-          vec3 lean0 = clipped ? vec3(stripe * 0.12, 0.04, 0.2) : vec3(0.0, 0.1, 0.9);
+          float foot = vLawnX.y;
+          float tall = (0.82 + 0.36 * n2) * (1.0 + 0.45 * foot);
+          // Clipped lawns stand up straight (leaning a little with the mower's stripe); meadow grass flops.
+          vec3 lean0 = clipped ? vec3(stripe * 0.06, 0.04, 0.32) : vec3(0.0, 0.1, 0.9);
           float gap = clipped ? uLawnGap.x : uLawnGap.y;
           vec3 ray = vLawnPos - cameraPosition;
           vec2 run = ray.xz / max(abs(ray.y), 0.2 * length(ray.xz)) * gap * vLawn.y;
           float tint;
           float t = lawnBlade(p1, vShell, tall, lean0, run * bladeScale, gap, tint);
+          // Daisies and clover in the private gardens: round white heads with gold eyes at the tips
+          // of the grass, low trefoil leaves under it.
+          vec3 bloom = vec3(-1.0);
+          if (vLawnX.x > 0.5 && lod < 0.6) {
+            vec2 q = wp * 2.4, qi = floor(q), qf = fract(q);
+            vec3 h = lawnHash(qi + 17.0);
+            if (h.z < 0.16) {
+              float d = length(qf - (0.25 + 0.5 * h.xy));
+              if (vShell > 0.82 && d < 0.16) bloom = d < 0.06 ? vec3(0.95, 0.78, 0.25) : vec3(0.96, 0.95, 0.9);
+            } else if (h.z > 0.8 && vShell < 0.45) {
+              vec2 o = qf - (0.25 + 0.5 * h.yx);
+              float a = atan(o.y, o.x), rr = length(o);
+              if (rr < 0.17 * (0.65 + 0.35 * abs(cos(a * 1.5)))) bloom = uLawnRoot * 2.1 * vec3(0.92, 1.05, 0.9);
+            }
+          }
           // The lowest shell closes up into one layer far away (tiny blades would shimmer) and
-          // along the lawn's border, where it is the dark root of the carpet right up to a crisp edge.
-          if (t < 0.0 && !(lowest && (weight < 0.999 || lawnHash(gl_FragCoord.xy).x < lod))) discard;
-          // Colour: dark root to a light tip, drifting between a warmer and a cooler green.
+          // along the lawn's border, where it is the dark root of the carpet right up to the edge.
+          if (t < 0.0 && bloom.x < 0.0 && !lowest) discard;
+          // Colour: dark root to a light tip, drifting between a warmer and a cooler green, each
+          // blade its own shade and hue.
           float n1 = texture2D(uLawnNoise, wp * 0.031).r;
           vec3 tip = uLawnTip * mix(vec3(1.07, 1.02, 0.78), vec3(0.88, 1.0, 1.04), smoothstep(0.3, 0.7, n1));
-          tip *= 0.9 + 0.2 * n2 + (tint - 0.5) * 0.16;
+          tip *= 0.86 + 0.28 * n2 + (tint - 0.5) * 0.26;
+          tip *= mix(vec3(1.06, 1.02, 0.86), vec3(0.9, 1.0, 1.06), fract(tint * 7.13));
+          tip *= 1.0 - 0.22 * foot;
           vec3 col = mix(uLawnRoot, tip, pow(clamp(t, 0.0, 1.0), 0.85));
-          // The far lawn (one layer): the carpet's average, root and blades together.
-          if (lowest) col = mix(col, mix(uLawnRoot, tip, 0.45), lod);
+          // The far lawn (one layer): the carpet's average painted with the grain of its blades
+          // (two scales of mipmapped noise), never one flat green.
+          if (lowest && t < 0.0) {
+            float g1 = texture2D(uLawnNoise, wp * 0.9 + vec2(0.3, 0.7)).r, g2 = texture2D(uLawnNoise, wp * 0.27).r;
+            col = mix(uLawnRoot * (0.9 + 0.2 * g1), mix(uLawnRoot, tip, 0.42 + 0.3 * (g1 - 0.5) + 0.2 * (g2 - 0.5)), lod);
+          }
+          if (bloom.x >= 0.0) col = bloom;
           // Mower stripes on clipped lawns; broad lighter and darker drifts across meadows.
-          col *= clipped ? 1.0 + 0.06 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
+          col *= clipped ? 1.0 + 0.03 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
           diffuseColor.rgb = col;
         }`,
       );
   } });
 
-  // Lawn weight at every grid corner: the share of lawn among its four cells (the carpet's border
-  // is where it crosses one half). Softened once with its neighbours so a curved border (the
-  // fountain plaza) runs smoothly across the cells instead of stepping along them; no corner
-  // changes side, so no strip of lawn is lost and no straight border moves. A round border the
-  // layout asks for (lawnCut) is exact.
+  // The carpet covers exactly the lawn's own cells (its mesh is built from them), so its edge is
+  // straight and square against paving and beds. At every grid corner: the outline where the
+  // layout cuts a disc from the lawn (its border crosses one half exactly on the circle, else 1),
+  // the share of garden lawn, and whether a hedge, bed or statue stands on one of its cells (the
+  // grass grows long at its foot).
   const VW = w + 1;
-  const raw = new Float32Array(VW * (h + 1));
+  const weight = new Float32Array(VW * (h + 1)), garden = new Float32Array(VW * (h + 1)), foot = new Float32Array(VW * (h + 1));
+  const blocked = (x: number, z: number) => x >= 0 && z >= 0 && x < w && z < h && layout.cells[z * w + x] === Cell.Blocked && !!kind(x, z);
   for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
-    raw[z * VW + x] = ((kind(x - 1, z - 1) ? 1 : 0) + (kind(x, z - 1) ? 1 : 0) + (kind(x - 1, z) ? 1 : 0) + (kind(x, z) ? 1 : 0)) / 4;
-  }
-  const weight = new Float32Array(raw.length);
-  for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
-    let sum = 0, n = 0;
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-      const xx = x + dx, zz = z + dz;
-      if (xx < 0 || zz < 0 || xx > w || zz > h) continue;
-      const k = (dx ? 1 : 2) * (dz ? 1 : 2);
-      sum += raw[zz * VW + xx] * k;
-      n += k;
-    }
-    const r = raw[z * VW + x], b = sum / n;
-    let wt = r >= 0.5 ? Math.max(b, 0.5) : Math.min(b, 0.49);
-    // Cut back from a disc: the border crosses one half exactly on its circle.
+    let wt = 1;
     for (const c of layout.lawnCut ?? []) wt = Math.min(wt, Math.max(0, Math.min(1, 0.5 + (Math.hypot(x - c.x, z - c.z) - c.r) * 0.5)));
     weight[z * VW + x] = wt;
+    let gd = 0, ft = 0;
+    for (const [ax, az] of [[x - 1, z - 1], [x, z - 1], [x - 1, z], [x, z]]) {
+      if (kind(ax, az) === Lawn.Garden) gd += 0.25;
+      if (blocked(ax, az)) ft = 1;
+    }
+    garden[z * VW + x] = gd;
+    foot[z * VW + x] = ft;
   }
 
   const meshes: THREE.InstancedMesh[] = [];
@@ -223,7 +247,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
     const x1 = Math.min(w, cx + CHUNK), z1 = Math.min(h, cz + CHUNK);
     const CW = x1 - cx + 1;
     const vid = new Map<number, number>();
-    const pos: number[] = [], attr: number[] = [], index: number[] = [];
+    const pos: number[] = [], attr: number[] = [], extra: number[] = [], index: number[] = [];
     let clipped = false;
     const vert = (x: number, z: number) => {
       const key = (z - cz) * CW + (x - cx);
@@ -240,11 +264,15 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
       v = pos.length / 3;
       pos.push(x, heightAt(x, z), z);
       attr.push(weight[z * VW + x], kinds ? ht / kinds : 0);
+      extra.push(garden[z * VW + x], foot[z * VW + x]);
       vid.set(key, v);
       return v;
     };
     for (let z = cz; z < z1; z++) for (let x = cx; x < x1; x++) {
       if (!kind(x, z)) continue;
+      // No carpet on a cell that is really a slope between levels (it would stand up as a wall of grass).
+      const hs = [heightAt(x, z), heightAt(x + 1, z), heightAt(x, z + 1), heightAt(x + 1, z + 1)];
+      if (Math.max(...hs) - Math.min(...hs) > 0.9) continue;
       if (kind(x, z) === Lawn.Clipped) clipped = true;
       const a = vert(x, z), b = vert(x + 1, z), c = vert(x + 1, z + 1), d = vert(x, z + 1);
       // The terrain's own diagonals, so the carpet lies exactly on the ground.
@@ -255,6 +283,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(pos.length).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
     geo.setAttribute('aLawn', new THREE.Float32BufferAttribute(attr, 2));
+    geo.setAttribute('aLawnX', new THREE.Float32BufferAttribute(extra, 2));
     const set = clipped ? CLIPPED : MEADOW;
     geo.setAttribute('aShell', set.attr);
     geo.setIndex(index);

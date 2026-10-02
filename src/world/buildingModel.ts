@@ -204,7 +204,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   // thickness, and the surround lies flush on both faces (only the outside sill ledge projects).
   const face = (timber ? WALL_T - 0.08 : WALL_T) / 2;
   // (The castle's windows are tall narrow lancets, their upper ones' sills clear of the upper course.)
-  const winDims = (wi: Window) => (keep ? { ww: 0.8, wh: 2.4, wy: wi.floor ? storeyH + CUT_H + 0.3 : 1.7 } : wi.floor ? { ww: 1.1, wh: 2.1, wy: storeyH + 1.0 } : hall ? { ww: 1.3, wh: 2.3, wy: 1.9 } : { ww: 1.0, wh: 1.3, wy: 1.55 });
+  // On a single tall storey (the wings) the upper row are clerestory lancets high in the wall.
+  const winDims = (wi: Window) => (keep ? { ww: 0.8, wh: 2.4, wy: wi.floor ? (multi ? storeyH + CUT_H + 0.3 : wallH * 0.58) : 1.7 } : wi.floor ? { ww: 1.1, wh: 2.1, wy: storeyH + 1.0 } : hall ? { ww: 1.3, wh: 2.3, wy: 1.9 } : { ww: 1.0, wh: 1.3, wy: 1.55 });
   for (const side of ['n', 's', 'e', 'w'] as Side[]) {
     if (shared.has(side)) continue;
     const W = wallFrame(b, side), fade = side === 's';
@@ -312,10 +313,12 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       }
     }
     if (keep) {
-      // Pilasters between the window bays (long faces): a broad lower stage up to the floor line,
-      // a slimmer upper stage to the parapet, each with a weathered cap, so the front reads as
-      // bays with depth rather than one flat box.
-      if (ns) {
+      // Pilasters between the window bays (every face long enough for bays): a broad lower stage up
+      // to the floor line, a slimmer upper stage to the parapet, each with a weathered cap, so the
+      // front reads as bays with depth rather than one flat box. A single tall storey takes its
+      // string course and the pilasters' set-back at mid-height.
+      const mid = multi ? storeyH : wallH >= 7 ? wallH * 0.52 : wallH;
+      if (L >= 10) {
         const open: [number, number][] = wins.map((o) => [o.wi.at - o.ww / 2 - 0.3, o.wi.at + o.ww / 2 + 0.3]);
         for (const dr of b.doors.filter((x) => x.side === side)) open.push([dr.at - 1.7, dr.at + dr.w + 1.7]);
         open.push([-9, lo + 0.4], [hi - 0.4, L + 9]);
@@ -324,14 +327,14 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           const g0 = open[i][1], g1 = open[i + 1][0];
           if (g1 - g0 < 1.3) continue;
           const p = (g0 + g1) / 2;
-          piece(1.0, 1.1, storeyH, 0.5, p, WALL_T / 2 + 0.25, STONE_D, 0.05);
-          piece(1.12, storeyH - 0.05, storeyH + 0.25, 0.62, p, WALL_T / 2 + 0.3, STONE_L, 0.04);
-          piece(0.74, storeyH + 0.25, wallH - 0.1, 0.34, p, WALL_T / 2 + 0.17, STONE_D, 0.04);
+          piece(1.0, 1.1, mid, 0.5, p, WALL_T / 2 + 0.25, STONE_D, 0.05);
+          piece(1.12, mid - 0.05, mid + 0.25, 0.62, p, WALL_T / 2 + 0.3, STONE_L, 0.04);
+          piece(0.74, mid + 0.25, wallH - 0.1, 0.34, p, WALL_T / 2 + 0.17, STONE_D, 0.04);
         }
       }
       // The floor line: a string course outside, and inside (on the walls that
       // stay standing) the beam the upper floor's joists rest on.
-      piece(hi - lo + 0.2, storeyH - 0.12, storeyH + 0.12, 0.12, (lo + hi) / 2, face + 0.05, STONE_D);
+      piece(hi - lo + 0.2, mid - 0.12, mid + 0.12, 0.12, (lo + hi) / 2, face + 0.05, STONE_D);
       if (!fade) {
         W.box(k, built, hi - lo, 0.3, 0.2, (lo + hi) / 2, storeyH - 0.35, -(face + 0.1), TIMBER, 0, 0.02);
         for (let t = lo + 0.8; t < hi - 0.5; t += 1.4) W.box(k, built, 0.26, 0.26, 0.24, t, storeyH - 0.66, -(face + 0.12), STONE_L, 0, 0.03);
@@ -816,21 +819,71 @@ function flight(k: ModelKit, g: Obj, st: Stair, storeyH: number) {
 /** Is local cell (lx, lz) inside a rectangle [x0, z0, x1, z1)? */
 const inRect = ([x0, z0, x1, z1]: [number, number, number, number], lx: number, lz: number) => lx >= x0 && lx < x1 && lz >= z0 && lz < z1;
 
-/** The castle's roof: a flat lead deck inside a corbelled, crenellated parapet. Returns the parapet's top. */
+/**
+ * The castle's roof: a flat lead deck (laid in sheets with standing rolls) inside a corbelled,
+ * crenellated parapet with one merlon at each corner; a wall shared with a neighbour carries only
+ * the neighbour's parapet, so a range of buildings reads as one even parapet. Big roofs (the wings)
+ * take a stair turret on the middle of their back wall, a pair of chimney stacks in the side walls
+ * and two glazed roof lanterns down the middle, all symmetric about the building's own axis.
+ * Returns the parapet's top.
+ */
 function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
-  const { w, d, wallH } = b;
+  const { w, d, wallH } = b, shared = new Set(b.shared ?? []), joined = new Set(b.joined ?? []);
   cb(fk, p, [w - 0.3, 0.3, d - 0.3], [w / 2, wallH + 0.05, d / 2], STONE_D, undefined, 0.03);
   for (const side of ['n', 's', 'e', 'w'] as Side[]) {
-    const W = wallFrame(b, side), L = sideLen(b, side), o = WALL_T / 2 + 0.05, lo = 0, hi = L;
+    if (shared.has(side) || joined.has(side)) continue;
+    const W = wallFrame(b, side), L = sideLen(b, side), o = WALL_T / 2 + 0.05, ns = side === 'n' || side === 's';
+    // Along the north and south walls the ends at a shared wall stop short of it (the neighbour's
+    // parapet runs there); the east and west walls leave the corner merlons to the north and south.
+    const lo = ns && shared.has('w') ? 0.9 : 0, hi = ns && shared.has('e') ? L - 0.9 : L;
     for (let t = lo + 0.5; t < hi - 0.3; t += 0.95) W.box(fk, p, 0.36, 0.4, 0.5, t, wallH - 0.22, WALL_T / 2 + 0.15, STONE_D, 0, 0.03);
-    W.box(fk, p, hi - lo + 0.2, 1.0, 0.7, L / 2, wallH + 0.5, o, STONE, 0, 0.03);
-    W.box(fk, p, hi - lo + 0.3, 0.16, 0.84, L / 2, wallH + 1.05, o, STONE_L, 0, 0.03);
-    const n = Math.max(1, Math.round((hi - lo - 1.2) / 1.6));
-    for (let i = 0; i <= n; i++) W.box(fk, p, 0.82, 0.74, 0.7, lo + 0.6 + (i * (hi - lo - 1.2)) / n, wallH + 1.5, o, STONE, 0, 0.04);
+    W.box(fk, p, hi - lo + 0.2, 1.0, 0.7, (lo + hi) / 2, wallH + 0.5, o, STONE, 0, 0.03);
+    W.box(fk, p, hi - lo + 0.3, 0.16, 0.84, (lo + hi) / 2, wallH + 1.05, o, STONE_L, 0, 0.03);
+    const a = lo + 0.41, e = hi - 0.41, n = Math.max(1, Math.round((e - a) / 1.6));
+    for (let i = 0; i <= n; i++) {
+      const end = i === 0 || i === n;
+      if (end && (!ns || (i === 0 && (shared.has('w') || joined.has('w'))) || (i === n && (shared.has('e') || joined.has('e'))))) continue;
+      W.box(fk, p, 0.82, 0.74, 0.7, a + (i * (e - a)) / n, wallH + 1.5, o, STONE, 0, 0.04);
+    }
   }
-  fk.box(p, [w - 1.8, 0.06, d - 1.8], [w / 2, wallH + 0.22, d / 2], 0x4e4a44);
+  // The leads: grey sheets with standing rolls across the short way.
+  const along = w >= d;
+  fk.box(p, [w - 1.8, 0.06, d - 1.8], [w / 2, wallH + 0.22, d / 2], LEAD);
+  const span = along ? w - 1.8 : d - 1.8, cross = along ? d - 1.8 : w - 1.8;
+  for (let t = -span / 2 + 1.3; t < span / 2 - 0.4; t += 1.3) {
+    if (along) fk.box(p, [0.09, 0.07, cross], [w / 2 + t, wallH + 0.27, d / 2], LEAD_ROLL);
+    else fk.box(p, [cross, 0.07, 0.09], [w / 2, wallH + 0.27, d / 2 + t], LEAD_ROLL);
+  }
+  if (w * d >= 150 && !b.doors.some((x) => x.side === 's' && x.w >= 4)) {
+    // The stair turret on the middle of the back (north) wall, up from below onto the leads.
+    const tx = w / 2, tz = 1.3, TH = wallH + 2.9;
+    cb(fk, p, [2.4, TH - wallH, 2.4], [tx, (wallH + TH) / 2, tz], STONE, undefined, 0.04);
+    cb(fk, p, [2.7, 0.2, 2.7], [tx, TH - 0.6, tz], STONE_D, undefined, 0.03);
+    cb(fk, p, [2.8, 0.5, 2.8], [tx, TH + 0.1, tz], STONE, undefined, 0.04);
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(fk, p, [0.7, 0.6, 0.7], [tx + dx * 1.05, TH + 0.65, tz + dz * 1.05], STONE, undefined, 0.04);
+    cb(fk, p, [0.9, 1.8, 0.1], [tx, wallH + 1.2, tz + 1.21], DARK, undefined, 0.01);
+    cb(fk, p, [1.2, 0.2, 0.18], [tx, wallH + 2.15, tz + 1.24], STONE_L, undefined, 0.02);
+    // Chimney stacks in the side walls, level with each other.
+    const stacks: [number, number][] = along ? [[w / 2, 0.6], [w / 2, d - 0.6]] : [[0.6, d * 0.55], [w - 0.6, d * 0.55]];
+    for (const [cx, cz] of stacks) {
+      cb(fk, p, [1.3, 2.6, 1.3], [cx, wallH + 1.3, cz], STONE, undefined, 0.04);
+      cb(fk, p, [1.55, 0.26, 1.55], [cx, wallH + 2.7, cz], STONE_D, undefined, 0.03);
+      fk.box(p, [0.8, 0.06, 0.8], [cx, wallH + 2.84, cz], DARK);
+    }
+    // Two glazed lanterns over the long room, on its axis, under low lead caps.
+    for (const f of [0.45, 0.78]) {
+      const lx = along ? w * f : w / 2, lz = along ? d / 2 : d * f;
+      cb(fk, p, [1.8, 0.5, 1.8], [lx, wallH + 0.5, lz], STONE_D, undefined, 0.04);
+      cb(fk, p, [1.5, 0.9, 1.5], [lx, wallH + 1.2, lz], STONE_L, undefined, 0.04);
+      for (const [dx, dz] of [[0.76, 0], [-0.76, 0], [0, 0.76], [0, -0.76]]) fk.box(p, [dz ? 0.9 : 0.04, 0.55, dz ? 0.04 : 0.9], [lx + dx, wallH + 1.2, lz + dz], 0xffc870, undefined, 0xffa040, 0.7);
+      fk.mesh(p, taper(1.9, 1.9, 0.5, 0.5, 0.5), LEAD_ROLL, [lx, wallH + 2.0, lz]);
+    }
+  }
   return wallH + 1.9;
 }
+
+/** The castle's lead roofs and their standing rolls. */
+const LEAD = 0x5a5f68, LEAD_ROLL = 0x6c717a;
 
 // ─── Furnishings ─────────────────────────────────────────────────────────────
 

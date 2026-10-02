@@ -79,6 +79,11 @@ export interface BuildingSpec {
   restore?: string;
   /** Interior walls dividing the floor into rooms. */
   partitions?: Partition[];
+  /**
+   * Walls this building shares with a neighbour of the same height whose roof continues its own:
+   * no parapet stands on them, so the two roofs read as one.
+   */
+  joined?: Side[];
   /** Height of the ground storey of a multi-storey building (upper-floor windows sit above it). */
   storeyH?: number;
   /** Stairs between the ground and upper floors (a building with an `upper` floor). */

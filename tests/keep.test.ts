@@ -132,9 +132,9 @@ describe('Dragonspire Keep', () => {
     const door = { x: k.x + great.at + great.w / 2, z: k.z + k.d + 0.5 };
     const path = nav.findPath(L.entry.x, L.entry.z, door.x, door.z)!;
     expect(path).not.toBeNull();
-    // On the way in it passes through the gate and up the avenue.
+    // On the way in it passes through the gate (its passage is four cells wide) and up the avenue.
     const near = (g: { x: number; z: number }) => Math.min(...path.slice(1).map((q, i) => distToPoly(g.x, g.z, [path[i], q]).d));
-    for (const g of [{ x: 66, z: 100 }, { x: 66, z: 70 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(1.5);
+    for (const g of [{ x: 66, z: 100 }, { x: 66, z: 70 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(2.1);
     // The curtain is shut elsewhere: a step through its north wall is blocked.
     expect(nav.isWalkable(80, 22)).toBe(false);
   });

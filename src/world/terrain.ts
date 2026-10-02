@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { ZoneTheme } from '../data/zones';
 import { applyGround, CAVE_TERRACE, GROUND_TIME } from '../render/surface';
 import { noiseTexture } from '../render/textures';
+import { planarReflection } from './water';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
 
 /**
@@ -636,79 +637,6 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
  *   hot, deep middle; open molten patches churn in the deepest spots. Emission stays moderate so
  *   bloom shows seams, not a blown-out disc.
  */
-/**
- * A mirror of the scene about the water plane, rendered into a half-resolution HDR target just
- * before the water draws (three.js Reflector's oblique-clip method, so nothing under the surface
- * is mirrored). Only for perspective cameras; the water hides itself while the mirror renders.
- */
-function planarReflection(y: number) {
-  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-  const texMat = new THREE.Matrix4(), vcam = new THREE.PerspectiveCamera();
-  const normal = new THREE.Vector3(0, 1, 0), onPlane = new THREE.Vector3(0, y, 0);
-  const camPos = new THREE.Vector3(), view = new THREE.Vector3(), look = new THREE.Vector3(), target = new THREE.Vector3();
-  const rot = new THREE.Matrix4(), plane = new THREE.Plane(), clip = new THREE.Vector4(), qv = new THREE.Vector4();
-  const size = new THREE.Vector2(), clearC = new THREE.Color();
-  const on = { value: 0 };
-  let busy = false;
-  const render = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, self: THREE.Object3D) => {
-    on.value = 0;
-    if (busy || !(camera as THREE.PerspectiveCamera).isPerspectiveCamera) return;
-    camPos.setFromMatrixPosition(camera.matrixWorld);
-    view.subVectors(onPlane.set(camPos.x, y, camPos.z), camPos);
-    if (view.dot(normal) > 0) return;
-    view.reflect(normal).negate().add(onPlane);
-    rot.extractRotation(camera.matrixWorld);
-    look.set(0, 0, -1).applyMatrix4(rot).add(camPos);
-    target.subVectors(onPlane, look).reflect(normal).negate().add(onPlane);
-    vcam.position.copy(view);
-    vcam.up.set(0, 1, 0).applyMatrix4(rot).reflect(normal);
-    vcam.lookAt(target);
-    vcam.far = (camera as THREE.PerspectiveCamera).far;
-    vcam.updateMatrixWorld();
-    vcam.projectionMatrix.copy(camera.projectionMatrix);
-    texMat.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(vcam.projectionMatrix).multiply(vcam.matrixWorldInverse);
-    // Oblique near plane on the water surface: nothing below it reaches the mirror.
-    plane.setFromNormalAndCoplanarPoint(normal, onPlane).applyMatrix4(vcam.matrixWorldInverse);
-    clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
-    const pm = vcam.projectionMatrix.elements;
-    qv.set((Math.sign(clip.x) + pm[8]) / pm[0], (Math.sign(clip.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
-    clip.multiplyScalar(2 / clip.dot(qv));
-    pm[2] = clip.x;
-    pm[6] = clip.y;
-    pm[10] = clip.z + 1 - 0.003;
-    pm[14] = clip.w;
-    renderer.getDrawingBufferSize(size);
-    const W = Math.max(64, Math.round(size.x / 2)), H = Math.max(64, Math.round(size.y / 2));
-    if (rt.width !== W || rt.height !== H) rt.setSize(W, H);
-    busy = true;
-    self.visible = false;
-    const prevTarget = renderer.getRenderTarget(), prevShadow = renderer.shadowMap.autoUpdate, prevXr = renderer.xr.enabled;
-    // No background in the mirror: its alpha then marks where something was reflected, and the
-    // painted sky gradient fills the rest.
-    const bg = scene.background, prevAlpha = renderer.getClearAlpha();
-    renderer.getClearColor(clearC);
-    scene.background = null;
-    renderer.setClearColor(clearC, 0);
-    renderer.xr.enabled = false;
-    renderer.shadowMap.autoUpdate = false;
-    renderer.setRenderTarget(rt);
-    renderer.state.buffers.depth.setMask(true);
-    if (renderer.autoClear === false) renderer.clear();
-    renderer.render(scene, vcam);
-    scene.background = bg;
-    renderer.setClearColor(clearC, prevAlpha);
-    renderer.xr.enabled = prevXr;
-    renderer.shadowMap.autoUpdate = prevShadow;
-    renderer.setRenderTarget(prevTarget);
-    const vp = (camera as THREE.Camera & { viewport?: THREE.Vector4 }).viewport;
-    if (vp) renderer.state.viewport(vp);
-    self.visible = true;
-    busy = false;
-    on.value = 1;
-  };
-  return { texture: rt.texture, texMat, on, render };
-}
-
 function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, mirror = false) {
   const lava = kind === Fluid.Lava;
   const refl = mirror ? planarReflection(WATER_Y) : null;

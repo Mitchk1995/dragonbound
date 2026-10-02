@@ -62,7 +62,7 @@ export const ZONES: Record<string, ZoneDef> = {
   keep: {
     id: 'keep', name: 'Dragonspire Keep', kind: 'hub', arch: 0xffffff, build: buildKeep,
     theme: {
-      bg: 0x0b0a1c, fog: [60, 140], hemi: [0x9a9ad8, 0x4a3a50, 1.25], sun: [0xffd6a8, 2.3], exposure: 1.1,
+      bg: 0x0b0a1c, fog: [60, 140], hemi: [0xa8a6dc, 0x64545e, 1.5], sun: [0xffd6a8, 2.3], exposure: 1.1,
       ambient: 'void', trees: 'grove', wall: 'castle',
       ground: { [Ground.Grass]: [0x4a7a3a, 0x5a8a44], [Ground.Stone]: [0x8a8478, 0x7a7468], [Ground.Path]: [0x8a7a5e, 0x7a6a50], [Ground.Dirt]: [0x6e6048, 0x5e5240] },
       // The castle rock and the upland: grey stone faces, grass growing over their tops.

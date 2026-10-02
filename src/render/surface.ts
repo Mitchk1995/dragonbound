@@ -703,6 +703,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
         // 37° rotation (column-major) for the second, larger-scale sample.
         const mat2 GROT = mat2(0.7986, 0.6018, -0.6018, 0.7986);
         const float GSCALE2 = 0.348;
+        const mat2 GROT2 = mat2(0.3256, 0.9455, -0.9455, 0.3256);
         float surfSample(out vec3 grad) {
           grad = vec3(0.0);
           vec4 k = vSplat / max(0.001, dot(vSplat, vec4(1.0)));
@@ -717,6 +718,13 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           vec4 t2 = texture2D(uGroundTex, GROT * p * (uSurfScale * GSCALE2) + vec2(0.31, 0.57));
           float m = smoothstep(0.36, 0.64, texture2D(uMixTex, p * 0.019 + vec2(0.13, 0.71)).r);
           vec4 t = mix(t1, t2, m);
+          // Beaten earth: a third sample at another scale and angle, blended in by a finer mask, so
+          // no stain repeats on a visible grid across a big yard.
+          if (k.x > 0.001) {
+            float m3 = smoothstep(0.3, 0.7, texture2D(uMixTex, p * 0.083 + vec2(0.57, 0.21)).r);
+            float t3 = texture2D(uGroundTex, GROT2 * p * (uSurfScale * 0.61) + vec2(0.73, 0.19)).r;
+            t.r = mix(mix(t1.r, t2.r, 0.5), t3, m3);
+          }
           // Paving is laid square to the world and never cross-faded (two overlaid layouts read
           // as cracked mud): one unrotated sample with an 8-unit tile.
           if (k.b > 0.001) t.b = texture2D(uGroundTex, p * (uSurfScale * 0.5)).b;

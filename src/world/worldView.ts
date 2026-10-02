@@ -30,10 +30,13 @@ export const OCCLUDE = {
 
 /**
  * Patch a material so fragments between the camera and the player, inside a small
- * screen-space circle around the player and above the hero's knees, are cut away cleanly (no
- * dither). Trees and walls never hide the hero; a low stub of what was cut stays in place.
+ * screen-space circle around the player and above the hero's knees, are cut away (no dither
+ * stipple). The rim of the opening fades out over its last fifth through alpha-to-coverage, so with
+ * multisampling the edge is a soft feathered ring, not a hard disc. Trees and walls never hide the
+ * hero; a low stub of what was cut stays in place.
  */
 export function makeOccludable(mat: THREE.Material, shadow = false) {
+  if (!shadow && !mat.transparent) mat.alphaToCoverage = true;
   addPatch(mat, { key: shadow ? 'occlude:shadow' : 'occlude', slot: 'occlude', apply: (shader) => {
     Object.assign(shader.uniforms, OCCLUDE);
     shader.vertexShader = shader.vertexShader
@@ -61,6 +64,7 @@ export function makeOccludable(mat: THREE.Material, shadow = false) {
       .replace(
         '#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
+        float occFade = 1.0;
         {
           vec3 target = uOccPlayer + vec3(0.0, 1.0, 0.0);
           vec3 toP = target - uOccCam;
@@ -79,10 +83,12 @@ export function makeOccludable(mat: THREE.Material, shadow = false) {
           float feet = dot(uOccPlayer - uOccCam, dirP);
           if (uOccOn > 0.5 && lift > 0.4 && along > 0.5 && along < feet + 0.3) {` : `if (uOccOn > 0.5 && along > 0.5 && along < lenP - 0.8 && vOccWorld.y > uOccPlayer.y + 0.4) {`}
             float perp = length(toF - dirP * along);
-            if (perp / along < uOccRadius * 0.85) discard;
+            if (perp / along * 1.25 < uOccRadius * 0.85) discard;
+            occFade = smoothstep(0.8, 1.0, perp / along / (uOccRadius * 0.85));
           }
         }`,
-      );
+      )
+      .replace('#include <opaque_fragment>', 'diffuseColor.a *= occFade;\n#include <opaque_fragment>');
   } });
 }
 
@@ -118,11 +124,12 @@ function voidSky(group: THREE.Group, rng: () => number) {
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: { top: { value: new THREE.Color(0x1a1040) }, mid: { value: new THREE.Color(0x3a1a4a) }, bot: { value: new THREE.Color(0x050510) } },
+    uniforms: { top: { value: new THREE.Color(0x1a1040) }, mid: { value: new THREE.Color(0x40204e) }, bot: { value: new THREE.Color(0x050510) } },
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
     fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 mid; uniform vec3 bot;
       void main(){ float h = vP.y; vec3 c = h > 0.0 ? mix(mid, top, h) : mix(mid, bot, -h * 1.5);
-      float band = exp(-pow((h + 0.05) * 6.0, 2.0)); c += vec3(0.35, 0.18, 0.4) * band * 0.6; gl_FragColor = vec4(c, 1.0); }`,
+      float band = exp(-pow((h + 0.05) * 6.0, 2.0)); c += vec3(0.46, 0.24, 0.3) * band * 0.5;
+      float glow = exp(-pow((h - 0.1) * 3.0, 2.0)); c += vec3(0.22, 0.1, 0.1) * glow * 0.35; gl_FragColor = vec4(c, 1.0); }`,
   });
   const sky = new THREE.Mesh(skyGeo, skyMat);
   sky.renderOrder = -10;
@@ -130,7 +137,8 @@ function voidSky(group: THREE.Group, rng: () => number) {
   group.add(sky);
   const starPos: number[] = [];
   for (let i = 0; i < 1500; i++) {
-    const u = rng() * 2 - 1, a = rng() * Math.PI * 2;
+    // Stars only high in the sky: the horizon glows with the dusk.
+    const u = 0.3 + rng() * 0.7, a = rng() * Math.PI * 2;
     const r = Math.sqrt(1 - u * u);
     starPos.push(Math.cos(a) * r * 170, u * 170, Math.sin(a) * r * 170);
   }
@@ -540,7 +548,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
             bushes.push(m.compose(p, q, s.set(sc, sc * 0.75, sc)).clone());
             bushCols.push(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]).offsetHSL(0, 0.04, -0.03));
           }
-        } else if (g === Ground.Grass && theme.flowers && layout.lawn?.[i] !== Lawn.Clipped && rng() < 0.06) {
+        } else if (g === Ground.Grass && theme.flowers && layout.lawn?.[i] !== Lawn.Clipped && layout.lawn?.[i] !== Lawn.Garden && rng() < 0.06) {
           const fc = new THREE.Color(theme.flowers[Math.floor(rng() * theme.flowers.length)]);
           for (let k = 0; k < 4; k++) {
             p.set(x + rng(), heightAt(x + 0.5, z + 0.5), z + rng());

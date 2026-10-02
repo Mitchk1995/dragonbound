@@ -144,6 +144,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('plan', [c.x, y0 + 160, c.z + 22], [c.x, y0, c.z + 1], 70, false);
   // The approach from below the rock: the ledge road climbing west under the south wall to the gate.
   await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
+  // The spring's fall out of the castle rock into its pool and the stream leaving it, from below.
+  await view('falls', [P.gate.x + 31, y0 - 5, P.gate.z + 30], [P.gate.x + 26.5, y0 - 6.5, P.gate.z + 12], 18);
   // Through the gameplay camera: inside the gate looking up the yard, the centrepiece, the great door.
   await play('entry', P.gate.x, P.gate.z - 4, 1.3);
   await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.35, true);
@@ -159,8 +161,9 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await play('bower', Z.bower.x, Z.bower.z, 1.0);
   await play('belvedere', Z.belvedere.x, Z.belvedere.z, 1.0);
   await play('kitchen-garden', Z.kitchen.x, Z.kitchen.z, 1.1);
-  await play('training', Z.training.x, Z.training.z - 3, 1.2);
+  await play('training', Z.training.x, Z.training.z, 1.2);
   await play('stables', Z.service.x, Z.service.z, 1.1);
+  await play('paddock', Z.paddock.x, Z.paddock.z, 1.1);
   // A lawn up close (the parterre's north-west panel), low across the grass.
   await view('lawn-close', [Z.parterre.x - 8.5, y0 + 1.2, Z.parterre.z + 3.4], [Z.parterre.x + 1, y0 + 0.3, Z.parterre.z - 3.5], 12);
   // The island beyond the castle: meadows, the approach, the portal court.
