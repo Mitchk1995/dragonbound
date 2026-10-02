@@ -23,6 +23,8 @@ export interface Window {
   floor?: number;
   /** A stable stall's opening on the facade (a half-door, a horse looking out), not a glazed window. */
   stall?: boolean;
+  /** Stained glass (castle lancets): the hall's pattern (sapphire and gold) or the chapel's (sapphire, ruby, emerald). */
+  stained?: 'hall' | 'chapel';
 }
 
 /**

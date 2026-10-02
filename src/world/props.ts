@@ -26,6 +26,18 @@ export interface Prop {
 
 // Masonry: close shades of one stone so walls read as blocks, never as stripes.
 export const STONE = 0x8a8478, STONE_L = 0x969086, STONE_D = 0x6e685f, STONE_DD = 0x57524b;
+/**
+ * Dragonspire Castle's own stone (docs/CASTLE_DESIGN.md, "Colour and materials"): cream limestone
+ * for the masses (sunlit blocks paler, weathered courses darker), blue-grey dressings for the
+ * continuous lines and frames (string courses, copings, corbels, hood moulds), darker blue-grey for
+ * plinths, a grey deck for walks and platforms. The rest of the world keeps STONE.
+ */
+export const ASHLAR = 0xcdc0a3, ASHLAR_L = 0xdacfb5, ASHLAR_W = 0xb8aa8e;
+export const TRIM = 0x737e8e, TRIM_D = 0x56606e, TRIM_L = 0x8592a2, DECK = 0x8a8478;
+/** The donjon's spire: deep blue slate. */
+export const SLATE_BLUE = 0x3e5472;
+/** The lord's livery: royal blue cloth (field and shade) charged and edged in gold (PAL.gold). */
+export const HERALD_BLUE = 0x2848a0, HERALD_BLUE_D = 0x1c3272;
 export const BRICK = 0x9a5a42, BRICK_L = 0xa8664a, BRICK_D = 0x7e4836;
 export const WOOD = PAL.wood, WOOD_D = 0x4a3020, WOOD_L = 0x8a6440;
 export const SLATE = 0x4e5564, PLASTER = 0xd6cab0, DARK = 0x1c1612;
@@ -56,11 +68,20 @@ paintAs('rock', [RUSTY, RUSTY_L, RUST, ...BLOCKS, BASALT, BASALT_L, BASALT_D, 0x
 paintAs('wood', [WOOD, WOOD_D, WOOD_L, 0x7a5636, 0x94704a, 0x5a3a22, 0x3a2618, 0x5a3a20, 0x4a2e18, 0x8a6a44, 0x5a4a3a, 0x3a2a1e, 0xa08058]);
 paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438, 0x3e6a6a, 0x7a4a34]);
 paintAs('masonry', [...SAND, ...SOOT]);
+paintAs('ashlar', [ASHLAR, ASHLAR_L, ASHLAR_W]);
+paintAs('masonry', [TRIM, TRIM_D, TRIM_L, DECK]);
+paintAs('shingle', [SLATE_BLUE]);
+paintAs('hide', [HERALD_BLUE, HERALD_BLUE_D]);
 paintAs('rock', BRICK_SOOT);
 paintAs('soft', [0x4b3122]);
 paintAs('bone', [BONE, BONE_D, PAL.bone]);
 paintAs('plaster', [PLASTER, 0xe8dcc0, 0xc8b070]);
 paintAs('hide', [0x8a6a48, 0x6e5238, 0x7a5a3a, 0x5a4230, 0x8a4a34, 0x6a3a2a, 0x8a2424, 0x8a2a1e, 0x7a2020, 0x6a2020, 0xa03030, PAL.leather]);
+
+/** Ivy and climbing roses on the castle's walls: leaf greens (painted as foliage) and the roses' blooms. */
+const CLIMBER_IVY = [0x2f5a2a, 0x3a6a2e, 0x4a7a36], CLIMBER_ROSE_LEAF = [0x3e6e30, 0x4a7a36], CLIMBER_BLOOM = [0xe0507a, 0xf08aa8, 0xf6eee2];
+const CLIMBER_LEAF = new THREE.IcosahedronGeometry(1, 0);
+paintAs('foliage', [...CLIMBER_IVY, ...CLIMBER_ROSE_LEAF]);
 
 function paintFor(hex: number): PaintKind {
   const known = PAINT_OF.get(hex);
@@ -850,14 +871,81 @@ function dragonBeast(k: ModelKit, g: THREE.Object3D, pose: BeastPose): THREE.Vec
  * its N faces.
  */
 function crown(k: ModelKit, g: THREE.Object3D, x: number, z: number, r: number, P: number, N: number) {
-  k.cyl(g, r + 0.12, r + 0.12, 0.22, [x, P - 1.1, z], STONE_D, undefined, N);
+  k.cyl(g, r + 0.12, r + 0.12, 0.22, [x, P - 1.1, z], TRIM, undefined, N);
   for (let i = 0; i < N; i++) {
     const a = ((i + 0.5) / N) * Math.PI * 2, c = 2 * (r + 0.25) * Math.sin(Math.PI / N);
-    cb(k, g, [c * 0.42, 0.5, 0.42], [x + Math.sin(a) * (r + 0.12), P - 0.3, z + Math.cos(a) * (r + 0.12)], STONE_D, [0, a, 0], 0.03);
-    cb(k, g, [c + 0.04, 1.0, 0.5], [x + Math.sin(a) * (r + 0.05), P + 0.5, z + Math.cos(a) * (r + 0.05)], STONE, [0, a, 0], 0.03);
-    if (i % 2 === 0) cb(k, g, [c * 0.82, 0.75, 0.54], [x + Math.sin(a) * (r + 0.05), P + 1.37, z + Math.cos(a) * (r + 0.05)], hash01(i, r) > 0.7 ? STONE_L : STONE, [0, a, 0], 0.05);
+    cb(k, g, [c * 0.42, 0.5, 0.42], [x + Math.sin(a) * (r + 0.12), P - 0.3, z + Math.cos(a) * (r + 0.12)], TRIM, [0, a, 0], 0.03);
+    cb(k, g, [c + 0.04, 1.0, 0.5], [x + Math.sin(a) * (r + 0.05), P + 0.5, z + Math.cos(a) * (r + 0.05)], ASHLAR, [0, a, 0], 0.03);
+    if (i % 2 === 0) cb(k, g, [c * 0.82, 0.75, 0.54], [x + Math.sin(a) * (r + 0.05), P + 1.37, z + Math.cos(a) * (r + 0.05)], hash01(i, r) > 0.7 ? ASHLAR_L : ASHLAR, [0, a, 0], 0.05);
   }
-  k.cyl(g, r - 0.2, r - 0.2, 0.1, [x, P + 0.05, z], 0x5e5850, undefined, N);
+  // One continuous coping round the parapet's top under the merlons (never a cap per merlon).
+  k.mesh(g, ringBand(r - 0.24, r + 0.4, 0.12, N), TRIM, [x, P + 0.96, z]);
+  k.cyl(g, r - 0.2, r - 0.2, 0.1, [x, P + 0.05, z], DECK, undefined, N);
+}
+
+/**
+ * A flat ring (an annulus `h` thick from radius rIn to rOut, base on y = 0) with `n` straight sides,
+ * its corners at the same angles as a kit cylinder's: copings and eave rings round round towers.
+ */
+const ringCache = new Map<string, THREE.BufferGeometry>();
+export function ringBand(rIn: number, rOut: number, h: number, n: number) {
+  const key = `${rIn},${rOut},${h},${n}`;
+  let geo = ringCache.get(key);
+  if (geo) return geo;
+  const poly = (r: number) => Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2;
+    // Laid flat below, the shape's -y becomes +z: (sin a, cos a) round the plan like a cylinder's.
+    return new THREE.Vector2(Math.sin(a) * r, -Math.cos(a) * r);
+  });
+  const shape = new THREE.Shape(poly(rOut));
+  shape.holes.push(new THREE.Path(poly(rIn)));
+  // Extruded along +Z, then laid flat (+Z becomes +Y).
+  geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments: 1 }).rotateX(-Math.PI / 2);
+  ringCache.set(key, geo);
+  return geo;
+}
+
+/** A flat point of cloth: a triangle `w` across its top edge (on y = 0) to a point `h` below it, `d` thick. */
+const pointCache = new Map<string, THREE.BufferGeometry>();
+function clothPoint(w: number, h: number, d: number) {
+  const key = `${w},${h},${d}`;
+  let geo = pointCache.get(key);
+  if (!geo) {
+    const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(0, -h), new THREE.Vector2(w / 2, 0)]);
+    geo = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false }).translate(0, 0, -d / 2);
+    pointCache.set(key, geo);
+  }
+  return geo;
+}
+
+/**
+ * The lord's banner hanging flat on a face (facing +Z) from a rod at height `top`: a royal blue
+ * field `w` × `h`, a thin gold strip down each side, the gold dragon diamond, and a two-point
+ * swallowtail in the deeper blue, edged in gold, below it.
+ */
+export function livery(k: ModelKit, p: THREE.Object3D, x: number, top: number, z: number, w: number, h: number) {
+  cb(k, p, [w + 0.4, 0.14, 0.14], [x, top, z - 0.02], WOOD_D, undefined, 0.02);
+  const yc = top - 0.07 - h / 2, yb = top - 0.07 - h, th = w * 0.42;
+  cb(k, p, [w, h, 0.06], [x, yc, z], HERALD_BLUE, undefined, 0.01);
+  for (const sx of [-1, 1]) {
+    k.box(p, [0.1, h, 0.04], [x + sx * (w / 2 - 0.14), yc, z + 0.04], PAL.gold);
+    k.mesh(p, clothPoint(w / 2 + 0.1, th + 0.12, 0.04), PAL.gold, [x + (sx * w) / 4, yb + 0.02, z - 0.02]);
+    k.mesh(p, clothPoint(w / 2 - 0.02, th, 0.06), HERALD_BLUE_D, [x + (sx * w) / 4, yb + 0.01, z]);
+  }
+  k.box(p, [w * 0.36, w * 0.36, 0.04], [x, top - 0.07 - h * 0.42, z + 0.05], PAL.gold, [0, 0, Math.PI / 4]);
+}
+
+/**
+ * A flag on a pole at x, its top edge at `top`, flying out toward `dir` (±1 along X), flat in the
+ * XY plane: a royal blue field `w` × `h`, a gold stripe at the hoist, a two-point swallowtail at the
+ * fly in the deeper blue (and the gold diamond when `charge`).
+ */
+export function flag(k: ModelKit, p: THREE.Object3D, x: number, top: number, z: number, w: number, h: number, dir = 1, charge = false) {
+  const yc = top - h / 2, x0 = x + dir * 0.07;
+  cb(k, p, [w, h, 0.05], [x0 + (dir * w) / 2, yc, z], HERALD_BLUE, undefined, 0.01);
+  k.box(p, [0.12, h, 0.07], [x0 + dir * 0.06, yc, z], PAL.gold);
+  for (const sy of [-1, 1]) k.mesh(p, clothPoint(h / 2, h * 0.42, 0.05), HERALD_BLUE_D, [x0 + dir * (w - 0.01), yc + (sy * h) / 4, z], [0, 0, (dir * Math.PI) / 2]);
+  if (charge) k.box(p, [h * 0.38, h * 0.38, 0.09], [x0 + (dir * w) / 2, yc, z], PAL.gold, [0, 0, Math.PI / 4]);
 }
 
 /**
@@ -917,6 +1005,24 @@ export function spandrels(w: number, h: number, dep: number) {
   return g;
 }
 
+/** The head of a pointed opening above its springing (sill at y = 0), `dep` thick, centred on z = 0. */
+const headCache = new Map<string, THREE.BufferGeometry>();
+function archHead(w: number, h: number, dep: number) {
+  const key = `${w},${h},${dep}`;
+  let g = headCache.get(key);
+  if (!g) {
+    const { arc } = pointedArch(w, h);
+    const s = new THREE.Shape();
+    s.moveTo(-arc[0][0], arc[0][1]);
+    for (const [px, py] of arc) s.lineTo(px, py);
+    for (let i = arc.length - 2; i >= 0; i--) s.lineTo(-arc[i][0], arc[i][1]);
+    s.closePath();
+    g = new THREE.ExtrudeGeometry(s, { depth: dep, bevelEnabled: false }).translate(0, 0, -dep / 2);
+    headCache.set(key, g);
+  }
+  return g;
+}
+
 /** A pane of glass in a pointed opening, `dep` thick, centred on z = 0. */
 const paneCache = new Map<string, THREE.BufferGeometry>();
 export function archPane(w: number, h: number, dep: number) {
@@ -947,21 +1053,53 @@ export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, 
   if (opt.key !== undefined) cb(k, g, [0.3, 0.42, p + 0.04], [x, y0 + h + out + 0.12, z + p / 2], opt.key, undefined, 0.02);
 }
 
+/** Stained glass: each colour glows in itself. Came (the lead between the pieces) is near black. */
+export const GLASS = { ruby: 0xc8304a, sapphire: 0x2f5fd0, gold: 0xf2b84a, emerald: 0x2f9a5a } as const;
+const CAME = 0x26262c;
+/** Which glass goes where in a stained lancet: the two outer lights, the centre light, the head. */
+export type Stained = { outer: number; centre: number; head: number };
+/** The hall's and the pavilions' glass: sapphire either side of gold, a gold head. */
+export const STAINED_HALL: Stained = { outer: GLASS.sapphire, centre: GLASS.gold, head: GLASS.gold };
+/** The chapel's: sapphire either side of ruby, an emerald head. */
+export const STAINED_CHAPEL: Stained = { outer: GLASS.sapphire, centre: GLASS.ruby, head: GLASS.emerald };
+
+/**
+ * Stained glass in a pointed opening `w` wide, apex `h` above its sill at y (on a face at z, facing
+ * +Z): three vertical lights to the springing and a head piece over them, each glowing in its own
+ * colour, with came bars between them. `put` places a piece (a geometry and a colour, at x, y, z).
+ */
+export function stainedGlass(put: (geo: THREE.BufferGeometry, color: number, emissive: number, x: number, y: number, z: number) => void, x: number, y: number, z: number, w: number, h: number, s: Stained) {
+  const { ys } = pointedArch(w, h), lw = w / 3;
+  put(archHead(w, h, 0.05), s.head, s.head, x, y, z);
+  for (let i = -1; i <= 1; i++) {
+    const c = i ? s.outer : s.centre;
+    put(chamferBox(q(lw), q(ys), 0.05, 0), c, c, x + i * lw, y + ys / 2, z);
+  }
+  for (const sx of [-1, 1]) put(chamferBox(0.04, q(ys), 0.07, 0), CAME, 0, x + (sx * lw) / 2, y + ys / 2, z + 0.01);
+  put(chamferBox(q(w), 0.04, 0.07, 0), CAME, 0, x, y + ys, z + 0.01);
+}
+
 /**
  * A tall pointed lancet on a face at z (facing +Z), its sill at y: the opening sunk into a dressed
- * surround (jambs to the springing, voussoirs round the head), a pane of glass glowing with the lit
- * room behind it (or dark), a hood mould following the arch and a projecting sill.
+ * surround (jambs to the springing, voussoirs round the head) in pale ashlar, a pane of glass glowing
+ * with the lit room behind it (or dark, or `stained` glass), a blue-grey hood mould following the
+ * arch with its label stops, and a projecting sill.
  */
-export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true) {
+export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true, stained?: Stained) {
   const { ys } = pointedArch(w, h);
-  k.mesh(g, archPane(w, h, 0.05), lit ? 0xffc870 : 0x1e2430, [x, y, z - 0.08], undefined, lit ? 0xffa040 : 0, lit ? 0.9 : 1);
-  // A slender mullion up to the springing, leading across it.
-  cb(k, g, [0.06, ys, 0.06], [x, y + ys / 2, z - 0.04], STONE_L, undefined, 0.01);
-  for (const sx of [-1, 1]) cb(k, g, [0.2, ys + 0.02, 0.24], [x + sx * (w / 2 + 0.1), y + ys / 2, z - 0.02], STONE_L, undefined, 0.02);
-  archRing(k, g, x, y, z - 0.14, w, h, STONE_L, { n: 4, t: 0.2, p: 0.24, out: 0 });
-  archRing(k, g, x, y, z - 0.04, w + 0.42, h + 0.26, STONE_D, { n: 4, t: 0.12, p: 0.16, out: 0 });
-  for (const sx of [-1, 1]) cb(k, g, [0.16, 0.22, 0.2], [x + sx * (w / 2 + 0.3), y + ys - 0.06, z + 0.06], STONE_D, undefined, 0.02);
-  cb(k, g, [w + 0.5, 0.14, 0.32], [x, y - 0.07, z + 0.06], STONE_L, undefined, 0.02);
+  if (stained) {
+    stainedGlass((geo, c, em, px, py, pz) => k.mesh(g, geo, c, [px, py, pz], undefined, em, em ? 0.9 : 1), x, y, z + 0.03, w, h, stained);
+  } else {
+    // The glass stands just proud of the face (the surround stands prouder), so it always shows.
+    k.mesh(g, archPane(w, h, 0.05), lit ? 0xffc870 : 0x1e2430, [x, y, z + 0.03], undefined, lit ? 0xffa040 : 0, lit ? 0.9 : 1);
+    // A slender mullion up to the springing, leading across it.
+    cb(k, g, [0.06, ys, 0.06], [x, y + ys / 2, z + 0.07], ASHLAR_L, undefined, 0.01);
+  }
+  for (const sx of [-1, 1]) cb(k, g, [0.2, ys + 0.02, 0.24], [x + sx * (w / 2 + 0.1), y + ys / 2, z - 0.02], ASHLAR_L, undefined, 0.02);
+  archRing(k, g, x, y, z - 0.14, w, h, ASHLAR_L, { n: 4, t: 0.2, p: 0.24, out: 0 });
+  archRing(k, g, x, y, z - 0.04, w + 0.42, h + 0.26, TRIM, { n: 4, t: 0.12, p: 0.16, out: 0 });
+  for (const sx of [-1, 1]) cb(k, g, [0.16, 0.22, 0.2], [x + sx * (w / 2 + 0.3), y + ys - 0.06, z + 0.06], TRIM, undefined, 0.02);
+  cb(k, g, [w + 0.5, 0.14, 0.32], [x, y - 0.07, z + 0.06], ASHLAR_L, undefined, 0.02);
 }
 
 /**
@@ -983,22 +1121,23 @@ function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: boolea
     }
     return 0;
   };
-  cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
-  for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2, S, T], [sx * (P / 2 + (L - P) / 4), S / 2, 0], STONE, undefined, 0.04);
+  cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], TRIM_D, undefined, 0.06);
+  for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2, S, T], [sx * (P / 2 + (L - P) / 4), S / 2, 0], ASHLAR, undefined, 0.04);
   for (let y = S; y < apex - 0.01; y += 0.2) {
     const y1 = Math.min(apex, y + 0.2), hw = half((y + y1) / 2);
-    for (const sx of [-1, 1]) cb(k, g, [L / 2 - hw, y1 - y + 0.01, T], [sx * (hw + (L / 2 - hw) / 2), (y + y1) / 2, 0], STONE, undefined, 0);
+    for (const sx of [-1, 1]) cb(k, g, [L / 2 - hw, y1 - y + 0.01, T], [sx * (hw + (L / 2 - hw) / 2), (y + y1) / 2, 0], ASHLAR, undefined, 0);
   }
-  cb(k, g, [L, H - apex, T], [0, apex + (H - apex) / 2, 0], STONE, undefined, 0.04);
+  cb(k, g, [L, H - apex, T], [0, apex + (H - apex) / 2, 0], ASHLAR, undefined, 0.04);
+  for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2 - 0.36, 0.5, T + 0.04], [sx * (P / 2 + 0.36 + (L - P - 0.72) / 4), 1.05, 0], ASHLAR_W, undefined, 0.02);
   for (const e of [-1, 1]) {
     const f = new THREE.Group();
     f.rotation.y = e > 0 ? 0 : Math.PI;
     g.add(f);
     const z = T / 2;
-    for (const sx of [-1, 1]) cb(k, f, [0.34, S, 0.16], [sx * (P / 2 + 0.17), S / 2, z + 0.08], STONE_L, undefined, 0.02);
-    archRing(k, f, 0, 0, z, P, apex, STONE_L, { n: 5, t: 0.4, p: 0.16, out: 0, key: STONE_L, rise });
-    archRing(k, f, 0, 0, z, P + 1.0, apex + 0.55, STONE_D, { n: 5, t: 0.14, p: 0.26, out: 0, rise: rise + 0.55 });
-    for (const sx of [-1, 1]) cb(k, f, [0.2, 0.3, 0.3], [sx * (P / 2 + 0.55), S + 0.02, z + 0.15], STONE_D, undefined, 0.02);
+    for (const sx of [-1, 1]) cb(k, f, [0.34, S, 0.16], [sx * (P / 2 + 0.17), S / 2, z + 0.08], ASHLAR_L, undefined, 0.02);
+    archRing(k, f, 0, 0, z, P, apex, ASHLAR_L, { n: 5, t: 0.4, p: 0.16, out: 0, key: ASHLAR_L, rise });
+    archRing(k, f, 0, 0, z, P + 1.0, apex + 0.55, TRIM, { n: 5, t: 0.14, p: 0.26, out: 0, rise: rise + 0.55 });
+    for (const sx of [-1, 1]) cb(k, f, [0.2, 0.3, 0.3], [sx * (P / 2 + 0.55), S + 0.02, z + 0.15], TRIM, undefined, 0.02);
     if (opt.lanterns?.includes(e)) for (const sx of [-1, 1]) {
       const lx = sx * (P / 2 + 0.95);
       cb(k, f, [0.08, 0.08, 0.5], [lx, S + 0.55, z + 0.25], IRON, undefined, 0.01);
@@ -1006,31 +1145,45 @@ function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: boolea
       k.box(f, [0.2, 0.26, 0.2], [lx, S + 0.28, z + 0.5], 0xffd080, undefined, 0xffb040, 2);
     }
     if (opt.head && e > 0) {
-      // The lord's crest over the arch: a red shield with the gold dragon diamond.
-      cb(k, f, [0.9, 1.0, 0.1], [0, apex + 0.95, z + 0.06], 0x7a2020, undefined, 0.02);
-      k.mesh(f, wedge(0.9, 0.4, 0.1), 0x7a2020, [0, apex + 0.25, z + 0.06], [Math.PI, 0, 0]);
-      k.box(f, [0.36, 0.36, 0.04], [0, apex + 0.85, z + 0.13], 0xd8b060, [0, 0, Math.PI / 4]);
+      // The lord's crest over the arch: a blue shield rimmed in gold with the gold dragon diamond.
+      crest(k, f, 0, apex + 1.45, z + 0.06, 1.0);
     }
   }
   // The wall walk carried over the gate: the outer parapet and merlons, the inner rail; a gate's head
   // rises above it, crenellated on both faces.
   if (opt.head) {
-    cb(k, g, [L + 0.5, 1.4, T + 0.36], [0, H + 0.7, 0], STONE, undefined, 0.04);
-    cb(k, g, [L + 0.6, 0.16, T + 0.46], [0, H + 1.42, 0], STONE_L, undefined, 0.03);
-    for (const e of [-1, 1]) for (let i = 0; i < 4; i++) cb(k, g, [0.7, 0.66, 0.5], [-L / 2 + 0.4 + (i * (L - 0.8)) / 3, H + 1.83, e * (T / 2 - 0.05)], i % 2 ? STONE_L : STONE, undefined, 0.04);
-    for (let i = 0; i < 6; i++) for (const e of [-1, 1]) cb(k, g, [0.32, 0.36, 0.4], [-L / 2 + 0.5 + (i * (L - 1.0)) / 5, H - 0.2, e * (T / 2 + 0.12)], STONE_D, undefined, 0.03);
+    cb(k, g, [L + 0.5, 1.4, T + 0.36], [0, H + 0.7, 0], ASHLAR, undefined, 0.04);
+    cb(k, g, [L + 0.6, 0.16, T + 0.46], [0, H + 1.42, 0], TRIM, undefined, 0.03);
+    for (const e of [-1, 1]) for (let i = 0; i < 4; i++) cb(k, g, [0.7, 0.66, 0.5], [-L / 2 + 0.4 + (i * (L - 0.8)) / 3, H + 1.83, e * (T / 2 - 0.05)], ASHLAR, undefined, 0.04);
+    for (let i = 0; i < 6; i++) for (const e of [-1, 1]) cb(k, g, [0.32, 0.36, 0.4], [-L / 2 + 0.5 + (i * (L - 1.0)) / 5, H - 0.2, e * (T / 2 + 0.12)], TRIM, undefined, 0.03);
   } else {
-    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], STONE, undefined, 0.03);
-    for (let u = -L / 2 + 0.5; u < L / 2; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], STONE, undefined, 0.05);
-    cb(k, g, [L, 0.9, 0.3], [0, H + 0.45, T / 2 - 0.15], STONE_D, undefined, 0.03);
+    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], ASHLAR, undefined, 0.03);
+    cb(k, g, [L, 0.12, 0.72], [0, H + 0.78, -T / 2 + 0.3], TRIM, undefined, 0.02);
+    for (let u = -L / 2 + 0.5; u < L / 2; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], ASHLAR, undefined, 0.05);
+    cb(k, g, [L, 0.9, 0.3], [0, H + 0.45, T / 2 - 0.15], ASHLAR_W, undefined, 0.03);
   }
+  // The leaves: the lord's blue, boarded, with iron straps.
   if (opt.door) for (const sx of [-1, 1]) {
-    const lw = P / 2 - 0.08;
-    cb(k, g, [0.1, S - 0.1, lw], [sx * (P / 2 - 0.08), (S - 0.1) / 2, -0.4 + lw / 2], WOOD_D, undefined, 0.02);
-    for (const y of [0.7, 1.8]) k.box(g, [0.12, 0.08, lw - 0.1], [sx * (P / 2 - 0.08), y, -0.4 + lw / 2], IRON);
+    const lw = P / 2 - 0.08, lx = sx * (P / 2 - 0.08), lz = -0.4 + lw / 2;
+    cb(k, g, [0.1, S - 0.1, lw], [lx, (S - 0.1) / 2, lz], HERALD_BLUE, undefined, 0.02);
+    for (let i = 1; i < 4; i++) k.box(g, [0.12, S - 0.2, 0.03], [lx, (S - 0.1) / 2, lz - lw / 2 + (i * lw) / 4], HERALD_BLUE_D);
+    for (const y of [0.7, 1.8]) k.box(g, [0.13, 0.08, lw - 0.1], [lx, y, lz], IRON);
   }
-  if (opt.steps) for (let i = 0; i < 2; i++) cb(k, g, [P + 0.9 - i * 0.3, 0.16, 0.5], [0, 0.08 + i * 0.12, -T / 2 - 0.55 + i * 0.25], i ? STONE_L : STONE, undefined, 0.02);
-  k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], STONE_D);
+  if (opt.steps) for (let i = 0; i < 2; i++) cb(k, g, [P + 0.9 - i * 0.3, 0.16, 0.5], [0, 0.08 + i * 0.12, -T / 2 - 0.55 + i * 0.25], i ? ASHLAR_L : ASHLAR_W, undefined, 0.02);
+  k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], TRIM_D);
+}
+
+/**
+ * The lord's crest (facing +Z, its top edge at `top`): a heater shield `w` wide in royal blue, a gold
+ * rim standing out behind it, and the gold dragon diamond.
+ */
+export function crest(k: ModelKit, p: THREE.Object3D, x: number, top: number, z: number, w: number) {
+  const body = w * 0.7, point = w * 0.62;
+  cb(k, p, [w + 0.1, body + 0.08, 0.06], [x, top - body / 2 + 0.02, z - 0.03], PAL.gold, undefined, 0.02);
+  k.mesh(p, clothPoint(w + 0.1, point + 0.1, 0.06), PAL.gold, [x, top - body + 0.01, z - 0.03]);
+  cb(k, p, [w, body, 0.1], [x, top - body / 2, z], HERALD_BLUE, undefined, 0.02);
+  k.mesh(p, clothPoint(w, point, 0.1), HERALD_BLUE, [x, top - body + 0.005, z]);
+  k.box(p, [w * 0.4, w * 0.4, 0.05], [x, top - body * 0.8, z + 0.06], PAL.gold, [0, 0, Math.PI / 4]);
 }
 
 /** The layer a pool's mirror draws (the fountain's own dragon, rock and jets). */
@@ -1404,19 +1557,23 @@ const BUILDERS: Record<string, Builder> = {
   /** A curtain wall `len` long. */
   castle_wall: (k, g, arg) => {
     const L = lenOf(arg) ?? 10, T = 2.2, H = 7;
-    cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
-    cb(k, g, [L, H - 0.8, T], [0, 0.8 + (H - 0.8) / 2, 0], STONE, undefined, 0.04);
-    cb(k, g, [L, 0.2, T + 0.16], [0, 3.6, 0], STONE_D, undefined, 0.03);
-    // The wall walk: the deck, the outer parapet with its merlons, the inner rail.
-    k.box(g, [L, 0.06, T - 0.9], [0, H + 0.03, 0.1], 0x5e5850);
-    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], STONE, undefined, 0.03);
-    for (let u = -L / 2 + 0.5; u < L / 2 - 0.3; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], hash01(u, T) > 0.7 ? STONE_L : STONE, undefined, 0.05);
-    cb(k, g, [L, 0.9, 0.3], [0, H + 0.45, T / 2 - 0.15], STONE_D, undefined, 0.03);
+    // Cream ashlar on a blue-grey plinth, a weathered course above it; blue-grey string courses run
+    // on round the towers' bands, and one continuous coping lies under the merlons.
+    cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], TRIM_D, undefined, 0.06);
+    cb(k, g, [L, H - 0.8, T], [0, 0.8 + (H - 0.8) / 2, 0], ASHLAR, undefined, 0.04);
+    cb(k, g, [L, 0.5, T + 0.04], [0, 1.05, 0], ASHLAR_W, undefined, 0.02);
+    cb(k, g, [L, 0.2, T + 0.16], [0, 3.6, 0], TRIM, undefined, 0.03);
+    // The wall walk: the deck, the outer parapet with its coping and merlons, the inner rail.
+    k.box(g, [L, 0.06, T - 0.9], [0, H + 0.03, 0.1], DECK);
+    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], ASHLAR, undefined, 0.03);
+    cb(k, g, [L, 0.12, 0.72], [0, H + 0.78, -T / 2 + 0.3], TRIM, undefined, 0.02);
+    for (let u = -L / 2 + 0.5; u < L / 2 - 0.3; u += 1.3) cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], hash01(u, T) > 0.7 ? ASHLAR_L : ASHLAR, undefined, 0.05);
+    cb(k, g, [L, 0.9, 0.3], [0, H + 0.45, T / 2 - 0.15], ASHLAR_W, undefined, 0.03);
     // On the inner face, the wall walk's ledge carried out on a row of corbels, a second string
     // course below it.
-    cb(k, g, [L, 0.22, 0.42], [0, H - 0.08, T / 2 + 0.16], STONE_L, undefined, 0.02);
-    for (let u = -L / 2 + 0.6; u < L / 2 - 0.3; u += 1.2) cb(k, g, [0.32, 0.46, 0.34], [u, H - 0.42, T / 2 + 0.12], STONE_D, undefined, 0.02);
-    cb(k, g, [L, 0.16, T + 0.12], [0, 5.6, 0], STONE_D, undefined, 0.02);
+    cb(k, g, [L, 0.22, 0.42], [0, H - 0.08, T / 2 + 0.16], TRIM, undefined, 0.02);
+    for (let u = -L / 2 + 0.6; u < L / 2 - 0.3; u += 1.2) cb(k, g, [0.32, 0.46, 0.34], [u, H - 0.42, T / 2 + 0.12], TRIM, undefined, 0.02);
+    cb(k, g, [L, 0.16, T + 0.12], [0, 5.6, 0], TRIM, undefined, 0.02);
     // Arrow slits in the outer face.
     for (let u = -L / 2 + 2; u < L / 2 - 1; u += 4) k.box(g, [0.16, 1.0, 0.1], [u, 4.6, -T / 2 - 0.01], DARK);
   },
@@ -1427,11 +1584,22 @@ const BUILDERS: Record<string, Builder> = {
    */
   round_tower: (k, g, arg) => {
     const r = lenOf(arg) ?? 3.2, H = vOf(arg) || 9, N = 20, P = H + 1.4;
-    k.cyl(g, r + 0.15, r + 0.5, 0.9, [0, 0.45, 0], STONE_DD, undefined, N);
-    k.cyl(g, r, r, P - 0.9, [0, 0.9 + (P - 0.9) / 2, 0], STONE, undefined, N);
-    for (const y of [3.6, 7.0]) k.cyl(g, r + 0.1, r + 0.1, 0.22, [0, y, 0], STONE_D, undefined, N);
+    k.cyl(g, r + 0.15, r + 0.5, 0.9, [0, 0.45, 0], TRIM_D, undefined, N);
+    k.cyl(g, r, r, P - 0.9, [0, 0.9 + (P - 0.9) / 2, 0], ASHLAR, undefined, N);
+    k.cyl(g, r + 0.03, r + 0.03, 0.5, [0, 1.15, 0], ASHLAR_W, undefined, N);
+    for (const y of [3.6, 7.0]) k.cyl(g, r + 0.1, r + 0.1, 0.22, [0, y, 0], TRIM, undefined, N);
     crown(k, g, 0, 0, r, P, N);
     for (const a of [0.6, 2.2, 3.8, 5.3]) for (const y of [4.8, 8.6]) k.box(g, [0.16, 1.0, 0.1], [Math.sin(a) * (r + 0.02), y, Math.cos(a) * (r + 0.02)], DARK, [0, a, 0]);
+  },
+  /**
+   * A flag on a pole standing on a round tower's platform (the tower `v` tall, as round_tower), flying
+   * toward `len` (±1 along local X). The south face's pair flank the gatehouse's three, so the gate
+   * front reads as one symmetric composition of five.
+   */
+  tower_flag: (k, g, arg) => {
+    const P = (vOf(arg) || 9) + 1.4, dir = (lenOf(arg) ?? 1) < 0 ? -1 : 1;
+    cb(k, g, [0.12, 3.0, 0.12], [0, P + 1.5, 0], IRON, undefined, 0.02);
+    flag(k, g, 0, P + 2.95, 0, 1.8, 1.1, dir);
   },
   /**
    * The outer gatehouse in the curtain: two D-towers (radius 2.6) standing out from the curtain's
@@ -1445,9 +1613,10 @@ const BUILDERS: Record<string, Builder> = {
     const P = lenOf(arg) ?? 4, R = 2.6, H = 11.6, cx = 5, tz = -1.5, T = 2.2, D = T + 0.8, GH = 10.6, N = 20;
     for (const sx of [-1, 1]) {
       const x = sx * cx;
-      k.cyl(g, R + 0.2, R + 0.55, 0.9, [x, 0.45, tz], STONE_DD, undefined, N);
-      k.cyl(g, R, R, H - 0.9, [x, 0.9 + (H - 0.9) / 2, tz], STONE, undefined, N);
-      for (const y of [3.8, 7]) k.cyl(g, R + 0.1, R + 0.1, 0.22, [x, y, tz], STONE_D, undefined, N);
+      k.cyl(g, R + 0.2, R + 0.55, 0.9, [x, 0.45, tz], TRIM_D, undefined, N);
+      k.cyl(g, R, R, H - 0.9, [x, 0.9 + (H - 0.9) / 2, tz], ASHLAR, undefined, N);
+      k.cyl(g, R + 0.03, R + 0.03, 0.5, [x, 1.15, tz], ASHLAR_W, undefined, N);
+      for (const y of [3.8, 7]) k.cyl(g, R + 0.1, R + 0.1, 0.22, [x, y, tz], TRIM, undefined, N);
       crown(k, g, x, tz, R, H, N);
       for (const y of [5.2, 8.8]) k.box(g, [0.16, 1.0, 0.1], [x + sx * 0.9, y, tz - R + 0.15], DARK, [0, sx * -0.36, 0]);
     }
@@ -1456,15 +1625,17 @@ const BUILDERS: Record<string, Builder> = {
     const spring = 3.6, ra = P * 0.8, off = ra - P / 2, apex = spring + Math.sqrt(ra * ra - off * off);
     const half = (y: number) => Math.max(0, Math.sqrt(Math.max(0, ra * ra - (y - spring) ** 2)) - off);
     const zc = 0.4 - 0.2;
-    for (const sx of [-1, 1]) cb(k, g, [cx - P / 2, spring, D], [sx * (P / 2 + (cx - P / 2) / 2), spring / 2, zc], STONE, undefined, 0.03);
+    for (const sx of [-1, 1]) cb(k, g, [cx - P / 2, spring, D], [sx * (P / 2 + (cx - P / 2) / 2), spring / 2, zc], ASHLAR, undefined, 0.03);
+    for (const sx of [-1, 1]) cb(k, g, [cx - P / 2 - 0.3, 0.6, D + 0.12], [sx * (P / 2 + 0.3 + (cx - P / 2 - 0.3) / 2), 0.3, zc], TRIM_D, undefined, 0.03);
     for (let y = spring; y < apex - 0.01; y += 0.2) {
       const y1 = Math.min(apex, y + 0.2), hw = half((y + y1) / 2);
-      for (const sx of [-1, 1]) cb(k, g, [cx - hw, y1 - y + 0.01, D], [sx * (hw + (cx - hw) / 2), (y + y1) / 2, zc], STONE, undefined, 0.0);
+      for (const sx of [-1, 1]) cb(k, g, [cx - hw, y1 - y + 0.01, D], [sx * (hw + (cx - hw) / 2), (y + y1) / 2, zc], ASHLAR, undefined, 0.0);
     }
     // Above the arch the block stands between the drums (never over their platforms).
     const bw = cx - R + 0.45;
-    cb(k, g, [2 * bw, GH - apex, D], [0, (apex + GH) / 2, zc], STONE, undefined, 0.04);
-    // Dressed voussoirs round the arch on both faces, a keystone at the apex.
+    cb(k, g, [2 * bw, GH - apex, D], [0, (apex + GH) / 2, zc], ASHLAR, undefined, 0.04);
+    // The ceremonial arch: voussoirs alternating pale ashlar and blue-grey on both faces, a hood
+    // mould over them, and a pale keystone bearing the lord's shield on the outer face.
     for (const e of [-1, 1]) {
       const fz = zc + e * (D / 2 + 0.06);
       for (const sx of [-1, 1]) {
@@ -1472,11 +1643,22 @@ const BUILDERS: Record<string, Builder> = {
         for (let i = 0; i < 7; i++) {
           const a = a0 + ((a1 - a0) * (i + 0.5)) / 7, rr = ra + 0.32;
           const px = sx * (off + Math.cos(a) * rr), py = spring + Math.sin(a) * rr;
-          cb(k, g, [0.66, 0.36, 0.2], [px, py, fz], i % 2 ? STONE_L : STONE_D, [0, 0, sx > 0 ? a : Math.PI - a], 0.02);
+          cb(k, g, [0.66, 0.36, 0.2], [px, py, fz], i % 2 ? TRIM : ASHLAR_L, [0, 0, sx > 0 ? a : Math.PI - a], 0.02);
         }
-        cb(k, g, [0.3, spring, 0.2], [sx * (P / 2 + 0.15), spring / 2, fz], STONE_L, undefined, 0.02);
+        for (let i = 0; i < 8; i++) {
+          const a = a0 + ((a1 - a0) * (i + 0.5)) / 8, rr = ra + 0.62;
+          const px = sx * (off + Math.cos(a) * rr), py = spring + Math.sin(a) * rr;
+          cb(k, g, [((a1 - a0) / 8) * rr + 0.06, 0.16, 0.3], [px, py, fz + e * 0.05], TRIM, [0, 0, sx > 0 ? a + Math.PI / 2 : Math.PI / 2 - a], 0.02);
+        }
+        cb(k, g, [0.24, 0.3, 0.34], [sx * (P / 2 + 0.75), spring + 0.02, fz + e * 0.06], TRIM, undefined, 0.02);
+        cb(k, g, [0.3, spring, 0.2], [sx * (P / 2 + 0.15), spring / 2, fz], ASHLAR_L, undefined, 0.02);
       }
-      cb(k, g, [0.5, 0.7, 0.24], [0, apex + 0.25, fz], STONE_L, undefined, 0.03);
+      cb(k, g, [0.5, 0.7, 0.24], [0, apex + 0.25, fz], ASHLAR_L, undefined, 0.03);
+    }
+    {
+      const kz = zc - D / 2 - 0.2;
+      cb(k, g, [0.36, 0.3, 0.05], [0, apex + 0.36, kz], HERALD_BLUE, undefined, 0.01);
+      k.box(g, [0.13, 0.13, 0.03], [0, apex + 0.36, kz - 0.03], PAL.gold, [0, 0, Math.PI / 4]);
     }
     // The portcullis, raised: its grid filling the arch head, the spiked foot just below it.
     const pz = zc - D / 2 + 0.55;
@@ -1491,30 +1673,34 @@ const BUILDERS: Record<string, Builder> = {
       if (hw > 0.2) k.box(g, [hw * 2, 0.09, 0.12], [0, y, pz], IRON);
     }
     // Machicolations along the outer face, then the parapet all round the block's top.
-    for (let u = -bw + 0.45; u <= bw - 0.4; u += 0.95) cb(k, g, [0.34, 0.55, 0.5], [u, GH - 0.3, zc - D / 2 - 0.2], STONE_D, undefined, 0.03);
-    cb(k, g, [2 * bw, 1.0, 0.6], [0, GH + 0.5, zc - D / 2 - 0.15], STONE, undefined, 0.03);
-    cb(k, g, [2 * bw, 1.0, 0.5], [0, GH + 0.5, zc + D / 2 - 0.25], STONE, undefined, 0.03);
-    for (const sx of [-1, 1]) cb(k, g, [0.5, 1.0, D - 0.4], [sx * (bw - 0.25), GH + 0.5, zc], STONE, undefined, 0.03);
-    cb(k, g, [2 * bw + 0.1, 0.14, 0.74], [0, GH + 1.06, zc - D / 2 - 0.15], STONE_L, undefined, 0.02);
+    for (let u = -bw + 0.45; u <= bw - 0.4; u += 0.95) cb(k, g, [0.34, 0.55, 0.5], [u, GH - 0.3, zc - D / 2 - 0.2], TRIM, undefined, 0.03);
+    cb(k, g, [2 * bw, 1.0, 0.6], [0, GH + 0.5, zc - D / 2 - 0.15], ASHLAR, undefined, 0.03);
+    cb(k, g, [2 * bw, 1.0, 0.5], [0, GH + 0.5, zc + D / 2 - 0.25], ASHLAR, undefined, 0.03);
+    for (const sx of [-1, 1]) cb(k, g, [0.5, 1.0, D - 0.4], [sx * (bw - 0.25), GH + 0.5, zc], ASHLAR, undefined, 0.03);
+    cb(k, g, [2 * bw + 0.1, 0.14, 0.74], [0, GH + 1.06, zc - D / 2 - 0.15], TRIM, undefined, 0.02);
+    cb(k, g, [2 * bw + 0.1, 0.14, 0.64], [0, GH + 1.06, zc + D / 2 - 0.25], TRIM, undefined, 0.02);
     // The roof deck stands nearly flush with the parapet, so the block reads as one solid mass.
-    cb(k, g, [2 * bw - 0.5, 0.7, D - 0.7], [0, GH + 0.35, zc], STONE_D, undefined, 0.02);
+    cb(k, g, [2 * bw - 0.5, 0.7, D - 0.7], [0, GH + 0.35, zc], DECK, undefined, 0.02);
     for (let i = 0; i < 4; i++) {
       const u = -bw + 0.5 + (i * (2 * bw - 1.0)) / 3;
-      cb(k, g, [0.8, 0.75, 0.62], [u, GH + 1.5, zc - D / 2 - 0.15], i % 2 ? STONE_L : STONE, undefined, 0.04);
-      cb(k, g, [0.8, 0.75, 0.52], [u, GH + 1.5, zc + D / 2 - 0.25], STONE, undefined, 0.04);
+      cb(k, g, [0.8, 0.75, 0.62], [u, GH + 1.5, zc - D / 2 - 0.15], ASHLAR, undefined, 0.04);
+      cb(k, g, [0.8, 0.75, 0.52], [u, GH + 1.5, zc + D / 2 - 0.25], ASHLAR, undefined, 0.04);
     }
-    // The lord's banner over the arch on the outer face, and its pole on the parapet.
-    const bz = zc - D / 2 - 0.08;
-    cb(k, g, [2.0, 0.14, 0.14], [0, GH - 1.0, bz - 0.06], WOOD_D, undefined, 0.02);
-    cb(k, g, [1.6, 2.4, 0.06], [0, GH - 2.3, bz], 0x7a2020, undefined, 0.01);
-    k.mesh(g, wedge(1.6, 0.45, 0.06), 0x7a2020, [0, GH - 3.72, bz], [Math.PI, 0, 0]);
-    k.box(g, [0.6, 0.6, 0.04], [0, GH - 2.2, bz - 0.05], 0xd8b060, [0, 0, Math.PI / 4]);
-    // A banner on each drum (none over the passage, so the view up the avenue stays clear).
+    // The lord's banner over the arch on the outer face (facing out, -Z): the middle of the gate
+    // front's five flags.
+    {
+      const out = new THREE.Group();
+      out.position.set(0, 0, zc - D / 2 - 0.12);
+      out.rotation.y = Math.PI;
+      g.add(out);
+      livery(k, out, 0, GH - 0.75, 0, 1.5, 1.6);
+    }
+    // A flag on each drum, flying outward (none over the passage, so the view up the avenue stays clear).
     for (const sx of [-1, 1]) {
-      cb(k, g, [0.12, 2.6, 0.12], [sx * cx, H + 1.3, tz], IRON, undefined, 0.02);
-      cb(k, g, [1.3, 0.8, 0.04], [sx * cx + sx * 0.67, H + 2.1, tz], 0x7a2020, undefined, 0.01);
+      cb(k, g, [0.12, 3.0, 0.12], [sx * cx, H + 1.5, tz], IRON, undefined, 0.02);
+      flag(k, g, sx * cx, H + 2.95, tz, 1.8, 1.1, sx);
     }
-    k.box(g, [P - 0.1, 0.04, D], [0, 0.02, zc], STONE_D);
+    k.box(g, [P - 0.1, 0.04, D], [0, 0.02, zc], TRIM_D);
   },
   /**
    * A solid masonry stair against a wall's inner face (on its -Z side), climbing toward +X over
@@ -1524,28 +1710,41 @@ const BUILDERS: Record<string, Builder> = {
     const L = lenOf(arg) ?? 8.4, n = 25, t = L / n, D = 1.3, H = 7;
     for (let i = 0; i < n; i++) {
       const y = ((i + 1) * H) / n, x = -L / 2 + (i + 0.5) * t;
-      cb(k, g, [t + 0.01, y, D], [x, y / 2, 0], i % 2 ? STONE : STONE_L, undefined, 0.02);
-      cb(k, g, [t + 0.03, 0.06, D + 0.04], [x, y - 0.03, 0], STONE_D, undefined, 0.01);
+      cb(k, g, [t + 0.01, y, D], [x, y / 2, 0], ASHLAR_W, undefined, 0.02);
+      cb(k, g, [t + 0.03, 0.06, D + 0.04], [x, y - 0.03, 0], TRIM, undefined, 0.01);
     }
   },
   /**
    * The donjon: the great round tower at the castle's high corner (radius `len`, `v` tall), a
-   * battered base, string courses at each floor, lit windows, a corbelled crenellated parapet and
-   * the lord's banner on a pole above it.
+   * battered base, string courses at each floor, lit windows, a corbelled crenellated parapet, and
+   * inside the merlon ring the castle's one spire: deep blue slate on a blue-grey eave, a gold
+   * finial, and the lord's banner on a pole above it.
    */
   donjon: (k, g, arg) => {
     const r = lenOf(arg) ?? 7, H = vOf(arg) || 13, N = 24;
-    k.cyl(g, r + 0.3, r + 0.8, 1.2, [0, 0.6, 0], STONE_DD, undefined, N);
-    k.cyl(g, r, r, H - 1.2, [0, 1.2 + (H - 1.2) / 2, 0], STONE, undefined, N);
-    for (const y of [5, 9]) k.cyl(g, r + 0.12, r + 0.12, 0.26, [0, y, 0], STONE_D, undefined, N);
-    k.cyl(g, r + 0.45, r + 0.2, 0.5, [0, H + 0.25, 0], STONE_D, undefined, N);
-    k.cyl(g, r - 0.4, r - 0.4, 0.1, [0, H + 0.45, 0], 0x5e5850, undefined, N);
+    k.cyl(g, r + 0.3, r + 0.8, 1.2, [0, 0.6, 0], TRIM_D, undefined, N);
+    k.cyl(g, r, r, H - 1.2, [0, 1.2 + (H - 1.2) / 2, 0], ASHLAR, undefined, N);
+    k.cyl(g, r + 0.03, r + 0.03, 0.5, [0, 1.45, 0], ASHLAR_W, undefined, N);
+    for (const y of [5, 9]) k.cyl(g, r + 0.12, r + 0.12, 0.26, [0, y, 0], TRIM, undefined, N);
+    k.cyl(g, r + 0.45, r + 0.2, 0.5, [0, H + 0.25, 0], TRIM, undefined, N);
+    k.cyl(g, r - 0.4, r - 0.4, 0.1, [0, H + 0.45, 0], DECK, undefined, N);
     for (let i = 0; i < N; i++) {
       const a = (i / N) * Math.PI * 2, c = 2 * (r + 0.2) * Math.sin(Math.PI / N) + 0.05;
       const x = Math.sin(a) * (r + 0.05), z = Math.cos(a) * (r + 0.05);
-      cb(k, g, [c, 0.8, 0.6], [x, H + 0.9, z], STONE, [0, a, 0], 0.03);
-      if (i % 2 === 0) cb(k, g, [c * 0.8, 0.7, 0.62], [x, H + 1.65, z], hash01(i, r) > 0.7 ? STONE_L : STONE, [0, a, 0], 0.05);
+      cb(k, g, [c, 0.8, 0.6], [x, H + 0.9, z], ASHLAR, [0, a, 0], 0.03);
+      if (i % 2 === 0) cb(k, g, [c * 0.8, 0.7, 0.62], [x, H + 1.65, z], hash01(i, r) > 0.7 ? ASHLAR_L : ASHLAR, [0, a, 0], 0.05);
     }
+    k.mesh(g, ringBand(r - 0.28, r + 0.45, 0.12, N), TRIM, [0, H + 1.24, 0]);
+    // The spire, standing inside the merlon ring on its eave; the finial and the lord's banner.
+    const sh = r * 1.6, s0 = H + 0.9;
+    k.cyl(g, r + 0.25, r + 0.25, 0.18, [0, s0 + 0.09, 0], TRIM, undefined, N);
+    k.cone(g, r + 0.15, sh, [0, s0 + 0.18 + sh / 2, 0], SLATE_BLUE, undefined, N);
+    const tip = s0 + 0.18 + sh;
+    k.cyl(g, 0.45, 0.45, 0.62, [0, tip - 0.1, 0], PAL.gold, undefined, 8);
+    k.cyl(g, 0.3, 0.45, 0.2, [0, tip + 0.31, 0], PAL.gold, undefined, 8);
+    k.cone(g, 0.14, 0.9, [0, tip + 0.86, 0], PAL.gold, undefined, 8);
+    cb(k, g, [0.12, 3.2, 0.12], [0, tip + 1.0 + 1.6, 0], IRON, undefined, 0.02);
+    flag(k, g, 0, tip + 4.1, 0, 2.2, 1.4, 1, true);
     // Tall pointed lancets, each centred on a face of the drum (the same window as the halls'), stacked
     // one per storey in columns either side of the south, mirrored east and west.
     const ap = r * Math.cos(Math.PI / N), step = (Math.PI * 2) / N;
@@ -1557,9 +1756,6 @@ const BUILDERS: Record<string, Builder> = {
       g.add(face);
       for (const y of col === 3 ? [2.2, 6.0, 9.6] : [6.0, 9.6]) lancet(k, face, 0, y, 0.02, 0.72, 2.3);
     }
-    cb(k, g, [0.14, 3.2, 0.14], [0, H + 2.5, 0], IRON, undefined, 0.02);
-    cb(k, g, [1.6, 1.0, 0.05], [0.82, H + 3.4, 0], 0x7a2020, undefined, 0.01);
-    k.box(g, [0.4, 0.4, 0.04], [0.82, H + 3.4, 0.04], 0xd8b060, [0, 0, Math.PI / 4]);
   },
   stall: (k, g, v) => {
     // A market stall: counter, four posts and a striped awning (colours vary).
@@ -1573,7 +1769,7 @@ const BUILDERS: Record<string, Builder> = {
   },
   lamp_post: (k, g) => {
     // A lit lamp post without its own light (the keep has only a few real lights).
-    cb(k, g, [0.44, 0.3, 0.44], [0, 0.15, 0], STONE_D, undefined, 0.05);
+    cb(k, g, [0.44, 0.3, 0.44], [0, 0.15, 0], TRIM, undefined, 0.05);
     cb(k, g, [0.14, 2.4, 0.14], [0, 1.4, 0], IRON, undefined, 0.02);
     cb(k, g, [0.4, 0.44, 0.4], [0, 2.7, 0], IRON, undefined, 0.04);
     k.box(g, [0.3, 0.32, 0.3], [0, 2.7, 0], 0xffd080, undefined, 0xffb040, 2.5);
@@ -1595,7 +1791,7 @@ const BUILDERS: Record<string, Builder> = {
     }
   },
   lamp: (k, g) => {
-    cb(k, g, [0.44, 0.3, 0.44], [0, 0.15, 0], STONE_D, undefined, 0.05);
+    cb(k, g, [0.44, 0.3, 0.44], [0, 0.15, 0], TRIM, undefined, 0.05);
     cb(k, g, [0.14, 2.4, 0.14], [0, 1.4, 0], IRON, undefined, 0.02);
     cb(k, g, [0.4, 0.44, 0.4], [0, 2.7, 0], IRON, undefined, 0.04);
     k.box(g, [0.3, 0.32, 0.3], [0, 2.7, 0], 0xffd080, undefined, 0xffb040, 2.5);
@@ -1731,11 +1927,11 @@ const BUILDERS: Record<string, Builder> = {
    */
   revetment: (k, g, arg) => {
     const L = Math.max(1, lenOf(arg) ?? 4), H = Math.max(0.6, vOf(arg) || 3);
-    cb(k, g, [L + 0.04, 0.5, 1.1], [0, 0.25, -0.1], STONE_DD, undefined, 0.04);
-    cb(k, g, [L + 0.02, H - 0.5, 0.8], [0, 0.5 + (H - 0.5) / 2, -0.25], STONE, undefined, 0.03);
-    for (let y = 1.4; y < H - 0.3; y += 1.6) cb(k, g, [L + 0.03, 0.12, 0.84], [0, y, -0.25], STONE_D, undefined, 0.02);
-    cb(k, g, [L + 0.06, 0.16, 0.96], [0, H + 0.08, -0.25], STONE_L, undefined, 0.03);
-    cb(k, g, [L + 0.02, 0.5, 0.5], [0, H + 0.41, -0.4], STONE, undefined, 0.03);
+    cb(k, g, [L + 0.04, 0.5, 1.1], [0, 0.25, -0.1], TRIM_D, undefined, 0.04);
+    cb(k, g, [L + 0.02, H - 0.5, 0.8], [0, 0.5 + (H - 0.5) / 2, -0.25], ASHLAR_W, undefined, 0.03);
+    for (let y = 1.4; y < H - 0.3; y += 1.6) cb(k, g, [L + 0.03, 0.12, 0.84], [0, y, -0.25], TRIM, undefined, 0.02);
+    cb(k, g, [L + 0.06, 0.16, 0.96], [0, H + 0.08, -0.25], TRIM, undefined, 0.03);
+    cb(k, g, [L + 0.02, 0.5, 0.5], [0, H + 0.41, -0.4], ASHLAR, undefined, 0.03);
   },
   /**
    * A low stone parapet along local X (`arg` = length): a plinth, a solid breast wall, a coping; under
@@ -1743,14 +1939,68 @@ const BUILDERS: Record<string, Builder> = {
    * stands on is finished in dressed stone.
    */
   parapet: (k, g, arg) => {
+    // The castle's own stone: a cream breast wall under one continuous blue-grey coping, on a
+    // blue-grey base course and lip.
     const L = Math.max(2, arg ?? 6);
-    cb(k, g, [L + 0.08, 1.5, 0.7], [0, -0.62, 0.42], STONE_D, undefined, 0.03);
-    cb(k, g, [L + 0.1, 0.14, 0.82], [0, -1.32, 0.46], STONE_DD, undefined, 0.02);
-    cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], STONE_DD, undefined, 0.04);
-    cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], STONE, undefined, 0.04);
-    cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], STONE_L, undefined, 0.03);
-    const n = Math.max(1, Math.round(L / 2.6));
-    for (let i = 0; i < n; i++) cb(k, g, [0.7, 0.32, 0.86], [-L / 2 + ((i + 0.5) * L) / n, 1.12, 0], STONE_D, undefined, 0.04);
+    cb(k, g, [L + 0.08, 1.5, 0.7], [0, -0.62, 0.42], TRIM_D, undefined, 0.03);
+    cb(k, g, [L + 0.1, 0.14, 0.82], [0, -1.32, 0.46], TRIM_D, undefined, 0.02);
+    cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], TRIM_D, undefined, 0.04);
+    cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], ASHLAR, undefined, 0.04);
+    cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], TRIM, undefined, 0.03);
+  },
+  /**
+   * A kerb along local X, `len` long: a chamfered blue-grey slab 0.5 wide standing 0.05 proud of the
+   * paving, edging a walk. `v` 1: an inlay band instead, paler and flush, laid across a walk.
+   */
+  kerb: (k, g, arg) => {
+    const L = Math.max(0.5, lenOf(arg) ?? 4), inlay = vOf(arg) === 1;
+    if (inlay) cb(k, g, [L, 0.1, 0.6], [0, -0.03, 0], TRIM_L, undefined, 0.02);
+    else cb(k, g, [L, 0.12, 0.5], [0, -0.01, 0], TRIM_D, undefined, 0.03);
+  },
+  /**
+   * A round kerb of radius `len` in 40 slabs like a kerb's, ringing a plaza, open where the walks
+   * come in on its four axes (no slab within `v` of the X or Z axis).
+   */
+  kerb_ring: (k, g, arg) => {
+    const r = lenOf(arg) ?? 10, gap = vOf(arg), N = 40, chord = 2 * r * Math.sin(Math.PI / N);
+    for (let i = 0; i < N; i++) {
+      const a = ((i + 0.5) / N) * Math.PI * 2, x = Math.sin(a) * r, z = Math.cos(a) * r;
+      if (Math.abs(x) < gap || Math.abs(z) < gap) continue;
+      cb(k, g, [q(chord + 0.06), 0.12, 0.5], [x, -0.01, z], TRIM_D, [0, a, 0], 0.03);
+    }
+  },
+  /**
+   * Ivy or a climbing rose against a wall (its back on z = 0, growing up its +Z face): leafy masses
+   * hugging the face, dense at the foot and thinning upward to a ragged top, `len` wide. `v` 0 ivy
+   * (up to 4.5 high), 1 roses on a faint trellis (up to 3 high) with pink and white blooms. `bend`
+   * the growth round a drum of that radius (the wall curving away behind it).
+   */
+  wall_climber: (k, g, arg) => {
+    const L = Math.max(1.5, lenOf(arg) ?? 4), rose = vOf(arg) === 1, R: number | undefined = typeof arg === 'object' ? arg?.bend : undefined;
+    const top = rose ? 3 : 4.5, LEAF = rose ? CLIMBER_ROSE_LEAF : CLIMBER_IVY, seed = Math.round(L * 10) + (rose ? 7 : 0);
+    /** How far the face falls back at u along it (round a drum). */
+    const sag = (u: number) => (R ? R - Math.sqrt(Math.max(0, R * R - u * u)) : 0);
+    if (rose) {
+      for (let i = 0; i <= 4; i++) {
+        const u = -L / 2 + 0.3 + (i * (L - 0.6)) / 4;
+        cb(k, g, [0.05, top - 0.2, 0.05], [u, (top - 0.2) / 2, 0.04 - sag(u)], WOOD_D, undefined, 0.01);
+      }
+      for (const y of [0.8, 1.6, 2.4]) cb(k, g, [L - 0.4, 0.05, 0.05], [0, y, 0.06], WOOD_D, undefined, 0.01);
+    }
+    // Leaf clusters flat to the face in a staggered grid, each column reaching its own height (a
+    // ragged top, lower toward the ends), thinning out as they climb.
+    const cols = Math.max(4, Math.round(L / 0.3));
+    for (let c = 0; c < cols; c++) {
+      const u0 = -L / 2 + (L * (c + 0.5)) / cols, edge = Math.abs(u0) / (L / 2);
+      const h = top * (0.6 + 0.4 * hash01(seed, c)) * (1 - 0.4 * edge * edge);
+      for (let y = 0.2 + (c % 2) * 0.14, j = 0; y < h; y += 0.28, j++) {
+        if (hash01(seed, c, j) > 1 - 0.5 * (y / h) ** 2) continue;
+        const rr = 0.2 + hash01(seed + 1, c, j) * 0.1, u = u0 + (hash01(seed + 2, c, j) - 0.5) * 0.16;
+        const m = k.mesh(g, CLIMBER_LEAF, LEAF[Math.floor(hash01(seed + 3, c, j) * LEAF.length)], [u, y, 0.1 - sag(u)], [0, Math.asin(Math.min(1, u / (R ?? 1e9))), hash01(seed + 5, c, j) * 3]);
+        m.scale.set(rr * 1.2, rr, rr * 0.45);
+        if (rose && hash01(seed + 4, c, j) > 0.62) k.gem(g, 0.075, [u, y + 0.06, 0.2 - sag(u)], CLIMBER_BLOOM[(c + j) % 3]);
+      }
+    }
   },
   /** A clipped box hedge along local X, `len` long, with leafy lumps on top. */
   hedge: (k, g, arg) => {
@@ -1975,22 +2225,24 @@ const BUILDERS: Record<string, Builder> = {
    */
   pavilion: (k, g) => {
     const W = 4, D0 = -1.0, D1 = 2.1, H = 13.6, d = D1 - D0, zc = (D0 + D1) / 2;
-    cb(k, g, [W + 0.6, 0.62, d + 0.3], [0, 0.31, zc + 0.15], STONE_DD, undefined, 0.05);
-    cb(k, g, [W + 0.3, 0.34, d + 0.15], [0, 0.79, zc + 0.08], STONE_D, undefined, 0.04);
-    cb(k, g, [W, H - 0.62, d], [0, 0.62 + (H - 0.62) / 2, zc], STONE, undefined, 0.04);
-    for (const y of [5.0, 9.0]) cb(k, g, [W + 0.18, 0.24, d + 0.12], [0, y, zc + 0.06], STONE_D, undefined, 0.03);
+    cb(k, g, [W + 0.6, 0.62, d + 0.3], [0, 0.31, zc + 0.15], TRIM_D, undefined, 0.05);
+    cb(k, g, [W + 0.3, 0.34, d + 0.15], [0, 0.79, zc + 0.08], TRIM, undefined, 0.04);
+    cb(k, g, [W, H - 0.62, d], [0, 0.62 + (H - 0.62) / 2, zc], ASHLAR, undefined, 0.04);
+    for (const y of [5.0, 9.0]) cb(k, g, [W + 0.18, 0.24, d + 0.12], [0, y, zc + 0.06], TRIM, undefined, 0.03);
+    // Quoins in the two blue-greys (never cream against dark, which reads as piano keys from above).
     for (const sx of [-1, 1]) for (let y = 1.0, i = 0; y < H - 1.2; y += 0.56, i++) {
-      cb(k, g, i % 2 ? [0.62, 0.5, 0.44] : [0.44, 0.5, 0.62], [sx * (W / 2 - 0.2), y + 0.25, D1 - (i % 2 ? 0.2 : 0.29)], i % 2 ? STONE_L : STONE_D, undefined, 0.03);
+      cb(k, g, i % 2 ? [0.62, 0.5, 0.44] : [0.44, 0.5, 0.62], [sx * (W / 2 - 0.2), y + 0.25, D1 - (i % 2 ? 0.2 : 0.29)], i % 2 ? TRIM_L : TRIM, undefined, 0.03);
     }
-    for (const y of [1.7, 6.1, 10.1]) lancet(k, g, 0, y, D1, 0.82, 2.5);
-    // Corbels, the parapet standing out on them, merlons, and the leads behind.
-    for (let i = 0; i < 5; i++) cb(k, g, [0.34, 0.42, 0.5], [-W / 2 + 0.4 + (i * (W - 0.8)) / 4, H - 0.24, D1 + 0.14], STONE_D, undefined, 0.03);
-    for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(k, g, [0.5, 0.42, 0.34], [sx * (W / 2 + 0.14), H - 0.24, D0 + 0.8 + i * 0.9], STONE_D, undefined, 0.03);
-    cb(k, g, [W + 0.6, 0.85, d + 0.4], [0, H + 0.42, zc + 0.2], STONE, undefined, 0.04);
-    cb(k, g, [W + 0.7, 0.14, d + 0.5], [0, H + 0.9, zc + 0.2], STONE_L, undefined, 0.03);
-    k.box(g, [W - 0.4, 0.06, d - 0.4], [0, H + 0.98, zc], 0x6e685f);
-    for (let i = 0; i < 3; i++) cb(k, g, [0.78, 0.72, 0.5], [-W / 2 + 0.55 + i * ((W - 1.1) / 2), H + 1.33, D1 + 0.15], i === 1 ? STONE_L : STONE, undefined, 0.04);
-    for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) cb(k, g, [0.5, 0.72, 0.72], [sx * (W / 2 + 0.05), H + 1.33, D0 + 0.6 + i * 1.5], STONE, undefined, 0.04);
+    // A plain lancet beside the door below, stained glass in the two above.
+    for (const y of [1.7, 6.1, 10.1]) lancet(k, g, 0, y, D1, 0.82, 2.5, true, y > 2 ? STAINED_HALL : undefined);
+    // Corbels, the parapet standing out on them, its coping, merlons, and the leads behind.
+    for (let i = 0; i < 5; i++) cb(k, g, [0.34, 0.42, 0.5], [-W / 2 + 0.4 + (i * (W - 0.8)) / 4, H - 0.24, D1 + 0.14], TRIM, undefined, 0.03);
+    for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(k, g, [0.5, 0.42, 0.34], [sx * (W / 2 + 0.14), H - 0.24, D0 + 0.8 + i * 0.9], TRIM, undefined, 0.03);
+    cb(k, g, [W + 0.6, 0.85, d + 0.4], [0, H + 0.42, zc + 0.2], ASHLAR, undefined, 0.04);
+    cb(k, g, [W + 0.7, 0.14, d + 0.5], [0, H + 0.9, zc + 0.2], TRIM, undefined, 0.03);
+    k.box(g, [W - 0.4, 0.06, d - 0.4], [0, H + 0.98, zc], DECK);
+    for (let i = 0; i < 3; i++) cb(k, g, [0.78, 0.72, 0.5], [-W / 2 + 0.55 + i * ((W - 1.1) / 2), H + 1.33, D1 + 0.15], i === 1 ? ASHLAR_L : ASHLAR, undefined, 0.04);
+    for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) cb(k, g, [0.5, 0.72, 0.72], [sx * (W / 2 + 0.05), H + 1.33, D0 + 0.6 + i * 1.5], ASHLAR, undefined, 0.04);
   },
   /**
    * A gate through a stretch of full-height curtain (the ward's gates in the inner curtain), the
@@ -1998,7 +2250,7 @@ const BUILDERS: Record<string, Builder> = {
    * oak leaves folded back inside, a lantern either side of the arch on both faces and a raised,
    * crenellated head over the gate with the lord's crest on its inner (+Z) face.
    */
-  ward_gate: (k, g, arg) => gateway(k, g, lenOf(arg) ?? 4, { head: true, lanterns: [-1, 1] }),
+  ward_gate: (k, g, arg) => gateway(k, g, lenOf(arg) ?? 4, { head: true, door: true, lanterns: [-1, 1] }),
   /**
    * The postern: a narrow gate `len` wide through a stretch of full-height curtain under a pointed
    * arch of pale dressed stone on both faces, the oak door set back in the passage, three steps out
@@ -2011,12 +2263,12 @@ const BUILDERS: Record<string, Builder> = {
    */
   wall_niche: (k, g) => {
     const W = 2.4, H = 3.3;
-    cb(k, g, [W + 1.2, 0.08, 1.6], [0, 0.04, 0.55], STONE_L, undefined, 0.02);
-    k.mesh(g, archPane(W, H, 0.1), STONE_DD, [0, 0.08, -0.1]);
-    for (const sx of [-1, 1]) cb(k, g, [0.42, H - 0.95, 0.5], [sx * (W / 2 + 0.21), (H - 0.95) / 2 + 0.08, 0.1], STONE_L, undefined, 0.03);
-    archRing(k, g, 0, 0.08, -0.15, W, H, STONE_L, { n: 4, t: 0.42, p: 0.5, out: 0, key: STONE_L });
-    archRing(k, g, 0, 0.08, 0.05, W + 0.95, H + 0.5, STONE_D, { n: 4, t: 0.14, p: 0.34, out: 0 });
-    cb(k, g, [W + 1.0, 0.2, 0.62], [0, 0.18, 0.12], STONE_D, undefined, 0.03);
+    cb(k, g, [W + 1.2, 0.08, 1.6], [0, 0.04, 0.55], ASHLAR_L, undefined, 0.02);
+    k.mesh(g, archPane(W, H, 0.1), TRIM_D, [0, 0.08, -0.1]);
+    for (const sx of [-1, 1]) cb(k, g, [0.42, H - 0.95, 0.5], [sx * (W / 2 + 0.21), (H - 0.95) / 2 + 0.08, 0.1], ASHLAR_L, undefined, 0.03);
+    archRing(k, g, 0, 0.08, -0.15, W, H, ASHLAR_L, { n: 4, t: 0.42, p: 0.5, out: 0, key: ASHLAR_L });
+    archRing(k, g, 0, 0.08, 0.05, W + 0.95, H + 0.5, TRIM, { n: 4, t: 0.14, p: 0.34, out: 0 });
+    cb(k, g, [W + 1.0, 0.2, 0.62], [0, 0.18, 0.12], TRIM, undefined, 0.03);
   },
   /**
    * The paddock's field shelter `len` wide (open to +Z, its back to -Z): a stone lean-to under a flat stone roof
@@ -2025,13 +2277,13 @@ const BUILDERS: Record<string, Builder> = {
    */
   field_shelter: (k, g, arg) => {
     const W = lenOf(arg) ?? 6.8, D = 2.6, H = 3.0;
-    cb(k, g, [W, H, 0.5], [0, H / 2, -D / 2 + 0.25], STONE, undefined, 0.04);
-    for (const sx of [-1, 1]) cb(k, g, [0.5, H, D], [sx * (W / 2 - 0.25), H / 2, 0], STONE, undefined, 0.04);
-    for (const sx of [-1, 1]) cb(k, g, [0.5, H, 0.5], [sx * 1.15, H / 2, D / 2 - 0.25], STONE, undefined, 0.04);
-    cb(k, g, [W + 0.3, 0.34, D + 0.3], [0, H + 0.12, 0.05], STONE_D, undefined, 0.03);
-    cb(k, g, [W + 0.4, 0.5, 0.36], [0, H + 0.5, D / 2 + 0.05], STONE, undefined, 0.03);
-    for (const sx of [-1, 1]) cb(k, g, [0.36, 0.5, D + 0.3], [sx * (W / 2 + 0.02), H + 0.5, 0.05], STONE, undefined, 0.03);
-    for (let i = 0; i < 6; i++) cb(k, g, [0.6, 0.5, 0.4], [-W / 2 + 0.3 + (i * (W - 0.6)) / 5, H + 1.0, D / 2 + 0.05], i % 2 ? STONE_L : STONE, undefined, 0.04);
+    cb(k, g, [W, H, 0.5], [0, H / 2, -D / 2 + 0.25], ASHLAR, undefined, 0.04);
+    for (const sx of [-1, 1]) cb(k, g, [0.5, H, D], [sx * (W / 2 - 0.25), H / 2, 0], ASHLAR, undefined, 0.04);
+    for (const sx of [-1, 1]) cb(k, g, [0.5, H, 0.5], [sx * 1.15, H / 2, D / 2 - 0.25], ASHLAR, undefined, 0.04);
+    cb(k, g, [W + 0.3, 0.34, D + 0.3], [0, H + 0.12, 0.05], TRIM, undefined, 0.03);
+    cb(k, g, [W + 0.4, 0.5, 0.36], [0, H + 0.5, D / 2 + 0.05], ASHLAR, undefined, 0.03);
+    for (const sx of [-1, 1]) cb(k, g, [0.36, 0.5, D + 0.3], [sx * (W / 2 + 0.02), H + 0.5, 0.05], ASHLAR, undefined, 0.03);
+    for (let i = 0; i < 6; i++) cb(k, g, [0.6, 0.5, 0.4], [-W / 2 + 0.3 + (i * (W - 0.6)) / 5, H + 1.0, D / 2 + 0.05], ASHLAR, undefined, 0.04);
     for (const sx of [-1, 1]) cb(k, g, [W - 0.8, 0.22, 0.12], [0, sx > 0 ? 0.9 : 0.12, -D / 2 + 0.56], WOOD_D, undefined, 0.02);
     // The hay rack: slats leaning out from the back wall over a manger, hay heaped in it.
     for (let i = 0; i < 12; i++) cb(k, g, [0.06, 1.0, 0.06], [-W / 2 + 0.9 + (i * (W - 1.8)) / 11, 1.6, -D / 2 + 0.75], WOOD, [0.35, 0, 0], 0.01);
@@ -2244,9 +2496,10 @@ const BUILDERS: Record<string, Builder> = {
       g.add(leaf);
       cb(k, leaf, [hw, H, 0.14], [hw / 2, H / 2, 0], WOOD_D, undefined, 0.02);
       for (let i = 0; i < 4; i++) cb(k, leaf, [0.04, H - 0.1, 0.16], [0.2 + i * (hw - 0.3) / 3, H / 2, 0], 0x3a2618, undefined, 0.005);
-      for (const y of [0.5, 1.8, 3.1]) k.box(leaf, [hw - 0.1, 0.12, 0.18], [hw / 2, y, 0], IRON);
-      for (const y of [0.5, 1.8, 3.1]) for (let i = 0; i < 4; i++) k.box(leaf, [0.07, 0.07, 0.22], [0.25 + i * (hw - 0.4) / 3, y, 0], IRON_L);
-      k.mesh(leaf, octagon(0.14, 0.04), IRON_L, [hw - 0.3, 1.6, 0.1], [0, Math.PI / 2, 0]);
+      // Gilt strap hinges and studs, and a gilt ring.
+      for (const y of [0.5, 1.8, 3.1]) k.box(leaf, [hw - 0.1, 0.12, 0.18], [hw / 2, y, 0], PAL.gold);
+      for (const y of [0.5, 1.8, 3.1]) for (let i = 0; i < 4; i++) k.box(leaf, [0.07, 0.07, 0.22], [0.25 + i * (hw - 0.4) / 3, y, 0], PAL.gold);
+      k.mesh(leaf, octagon(0.14, 0.04), PAL.gold, [hw - 0.3, 1.6, 0.1], [0, Math.PI / 2, 0]);
     }
   },
   /** A sundial: a dressed stone baluster with a bronze dial and its gnomon. */
@@ -3297,7 +3550,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'outer_gatehouse', 'postern', 'ward_gate', 'wall_flight', 'donjon', 'pavilion', 'forge_canopy', 'dragon_fountain', 'great_doors', 'pergola', 'garden_tree']);
+export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'outer_gatehouse', 'postern', 'ward_gate', 'wall_flight', 'donjon', 'pavilion', 'forge_canopy', 'dragon_fountain', 'great_doors', 'pergola', 'garden_tree', 'wall_climber', 'tower_flag']);
 
 /** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
 export const PROP_KINDS = Object.keys(BUILDERS);

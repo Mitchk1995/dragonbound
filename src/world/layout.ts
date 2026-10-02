@@ -55,6 +55,8 @@ export interface PropSpawn {
   len?: number;
   /** Builder variant/seed for props that take one alongside a length (ruin walls, slabs). */
   v?: number;
+  /** The radius of a curved face the prop hugs (a climber on a round tower's drum); none = a flat wall. */
+  bend?: number;
 }
 
 /** Liquid in a cell: rendered as a lowered bed with an animated surface. Bridges are walkable cells over it. */

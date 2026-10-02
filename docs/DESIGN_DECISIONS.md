@@ -83,6 +83,12 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - Full grass on every lawn, island-wide, instead of scattered tufts.
   - Realistic water in the fountain, the stream and the pond.
   - Built: the layout (curtain, towers, gatehouse, approach along the ledge, buildings, walks, gardens and yards), the full grass, the dragon fountain (the bronze dragon rearing on its rock, water pouring from its jaws, jets from the kerb) and the realistic water in its basin and the waterfall's pools.
+- **The castle's architecture made colourful and royal to match the gardens** (October 2; docs/CASTLE_DESIGN.md, "Colour and materials"). Mitchell found the yard beautiful with colour but the walls, towers and buildings one flat brown mass, and asked for the buildings to match its vibrance and look more royal ("do what you think would look good"). Decided and built:
+  - Cream limestone for every castle mass (curtain, towers, gatehouse, donjon, pavilions and the castle buildings), with blue-grey dressings: string courses, one continuous coping under the merlons, corbels, machicolations, hood moulds, quoins and plinths. Trim runs as continuous lines and frames, never as per-block dots.
+  - Blue and gold livery replaces red: royal blue banners and flags edged and charged in gold (swallowtails, the gold dragon diamond), the lord's crest on the ward gates, a deep blue tympanum over the great door, gilt fittings on the great doors and blue leaves on the postern and ward gates. The gate front flies five flags in a symmetric composition. Rugs, cushions and runners inside stay crimson.
+  - One deep blue slate spire on the donjon only, with a gold finial and the lord's banner; every other tower stays crenellated. It was checked from the overview, the approach and the skyline and reads as one landmark.
+  - Pitched roofs on castle buildings stay rejected.
+  - Stained glass in the pavilions' upper lancets, the lancet over the great door (sapphire and gold) and the chapel's south gable (sapphire, ruby and emerald); ivy and climbing roses on ten chosen wall faces, mirrored where the plan is; blue-grey kerbs along the avenue and cross walk and round the fountain plaza; cooler paving and a grey-mauve castle rock so the cream walls stand off both.
 - **The 14 material and quest item icons are approved** (ores, bars, uncut gems, the Cinder Seal Fragment and the Cinder Key) and are in the game. Every item now has painted artwork.
 
 ### Already done before Round 5
@@ -369,7 +375,7 @@ The revised sword, bow and staff set received approval, and corrected leather ar
 
 ### Visual continuity
 
-Preserve the liked portals and banquet-table appeal, and carry forward useful details such as the red-and-gold banners where they fit the new castle. The full castle redesign remains the controlling architectural direction. Consistent materials, foliage, landmarks and restrained placement of bright accents are possible tools for that work.
+Preserve the liked portals and banquet-table appeal. The red-and-gold banners became blue and gold in the castle's colour pass (October 2), and crimson stays inside on the hall's cloth. The full castle redesign remains the controlling architectural direction. Consistent materials, foliage, landmarks and restrained placement of bright accents are possible tools for that work.
 
 The preferred tree option recorded as B is part of the existing visual reference. Exact regional style and layout still need to be judged in context. An isolated still cannot establish interaction, collision, travel pacing or combat feel.
 

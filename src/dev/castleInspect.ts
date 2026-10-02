@@ -141,6 +141,16 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
   // The spring's fall out of the castle rock into its pool and the stream leaving it, from below.
   await view('falls', [P.gate.x + 31, y0 - 5, P.gate.z + 30], [P.gate.x + 26.5, y0 - 6.5, P.gate.z + 12], 18);
+  // The architecture's colour and detail up close: the hall's front between its pavilions, the
+  // gatehouse's outer face, the gate front from the terrace, a wall tower, the donjon and its spire,
+  // the north skyline from far out in the south-east, and the roses on the curtain behind the bower.
+  await view('keep-front', [P.door.x, y0 + 9, 62], [P.door.x, y0 + 7, 40], 18);
+  await view('gatehouse-outer', [P.gate.x + 10, y0 + 6, P.gate.z + 22], [P.gate.x, y0 + 7, P.gate.z], 18);
+  await view('gate-close', [P.gate.x + 14, y0 + 9, P.gate.z + 22], [P.gate.x, y0 + 6, P.gate.z - 1], 20);
+  await view('tower-close', [43, y0 + 8, 79], [31, y0 + 7, 69], 14);
+  await view('donjon', [66, y0 + 14, 66], [50, y0 + 12, 40], 24);
+  await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 70], [P.gate.x, y0 + 6, 60], 60);
+  await view('ivy-curtain', [38, y0 + 4, 48], [38, y0 + 4, 39], 12);
   // Through the gameplay camera: inside the gate looking up the yard, the centrepiece, the great door.
   await play('entry', P.gate.x, P.gate.z - 4, 1.3);
   await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.35, true);

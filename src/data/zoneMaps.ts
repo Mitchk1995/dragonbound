@@ -132,7 +132,9 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     windows: [
       { side: 'e', at: 7.5 }, { side: 'e', at: 10.0 },
       ...[2.5, 5.75, 9.0, 12.25, 15.5].map((at) => ({ side: 'e' as const, at, floor: 1 as const })),
-      { side: 's', at: 3.5 }, { side: 's', at: 8.5 }, ...[3.0, 6.0, 9.0].map((at) => ({ side: 's' as const, at, floor: 1 as const })),
+      // The chapel's south gable, in stained glass.
+      { side: 's', at: 3.5, stained: 'chapel' }, { side: 's', at: 8.5, stained: 'chapel' },
+      ...[3.0, 6.0, 9.0].map((at) => ({ side: 's' as const, at, floor: 1 as const, stained: 'chapel' as const })),
     ],
     fits: [
       // Guardroom and armory: the rack along the west wall, suits of plate, the armourer's bench.
@@ -857,6 +859,45 @@ export function buildKeep(seed: number): ZoneLayout {
   don.len = DONJON.r;
   don.v = DONJON.h;
   blockDisc(G.l, DONJON.x, DONJON.z, DONJON.r);
+  // The gate front's five flags: the banner over the arch and the drums' (the gatehouse's own), and
+  // one on each of the south face's towers either side of it, flying outward.
+  for (const t of TOWERS.filter((tw) => tw.z === GATE.z && Math.abs(tw.x - GATE.x) < 25)) {
+    const p = G.prop('tower_flag', t.x, t.z);
+    p.len = Math.sign(t.x - GATE.x);
+    p.v = t.h;
+  }
+  // Ivy and climbing roses, ten in all and mirrored where the plan is: roses on the curtain behind
+  // the bower and either side of the privy garden's seat niche, ivy either side of the postern, on
+  // the bailey faces of the mid-wall towers, on the outer faces of the south face's towers (seen on
+  // the approach) and on the donjon's drum over the bower's court. None on the gatehouse, the great
+  // door's pavilions, the hall's front or the service ward.
+  const climb = (x: number, z: number, rot: number, len: number, v: number, bend?: number) => {
+    const p = G.prop('wall_climber', x, z, rot);
+    p.len = len;
+    p.v = v;
+    if (bend) p.bend = bend;
+  };
+  /** A point on the curtain from a to b, `t` along it, `off` out from its centre line on the bailey side, and the rotation facing the bailey. */
+  const onCurtain = (a: Vec2, b: Vec2, t: number, off: number) => {
+    const L = Math.hypot(b.x - a.x, b.z - a.z), ux = (b.x - a.x) / L, uz = (b.z - a.z) / L;
+    return { x: a.x + ux * t - uz * off, z: a.z + uz * t + ux * off, rot: Math.atan2(-uz, ux) };
+  };
+  /** A point on a drum (centre c, radius r) at angle `a` from +Z toward +X, facing out. */
+  const onDrum = (c: { x: number; z: number }, r: number, a: number) => ({ x: c.x + Math.sin(a) * r, z: c.z + Math.cos(a) * r, rot: a });
+  {
+    const bower = onCurtain(CURTAIN[0], CURTAIN[1], 6.6, 1.15);
+    climb(bower.x, bower.z, bower.rot, 7, 1);
+    for (const dz of [-3.6, 3.6]) climb(41.95, POSTERN.z + dz, -Math.PI / 2, 3.2, 1);
+    for (const dz of [-4.4, 4.4]) climb(32.15, POSTERN.z + dz, Math.PI / 2, 4, 0);
+    for (const sx of [-1, 1]) {
+      const mid = TOWERS.find((tw) => tw.z === 69 && Math.sign(tw.x - AXIS) === sx)!, south = TOWERS.find((tw) => tw.z === GATE.z && tw.x === AXIS + sx * 20)!;
+      const m = onDrum(mid, mid.r, -sx * 0.7), s = onDrum(south, south.r, sx * 0.6);
+      climb(m.x, m.z, m.rot, 3.2, 0, mid.r);
+      climb(s.x, s.z, s.rot, 3.2, 0, south.r);
+    }
+    const d = onDrum(DONJON, DONJON.r, -1.08);
+    climb(d.x, d.z, d.rot, 4.2, 0, DONJON.r);
+  }
   // The stone flights up to the wall walk, mirrored either side of the gate against the south
   // wall's inner face: each climbs from the south walk to its south-face tower.
   for (const [foot, top] of [[57, 49.4], [75, 82.6]]) {
@@ -1164,6 +1205,42 @@ export function buildKeep(seed: number): ZoneLayout {
   }
   // The avenue's rhythm: lamp posts in pairs up its length.
   for (const z of [94, 70, 58, 46]) for (const x of [AXIS - 2.4, AXIS + 2.4]) G.prop('lamp_post', x, z, 0, 1, 0.4);
+  // Kerbs: blue-grey slabs edging the avenue from the gate to the feast court and the cross walk
+  // across the parterre, broken wherever another walk crosses; a ring round the fountain plaza, open
+  // where the four walks come in; and paler inlay bands across the avenue at the gate's threshold
+  // and at the head of the feast court before the great door.
+  {
+    const paved = (x: number, z: number) => G.l.ground[G.idx(x, z)] === Ground.Stone || G.l.ground[G.idx(x, z)] === Ground.Path;
+    const byPlaza = (x: number, z: number) => Math.hypot(x + 0.5 - FOUNTAIN.x, z + 0.5 - FOUNTAIN.z) < ARC_R + 0.7;
+    /**
+     * Kerbs along the edge row of a walk (cells i0..i1 at `row`, along X or Z) wherever the cell
+     * beyond its edge (row + out) is not paved, laid on the line `at`.
+     */
+    const kerbs = (alongX: boolean, row: number, out: number, i0: number, i1: number, at: number) => {
+      let s = -1;
+      for (let i = i0; i <= i1; i++) {
+        const cell = (r: number): [number, number] => (alongX ? [i, r] : [r, i]);
+        const ok = i < i1 && paved(...cell(row)) && !paved(...cell(row + out)) && !byPlaza(...cell(row));
+        if (ok && s < 0) s = i;
+        if (!ok && s >= 0) {
+          G.prop('kerb', alongX ? (s + i) / 2 : at, alongX ? at : (s + i) / 2, alongX ? 0 : Math.PI / 2).len = i - s;
+          s = -1;
+        }
+      }
+    };
+    kerbs(false, AXIS - 3, -1, 46, 98, AXIS - 2.75);
+    kerbs(false, AXIS + 2, 1, 46, 98, AXIS + 2.75);
+    kerbs(true, CROSS_AXIS - 2, -1, 39, 93, CROSS_AXIS - 1.75);
+    kerbs(true, CROSS_AXIS + 1, 1, 39, 93, CROSS_AXIS + 1.75);
+    const ring = G.prop('kerb_ring', FOUNTAIN.x, FOUNTAIN.z);
+    ring.len = PLAZA_R - 0.25;
+    ring.v = 3.2;
+    for (const z of [46.4, 98.4]) {
+      const band = G.prop('kerb', AXIS, z, 0);
+      band.len = 6;
+      band.v = 1;
+    }
+  }
   // The cour d'honneur: a long bed down each lawn panel between a pair of clipped standard trees,
   // clipped balls squaring off each end of the lawns in line with the feast court's champions.
   for (const X of [(x: number) => x, mx]) {

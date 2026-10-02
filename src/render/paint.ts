@@ -20,7 +20,7 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * instances (rocks, walls).
  */
 
-export type PaintKind = 'masonry' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles' | 'foliage';
+export type PaintKind = 'masonry' | 'ashlar' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles' | 'foliage';
 
 interface PaintParams {
   atlas: 0 | 1 | 2;
@@ -33,6 +33,8 @@ interface PaintParams {
 
 export const PAINTS: Record<PaintKind, PaintParams> = {
   masonry: { atlas: 0, channel: 0, scale: 0.5, amount: 0.34 },
+  /** The castle's dressed limestone: the masonry pattern, painted a little stronger, damp and cool at its foot. */
+  ashlar: { atlas: 0, channel: 0, scale: 0.5, amount: 0.38 },
   rock: { atlas: 0, channel: 1, scale: 0.33, amount: 0.3 },
   wood: { atlas: 0, channel: 2, scale: 0.8, amount: 0.3 },
   shingle: { atlas: 0, channel: 3, scale: 0.55, amount: 0.34 },
@@ -97,6 +99,8 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
       return 0.17 + (v - 0.17) * inside;
     };
   },
+  // The castle's ashlar shares the masonry's pattern (and its atlas channel).
+  ashlar: () => PAINTERS.masonry(),
   rock: () => {
     // Painted strata: soft horizontal bands that wander, in flat tones, with pale chips.
     const warp = fbm(511, 2, 3), bands = tileNoise(512, 2, 12), blotch = fbm(513, 3, 3), chips = worley(514, 7);
@@ -279,9 +283,13 @@ export function paintAtlas(atlas: 0 | 1 | 2): THREE.DataTexture {
   const hit = atlases[atlas];
   if (hit) return hit;
   const kinds = (Object.keys(PAINTS) as PaintKind[]).filter((k) => PAINTS[k].atlas === atlas);
-  const data = new Uint8Array(SIZE * SIZE * 4);
+  const data = new Uint8Array(SIZE * SIZE * 4), done = new Set<number>();
   for (const k of kinds) {
-    const gen = PAINTERS[k](), c = PAINTS[k].channel;
+    const c = PAINTS[k].channel;
+    // Kinds sharing a channel share its pattern: paint it once.
+    if (done.has(c)) continue;
+    done.add(c);
+    const gen = PAINTERS[k]();
     for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) data[(y * SIZE + x) * 4 + c] = Math.max(0, Math.min(1, gen(x, y))) * 255;
   }
   const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
@@ -299,6 +307,9 @@ export function paintAtlas(atlas: 0 | 1 | 2): THREE.DataTexture {
 /** GLSL: warm lights and cool darks, scaled by how strongly the paint applies. */
 export const PAINT_TINT = 'mix(vec3(1.0), mix(vec3(0.94, 0.97, 1.06), vec3(1.05, 1.01, 0.93), paintV), uPaintAmt * 1.6)';
 
+/** GLSL (ashlar only): a damp, cooler foot brightening upward (props and buildings stand on y = 0). */
+const ASHLAR_FOOT = 'diffuseColor.rgb *= mix(vec3(0.84, 0.83, 0.87), vec3(1.03), smoothstep(0.0, 5.0, vPaintPos.y));';
+
 /**
  * Paint a material. Box projection: top/bottom faces take (x, z), side faces take (z or x, y),
  * so the texture's V always runs up the side of a model.
@@ -315,8 +326,9 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
     uPaintScale: { value: p.scale * scaleMul },
     uPaintAmt: { value: p.amount },
   };
+  const ashlar = kind === 'ashlar';
   addPatch(mat, {
-    key: `paint:${space}`,
+    key: ashlar ? `paint:${space}:ashlar` : `paint:${space}`,
     slot: 'surface',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
@@ -358,6 +370,7 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           {
             float paintV = paintSample();
             diffuseColor.rgb *= clamp(1.0 + (paintV - 0.5) * 2.0 * uPaintAmt, 0.0, 2.0) * ${PAINT_TINT};
+            ${ashlar ? ASHLAR_FOOT : ''}
           }`,
         );
     },
