@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Cell, Ground, Lawn } from '../src/world/layout';
-import { DOORS, HERO_HEIGHT } from '../src/world/props';
+import { KERB_W } from '../src/world/kerbStones';
+import { DOORS, HERO_HEIGHT, TRIM, TRIM_L } from '../src/world/props';
 import { castleScene, CASTLE_AREA, type Piece } from './castleScene';
 import { contains, corners, overlap, type Solid } from './geometry';
 import { CURTAIN_WALL } from '../src/data/castle';
@@ -370,7 +371,7 @@ describe('castle geometry', () => {
 
   it('garden pieces and hedges stand on their own ground, never out over a kerb', () => {
     const { layout: L } = S, bad: string[] = [];
-    const strips: { x: number; z: number; ux: number; uz: number; hl: number; hw: number }[] = (L.kerbs ?? []).map((k) => ({ x: k.x, z: k.z, ux: Math.cos(k.rot), uz: -Math.sin(k.rot), hl: k.len / 2, hw: 0.2 }));
+    const strips: { x: number; z: number; ux: number; uz: number; hl: number; hw: number }[] = (L.kerbs ?? []).map((k) => ({ x: k.x, z: k.z, ux: Math.cos(k.rot), uz: -Math.sin(k.rot), hl: k.len / 2, hw: KERB_W / 2 }));
     for (const p of P.filter((q) => q.kind === 'kerb_ring' || q.kind === 'kerb')) for (const s of p.solids) {
       const ax = [0, 2].reduce((a, k) => (s.e[k] > s.e[a] ? k : a), 0), across = ax === 0 ? 2 : 0;
       strips.push({ x: s.c.x, z: s.c.z, ux: s.u[ax].x, uz: s.u[ax].z, hl: s.e[ax], hw: s.e[across] });
@@ -517,7 +518,9 @@ describe('castle geometry', () => {
       const seen = new Set<string>();
       for (const list of by.values()) for (let a = 0; a < list.length; a++) for (let b = a + 1; b < list.length; b++) {
         const A = list[a], B = list[b];
-        if (A.part.mesh === B.part.mesh || Math.abs(A.hi.y - B.hi.y) > 0.006 || overlap(A, B) < 0.03) continue;
+        // (The stones of one band, laid edge to edge on mitred joints, are one shape.)
+        const band = A.part.info?.band !== undefined && A.part.info?.band === B.part.info?.band;
+        if (A.part.mesh === B.part.mesh || band || Math.abs(A.hi.y - B.hi.y) > 0.006 || overlap(A, B) < 0.03) continue;
         if (corners(A).every((k) => contains(B, k, 0.01)) || corners(B).every((k) => contains(A, k, 0.01))) continue;
         // Where they cross, is the top in the open (nothing of the piece standing on it)?
         const mid = A.c.clone().add(B.c).multiplyScalar(0.5).setY(A.hi.y + 0.02);
@@ -529,10 +532,32 @@ describe('castle geometry', () => {
     expect(bad, bad.slice(0, 3000).join('\n')).toEqual([]);
   });
 
+  it('string courses run clear of the quoins and of the window heads under them', () => {
+    const bad: string[] = [];
+    for (const p of P) {
+      const ss = p.solids.filter((s) => !s.r && !s.part.thin && !s.part.fx);
+      // A string course: a long, low blue-grey band.
+      const bands = ss.filter((s) => s.part.color === TRIM && s.hi.y - s.lo.y <= 0.32 && Math.max(s.hi.x - s.lo.x, s.hi.z - s.lo.z) >= 2);
+      // A quoin: a blue-grey dressed stone about a course high, one of a stack up a corner.
+      const dressed = ss.filter((s) => (s.part.color === TRIM || s.part.color === TRIM_L) && s.part.box && s.e.every((e) => e >= 0.17 && e <= 0.35));
+      const quoins = dressed.filter((q) => dressed.some((o) => o !== q && Math.abs(o.c.x - q.c.x) < 0.12 && Math.abs(o.c.z - q.c.z) < 0.12 && Math.abs(Math.abs(o.c.y - q.c.y) - 0.5) < 0.15));
+      for (const b of bands) for (const q of quoins) {
+        const dy = Math.min(b.hi.y, q.hi.y) - Math.max(b.lo.y, q.lo.y);
+        if (dy > 0.02 && overlap(b, q) > 0.01) bad.push(`${p.name}: a string course at ${fmt(b.c)} runs across a quoin at ${fmt(q.c)}`);
+      }
+      // A window's head (the top of its glass) and the hood over it stand well under the next course.
+      for (const g of p.solids.filter((s) => s.part.tag === 'glass')) for (const b of bands) {
+        const over = Math.min(b.hi.x, g.hi.x) - Math.max(b.lo.x, g.lo.x) > 0 && Math.min(b.hi.z, g.hi.z) - Math.max(b.lo.z, g.lo.z) > -0.6;
+        if (over && b.lo.y > g.hi.y - 0.05 && b.lo.y - g.hi.y < 0.5) bad.push(`${p.name}: a string course at ${fmt(b.c)} runs ${(b.lo.y - g.hi.y).toFixed(2)} over a window's head at ${fmt(g.c)}`);
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
+  });
+
   it('every lawn is kerbed all round where it meets paving, and no kerb runs on past its lawn', () => {
     const { layout: L } = S, bad: string[] = [];
     // The kerbs in plan: the layout's (laid along cell edges) and the kerb props' blocks.
-    const strips: { x: number; z: number; ux: number; uz: number; hl: number; hw: number }[] = (L.kerbs ?? []).map((k) => ({ x: k.x, z: k.z, ux: Math.cos(k.rot), uz: -Math.sin(k.rot), hl: k.len / 2 + 0.01, hw: 0.2 }));
+    const strips: { x: number; z: number; ux: number; uz: number; hl: number; hw: number }[] = (L.kerbs ?? []).map((k) => ({ x: k.x, z: k.z, ux: Math.cos(k.rot), uz: -Math.sin(k.rot), hl: k.len / 2 + 0.01, hw: KERB_W / 2 }));
     for (const p of P.filter((q) => q.kind === 'kerb_ring' || q.kind === 'kerb')) for (const s of p.solids) {
       const ax = [0, 2].reduce((a, k) => (s.e[k] > s.e[a] ? k : a), 0), across = ax === 0 ? 2 : 0;
       strips.push({ x: s.c.x, z: s.c.z, ux: s.u[ax].x, uz: s.u[ax].z, hl: s.e[ax] + 0.02, hw: s.e[across] });
@@ -573,7 +598,11 @@ describe('castle geometry', () => {
     // lawn's corner, never a point running on past it or a gap.
     for (const p of P.filter((q) => q.kind === 'kerb_ring')) {
       const bands = new Map<number, Solid[]>();
-      for (const s of p.solids) bands.set(s.part.mesh, [...(bands.get(s.part.mesh) ?? []), s]);
+      // (A band laid in separate stones names its band.)
+      for (const s of p.solids) {
+        const id = (s.part.info?.band as number | undefined) ?? 100 + s.part.mesh;
+        bands.set(id, [...(bands.get(id) ?? []), s]);
+      }
       for (const list of bands.values()) for (const [s, nb] of [[list[0], list[1]], [list[list.length - 1], list[list.length - 2]]]) {
         // (A band's blocks run along their own X; its free end is the face away from its neighbour.)
         const u = s.u[0], ends = [1, -1].map((sg) => s.c.clone().addScaledVector(u, sg * s.e[0]));

@@ -10,6 +10,8 @@ import { setWaterSky } from './water';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
+import { masonGeometry } from '../render/masonry';
+import { KERB_W, kerbStones } from './kerbStones';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
 import { chamferBox, hash01, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock, taper } from '../render/blocks';
 import { useStrataRock } from '../render/rock';
@@ -1139,17 +1141,18 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     debrisTick = (t) => bobbers.forEach((b) => (b.o.position.y = b.y + Math.sin(t * 0.35 + b.ph) * 0.45));
   }
 
-  // The kerbs edging paving against lawns and gravel (layout.kerbs): one merged mesh of dressed
-  // blue-grey slabs standing a hair proud of the ground.
+  // The kerbs edging paving against lawns and gravel (layout.kerbs): single square header stones of
+  // dressed blue-grey standing a hair proud of the ground, a corner stone where two runs turn (see
+  // kerbStones), one merged mesh, each stone painted whole.
   if (layout.kerbs?.length) {
-    const km = new THREE.Matrix4();
-    const parts = layout.kerbs.map((kb) => {
-      const g = chamferBox(kb.len + 0.02, 0.12, 0.4, 0.03).clone();
+    const km = new THREE.Matrix4(), id = new THREE.Matrix4();
+    const parts = kerbStones(layout.kerbs).map((kb) => {
+      const g = masonGeometry(chamferBox(kb.len - 0.012, 0.12, KERB_W, 0.03), { m: id, wrap: false, breaks: [], seed: Math.floor(hash01(kb.x, kb.z) * 97), single: true });
       g.applyMatrix4(km.makeRotationY(kb.rot).setPosition(kb.x, Math.max(floorAt(kb.x, kb.z), heightAt(kb.x, kb.z)) + 0.0, kb.z));
       return g;
     });
     const kerbMat = new THREE.MeshStandardMaterial({ color: TRIM_D, roughness: 0.9, flatShading: true });
-    applyPaint(kerbMat, 'masonry', 'world');
+    applyPaint(kerbMat, 'masonry', 'object');
     const kerbMesh = new THREE.Mesh(mergeGeometries(parts)!, kerbMat);
     kerbMesh.receiveShadow = true;
     kerbMesh.name = 'kerbs';

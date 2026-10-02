@@ -639,6 +639,26 @@ const CAVE_RISERS = `
  * take the shared painted rock (rock.ts: strata blocks, cracks, grain), projected triplanar from
  * the flat face so it never stretches on tall faces.
  */
+/**
+ * GLSL: paving laid as a designed bond on the cell grid: rows a third of a cell deep along X, each
+ * stone two thirds long, every other row's joints over the middle of the stones below. Every cell
+ * edge falls on a row joint and on a whole or half stone, so wherever a paved area ends (a cell
+ * edge) its stones end whole, and a kerb (a third wide, flush on the paving's side) takes its first row
+ * exactly. Rounded, bevelled stones, a tone each, soft broad drift: as the painted paving.
+ */
+const PAVE_LAID = `
+        float paveLaid(vec2 p) {
+          float rz = p.y * 3.0, r = floor(rz), fz = rz - r;
+          float xo = p.x * 1.5 + (mod(r, 2.0) > 0.5 ? 0.5 : 0.0), b = floor(xo), fx = xo - b;
+          float dx = min(fx, 1.0 - fx) / 1.5, dz = min(fz, 1.0 - fz) / 3.0, rc = 0.05;
+          float d = (dx < rc && dz < rc) ? rc - length(vec2(rc - dx, rc - dz)) : min(dx, dz);
+          d += (texture2D(uMixTex, p * 1.7).r - 0.5) * 0.012;
+          float h = fract(sin(dot(vec2(r, b), vec2(127.1, 311.7))) * 43758.5453);
+          float tone = 0.54 + (h - 0.5) * 0.3 + (texture2D(uMixTex, p * 0.09).r - 0.5) * 0.1 + (texture2D(uMixTex, p * 0.6 + 0.3).r - 0.5) * 0.08;
+          float face = tone - (1.0 - smoothstep(0.02, 0.07, d)) * 0.1 + (1.0 - smoothstep(0.0, 0.05, fz / 3.0)) * smoothstep(0.02, 0.04, d) * 0.06;
+          return 0.12 + (face - 0.12) * smoothstep(0.008, 0.026, d);
+        }`;
+
 /** Shared clock for animated ground (the refracted, caustic-lit bed under water); terrain ticks it. */
 export const GROUND_TIME = { value: 0 };
 
@@ -654,7 +674,7 @@ export const GROUND_TIME = { value: 0 };
  * `moss`: moss in the paving's grout lines (the drowned city).
  * `rockMoss`: how far moss spreads over grassy-topped rock (0 patches on the flattest ledges, 1 lush).
  */
-export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null, topRange: [number, number] = [0.8, 3.4], cave = false, waterY: number | null = null, waterTint = 0x2e6a70, rockTops = true, sharp = false, moss = false, rockMoss = 0) {
+export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null, topRange: [number, number] = [0.8, 3.4], cave = false, waterY: number | null = null, waterTint = 0x2e6a70, rockTops = true, sharp = false, moss = false, rockMoss = 0, laid = false) {
   const wet = waterY !== null;
   const uniforms = {
     uTime: GROUND_TIME,
@@ -677,7 +697,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
     uSurfBump: { value: 0 },
   };
   addPatch(mat, {
-    key: `ground4${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}${cliff !== null ? ':cliff' : ''}${cave ? ':cave' : ''}${wet ? ':wet' : ''}${rockTops ? ':tops' : ''}${sharp ? ':sharp' : ''}${moss ? ':moss' : ''}`,
+    key: `ground4${laid ? ':laid' : ''}${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}${cliff !== null ? ':cliff' : ''}${cave ? ':cave' : ''}${wet ? ':wet' : ''}${rockTops ? ':tops' : ''}${sharp ? ':sharp' : ''}${moss ? ':moss' : ''}`,
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
       commonInject(
@@ -703,6 +723,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
         vec4 gK;
         vec4 gT;
         ${ROCK_GLSL}
+        ${laid ? PAVE_LAID : ''}
         // 37° rotation (column-major) for the second, larger-scale sample.
         const mat2 GROT = mat2(0.7986, 0.6018, -0.6018, 0.7986);
         const float GSCALE2 = 0.348;
@@ -729,8 +750,8 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
             t.r = mix(mix(t1.r, t2.r, 0.5), t3, m3);
           }
           // Paving is laid square to the world and never cross-faded (two overlaid layouts read
-          // as cracked mud): one unrotated sample with an 8-unit tile.
-          if (k.b > 0.001) t.b = texture2D(uGroundTex, p * (uSurfScale * 0.5)).b;
+          // as cracked mud): one unrotated sample with an 8-unit tile${laid ? ', or (laid) the designed bond' : ''}.
+          if (k.b > 0.001) t.b = ${laid ? 'paveLaid(p)' : 'texture2D(uGroundTex, p * (uSurfScale * 0.5)).b'};
           ${sharp ? `// Height blend: each ground type rises by its own pattern (grass clumps, pebbles,
           // paving stones stand proud of their joints); within a narrow band of the highest the
           // types mix, below it they drop out. Edges are crisp but follow the paint, never the grid.

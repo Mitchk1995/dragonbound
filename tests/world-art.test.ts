@@ -49,7 +49,7 @@ describe('world props', () => {
     buildProp('round_tower', { len: 3.2, v: 9 }).obj.traverse((o) => {
       if (o instanceof THREE.Mesh) patchKeys(o.material as THREE.Material).forEach((k) => keys.add(k));
     });
-    expect([...keys]).toContain('paint:object:ashlar:wrap');
+    expect([...keys]).toContain('paint:object:ashlar:wrap:fit');
   });
   it('every prop builds with finite geometry and no bumped materials', () => {
     for (const kind of [...PROP_KINDS, 'portal', 'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_emberite']) {

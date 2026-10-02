@@ -7,6 +7,8 @@ import { ModelKit, PAL, type V3 } from '../render/kit';
 import { hasModel, makeModel } from '../render/registry';
 import { applyFinish, studioEnv } from '../render/env';
 import { applyPaint, type PaintKind } from '../render/paint';
+import { KERB_W } from './kerbStones';
+import { cleanBreaks, courseSpans, fitCourses, masonGeometry, STONE as STONE_LEN, type MasonOpts } from '../render/masonry';
 import { addPatch } from '../render/surface';
 import { chamferBox, hash01, octagon, prism, rockBlock, slabBlock, taper, wedge } from '../render/blocks';
 import { makePortal, type PortalSpec } from './portalFx';
@@ -894,6 +896,22 @@ function basinRing(rIn: number, rOut: number, h: number) {
  * as its own box along it.
  */
 export function mitredBand(pts: THREE.Vector2[], closed: boolean, w: number, h: number, bevel = 0) {
+  const pieces = mitredPieces(pts, closed, w, h, bevel, 0);
+  const geo = mergeGeometries(pieces)!;
+  geo.computeVertexNormals();
+  geo.userData.boxes = pieces.flatMap((p) => p.userData.boxes);
+  return geo;
+}
+
+/**
+ * A band as mitredBand, cut into separate stones: each stretch of it into whole stones as near
+ * `stone` long as fit (the joints square across it), each stone its own geometry.
+ */
+export function mitredStones(pts: THREE.Vector2[], closed: boolean, w: number, h: number, stone: number) {
+  return mitredPieces(pts, closed, w, h, 0, stone);
+}
+
+function mitredPieces(pts: THREE.Vector2[], closed: boolean, w: number, h: number, bevel: number, stone: number) {
   const n = pts.length, hw = w / 2;
   const dir = (i: number) => pts[(i + 1) % n].clone().sub(pts[i]).normalize();
   const left = (d: THREE.Vector2) => new THREE.Vector2(-d.y, d.x);
@@ -904,25 +922,25 @@ export function mitredBand(pts: THREE.Vector2[], closed: boolean, w: number, h: 
     const d0 = dir((i - 1 + n) % n), d1 = dir(i), m = left(d0).add(left(d1)).normalize();
     return m.divideScalar(Math.max(0.35, m.dot(left(d1))));
   };
-  const pieces: THREE.BufferGeometry[] = [], boxes: { c: number[]; h: number[]; ry: number }[] = [];
+  const pieces: THREE.BufferGeometry[] = [];
   for (let i = 0; i < (closed ? n : n - 1); i++) {
     const j = (i + 1) % n, a = pts[i], b = pts[j], ma = mitre(i), mb = mitre(j);
-    const quad = [a.clone().addScaledVector(ma, hw), b.clone().addScaledVector(mb, hw), b.clone().addScaledVector(mb, -hw), a.clone().addScaledVector(ma, -hw)];
-    const shape = new THREE.Shape(quad.map((p) => new THREE.Vector2(p.x, -p.y)));
-    const geo = new THREE.ExtrudeGeometry(shape, { depth: h - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.6, bevelOffset: -bevel * 0.6, bevelSegments: 1, curveSegments: 1 });
-    geo.rotateX(-Math.PI / 2);
-    if (bevel > 0) geo.translate(0, bevel, 0);
-    pieces.push(geo);
-    const d = b.clone().sub(a);
-    boxes.push({ c: [(a.x + b.x) / 2, h / 2, (a.y + b.y) / 2], h: [d.length() / 2, h / 2, hw], ry: Math.atan2(-d.y, d.x) });
+    const outA = a.clone().addScaledVector(ma, hw), outB = b.clone().addScaledVector(mb, hw), inA = a.clone().addScaledVector(ma, -hw), inB = b.clone().addScaledVector(mb, -hw);
+    const cuts = stone > 0 ? Math.max(1, Math.round(a.distanceTo(b) / stone)) : 1;
+    for (let c = 0; c < cuts; c++) {
+      const t0 = c / cuts, t1 = (c + 1) / cuts;
+      const quad = [outA.clone().lerp(outB, t0), outA.clone().lerp(outB, t1), inA.clone().lerp(inB, t1), inA.clone().lerp(inB, t0)];
+      const shape = new THREE.Shape(quad.map((p) => new THREE.Vector2(p.x, -p.y)));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: h - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.6, bevelOffset: -bevel * 0.6, bevelSegments: 1, curveSegments: 1 });
+      geo.rotateX(-Math.PI / 2);
+      if (bevel > 0) geo.translate(0, bevel, 0);
+      for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+      const p0 = a.clone().lerp(b, t0), p1 = a.clone().lerp(b, t1), d = p1.clone().sub(p0);
+      geo.userData.boxes = [{ c: [(p0.x + p1.x) / 2, h / 2, (p0.y + p1.y) / 2], h: [d.length() / 2, h / 2, hw], ry: Math.atan2(-d.y, d.x) }];
+      pieces.push(geo);
+    }
   }
-  const geo = mergeGeometries(pieces.map((p) => {
-    for (const k of Object.keys(p.attributes)) if (k !== 'position' && k !== 'normal') p.deleteAttribute(k);
-    return p;
-  }))!;
-  geo.computeVertexNormals();
-  geo.userData.boxes = boxes;
-  return geo;
+  return pieces;
 }
 
 /**
@@ -940,13 +958,22 @@ export function slopedBand(pts: THREE.Vector2[], y0: number[], y1: number[], w: 
     const m = left(dir(i - 1)).add(left(dir(i))).normalize();
     return m.divideScalar(Math.max(0.35, m.dot(left(dir(i)))));
   };
-  const pos: number[] = [], boxes: { c: number[]; h: number[]; ry: number }[] = [];
+  const pos: number[] = [], lay: number[] = [], boxes: { c: number[]; h: number[]; ry: number }[] = [];
+  // (Each vertex also carries where it lies in the band, for laying its stones along it: the
+  // distance along the run, 0 at the foot to 1 at the top, and 0 to 1 across: see masonry.ts.)
+  const run = [0];
+  for (let i = 1; i < n; i++) run.push(run[i - 1] + pts[i].distanceTo(pts[i - 1]));
   /** The 8 corners of the stretch between corners i and i + 1. */
   const corner = (i: number, side: number, top: boolean) => {
     const m = mitre(i), off = shift + side * (w / 2) + (top ? lean : 0), p = pts[i].clone().addScaledVector(m, off);
-    return [p.x, top ? y1[i] : y0[i], p.y];
+    return [p.x, top ? y1[i] : y0[i], p.y, run[i], top ? 1 : 0, (side + 1) / 2];
   };
-  const quad = (a: number[], b: number[], c: number[], d: number[]) => pos.push(...a, ...c, ...b, ...a, ...d, ...c);
+  const quad = (a: number[], b: number[], c: number[], d: number[]) => {
+    for (const v of [a, c, b, a, d, c]) {
+      pos.push(v[0], v[1], v[2]);
+      lay.push(v[3], v[4], v[5]);
+    }
+  };
   for (let i = 0; i < n - 1; i++) {
     const j = i + 1;
     const [lb0, rb0, lt0, rt0] = [corner(i, 1, false), corner(i, -1, false), corner(i, 1, true), corner(i, -1, true)];
@@ -963,8 +990,10 @@ export function slopedBand(pts: THREE.Vector2[], y0: number[], y1: number[], w: 
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('aLay', new THREE.Float32BufferAttribute(lay, 3));
   geo.computeVertexNormals();
   geo.userData.boxes = boxes;
+  geo.userData.lay = { len: run[n - 1], h: y0.reduce((a, y, i) => a + y1[i] - y, 0) / n, w };
   return geo;
 }
 
@@ -1787,28 +1816,97 @@ export function archPane(w: number, h: number, dep: number) {
   return g;
 }
 
+/** A flat piece cut to an outline in the XY plane, from z0 to z1. */
+function plate(pts: [number, number][], z0: number, z1: number) {
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))), { depth: z1 - z0, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, z0);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Mark a mesh as one dressed stone: painted whole, no joints across it (masonry.ts). */
+export function stone<T extends THREE.Object3D>(m: T): T {
+  m.userData.single = true;
+  return m;
+}
+
+/**
+ * The stones of a pointed arch (`w` wide, apex `h` above the sill at y = 0, centred on x = 0, the
+ * arch rising `rise` over its springing) laid between `r0` and `r1` out from the opening's edge, as
+ * outlines in the arch's plane: `n` voussoirs a side, cut on true radial joints so they close on each
+ * other with no gap and no step, and a keystone `kw` wide at its foot closing the two arcs on the
+ * centre line. Each comes with its place in the ring counted from the keystone (0) out to the springing.
+ */
+export function archStones(w: number, h: number, rise: number | undefined, r0: number, r1: number, n: number, kw: number) {
+  const { ys, c, R } = pointedArch(w, h, 2, rise);
+  /** The right-hand arc `d` out from the opening at angle `a` (0 at the springing). */
+  const at = (d: number, a: number): [number, number] => [-c + (R + d) * Math.cos(a), ys + (R + d) * Math.sin(a)];
+  /** Where the right-hand arc `d` out reaches the centre line. */
+  const apexA = (d: number) => Math.atan2(Math.sqrt(Math.max(0, (R + d) ** 2 - c * c)), c);
+  const keyA = Math.acos(Math.min(1, (kw / 2 + c) / (R + r0)));
+  const arcPts = (d: number, a: number, b: number, k = 4) => Array.from({ length: k + 1 }, (_, i) => at(d, a + ((b - a) * i) / k));
+  const out: { pts: [number, number][]; place: number }[] = [];
+  for (let j = 0; j < n; j++) {
+    const a = (keyA * j) / n, b = (keyA * (j + 1)) / n;
+    const right = [...arcPts(r0, a, b), ...arcPts(r1, b, a)];
+    for (const sx of [1, -1]) out.push({ pts: (sx > 0 ? right : right.map(([x, y]) => [-x, y] as [number, number]).reverse()), place: n - j });
+  }
+  const inR = arcPts(r0, keyA, apexA(r0)), outR = arcPts(r1, apexA(r1), keyA);
+  const mirror = (p: [number, number][]) => p.map(([x, y]) => [-x, y] as [number, number]).reverse();
+  out.push({ pts: [...inR, ...mirror(inR).slice(1), ...mirror(outR), ...outR.slice(1)], place: 0 });
+  return out;
+}
+
 /**
  * Stones laid round a pointed arch (`w` wide, apex `h` above the sill, sill at y0, centred on x), on a
- * face at z (facing +Z): voussoirs `t` deep standing proud `p` of the face, `n` to each side, and a
- * keystone; `out` sets them out from the opening's edge.
+ * face at z (facing +Z): voussoirs `t` deep standing proud `p` of the face, `n` to each side, cut on
+ * radial joints, closing on a keystone (in `key`'s colour when given); `out` sets them out from the
+ * opening's edge. A `band` is one continuous moulding round the arch instead of separate stones.
  */
-export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, z: number, w: number, h: number, color: number, opt: { n?: number; t?: number; p?: number; out?: number; key?: number; rise?: number } = {}) {
-  const { n = 5, t = 0.26, p = 0.14, out = 0.12 } = opt;
-  const { arc } = pointedArch(w, h, n * 2, opt.rise);
-  // The two arcs close on one stone at the apex (a keystone, or a stone of the ring's own), the top
-  // voussoir of each side stopping against it, so the arcs never cross each other there.
-  const kw = opt.key !== undefined ? 0.3 : t * 1.2;
-  for (const sx of [-1, 1]) for (let i = 0; i < n; i++) {
-    const a = arc[i * 2], b0 = arc[i * 2 + 2];
-    const b = i === n - 1 && a[0] > kw / 2 ? [a[0] + (b0[0] - a[0]) * ((a[0] - kw / 2) / a[0]), a[1] + (b0[1] - a[1]) * ((a[0] - kw / 2) / a[0])] : b0;
-    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
-    // Out from the opening along the arc's outward normal.
-    const nx = Math.sin(ang), ny = -Math.cos(ang);
-    cb(k, g, [len + (i === n - 1 ? 0 : 0.04), t, p], [x + sx * (mx + nx * (out + t / 2)), y0 + my + ny * (out + t / 2), z + p / 2], color, [0, 0, sx > 0 ? ang : Math.PI - ang], 0.02);
+export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, z: number, w: number, h: number, color: number, opt: { n?: number; t?: number; p?: number; out?: number; key?: number; rise?: number; band?: boolean } = {}) {
+  const { n = 5, t = 0.26, p = 0.14, out = 0 } = opt;
+  if (opt.band) {
+    // One outline: up the right-hand arc's outer edge, over the apex, down the left and back inside.
+    const { ys, c, R } = pointedArch(w, h, 2, opt.rise), apex = (d: number) => Math.atan2(Math.sqrt(Math.max(0, (R + d) ** 2 - c * c)), c);
+    const arc = (d: number, k2 = 16) => Array.from({ length: k2 + 1 }, (_, i) => [-c + (R + d) * Math.cos((apex(d) * i) / k2), ys + (R + d) * Math.sin((apex(d) * i) / k2)] as [number, number]);
+    const o = arc(out + t), inn = arc(out);
+    const pts: [number, number][] = [...o, ...o.slice(0, -1).reverse().map(([px, py]) => [-px, py] as [number, number]), ...inn.map(([px, py]) => [-px, py] as [number, number]), ...inn.slice(0, -1).reverse()];
+    return void stone(k.mesh(g, plate(pts, 0, p), color, [x, y0, z]));
   }
-  if (opt.key !== undefined) cb(k, g, [0.3, 0.42, p + 0.04], [x, y0 + h + out + 0.12, z + p / 2], opt.key, undefined, 0.02);
-  else cb(k, g, [kw, t * 1.15, p], [x, y0 + h + out + t / 2, z + p / 2], color, undefined, 0.02);
+  for (const s of archStones(w, h, opt.rise, out, out + t, n, opt.key !== undefined ? 0.34 : t * 1.2)) stone(k.mesh(g, plate(s.pts, 0, p), s.place === 0 && opt.key !== undefined ? opt.key : color, [x, y0, z]));
+}
+
+/**
+ * The dressed surround of a pointed opening `w` wide, its apex `h` over the sill at y = 0, centred on
+ * x = 0 in a face at z = 0 (facing +Z): one ring of stones `t` wide round the arch and down both
+ * jambs to `foot`, the stones in two tones alternating all the way round from the keystone (pale) to
+ * the foot, every one flush in one plane `p` proud of the face and `dep` deep into the reveal, and a
+ * blue-grey moulding `hood` wide close round the outside of the ring from foot to foot, one
+ * unbroken line. Returns the pieces (outline geometry, colour and the height of its foot), so a
+ * caller that splits its walls by height can place each piece in its own band.
+ */
+export function archDressing(w: number, h: number, rise: number, opt: { foot: number; t?: number; p?: number; dep?: number; hood?: number; tones?: [number, number]; hoodColor?: number }) {
+  const { foot, t = 0.34, p = 0.08, dep = 0.3, hood = 0.14, tones = [ASHLAR_L, TRIM], hoodColor = TRIM } = opt;
+  const { ys, c, R } = pointedArch(w, h, 2, rise), hw = w / 2;
+  const arcLen = R * Math.atan2(Math.sqrt(Math.max(0, (R + t / 2) ** 2 - c * c)), c);
+  const n = Math.max(2, Math.round((arcLen - 0.2) / 0.38));
+  const pieces: { geo: THREE.BufferGeometry; color: number; y: number }[] = [];
+  for (const s of archStones(w, h, rise, 0, t, n, 0.4)) pieces.push({ geo: plate(s.pts, -dep, p), color: tones[s.place % 2], y: Math.min(...s.pts.map(([, y]) => y)) });
+  // The jambs, in courses from the springing down to the foot, carrying on the ring's alternation.
+  const ys2 = fitCourses(foot, ys, 0.45).reverse();
+  for (let i = 0; i + 1 < ys2.length; i++) {
+    const y1 = ys2[i], y0 = ys2[i + 1], tone = tones[(n + 1 + i) % 2];
+    for (const sx of [-1, 1]) {
+      const a = sx * hw, b = sx * (hw + t);
+      pieces.push({ geo: plate(sx > 0 ? [[a, y0], [b, y0], [b, y1], [a, y1]] : [[b, y0], [a, y0], [a, y1], [b, y1]], -dep, p), color: tone, y: y0 });
+    }
+  }
+  // The moulding: out round the arch and straight down both jambs, in one piece.
+  const apex = (d: number) => Math.atan2(Math.sqrt(Math.max(0, (R + d) ** 2 - c * c)), c);
+  const arc = (d: number) => Array.from({ length: 17 }, (_, i) => [-c + (R + d) * Math.cos((apex(d) * i) / 16), ys + (R + d) * Math.sin((apex(d) * i) / 16)] as [number, number]);
+  const o = arc(t + hood), inn = arc(t), flip = (q: [number, number]) => [-q[0], q[1]] as [number, number];
+  const outline: [number, number][] = [[hw + t, foot], [hw + t + hood, foot], ...o, ...o.slice(0, -1).reverse().map(flip), [-(hw + t + hood), foot], [-(hw + t), foot], ...inn.map(flip), ...inn.slice(0, -1).reverse()];
+  pieces.push({ geo: plate(outline, -dep, p + 0.05), color: hoodColor, y: foot });
+  return pieces;
 }
 
 /**
@@ -1817,7 +1915,7 @@ export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, 
  * over the dim room behind it (a faint warm glow when lit), a blue-grey hood mould following the arch
  * with its label stops, and a projecting sill.
  */
-export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true) {
+export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true, dress = 1) {
   const { ys } = pointedArch(w, h);
   // The room behind the glass, then the pane in front of it, both inside the surround's reveal.
   const room = new THREE.Mesh(roomPlate(w, h), roomMat(k, lit));
@@ -1828,13 +1926,14 @@ export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: 
   pane.name = 'glass';
   pane.position.set(x, y, z + 0.07);
   g.add(pane);
-  for (const sx of [-1, 1]) cb(k, g, [0.2, ys + 0.02, 0.24], [x + sx * (w / 2 + 0.1), y + ys / 2, z - 0.02], ASHLAR_L, undefined, 0.02);
-  archRing(k, g, x, y, z - 0.14, w, h, ASHLAR_L, { n: 4, t: 0.2, p: 0.24, out: 0 });
-  archRing(k, g, x, y, z - 0.04, w + 0.42, h + 0.26, TRIM, { n: 4, t: 0.12, p: 0.16, out: 0 });
-  // The ring's two arcs close on a keystone and the hood's on one apex stone over it.
-  cb(k, g, [0.18, 0.28, 0.26], [x, y + h + 0.1, z - 0.02], ASHLAR_L, undefined, 0.01);
-  cb(k, g, [0.24, 0.13, 0.18], [x, y + h + 0.32, z + 0.05], TRIM, undefined, 0.01);
-  for (const sx of [-1, 1]) cb(k, g, [0.16, 0.22, 0.2], [x + sx * (w / 2 + 0.3), y + ys - 0.06, z + 0.06], TRIM, undefined, 0.02);
+  // The jambs and the ring one width all round, cut on radial joints and closing on a keystone, flush
+  // in one plane; the hood one moulding close round the ring, on label stops at the springing.
+  // (`dress` narrows the surround, so on a slender drum it all lies on one facet.)
+  const jt = 0.2 * dress, ht = 0.12 * dress;
+  for (const sx of [-1, 1]) cb(k, g, [jt, ys + 0.02, 0.24], [x + sx * (w / 2 + jt / 2), y + ys / 2, z - 0.02], ASHLAR_L, undefined, 0.02);
+  archRing(k, g, x, y, z - 0.14, w, h, ASHLAR_L, { n: 4, t: jt, p: 0.24, out: 0 });
+  archRing(k, g, x, y, z - 0.04, w, h, TRIM, { n: 4, t: ht, p: 0.16, out: jt });
+  for (const sx of [-1, 1]) cb(k, g, [jt, 0.22, 0.2], [x + sx * (w / 2 + jt + ht / 2), y + ys - 0.08, z + 0.06], TRIM, undefined, 0.02);
   cb(k, g, [w + 0.5, 0.14, 0.32], [x, y - 0.07, z + 0.06], ASHLAR_L, undefined, 0.02);
 }
 
@@ -3140,7 +3239,9 @@ const BUILDERS: Record<string, Builder> = {
         new THREE.Vector2(sx * xc, sz * d1),
         new THREE.Vector2(sx * x1, sz * d1),
       ];
-      k.mesh(g, mitredBand(pts, false, 0.4, 0.12), TRIM_D, [0, -0.06, 0]);
+      // (Laid in single stones as near square as fit, like the walks' kerbs; for the audit, each
+      // quarter's stones are one kerb.)
+      for (const geo of mitredStones(pts, false, KERB_W, 0.12, KERB_W)) stone(k.mesh(g, geo, TRIM_D, [0, -0.06, 0])).userData.audit = { band: sx * 2 + sz };
     }
   },
   /**
@@ -3437,15 +3538,23 @@ const BUILDERS: Record<string, Builder> = {
     const W = lenOf(arg) ?? 4, D0 = -0.9, D1 = 2.1, H = 13.6, d = D1 - D0, zc = (D0 + D1) / 2;
     cb(k, g, [W + 0.6, 0.62, d + 0.3], [0, 0.31, zc + 0.15], TRIM_D, undefined, 0.05);
     cb(k, g, [W + 0.3, 0.34, d + 0.15], [0, 0.79, zc + 0.08], TRIM, undefined, 0.04);
-    cb(k, g, [W, H - 0.62, d], [0, 0.62 + (H - 0.62) / 2, zc], ASHLAR_B, undefined, 0.04);
-    for (const y of [5.0, 9.0]) cb(k, g, [W + 0.18, 0.24, d + 0.12], [0, y, zc + 0.06], TRIM, undefined, 0.03);
-    // Quoins in the two blue-greys (never cream against dark, which reads as piano keys from above).
-    for (const sx of [-1, 1]) for (let y = 1.0, i = 0; y < H - 1.2; y += 0.56, i++) {
-      cb(k, g, i % 2 ? [0.62, 0.5, 0.44] : [0.44, 0.5, 0.62], [sx * (W / 2 - 0.2), y + 0.25, D1 - (i % 2 ? 0.2 : 0.29)], i % 2 ? TRIM_L : TRIM, undefined, 0.03);
+    // The walling's courses run whole between the base courses, the two string courses and the
+    // coping, and the quoins are laid course for course with it.
+    const breaks = [0, 0.62, 0.96, 4.88, 5.12, 8.88, 9.12, H + 0.83];
+    cb(k, g, [W, H - 0.62, d], [0, 0.62 + (H - 0.62) / 2, zc], ASHLAR_B, undefined, 0.04).userData.courses = breaks;
+    // (The string courses stand prouder than the quoins, so they run on round the corners over them.)
+    for (const y of [5.0, 9.0]) cb(k, g, [W + 0.3, 0.24, d + 0.15], [0, y, zc + 0.075], TRIM, undefined, 0.03);
+    // Quoins in the two blue-greys (never cream against dark, which reads as piano keys from above),
+    // long and short by turns, one to a course, stopping under each string course and starting again
+    // over it.
+    let qi = 0;
+    for (const [a, e] of [[0.96, 4.88], [5.12, 8.88], [9.12, H - 1.2]]) for (const [y0, y1] of courseSpans(breaks, a, e)) {
+      for (const sx of [-1, 1]) cb(k, g, qi % 2 ? [0.62, y1 - y0 - 0.04, 0.44] : [0.44, y1 - y0 - 0.04, 0.62], [sx * (W / 2 - 0.2), (y0 + y1) / 2, D1 - (qi % 2 ? 0.2 : 0.29)], qi % 2 ? TRIM_L : TRIM, undefined, 0.03);
+      qi++;
     }
-    // Lancets on the two upper storeys (the ground floor is left blank behind the champion
-    // that stands before it).
-    for (const y of [6.1, 10.1]) lancet(k, g, 0, y, D1, 0.82, 2.5);
+    // Lancets on the two upper storeys (the ground floor is left blank behind the champion that
+    // stands before it), each sill clear over its string course and its hood well under the next.
+    for (const y of [5.75, 9.75]) lancet(k, g, 0, y, D1, 0.82, 2.4);
     // Corbels, the parapet standing out on them, its coping, merlons, and the leads behind.
     for (const u of spread(W, 0.8, 0.4)) cb(k, g, [0.34, 0.42, 0.5], [u, H - 0.24, D1 + 0.14], TRIM, undefined, 0.03);
     for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(k, g, [0.5, 0.42, 0.34], [sx * (W / 2 + 0.14), H - 0.24, D0 + 0.8 + i * 0.9], TRIM, undefined, 0.03);
@@ -3556,11 +3665,13 @@ const BUILDERS: Record<string, Builder> = {
     spire(k, g, 0, P + 0.9, 0, r + 0.1, r * 2.3, N, 1, 1.1);
     const ap = r * Math.cos(Math.PI / N), step = (Math.PI * 2) / N;
     // (Between the bands, never crossed by one.)
+    // (On the middle of a facet, so its flat stones lie on the drum's face.)
     for (const y of [2.3, 6.2]) {
       const face = new THREE.Group();
-      face.position.set(0, 0, ap);
+      face.position.set(Math.sin(step / 2) * ap, 0, Math.cos(step / 2) * ap);
+      face.rotation.y = step / 2;
       g.add(face);
-      lancet(k, face, 0, y, 0.02, 0.62, 1.9);
+      lancet(k, face, 0, y, 0.02, 0.44, 1.9, true, 0.5);
     }
     for (const [a, y] of [[2.5, 3.0], [3.5, 5.8], [4.5, 8.6], [-2.5, 3.6], [-3.5, 7.2]]) {
       const t = a * step;
@@ -4956,7 +5067,7 @@ const BUILDERS: Record<string, Builder> = {
  * blocks to a handful, a portal's rune inlays to one. Groups toggled by setState and named parts
  * animated by tick (flames, seals) stay separate, so behaviour is unchanged.
  */
-export function mergeStatic(root: THREE.Object3D) {
+export function mergeStatic(root: THREE.Object3D, lay?: (m: THREE.Mesh) => MasonOpts | null) {
   const parents = new Set<THREE.Object3D>();
   root.traverse((o) => {
     if (o instanceof THREE.Mesh && o.parent && !o.children.length) parents.add(o.parent);
@@ -4974,10 +5085,12 @@ export function mergeStatic(root: THREE.Object3D) {
     for (const [mat, meshes] of groups) {
       // Single meshes are baked too, so every static part shares the prop's own space (painted
       // patterns line up across its parts and follow the prop as a whole).
+      // (Dressed stone takes its own stone layout first, in its own space: see masonry.ts.)
       const merged = mergeGeometries(meshes.map((m) => {
         m.updateMatrix();
-        let geo = m.geometry.clone().applyMatrix4(m.matrix);
-        for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+        const mason = lay?.(m);
+        let geo = mason ? masonGeometry(m.geometry, mason).applyMatrix4(m.matrix) : m.geometry.clone().applyMatrix4(m.matrix);
+        for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'aMason' && k !== 'aMasonK') geo.deleteAttribute(k);
         if (geo.index) geo = geo.toNonIndexed();
         return geo;
       }));
@@ -5065,6 +5178,77 @@ function recordParts(g: THREE.Object3D) {
   g.userData.parts = parts;
 }
 
+/** The painted pattern a finished prop's material takes (see finishProp), or null when it takes none. */
+function paintKindOf(m: THREE.MeshStandardMaterial): PaintKind | null {
+  const hex = m.color.getHex();
+  if (m.userData.cloth || METALS.has(hex) || BRONZES.has(hex) || hex === MEMBRANE || hex === ROCK_WET || hex === PUDDLE || GLOSSY.has(hex)) return null;
+  return m.emissive.getHex() === 0 || m.emissiveIntensity === 0 ? paintFor(hex) : null;
+}
+
+/**
+ * The stone layout of a finished prop's dressed stone (masonry.ts): for each part painted as masonry
+ * or ashlar, its courses run from the prop's foot to its top, broken at every band that crosses it
+ * (a string course, a plinth, a coping: any long, low part laid over it), so the courses fit whole
+ * between the bands and every part of one face shares them.
+ */
+function masonLayout(g: THREE.Object3D) {
+  g.updateMatrixWorld(true);
+  const inv = g.matrixWorld.clone().invert();
+  const parts: { mesh: THREE.Mesh; box: THREE.Box3; mason: boolean; color: number; square: boolean }[] = [];
+  g.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || Array.isArray(o.material) || !(o.material instanceof THREE.MeshStandardMaterial) || o.material.transparent) return;
+    const geo = o.geometry as THREE.BufferGeometry;
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    const kind = paintKindOf(o.material), m = inv.clone().multiply(o.matrixWorld), e = m.elements;
+    // (Square: upright and turned about Y by right angles only.)
+    const square = Math.abs(e[1]) < 1e-4 && Math.abs(e[9]) < 1e-4 && (Math.abs(e[0]) < 1e-4 || Math.abs(e[2]) < 1e-4);
+    parts.push({ mesh: o, box: geo.boundingBox!.clone().applyMatrix4(m), mason: kind === 'masonry' || kind === 'ashlar', color: o.material.color.getHex(), square });
+  });
+  const stone = parts.filter((p) => p.mason);
+  if (!stone.length) return () => null;
+  const foot = Math.min(...stone.map((p) => p.box.min.y)), top = Math.max(...stone.map((p) => p.box.max.y));
+  const bands = parts.filter((p) => p.box.max.y - p.box.min.y <= 0.8 && Math.max(p.box.max.x - p.box.min.x, p.box.max.z - p.box.min.z) >= 1.2);
+  const of = new Map<THREE.Mesh, (typeof parts)[number]>(parts.map((p) => [p.mesh, p]));
+  return (mesh: THREE.Mesh): MasonOpts | null => {
+    const p = of.get(mesh);
+    if (!p?.mason) return null;
+    const b = p.box, dx = b.max.x - b.min.x, dz = b.max.z - b.min.z, alongX = dx >= dz;
+    // (A part whose builder laid its quoins to its courses names its own breaks.)
+    const own = mesh.userData.courses as number[] | undefined;
+    const ys = own ? [...own] : [foot, top];
+    if (!own) for (const q of bands) {
+      if (q === p || q.box.min.y <= b.min.y + 0.02 && q.box.max.y >= b.max.y - 0.02) continue;
+      const qb = q.box;
+      if (qb.max.x < b.min.x - 0.3 || qb.min.x > b.max.x + 0.3 || qb.max.z < b.min.z - 0.3 || qb.min.z > b.max.z + 0.3) continue;
+      const cover = alongX ? Math.min(qb.max.x, b.max.x) - Math.max(qb.min.x, b.min.x) : Math.min(qb.max.z, b.max.z) - Math.max(qb.min.z, b.min.z);
+      if (cover < 0.7 * (alongX ? dx : dz)) continue;
+      ys.push(qb.min.y, qb.max.y);
+    }
+    // The whole face a square part is laid in: the parts of its stone and its wall's thickness that
+    // run on from it edge to edge, along X and along Z.
+    const reach = (ax: 'x' | 'z') => {
+      const ox = ax === 'x' ? 'z' : 'x';
+      const row = stone.filter((q) => q.square && q.color === p.color && Math.abs(q.box.min[ox] - b.min[ox]) < 0.05 && Math.abs(q.box.max[ox] - b.max[ox]) < 0.05);
+      let lo = b.min[ax], hi = b.max[ax], grew = true;
+      while (grew) {
+        grew = false;
+        for (const q of row) if (q.box.min[ax] < lo - 1e-6 && q.box.max[ax] >= lo - 0.05 || q.box.max[ax] > hi + 1e-6 && q.box.min[ax] <= hi + 0.05) {
+          lo = Math.min(lo, q.box.min[ax]);
+          hi = Math.max(hi, q.box.max[ax]);
+          grew = true;
+        }
+      }
+      return [lo, hi];
+    };
+    const [x0, x1] = reach('x'), [z0, z1] = reach('z');
+    const face = p.square && !mesh.userData.wrap ? { x0, x1, z0, z1 } : undefined;
+    const c = b.getCenter(new THREE.Vector3());
+    // (A part no bigger than one stone, a merlon, a quoin, a voussoir, is laid as one stone.)
+    const single = !!mesh.userData.single || (!mesh.userData.wrap && Math.max(dx, dz) <= STONE_LEN * 1.3 && b.max.y - b.min.y <= 0.8);
+    return { single, face, m: inv.clone().multiply(mesh.matrixWorld), wrap: !!mesh.userData.wrap, breaks: cleanBreaks(ys.filter((y) => y >= foot - 1e-6 && y <= top + 1e-6)), seed: Math.floor((face ? hash01(x0, x1, z0 + z1, p.color) : hash01(c.x, c.y, c.z)) * 97) };
+  };
+}
+
 /**
  * Finish a kit-built prop: merge static meshes, give materials their look (shiny metal, glossy
  * coal, painted albedo) and set shadow flags.
@@ -5083,7 +5267,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
     }
     o.material = w;
   });
-  mergeStatic(g);
+  mergeStatic(g, masonLayout(g));
   for (const m of [...kits.flatMap((k) => k.mats), ...wrapMats.values()]) {
     // Iron and gold fittings shine; coal and obsidian are glossy; grey masonry gets a gentle
     // stone detail (lined up in world space); everything else stays clean flat colour.

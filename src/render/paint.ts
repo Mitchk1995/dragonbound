@@ -314,6 +314,42 @@ export const PAINT_TINT = 'mix(vec3(1.0), mix(vec3(0.94, 0.97, 1.06), vec3(1.05,
 const ASHLAR_FOOT = 'diffuseColor.rgb *= mix(vec3(0.84, 0.83, 0.87), vec3(1.03), smoothstep(0.0, 5.0, vPaintPos.y));';
 
 /**
+ * GLSL: dressed stone from a part's own layout (masonry.ts). vMason = (stone coordinate along the
+ * face, course coordinate, stone length, course height), both coordinates whole on the joints;
+ * vMasonK = (mode, seed). Running bond: every other course's joints fall over the middle of the
+ * stones below. Painted mortar, a tone per stone, soft stains, a lighter top edge on each stone and a
+ * soft shadow under it, as the painted masonry atlas.
+ */
+const MASON_GLSL = `
+          varying vec4 vMason;
+          varying vec2 vMasonK;
+          uniform sampler2D uPaintStain;
+          float masonHash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+          }
+          float masonSample() {
+            float mode = vMasonK.x;
+            float X = vMason.x, C = vMason.y, l = vMason.z, h = vMason.w;
+            // A drum: whole stones round its axis (x carries how many), a drum's top one ring of them.
+            if (mode > 2.5) X = (atan(vPaintPos.x, vPaintPos.z) / 6.2831853 + 0.5) * vMason.x;
+            if (mode > 3.5) C = 0.5;
+            float r = floor(C + 1e-4), fy = C - r;
+            float xo = X + (mod(r, 2.0) > 0.5 ? 0.5 : 0.0);
+            float bi = floor(xo), fx = xo - bi;
+            // Distances to the joints in metres, so mortar is one width on every stone.
+            float jx = min(fx, 1.0 - fx) * l, jy = min(fy, 1.0 - fy) * h;
+            float inside = smoothstep(0.011, 0.03, jx) * smoothstep(0.011, 0.03, jy);
+            float stain = texture2D(uPaintStain, vec2(X * l, C * h) * 0.5).b;
+            // (Hashed from whole numbers only: an interpolated value would jitter the hash into streaks.)
+            float v = 0.47 + (masonHash(vec2(r + floor(vMasonK.y + 0.5) * 13.0, bi)) - 0.5) * 0.24 + (0.5 - stain) * 0.6;
+            if (mode < 1.5 || (mode > 2.5 && mode < 3.5)) {
+              float up = fy * h;
+              v += 0.11 * smoothstep(h - 0.11, h - 0.04, up) - 0.07 * (1.0 - smoothstep(0.03, 0.11, up));
+            }
+            return 0.17 + (v - 0.17) * inside;
+          }`;
+
+/**
  * Paint a material. Top and bottom faces take (x, z); side faces take the distance along the face
  * itself (its horizontal tangent) and y, so the texture's V always runs up the side of a model and
  * its blocks keep one size on a face turned at any angle. `wrap` paints a drum (a round tower
@@ -333,8 +369,11 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
     uPaintAmt: { value: p.amount },
   };
   const ashlar = kind === 'ashlar';
+  // Dressed stone laid by its parts' own stone layouts where they carry one (masonry.ts).
+  const fit = kind === 'masonry' || kind === 'ashlar';
+  if (fit) Object.assign(uniforms, { uPaintStain: { value: paintAtlas(1) } });
   addPatch(mat, {
-    key: `paint:${space}${ashlar ? ':ashlar' : ''}${wrap ? ':wrap' : ''}`,
+    key: `paint:${space}${ashlar ? ':ashlar' : ''}${wrap ? ':wrap' : ''}${fit ? ':fit' : ''}`,
     slot: 'surface',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
@@ -351,8 +390,8 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           }`
         : 'vPaintPos = transformed; vPaintNrm = objectNormal;';
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vPaintPos;\nvarying vec3 vPaintNrm;')
-        .replace('#include <project_vertex>', `#include <project_vertex>\n${vert}`);
+        .replace('#include <common>', `#include <common>\nvarying vec3 vPaintPos;\nvarying vec3 vPaintNrm;${fit ? '\nattribute vec4 aMason;\nattribute vec2 aMasonK;\nvarying vec4 vMason;\nvarying vec2 vMasonK;' : ''}`)
+        .replace('#include <project_vertex>', `#include <project_vertex>\n${vert}${fit ? '\nvMason = aMason; vMasonK = aMasonK;' : ''}`);
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
@@ -363,7 +402,9 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           uniform vec4 uPaintCh;
           uniform float uPaintScale;
           uniform float uPaintAmt;
+          ${fit ? MASON_GLSL : ''}
           float paintSample() {
+            ${fit ? 'if (vMasonK.x > 0.5) return masonSample();' : ''}
             vec3 n = abs(vPaintNrm);
             vec3 q = vPaintPos * uPaintScale;
             vec2 uv;

@@ -3,6 +3,7 @@ import { CURTAIN_WALL, GATEHOUSE } from './castle';
 import { Gen, distToPoly, pointAt } from '../world/gen';
 import { upperCells, type BuildingSpec } from '../world/building';
 import { blockDisc, Cell, Fluid, Ground, Lawn, lawnCell, type StationKind, type Strand, type ZoneLayout } from '../world/layout';
+import { KERB_SET } from '../world/kerbStones';
 
 /**
  * Zone maps. Each is composed from big authored shapes (roads, rivers, lakes, clearings,
@@ -867,14 +868,13 @@ export function buildKeep(seed: number): ZoneLayout {
   // walk) is paved, and so is the lane round the kitchen garden; the garden's cross of walks meets at
   // the sundial, its south arm going on through the training yard's gate.
   for (let z = 20; z < 38; z++) for (let x = 102; x < 120; x++) if (inCastle(x + 0.5, z + 0.5)) G.l.ground[G.idx(x, z)] = Ground.Stone;
-  // (The lanes down the garden's sides are two cells wide, a real walk along each wall's foot, and
-  // the north ward gate opens onto a paved landing where the west lane meets the cross walk.)
+  // (The lanes down the garden's sides are two cells wide, a real walk along each wall's foot; the
+  // north ward gate opens straight onto the west lane's earth where it meets the cross walk.)
   pave(102, 38, 104, 52, Ground.Path);
   pave(117, 38, 119, 52, Ground.Path);
   pave(104, 44, 117, 46, Ground.Path);
   pave(109, 38, 112, 53, Ground.Path);
   pave(104, 51, 117, 52, Ground.Path);
-  pave(102, 44, 104, 46);
   // The training yard: beaten earth, the walks worn into it lighter.
   pave(102, 53, 119, 70, Ground.Dirt);
   // One gravel lane down the yard's middle on the ward's axis (on from the kitchen garden's cross
@@ -1387,11 +1387,11 @@ export function buildKeep(seed: number): ZoneLayout {
   {
     // (Each quarter's kerb turns off the cross walk's kerb onto the lawn's circle and back onto the
     // terrace walk's: the lawns' straight edges are the walks' at z 76 / 80 and 69 / 87, their kerbs
-    // set 0.08 onto the paving.)
+    // laid KERB_SET onto the paving, and the ring as far in from the lawn's circle.)
     const ring = G.prop('kerb_ring', FOUNTAIN.x, FOUNTAIN.z);
-    ring.len = ARC_R - 0.5;
+    ring.len = ARC_R - 0.3 - KERB_SET;
     // (The cross walk's straight kerbs stop at the last whole lawn cell, ARC_R off the axis.)
-    ring.opt = { d0: CROSS_AXIS - 76 - 0.08, d1: CROSS_AXIS - 69 + 0.08, x0: ARC_R, xc: LAWN_CORNER - 0.08, x1: LAWN_CORNER + 0.6 };
+    ring.opt = { d0: CROSS_AXIS - 76 - KERB_SET, d1: CROSS_AXIS - 69 + KERB_SET, x0: ARC_R, xc: LAWN_CORNER - KERB_SET, x1: LAWN_CORNER + 0.6 };
     for (const z of [46.4, 98.4]) {
       const band = G.prop('kerb', AXIS, z, 0);
       band.len = 6;
@@ -1946,9 +1946,9 @@ export function buildKeep(seed: number): ZoneLayout {
     // (Round the fountain the lawns end on a circle: no straight kerb runs on inside it.)
     const clear = (x: number, z: number) => Math.hypot(x - FOUNTAIN.x, z - FOUNTAIN.z) > ARC_LAWN - 0.6;
     // Edges between rows z - 1 and z (along X), then between columns x - 1 and x (along Z); the kerb
-    // straddles the edge, set a little toward whichever side is the harder one (so a narrow walk
-    // keeps most of its width between its two kerbs).
-    for (let z = 1; z < h; z++) for (const [a, b, off] of [[z - 1, z, -0.08], [z, z - 1, 0.08]]) {
+    // lies flush along the edge on whichever side is the harder one, a third of a cell wide (the
+    // paving's first row: see kerbStones).
+    for (let z = 1; z < h; z++) for (const [a, b, off] of [[z - 1, z, -KERB_SET], [z, z - 1, KERB_SET]]) {
       let s = -1;
       for (let x = 0; x <= w; x++) {
         const ok = x < w && edge(x, a, x, b) && clear(x + 0.5, z);
@@ -1959,7 +1959,7 @@ export function buildKeep(seed: number): ZoneLayout {
         }
       }
     }
-    for (let x = 1; x < w; x++) for (const [a, b, off] of [[x - 1, x, -0.08], [x, x - 1, 0.08]]) {
+    for (let x = 1; x < w; x++) for (const [a, b, off] of [[x - 1, x, -KERB_SET], [x, x - 1, KERB_SET]]) {
       let s = -1;
       for (let z = 0; z <= h; z++) {
         const ok = z < h && edge(a, z, b, z) && clear(x, z + 0.5);
