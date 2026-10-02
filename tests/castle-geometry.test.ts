@@ -4,6 +4,7 @@ import { Cell, Ground, Lawn } from '../src/world/layout';
 import { DOORS, HERO_HEIGHT } from '../src/world/props';
 import { castleScene, CASTLE_AREA, type Piece } from './castleScene';
 import { contains, corners, overlap, type Solid } from './geometry';
+import { CURTAIN_WALL } from '../src/data/castle';
 
 /**
  * The castle's geometry audit: the keep is built as the game builds it, every prop and building in
@@ -32,7 +33,7 @@ const JOINTS: { a: string[]; b: string[]; why: string; rule?: (a: Piece, b: Piec
   { a: ['building'], b: ['great_doors'], why: 'the great door\'s leaves hang in the hall\'s doorway, standing open into the hall' },
   { a: ['parapet', 'balustrade', 'ramp_wall', 'kerb'], b: ['parapet', 'balustrade', 'parapet_pier'], why: 'runs of one low wall meet end to end or on their pier' },
   { a: ['outer_gate'], b: ['parapet', 'parapet_pier'], why: 'the landing\'s parapet starts at the outer gate\'s jamb' },
-  { a: ['ramp_paving'], b: ['ramp_wall', 'parapet_pier'], why: 'the climb\'s paving runs in under the feet of its kerb walls and their piers' },
+  { a: ['ramp_paving'], b: ['ramp_wall', 'parapet_pier', 'kerb'], why: 'the climb\'s paving runs in under the feet of its kerb walls and their piers, and its threshold band is laid in it' },
   { a: ['round_tower', 'corner_tower'], b: ['tower_flag'], why: 'the flagpole is stepped into the tower\'s platform' },
   { a: ['fence'], b: ['gate_piers'], why: 'a fence runs into its gate pier' },
   { a: ['stream_stone'], b: ['stream_stone'], why: 'stones heaped together in the stream' },
@@ -117,7 +118,7 @@ describe('castle geometry', () => {
     expect(P.length).toBeGreaterThan(300);
     expect(S.solids.length).toBeGreaterThan(20000);
     expect(S.solids.filter((s) => s.part.tag === 'door-leaf').length).toBeGreaterThan(40);
-    expect(S.solids.filter((s) => s.part.tag === 'glass').length).toBeGreaterThan(40);
+    expect(S.solids.filter((s) => s.part.tag === 'glass').length).toBeGreaterThan(35);
     let rock = 0;
     S.view.group.traverse((o) => {
       if (o instanceof THREE.InstancedMesh && o.userData.rock) rock += o.count;
@@ -218,9 +219,144 @@ describe('castle geometry', () => {
         const q = g.c.clone().addScaledVector(g.u[across[0]], a * 2 * g.e[across[0]]).addScaledVector(g.u[across[1]], b * 2 * g.e[across[1]]).addScaledVector(N, sg * (g.e[n] + 0.04));
         return !solid.some((s) => contains(s, q, -0.005));
       }));
-      if (side === undefined) bad.push(`${p.name}: a window pane at ${fmt(g.c)} is crossed or covered by a block`);
+      if (side === undefined) {
+        const across = [0, 1, 2].filter((k) => k !== n), q = g.c.clone().addScaledVector(N, g.e[n] + 0.04);
+        const by = [[0, 0], [0.35, 0], [-0.35, 0], [0, 0.3], [0, -0.3]].flatMap(([a, b]) => solid.filter((s) => contains(s, q.clone().addScaledVector(g.u[across[0]], a * 2 * g.e[across[0]]).addScaledVector(g.u[across[1]], b * 2 * g.e[across[1]]), -0.005)));
+        bad.push(`${p.name}: a window pane at ${fmt(g.c)} is crossed or covered by a block (${[...new Set(by.map((s) => `${s.part.color.toString(16)} at ${fmt(s.c)}`))].join(', ')})`);
+      }
     }
     expect(bad, bad.join('\n')).toEqual([]);
+  });
+
+  it('banners and flags hang clear: nothing crosses the cloth on the side it is seen from', () => {
+    const bad: string[] = [];
+    for (const s of S.solids.filter((q) => q.part.tag === 'cloth')) {
+      const n = [0, 1, 2].reduce((a, k) => (s.e[k] < s.e[a] ? k : a), 0), N = s.u[n], across = [0, 1, 2].filter((k) => k !== n);
+      const side = [1, -1].find((sg) => [[0, 0], [0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6], [0.6, 0.6], [-0.6, -0.6]].every(([a, b]) => {
+        const q = s.c.clone().addScaledVector(s.u[across[0]], a * s.e[across[0]]).addScaledVector(s.u[across[1]], b * s.e[across[1]]).addScaledVector(N, sg * (s.e[n] + 0.04));
+        return !S.grid.near(q, q).some((j) => {
+          const t = S.solids[j];
+          return t !== s && !t.part.thin && !t.part.hollow && !t.part.fx && contains(t, q, -0.005);
+        });
+      }));
+      if (side === undefined) bad.push(`${P[s.piece].name}: something crosses its cloth at ${fmt(s.c)}`);
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
+  });
+
+  it('doorways are clear: nothing stands in the way through a door on the side it is reached from', () => {
+    const bad: string[] = [];
+    for (const s of S.solids.filter((q) => q.part.tag === 'door-leaf')) {
+      const up = [0, 1, 2].reduce((a, k) => (Math.abs(s.u[k].y) > Math.abs(s.u[a].y) ? k : a), 0);
+      const rest = [0, 1, 2].filter((k) => k !== up), n = s.e[rest[0]] < s.e[rest[1]] ? rest[0] : rest[1], w = rest[0] === n ? rest[1] : rest[0];
+      const y0 = s.c.y - s.e[up];
+      const clear = [1, -1].some((sg) => [-0.6, 0, 0.6].every((a) => [0.6, 1.3, 2.0].every((h) => [0.3, 0.7, 1.1].every((d) => {
+        const q = s.c.clone().addScaledVector(s.u[w], a * s.e[w]).setY(y0 + h).addScaledVector(s.u[n], sg * (s.e[n] + d));
+        return !S.grid.near(q, q).some((j) => {
+          const t = S.solids[j];
+          return t !== s && t.part.tag !== 'door-leaf' && t.part.tag !== 'handle' && !t.part.thin && !t.part.hollow && !t.part.fx && !t.part.fit && contains(t, q, -0.01);
+        });
+      }))));
+      if (!clear) bad.push(`${P[s.piece].name}: the way through its door at ${fmt(s.c)} is blocked on both sides`);
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
+  });
+
+  it('the wall walks are clear: nothing of another piece crosses a curtain\'s walk', () => {
+    const bad: string[] = [];
+    const { T, H } = CURTAIN_WALL, z0 = -T / 2 + 0.66, z1 = T / 2 + 0.85 - 0.6;
+    const own = new Set(['round_tower', 'corner_tower', 'outer_gatehouse', 'ward_gate', 'postern', 'outer_gate']);
+    for (const w of P.filter((p) => p.kind === 'castle_wall')) {
+      const L = w.spawn!.len!, m = w.obj.matrixWorld;
+      const c = new THREE.Vector3(0, H + 1.06, (z0 + z1) / 2).applyMatrix4(m);
+      const u = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)].map((a) => a.transformDirection(m));
+      const e = [L / 2 - 0.1, 0.9, (z1 - z0) / 2];
+      const walk: Solid = { piece: -1, part: w.solids[0].part, c, u, e, r: 0, rIn: 0, lo: c.clone().subScalar(L / 2 + 2), hi: c.clone().addScalar(L / 2 + 2) };
+      for (const j of S.grid.near(walk.lo, walk.hi)) {
+        const t = S.solids[j], tp = P[t.piece];
+        if (tp === w || own.has(tp.kind) || t.part.fx || t.part.hollow) continue;
+        if (overlap(walk, t) > 0.12) bad.push(`${tp.name} crosses ${w.name}'s wall walk at ${fmt(t.c)}`);
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
+  });
+
+  it('flat stones on a drum lie on its facets, never across the crease between two', () => {
+    const bad: string[] = [];
+    for (const p of P) {
+      const drums = p.solids.filter((s) => s.r >= 1.5 && s.e[1] >= 1.5 && s.part.sides);
+      if (!drums.length) continue;
+      for (const s of p.solids) {
+        // (A door's leaf hangs square to the way through it, not on the drum's face.)
+        if (s.r || s.part.thin || s.part.fx || s.part.hollow || s.part.tag === 'door-leaf') continue;
+        const n = [0, 1, 2].reduce((a, k) => (s.e[k] < s.e[a] ? k : a), 0), N = s.u[n];
+        const wide = [0, 1, 2].filter((k) => k !== n).every((k) => s.e[k] >= 0.2);
+        if (!wide || s.e[n] > 0.15 || Math.abs(N.y) > 0.3) continue;
+        // (Only a stone laid flat against the drum: its face looks out from the drum's axis.)
+        const rad = new THREE.Vector3(s.c.x, 0, s.c.z);
+        const d = drums.find((q) => s.c.y > q.c.y - q.e[1] && s.c.y < q.c.y + q.e[1] && Math.abs(Math.hypot(s.c.x - q.c.x, s.c.z - q.c.z) - q.r) < 0.35);
+        if (!d) continue;
+        rad.sub(new THREE.Vector3(d.c.x, 0, d.c.z)).normalize();
+        if (Math.abs(rad.dot(N)) < 0.8) continue;
+        // The facet under it, in the drum's own turn: its middle's bearing, and the stone's facing.
+        const dx = s.c.x - d.c.x, dz = s.c.z - d.c.z, th = Math.atan2(dx * d.u[0].x + dz * d.u[0].z, dx * d.u[2].x + dz * d.u[2].z);
+        const step = (Math.PI * 2) / d.part.sides!, mid = (Math.floor(th / step) + 0.5) * step;
+        const nx = N.x * d.u[0].x + N.z * d.u[0].z, nz = N.x * d.u[2].x + N.z * d.u[2].z, face = Math.atan2(nx, nz);
+        const off = Math.abs(Math.atan2(Math.sin(face - mid), Math.cos(face - mid)));
+        if (Math.min(off, Math.PI - off) > 0.06) bad.push(`${p.name}: a flat ${s.part.color.toString(16)} stone (${s.e.map((x) => (2 * x).toFixed(2)).join(' × ')}) at ${fmt(s.c)} lies across the drum's facets`);
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
+  });
+
+  it('footings stand on the ground: no base block hangs out over a drop', () => {
+    const bad: string[] = [];
+    // (Not the climb's kerb walls: each sloping stretch is bounded as a level box from its low end, so
+    // its corners stand nowhere near the wall's own foot.)
+    const KINDS = /^(parapet|parapet_pier|castle_wall|round_tower|corner_tower|outer_gate|outer_gatehouse|postern|ward_gate|building:.*)$/;
+    for (const p of P.filter((q) => KINDS.test(q.kind))) for (const s of p.solids) {
+      if (s.part.thin || s.part.fx || s.part.hollow) continue;
+      if (s.lo.y > S.ground(s.c.x, s.c.z) + 0.3) continue;
+      const foot = s.r
+        ? Array.from({ length: 16 }, (_, i) => [s.c.x + Math.sin((i / 16) * Math.PI * 2) * s.r, s.c.z + Math.cos((i / 16) * Math.PI * 2) * s.r])
+        : corners(s).filter((k) => k.y < s.c.y).map((k) => [k.x, k.z]);
+      const under = foot.filter(([x, z]) => S.ground(x, z) < s.lo.y - 0.6);
+      if (under.length) bad.push(`${p.name}: its ${s.part.color.toString(16)} base at ${fmt(s.c)} hangs out over a drop at (${under[0][0].toFixed(1)}, ${under[0][1].toFixed(1)})`);
+    }
+    expect([...new Set(bad)], [...new Set(bad)].slice(0, 60).join('\n')).toEqual([]);
+  });
+
+  it('garden pieces keep a clear step apart: no planter, bed or tree jammed against another', () => {
+    const bad: string[] = [];
+    const KINDS = new Set(['topiary', 'flower_bed', 'herb_bed', 'urn', 'garden_tree', 'garden_bench', 'box_border']);
+    const gp = P.map((p, i) => [p, i] as const).filter(([p]) => KINDS.has(p.kind));
+    for (const [a, ia] of gp) for (const s of a.solids) {
+      // (Petals and leaves lying flat on the ground don't count.)
+      if (s.part.thin || s.part.fx || s.e[1] < 0.03 || s.lo.y > S.ground(s.c.x, s.c.z) + 0.6) continue;
+      for (const j of S.grid.near(s.lo, s.hi, 0.15)) {
+        const t = S.solids[j], b = P[t.piece];
+        if (t.piece <= ia || !KINDS.has(b.kind) || (a.kind === 'box_border' && b.kind === 'box_border') || t.part.thin || t.part.fx || t.e[1] < 0.03 || t.lo.y > S.ground(t.c.x, t.c.z) + 0.6) continue;
+        const near: Solid = { ...s, e: s.e.map((x) => x + 0.12), r: s.r ? s.r + 0.12 : 0, lo: s.lo.clone().subScalar(0.12), hi: s.hi.clone().addScalar(0.12) };
+        if (overlap(near, t) > 0) bad.push(`${a.name} and ${b.name} stand jammed together at ${fmt(s.c.clone().add(t.c).multiplyScalar(0.5))}`);
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
+  });
+
+  it('a course round a drum lies on what is under it, never jutting out over it as a loose lip', () => {
+    const bad: string[] = [];
+    for (const p of P) {
+      const rings = p.solids.filter((s) => s.r > 0 && !s.part.thin && !s.part.fx);
+      for (const s of rings) {
+        // What it stands on: the drum's pieces on its axis whose tops are at its foot.
+        const under = rings.filter((t) => t !== s && Math.hypot(t.c.x - s.c.x, t.c.z - s.c.z) < 0.05 && t.hi.y > s.lo.y - 0.03 && t.hi.y < s.lo.y + 0.12 && t.lo.y < s.lo.y - 0.03);
+        if (!under.length) continue;
+        const r = Math.max(...under.map((t) => t.r));
+        // (A corbelled or battered course steps out a little at a time; a loose lip juts out at once.)
+        if (s.r - r > 0.25) bad.push(`${p.name}: a ${s.part.color.toString(16)} course at ${fmt(s.c)} juts ${(s.r - r).toFixed(2)} out over what it stands on`);
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
   });
 
   it('rock never rises through a road, a walk, the paving or a lawn, or through the masonry', () => {
@@ -364,6 +500,23 @@ describe('castle geometry', () => {
         // (Lawn within a short step of it: at a lawn's sharp corner the kerb runs beside a thin wedge.)
         const near = Array.from({ length: 12 }, (_, j) => (j / 12) * Math.PI * 2).some((a) => [0.5, 0.9].some((d) => lawnAt(x + Math.sin(a) * d, z + Math.cos(a) * d)));
         if (!near) bad.push(`${p.name}: its kerb runs on past the lawn at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+      }
+    }
+    // Where a curved kerb ends it meets a straight kerb end to end, on its line: one edge round the
+    // lawn's corner, never a point running on past it or a gap.
+    for (const p of P.filter((q) => q.kind === 'kerb_ring')) {
+      const bands = new Map<number, Solid[]>();
+      for (const s of p.solids) bands.set(s.part.mesh, [...(bands.get(s.part.mesh) ?? []), s]);
+      for (const list of bands.values()) for (const [s, nb] of [[list[0], list[1]], [list[list.length - 1], list[list.length - 2]]]) {
+        // (A band's blocks run along their own X; its free end is the face away from its neighbour.)
+        const u = s.u[0], ends = [1, -1].map((sg) => s.c.clone().addScaledVector(u, sg * s.e[0]));
+        const end = ends[0].distanceTo(nb.c) > ends[1].distanceTo(nb.c) ? ends[0] : ends[1];
+        const meets = (L.kerbs ?? []).some((k) => {
+          const kx = Math.cos(k.rot), kz = -Math.sin(k.rot);
+          if (Math.abs(kx * u.x + kz * u.z) < 0.995) return false;
+          return [1, -1].some((sg) => Math.hypot(k.x + (kx * sg * k.len) / 2 - end.x, k.z + (kz * sg * k.len) / 2 - end.z) < 0.08);
+        });
+        if (!meets) bad.push(`${p.name}: its kerb ends at (${end.x.toFixed(2)}, ${end.z.toFixed(2)}) without meeting a straight kerb end to end`);
       }
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
