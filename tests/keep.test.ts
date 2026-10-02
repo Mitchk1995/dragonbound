@@ -134,7 +134,7 @@ describe('Dragonspire Keep', () => {
     expect(path).not.toBeNull();
     // On the way in it passes through the gate (its passage is four cells wide) and up the avenue.
     const near = (g: { x: number; z: number }) => Math.min(...path.slice(1).map((q, i) => distToPoly(g.x, g.z, [path[i], q]).d));
-    for (const g of [{ x: 66, z: 100 }, { x: 66, z: 70 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(2.1);
+    for (const g of [{ x: 66, z: 100 }, { x: 66, z: 62 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(2.1);
     // The curtain is shut elsewhere: a step through its north wall is blocked.
     expect(nav.isWalkable(80, 22)).toBe(false);
   });
@@ -144,7 +144,7 @@ describe('Dragonspire Keep', () => {
     expect(k.x + great.at + great.w / 2).toBe(CASTLE_PLAN.gate.x);
     expect(gate.x).toBeCloseTo(CASTLE_PLAN.gate.x, 6);
     expect(fountain).toBeDefined();
-    expect([fountain.x, fountain.z]).toEqual([66, 82]);
+    expect([fountain.x, fountain.z]).toEqual([66, 78]);
     expect(fountain.x).toBe(CASTLE_PLAN.gate.x);
   });
   it('the west wing and the barracks mirror each other across the axis', () => {
