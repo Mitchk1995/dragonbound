@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
-import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
+import { Cell, Fluid, Ground, Lawn, type ZoneLayout } from './layout';
+import { buildLawn } from './lawn';
 import { buildProp, OCCLUDING_PROPS, type Prop } from './props';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
@@ -536,7 +537,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
             bushes.push(m.compose(p, q, s.set(sc, sc * 0.75, sc)).clone());
             bushCols.push(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]).offsetHSL(0, 0.04, -0.03));
           }
-        } else if (g === Ground.Grass && theme.flowers && rng() < 0.06) {
+        } else if (g === Ground.Grass && theme.flowers && layout.lawn?.[i] !== Lawn.Clipped && rng() < 0.06) {
           const fc = new THREE.Color(theme.flowers[Math.floor(rng() * theme.flowers.length)]);
           for (let k = 0; k < 4; k++) {
             p.set(x + rng(), heightAt(x + 0.5, z + 0.5), z + rng());
@@ -648,8 +649,22 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     group.add(core);
   }
 
+  // A full grass carpet where the layout lays one (lawn.ts).
+  for (const mesh of buildLawn(layout, theme, heightAt, WIND)) group.add(mesh);
   // Grass: clumps of thin blades fanning out (dark at the root, light at the tip), coloured from
   // the zone's own grass, thick in meadows, sparse on dirt, none on paths; they sway in the wind.
+  // Over a lawn they only break up its edges: along meadow borders and at the foot of trees and
+  // walls, never on clipped lawns or on the castle's swept ground.
+  const lawn = layout.lawn;
+  const lawnEdge = (x: number, z: number) => {
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = x + dx, zz = z + dz;
+      if (xx < 0 || zz < 0 || xx >= w || zz >= h) return true;
+      const j = zz * w + xx;
+      if (lawn![j] === Lawn.None || layout.cells[j] !== Cell.Ground) return true;
+    }
+    return false;
+  };
   const tufts: THREE.Matrix4[] = [], tuftCols: THREE.Color[] = [];
   const grassPal = theme.ground[Ground.Grass] ?? [0x5a7a3a, 0x6a8a44];
   const tuftNoise = smoothNoise(seed + 91);
@@ -658,6 +673,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const gi = Math.floor(z) * w + Math.floor(x);
     const g = layout.ground[gi];
     if (layout.cells[gi] !== Cell.Ground || layout.fluid[gi] || (g !== Ground.Dirt && g !== Ground.Grass)) continue;
+    if (lawn && (lawn[gi] !== Lawn.Meadow || !lawnEdge(Math.floor(x), Math.floor(z)))) continue;
     const meadow = tuftNoise(x * 0.08, z * 0.08);
     if (rng() > (g === Ground.Grass ? 0.4 + meadow * 0.6 : 0.15)) continue;
     p.set(x, heightAt(x, z) - 0.02, z);

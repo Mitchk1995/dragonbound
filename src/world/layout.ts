@@ -64,6 +64,21 @@ export enum Fluid {
   Lava = 2,
 }
 
+/** Grass carpet over a cell (see lawn.ts): none (loose tufts instead), meadow, or a clipped lawn. */
+export enum Lawn {
+  None = 0,
+  Meadow = 1,
+  /** Clipped castle lawn: short, striped. */
+  Clipped = 2,
+}
+
+/** The lawn a cell grows: grass ground on open ground, under trees and under props. */
+export function lawnCell(cell: number, ground: number, fluid: number, clipped: boolean): Lawn {
+  if (fluid || ground !== Ground.Grass) return Lawn.None;
+  if (cell !== Cell.Ground && cell !== Cell.Blocked && cell !== Cell.Tree) return Lawn.None;
+  return clipped ? Lawn.Clipped : Lawn.Meadow;
+}
+
 export interface ZoneLayout {
   w: number;
   h: number;
@@ -96,6 +111,10 @@ export interface ZoneLayout {
   buildings?: BuildingSpec[];
   /** Chance (percent) of a tree on each raised relief cell; the theme's reliefTrees otherwise. */
   canopy?: Uint8Array;
+  /** Grass carpet per cell (Lawn enum); absent = loose grass tufts only. */
+  lawn?: Uint8Array;
+  /** Discs the lawn is cut back from, its border running exactly along each circle. */
+  lawnCut?: { x: number; z: number; r: number }[];
   /** Walkable cells nobody could reach, sealed off by Gen.connect (a designed area should leave none). */
   sealed?: number[];
 }

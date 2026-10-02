@@ -1,7 +1,7 @@
 import type { Vec2 } from '../types';
 import { Gen, distToPoly, pointAt } from '../world/gen';
 import { upperCells, type BuildingSpec } from '../world/building';
-import { blockDisc, Cell, Fluid, Ground, type StationKind, type ZoneLayout } from '../world/layout';
+import { blockDisc, Cell, Fluid, Ground, Lawn, lawnCell, type StationKind, type ZoneLayout } from '../world/layout';
 
 /**
  * Zone maps. Each is composed from big authored shapes (roads, rivers, lakes, clearings,
@@ -1137,6 +1137,23 @@ export function buildKeep(seed: number): ZoneLayout {
     return near * 0.4 * (0.4 + G.noise(x * 0.07 + 20, z * 0.07) * 1.1) + belt + (G.noise(x * 0.08, z * 0.08) > 0.68 ? 0.07 : 0);
   }, 0);
   G.connect();
+  // A full grass carpet on every grassy cell: clipped lawns inside the curtain, meadow outside.
+  const lawn = (G.l.lawn = new Uint8Array(w * h));
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    const i = G.idx(x, z);
+    lawn[i] = lawnCell(G.l.cells[i], G.l.ground[i], G.l.fluid[i], inCastle(x + 0.5, z + 0.5));
+  }
+  // Round the fountain the parterre's lawns end in a true circle just under their box arcs: the
+  // plaza's paving runs out to the arcs, and the carpet grows over the cells the circle crosses.
+  const ARC_LAWN = 8.7;
+  for (let z = Math.floor(FOUNTAIN.z - 10); z <= FOUNTAIN.z + 10; z++) for (let x = Math.floor(FOUNTAIN.x - 10); x <= FOUNTAIN.x + 10; x++) {
+    const px = x + 0.5, pz = z + 0.5, r = Math.hypot(px - FOUNTAIN.x, pz - FOUNTAIN.z), i = G.idx(x, z);
+    const panel = Math.abs(px - AXIS) > 3 && Math.abs(pz - CROSS_AXIS) > 2;
+    if (!panel || r >= 9.6 || (G.l.cells[i] !== Cell.Ground && G.l.cells[i] !== Cell.Blocked)) continue;
+    if (r < 9) G.l.ground[i] = Ground.Stone;
+    if (r >= 7.4) lawn[i] = Lawn.Clipped;
+  }
+  G.l.lawnCut = [{ x: FOUNTAIN.x, z: FOUNTAIN.z, r: ARC_LAWN }];
   return G.l;
 }
 

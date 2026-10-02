@@ -29,6 +29,7 @@ import { Story } from './systems/story';
 import type { SkillId } from './types';
 import { UI } from './ui/ui';
 import { WorldText } from './ui/worldText';
+import { LAWN_SHELLS, setLawnShells } from './world/lawn';
 import { OCCLUDE } from './world/worldView';
 import { ZoneRuntime } from './world/zone';
 
@@ -486,13 +487,14 @@ export class Game {
   /**
    * Quality presets. High: up to 2× pixel ratio, 4× MSAA, 2048 shadows, bloom. Medium: 1.5×,
    * MSAA, 1536 shadows, bloom. Low: 1× (no supersampling on HiDPI), no MSAA, 1024 shadows, no
-   * bloom — for integrated GPUs.
+   * bloom — for integrated GPUs. The lawn draws 8, 6 or 4 shells.
    */
   applyGraphics(level: Graphics) {
     const p = { high: { ratio: 2, msaa: 4, shadow: 2048, bloom: true }, medium: { ratio: 1.5, msaa: 4, shadow: 1536, bloom: true }, low: { ratio: 1, msaa: 0, shadow: 1024, bloom: false } }[level];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
     for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) rt.samples = p.msaa;
     this.bloom.enabled = p.bloom;
+    setLawnShells(LAWN_SHELLS[level]);
     if (this.sun.shadow.mapSize.x !== p.shadow) {
       this.sun.shadow.mapSize.set(p.shadow, p.shadow);
       this.sun.shadow.map?.dispose();

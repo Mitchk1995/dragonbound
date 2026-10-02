@@ -23,6 +23,8 @@ const BED_Y = -1.0;
 /** Highest a relief vertex below the first terrace may stand (cells with a corner above it are relief). */
 const FLOOR_CAP = 0.6;
 export const WATER_Y = -0.28;
+/** Brightness of the ground under a lawn (its root layer). */
+const LAWN_ROOT = 0.5;
 
 const SPLAT: Record<number, number> = {
   [Ground.Dirt]: 0, [Ground.Path]: 0, [Ground.Camp]: 0, [Ground.Grass]: 1,
@@ -99,6 +101,8 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         const top = theme.ground[theme.mesaTop!] ?? shades;
         c.setHex(top[0]).lerp(c2.setHex(top[1]), noise(x * 0.09, z * 0.09));
       } else if (relief) c.copy(cliffC.setHex(cliffShades[0]).lerp(c2.setHex(cliffShades[1]), noise(x * 0.21 + 50, z * 0.21)));
+      // Under a grass carpet (lawn.ts) the ground is its dark root layer: gaps between blades read as depth.
+      if (layout.lawn?.[i] && g === Ground.Grass) c.multiplyScalar(LAWN_ROOT);
       const bed = layout.fluid[i] !== Fluid.None && cell !== Cell.Ground;
       // Under water the bed is dark silt/rock; in the drowned city it is the old paving, sunk.
       if (bed) c.multiplyScalar(theme.wall === 'ruin' ? 0.62 : 0.5);
@@ -111,13 +115,16 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const parts: [number, number, THREE.Color][] = overgrown
         ? [[ch, 0.5, c], [2, 0.5, stoneC.setHex(theme.ground[Ground.Stone]?.[0] ?? 0x6a7070).lerp(c2.setHex(theme.ground[Ground.Stone]?.[1] ?? 0x5a6060), noise(x * 0.09 + 13, z * 0.09))]]
         : [[ch, 1, c]];
+      // A lawn's ground gives way to the paving beside it (the carpet's own edge is the lawn's
+      // border), so no grass bleeds out over the stones.
+      const splatW = layout.lawn?.[i] ? 0.35 : 1;
       for (const [xx, zz] of [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]]) {
         const k = vi(xx, zz);
         for (const [pc, wt, cc] of parts) {
           col[k * 3] += cc.r * wt;
           col[k * 3 + 1] += cc.g * wt;
           col[k * 3 + 2] += cc.b * wt;
-          splat[k * 4 + pc] += wt;
+          splat[k * 4 + pc] += wt * splatW;
           chan[k * 12 + pc * 3] += cc.r * wt;
           chan[k * 12 + pc * 3 + 1] += cc.g * wt;
           chan[k * 12 + pc * 3 + 2] += cc.b * wt;
