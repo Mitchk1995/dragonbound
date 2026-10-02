@@ -89,6 +89,12 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - One deep blue slate spire on the donjon only, with a gold finial and the lord's banner; every other tower stays crenellated. It was checked from the overview, the approach and the skyline and reads as one landmark.
   - Pitched roofs on castle buildings stay rejected.
   - Stained glass in the pavilions' upper lancets, the lancet over the great door (sapphire and gold) and the chapel's south gable (sapphire, ruby and emerald); ivy and climbing roses on ten chosen wall faces, mirrored where the plan is; blue-grey kerbs along the avenue and cross walk and round the fountain plaza; cooler paving and a grey-mauve castle rock so the cream walls stand off both.
+- **The castle rock, and every cliff, rebuilt as natural rock** (October 2; docs/CASTLE_DESIGN.md, "The castle rock"). Mitchell found the mountain unnatural, "the same shape stacked on each other", and asked for natural structures around it. Decided and built:
+  - Cliffs are cut on natural bedding: tall beds and the odd thin one, dipping and wandering across the land, so no two faces step alike; the faces are weathered back into bays and stand out as buttresses, lean into overhangs and are cut back under ledges.
+  - The rock is painted as weathered stone, not courses: big fractured facets, long vertical joints, a few broken bedding lines, dark rain streaks and ochre stains, moss in patches on the ledges.
+  - Crags (tall faceted pillars and buttresses in clusters) stand out of the taller faces; boulders lie fallen at the foot and scree spills out over the grass; grass, shrubs and small trees grow on the ledges and along the top lip.
+  - Spurs of the castle rock run out over the ground at its foot at irregular intervals, so the rock stands on great roots instead of a straight wall. None reaches a road, a kept lawn, the spring or the farm.
+  - The spring's fall from its culvert stays. The mine's cave walls keep their stacked strata (they are a quarried, layered place).
 - **The 14 material and quest item icons are approved** (ores, bars, uncut gems, the Cinder Seal Fragment and the Cinder Key) and are in the game. Every item now has painted artwork.
 
 ### Already done before Round 5

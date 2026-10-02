@@ -1457,6 +1457,44 @@ export function buildKeep(seed: number): ZoneLayout {
   for (const [x, z, r, hgt] of [[84.5, 111.5, 2.0, 1.6], [242, 150, 3.0, 2.2], [236, 186, 2.4, 1.8], [30, 116, 2.6, 2.0], [266, 120, 2.6, 2.4], [178, 182, 2.2, 1.6]]) {
     G.blob(x, z, r, 1.0, (i, _x, _z, t) => rock(i, hgt * (1.1 - t * 0.5)));
   }
+  // Buttresses: at irregular intervals along the foot of every tall face (the castle rock, the
+  // upland's scarps), a spur of the same rock runs out over the ground below, high where it leaves
+  // the face and stepping down toward its nose, so the cliffs stand on great roots of rock and their
+  // foot wanders in and out instead of running straight. None reaches a road, a kept lawn, the
+  // spring or the farm.
+  {
+    const tallFace = (i: number) => G.l.cells[i] === Cell.Cliff && G.l.elev[i] > 4.5;
+    const taken = new Set<string>();
+    const spurs: number[][] = [];
+    for (let z = 2; z < h - 2; z++) for (let x = 2; x < w - 2; x++) {
+      const i = G.idx(x, z);
+      if (G.l.cells[i] !== Cell.Ground || G.l.fluid[i] || G.reserved[i]) continue;
+      let ox = 0, oz = 0, hi = 0;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const j = G.idx(x + dx, z + dz);
+        if (!tallFace(j)) continue;
+        ox -= dx;
+        oz -= dz;
+        hi = Math.max(hi, level[j] + G.l.elev[j] - level[i]);
+      }
+      const ol = Math.hypot(ox, oz);
+      if (hi < 5 || ol < 0.5) continue;
+      if (Math.hypot(x - 92.5, z - 113.5) < 9 || Math.hypot(x - 27, z - 53) < 12) continue;
+      const key = `${Math.floor((x + G.noise(z * 0.2, 3) * 6) / 11)},${Math.floor((z + G.noise(x * 0.2, 7) * 6) / 11)}`;
+      if (taken.has(key)) continue;
+      taken.add(key);
+      if (G.rng() < 0.3) continue;
+      spurs.push([x + 0.5, z + 0.5, ox / ol, oz / ol, hi]);
+    }
+    for (const [x, z, ox, oz, hi] of spurs) {
+      const len = 2.5 + G.rng() * 4, wide = 1.4 + G.rng() * 1.4, bend = (G.rng() - 0.5) * 0.6;
+      for (let t = 0; t <= len; t += 0.5) {
+        const f = t / len, a = bend * f;
+        const dx = ox * Math.cos(a) - oz * Math.sin(a), dz = ox * Math.sin(a) + oz * Math.cos(a);
+        G.blob(x + dx * t, z + dz * t, wide * (1 - f * 0.55), 0.4, (i) => rock(i, hi * (0.85 - 0.6 * f) - 1));
+      }
+    }
+  }
   // The tear faces are fresh rock: a broken lip of crags along the north and west edges; the old
   // weathered edges keep only the odd crag between the woods.
   const voidD = G.distance((i) => G.l.cells[i] === Cell.Void);

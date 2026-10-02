@@ -116,6 +116,33 @@ export function slabBlock(seed: number) {
   });
 }
 
+/**
+ * A crag: a tall, faceted rock column for cliff faces (unit size: about 1 across, base on y = 0,
+ * 1 high). An irregular ring of 5 to 7 sides, its upper rings drawn in and pushed off-centre so it
+ * leans and narrows unevenly, and a top broken off at a slant. Scaled per instance into buttresses,
+ * pillars and spurs.
+ */
+export function cragColumn(seed: number) {
+  return cached(`cg${seed}`, () => {
+    const rng = mulberry32(seed * 4243 + 17);
+    const n = 5 + Math.floor(rng() * 3), a0 = rng() * Math.PI * 2;
+    const tilt = rng() * Math.PI * 2, slope = 0.12 + rng() * 0.22;
+    const lean = [(rng() - 0.5) * 0.18, (rng() - 0.5) * 0.18];
+    const pts: THREE.Vector3[] = [];
+    const radii = Array.from({ length: n }, () => 0.36 + rng() * 0.16);
+    for (const [y, shrink, off] of [[0, 1, 0], [0.45 + rng() * 0.15, 0.86 + rng() * 0.1, 0.5], [0.86, 0.62 + rng() * 0.16, 1]]) {
+      for (let i = 0; i < n; i++) {
+        const a = a0 + (i / n) * Math.PI * 2 + (rng() - 0.5) * 0.35, r = radii[i] * shrink * (0.92 + rng() * 0.14);
+        const x = Math.cos(a) * r + lean[0] * off, z = Math.sin(a) * r + lean[1] * off;
+        // The top ring is broken off at a slant.
+        const yy = y < 0.8 ? y : y + Math.cos(a - tilt) * slope * 0.5 + 0.04;
+        pts.push(V(x, Math.min(1, yy), z));
+      }
+    }
+    return new ConvexGeometry(pts);
+  });
+}
+
 /** A square crystal prism with a pyramid tip; base on y = 0, total height h. */
 export function prism(w: number, h: number, tip = 0.3) {
   return cached(`pr${w},${h},${tip}`, () => {

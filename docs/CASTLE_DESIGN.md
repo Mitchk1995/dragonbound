@@ -100,6 +100,17 @@ The castle is built in its own stone, so it reads as one royal composition again
 
 The stone is painted like all masonry, as blocks of varied tone; the ashlar is painted a little stronger and is damp and cooler at its foot, brightening upward.
 
+## The castle rock
+
+The crown stands on a mountain of natural rock, and every cliff on the island (and in the other zones' outdoor rock) is built the same way:
+
+- **Beds:** the rock is cut on natural bedding planes at irregular spacing (mostly tall beds, now and then a thin one) that dip and wander slowly, so ledges run at different heights along a face and no two cliffs step alike. The mine's cave walls keep their even, stacked strata.
+- **Weathered faces:** above the foot every face is pushed back into the rock by different amounts along the cliff and up it, standing out as buttresses, falling back into bays, leaning out over the bed below or cut back under the one above. The foot stays on its cell edge and the rock at the island's edge stays put over the underside.
+- **Paint:** big upright fractured facets, each catching the light from its own side, long vertical joints, a few broken bedding lines and the odd patch of fractures; dark rain streaks run down the faces and ochre and cool stains drift across them; moss takes hold in patches on the ledges.
+- **Crags, boulders and scree:** faceted crags (tall pillars and buttresses, some in pairs) stand out of every face taller than a storey; boulders sized to the face lie fallen at its foot and scree spills a little way out over the grass. None stands on a road or paving or crowds the spring's fall or the retaining wall.
+- **Plants:** grass, shrubs and the odd small tree grow wherever the rock lies flat: on the ledges and along the top lip.
+- **Spurs:** at irregular intervals along the foot of every tall face a spur of the same rock runs out over the ground below, high where it leaves the face and stepping down to its nose.
+
 ## Grass, water and sky
 
 The Veil is lit at the golden hour: a warm, low sun, a lilac sky warming to peach at the horizon, a sea of soft cloud below the island's edge, a bright sky bounce so shade stays readable. No stars.
@@ -109,7 +120,7 @@ Every grassy cell on the island grows a continuous shell lawn: clipped short wit
 
 ## Checking it
 
-`npm run inspect -- bailey` captures the castle for review: an overview and a plan, the approach, the architecture up close (the hall's front, the gatehouse's outer face, the gate front, a wall tower, the donjon and its spire, the north skyline, the roses behind the bower), every yard and garden through the gameplay camera with the hero standing in it, the fountain and a lawn up close, the island beyond, and the hero by the south wall as it dissolves. It also measures the frame cost at the fountain and in a meadow.
+`npm run inspect -- bailey` captures the castle for review: the castle rock from below (the south face from the farm, the east face and the approach's cutting from the court, the cutting close up, the west tear face from out over the Veil, the spring's fall, and the rock's foot through the gameplay camera; `bailey:rock` captures only these), an overview and a plan, the approach, the architecture up close (the hall's front, the gatehouse's outer face, the gate front, a wall tower, the donjon and its spire, the north skyline, the roses behind the bower), every yard and garden through the gameplay camera with the hero standing in it, the fountain and a lawn up close, the island beyond, and the hero by the south wall as it dissolves. It also measures the frame cost at the rock's foot, at the fountain and in a meadow.
 
 ## Still to build
 

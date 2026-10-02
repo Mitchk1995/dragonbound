@@ -10,7 +10,8 @@ import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel'
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
-import { hash01, rockBlock, slabBlock, taper } from '../render/blocks';
+import { cragColumn, hash01, rockBlock, slabBlock, taper } from '../render/blocks';
+import { useStrataRock } from '../render/rock';
 
 import type { SurfaceKind } from '../render/textures';
 import { treeSet, type TreeKind, type TreeSet, type TreeStyle } from './trees';
@@ -363,10 +364,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     return kinds[kinds.length - 1];
   };
   const trees: Record<TreeKind, { m: THREE.Matrix4[]; c: THREE.Color[] }> = { pine: { m: [], c: [] }, grove: { m: [], c: [] }, ash: { m: [], c: [] } };
-  const addTree = (x: number, z: number, scale = 1) => {
+  const addTree = (x: number, z: number, scale = 1, y?: number) => {
     const kind = speciesAt(x, z);
     const sc = (0.8 + rng() * 0.6) * scale;
-    p.set(x + (rng() - 0.5) * 0.3, heightAt(x, z) - 0.05, z + (rng() - 0.5) * 0.3);
+    if (y === undefined) p.set(x + (rng() - 0.5) * 0.3, heightAt(x, z) - 0.05, z + (rng() - 0.5) * 0.3);
+    else p.set(x, y - 0.05, z);
     q.setFromEuler(e.set((rng() - 0.5) * 0.1, rng() * Math.PI * 2, (rng() - 0.5) * 0.1));
     s.set(sc, sc * (0.9 + rng() * 0.3), sc);
     trees[kind].m.push(m.compose(p, q, s).clone());
@@ -466,6 +468,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       debrisCols.push(debrisBase.clone().offsetHSL(0, -0.02, (rng() - 0.5) * 0.12));
     }
   };
+  const rockCells: number[] = [];
   for (let z = 0; z < h; z++) {
     for (let x = 0; x < w; x++) {
       const cell = at(x, z);
@@ -483,8 +486,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         const edge = nearWalkable(x, z);
         if (edge && cell === Cell.Wall && theme.wallRise) {
           // Cave walls: the stacked strata at their foot do this job (no tilted boulders).
+        } else if (!theme.wallRise) {
+          // Outdoor rock: boulders, crags, scree and plants are set along it below (rockFoot).
+          rockCells.push(x, z);
         } else if (edge && rng() < (cell === Cell.Wall ? 0.6 : 0.3)) {
-          // Fallen ledges at the foot of cliffs: one or two flat-topped slabs, stepping back, in the
+          // Cave country: fallen ledges at the foot of cliffs, one or two flat-topped slabs stepping back in the
           // cliff's own rock (the same stacked-ledge language as the terraces above, never a
           // tilted boulder with big sloped facets).
           const wc = new THREE.Color(theme.cliff?.[0] ?? 0x6a5e52);
@@ -498,7 +504,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
             strataCols.push(wc.clone().offsetHSL(0, 0, (k ? 0.03 : -0.02) + (rng() - 0.5) * 0.06));
             y += th * 0.9;
           }
-        } else if (!edge && cell === Cell.Cliff && rng() < (layout.canopy ? layout.canopy[i] / 100 : theme.reliefTrees ?? 0)) addTree(x + 0.5, z + 0.5, 1.1);
+        }
       } else if (cell === Cell.Wall) {
         if (!nearWalkable(x, z)) continue;
         const hgt = theme.wall === 'castle' ? 2.4 : 1.6 + rng() * 1.8;
@@ -575,6 +581,125 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       }
     }
   }
+  // ─── Natural rock outdoors ───────────────────────────────────────────────────
+  // Along every outdoor cliff: crags standing out of the taller faces (buttresses and pillars of
+  // different sizes, in clusters, leaning a little), boulders fallen at the foot and scree spilling
+  // from it over the ground below, and plants rooted wherever the rock lies flat: grass and shrubs
+  // on the ledges and along the top lip, the odd small tree on a broad ledge. Nothing is set on a
+  // road or paving, or near a prop (the parapets, the revetment, the falls keep their own faces).
+  const crags: THREE.Matrix4[] = [], cragCols: THREE.Color[] = [];
+  const ledgeTufts: THREE.Matrix4[] = [], ledgeTuftCols: THREE.Color[] = [];
+  if (rockCells.length) {
+    const propNear = new Uint8Array(w * h), cragAt = new Uint8Array(w * h);
+    // Room kept round props by kind (parapets and lamps stand above the rock, not in front of it).
+    const room: Record<string, number> = { spring_fall: 3, edge_fall: 3, revetment: 2, parapet: -1, lamp_post: -1 };
+    for (const pr of layout.props) {
+      const r = room[pr.kind] ?? 1;
+      if (r < 0) continue;
+      const px = Math.floor(pr.x), pz = Math.floor(pr.z);
+      for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+        const xx = px + dx, zz = pz + dz;
+        if (xx >= 0 && zz >= 0 && xx < w && zz < h) propNear[zz * w + xx] = 1;
+      }
+    }
+    const cliffA = new THREE.Color(theme.cliff?.[0] ?? 0x7a6e62), cliffB = new THREE.Color(theme.cliff?.[1] ?? 0x5e544a);
+    const grassy = theme.mesaTop !== undefined;
+    const grassPal0 = theme.ground[Ground.Grass] ?? [0x5a7a3a, 0x6a8a44];
+    /** Bare ground where loose rock may lie (not road, paving, water or a kept lawn). */
+    const looseOk = (x: number, z: number) => {
+      if (x < 0 || z < 0 || x >= w || z >= h) return false;
+      const j = z * w + x, g = layout.ground[j];
+      if (layout.cells[j] !== Cell.Ground || layout.fluid[j] || propNear[j]) return false;
+      if (g === Ground.Stone || g === Ground.Path || g === Ground.Arena) return false;
+      return !layout.lawn || layout.lawn[j] === Lawn.None || layout.lawn[j] === Lawn.Meadow;
+    };
+    const treeP = (i: number) => (layout.canopy ? layout.canopy[i] / 100 : theme.reliefTrees ?? 0);
+    for (let n = 0; n < rockCells.length; n += 2) {
+      const x = rockCells[n], z = rockCells[n + 1], i = z * w + x;
+      const cx = x + 0.5, cz = z + 0.5, top = heightAt(cx, cz);
+      // Which way the face looks: toward the ground below it (the lower the ground, the more it counts).
+      let ox = 0, oz = 0, foot = Infinity, fx = -1, fz = -1;
+      for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+        if (!walkable(x + dx, z + dz) || layout.fluid[(z + dz) * w + x + dx]) continue;
+        const fl = floorAt(x + dx + 0.5, z + dz + 0.5), drop = top - fl, d2 = dx * dx + dz * dz;
+        if (drop <= 0.5) continue;
+        ox += (dx / d2) * drop;
+        oz += (dz / d2) * drop;
+        if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && fl < foot) [foot, fx, fz] = [fl, x + dx, z + dz];
+      }
+      const ol = Math.hypot(ox, oz);
+      if (fx >= 0 && ol > 0.01 && !propNear[i]) {
+        ox /= ol;
+        oz /= ol;
+        const tx = -oz, tz = ox, faceH = top - foot;
+        // Crags out of the taller faces, in clusters, none crowding the last.
+        let clear = true;
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (cragAt[(z + dz) * w + x + dx]) clear = false;
+        if (faceH > 2.4 && clear && rng() < 0.5) {
+          cragAt[i] = 1;
+          const tall = rng() < 0.3;
+          for (let k = 0, nk = rng() < 0.45 ? 2 : 1; k < nk; k++) {
+            const W = Math.min(3.6, 1.2 + faceH * 0.14 + rng() * 1.2) * (k ? 0.7 : 1), D = W * (0.75 + rng() * 0.35);
+            const H = Math.min(faceH - 0.5, Math.max(1.6, faceH * (tall && !k ? 0.86 + rng() * 0.08 : 0.38 + rng() * 0.45) * (k ? 0.75 : 1)));
+            const along = k ? (rng() < 0.5 ? -1 : 1) * W * 0.75 : (rng() - 0.5) * 0.4;
+            const back = W / 2 - 0.7 + (k ? 0.25 : 0);
+            p.set(cx - ox * back + tx * along, foot - 0.3, cz - oz * back + tz * along);
+            q.setFromEuler(e.set((rng() - 0.5) * 0.08, rng() * 6.3, (rng() - 0.5) * 0.08));
+            crags.push(m.compose(p, q, s.set(W, H + 0.3, D)).clone());
+            cragCols.push(cliffA.clone().lerp(cliffB, rng() * 0.5).offsetHSL((rng() - 0.5) * 0.02, 0, (rng() - 0.45) * 0.08));
+          }
+        }
+        // Boulders fallen at the foot, bigger under taller faces.
+        if (rng() < 0.3 + Math.min(0.25, faceH * 0.03)) {
+          for (let k = 0, nk = 1 + Math.floor(rng() * 2.4); k < nk; k++) {
+            const sc = 0.4 + Math.min(faceH, 10) * 0.08 + rng() * 0.5;
+            const bx = cx + ox * (0.3 + rng() * 0.5) + tx * (rng() - 0.5) * 1.4, bz = cz + oz * (0.3 + rng() * 0.5) + tz * (rng() - 0.5) * 1.4;
+            const bxi = Math.floor(bx), bzi = Math.floor(bz);
+            if (bxi < 0 || bzi < 0 || bxi >= w || bzi >= h || propNear[bzi * w + bxi]) continue;
+            if (walkable(bxi, bzi) && !looseOk(bxi, bzi)) continue;
+            p.set(bx, foot - sc * 0.22, bz);
+            q.setFromEuler(e.set((rng() - 0.5) * 0.5, rng() * 6.3, (rng() - 0.5) * 0.5));
+            rocks.push(m.compose(p, q, s.set(sc * (0.9 + rng() * 0.4), sc * (0.55 + rng() * 0.4), sc)).clone());
+            rockCols.push(cliffA.clone().lerp(rockBase, 0.2).offsetHSL(0, 0, -0.03 + (rng() - 0.5) * 0.1));
+          }
+        }
+        // Scree spilling out over the ground below.
+        if (faceH > 1.6 && looseOk(fx, fz) && rng() < 0.75) {
+          for (let k = 0, nk = 2 + Math.floor(rng() * 4); k < nk; k++) {
+            const sc = 0.07 + rng() * 0.2, u = rng();
+            const px = fx + 0.5 - ox * (0.5 - u) * 0.9 + tx * (rng() - 0.5), pz = fz + 0.5 - oz * (0.5 - u) * 0.9 + tz * (rng() - 0.5);
+            p.set(px, heightAt(px, pz) - sc * 0.2, pz);
+            q.setFromEuler(e.set((rng() - 0.5) * 0.6, rng() * 6.3, (rng() - 0.5) * 0.6));
+            debris.push(m.compose(p, q, s.set(sc * (1 + rng() * 0.5), sc * (0.6 + rng() * 0.4), sc)).clone());
+            debrisCols.push(cliffA.clone().lerp(rockBase, 0.3).offsetHSL(0, -0.02, (rng() - 0.5) * 0.12));
+          }
+        }
+      }
+      // Plants rooted on the rock wherever it lies flat (grassy country only).
+      if (!grassy) continue;
+      for (let k = 0; k < 3; k++) {
+        const px = x + 0.1 + rng() * 0.8, pz = z + 0.1 + rng() * 0.8;
+        const y = terrain.ledge(px, pz, 0.4);
+        if (y === null || y - floorAt(px, pz) < 0.7) continue;
+        const [wx, wz] = terrain.warp(px, y, pz);
+        const r = rng();
+        if (r < treeP(i) * 4 && terrain.ledge(px, pz, 1.1) !== null) addTree(wx, wz, 0.65 + rng() * 0.25, y);
+        else if (r < 0.2) {
+          const sc = 0.35 + rng() * 0.45;
+          p.set(wx, y - 0.05, wz);
+          q.setFromEuler(e.set(0, rng() * 6.3, 0));
+          bushes.push(m.compose(p, q, s.set(sc, sc * 0.75, sc)).clone());
+          bushCols.push(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]).offsetHSL(0, 0.04, -0.03));
+        } else if (r < 0.85) {
+          const sc = 0.7 + rng() * 0.6;
+          p.set(wx, y - 0.03, wz);
+          q.setFromEuler(e.set((rng() - 0.5) * 0.2, rng() * 6.3, (rng() - 0.5) * 0.2));
+          ledgeTufts.push(m.compose(p, q, s.set(sc, sc * (0.85 + rng() * 0.4), sc)).clone());
+          ledgeTuftCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(grassPal0[1]), rng()).multiplyScalar(1.15).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.05));
+        }
+      }
+    }
+  }
   // Behind the foot of the cave walls the same slabs climb on: bigger blocks stacked on the rock
   // mass in rings further back, each column topped at the rock's own height, so the wall reads as
   // one body of layered stone from the floor up into the dark (the bare relief only shows in the
@@ -640,7 +765,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   inst(rockBlock(9, 1.1, 1.0, 1.0), rims, rimCols, 0, false, 'rock');
   // Cave slabs fade into the dark with height exactly like the rock mass behind them.
   const caveShade = (mat: THREE.MeshStandardMaterial) => {
-    if (theme.wallRise) applyHeightShade(mat, theme.topShade ?? 1, ...(theme.topRange ?? [2.5, 12]));
+    if (!theme.wallRise) return;
+    applyHeightShade(mat, theme.topShade ?? 1, ...(theme.topRange ?? [2.5, 12]));
+    useStrataRock(mat);
   };
   inst(slabBlock(31), half(strata, 0), half(strataCols, 0), 0, true, 'rock', true, undefined, caveShade);
   inst(slabBlock(32), half(strata, 1), half(strataCols, 1), 0, true, 'rock', true, undefined, caveShade);
@@ -648,6 +775,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   inst(slabBlock(35), half(mass, 1), half(massCols, 1), 0, true, 'rock', false, undefined, caveShade);
   inst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), crevices, null, 0x120e0b, true, undefined, false);
   inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false);
+  for (let v = 0; v < 4; v++) inst(cragColumn(41 + v), crags.filter((_, i) => i % 4 === v), cragCols.filter((_, i) => i % 4 === v), 0, true, 'rock');
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
   const masonry = mergeGeometries([
     new THREE.BoxGeometry(1, 0.45, 1).translate(0, -0.275, 0),
@@ -707,7 +835,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     tufts.push(m.compose(p, q, s.set(sc, sc * (0.85 + rng() * 0.4), sc)).clone());
     tuftCols.push(new THREE.Color(grassPal[0]).lerp(new THREE.Color(grassPal[1]), rng()).multiplyScalar(g === Ground.Dirt ? 1.05 : 1.22).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.04));
   }
-  inst(grassClump(), tufts, tuftCols, 0, false, undefined, false, undefined, (mat) => {
+  inst(grassClump(), [...tufts, ...ledgeTufts], [...tuftCols, ...ledgeTuftCols], 0, false, undefined, false, undefined, (mat) => {
     mat.vertexColors = true;
     mat.flatShading = false;
     applyWind(mat);

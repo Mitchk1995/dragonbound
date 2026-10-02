@@ -20,7 +20,8 @@ import type { Slot } from '../types';
  * point of interest, model, pose and panel and writes full-window PNGs plus report.json to
  * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
  * perf, trees (tree style comparison, see treeLineup.ts), approved (approved artwork, see approvedInspect.ts).
- * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey.
+ * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
+ * rock's views alone: bailey:rock).
  */
 
 type Api = NonNullable<NonNullable<Window['electronAPI']>['inspect']>;
@@ -106,7 +107,8 @@ export async function runInspect(g: Game, suites: string) {
     const zoneArg = suites.split(',').find((s) => s.startsWith('zones:'));
     if (want('zones') || zoneArg) report.zones = await zonesSuite(g, shot, zoneArg?.slice(6).split('+'));
     if (want('castle')) report.castle = await (await import('./castleInspect')).castleSuite(g, shot);
-    if (want('bailey')) report.bailey = await (await import('./castleInspect')).baileySuite(g, shot);
+    const rockOnly = suites.split(',').includes('bailey:rock');
+    if (want('bailey') || rockOnly) report.bailey = await (await import('./castleInspect')).baileySuite(g, shot, rockOnly);
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     if (want('effects')) await effectsSuite(g, shot);
     if (want('boss')) await bossSuite(g, shot);

@@ -81,7 +81,7 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
  * centrepiece and a lawn up close, the island beyond and the camera-side wall dissolving round the
  * hero. Every position comes from CASTLE_PLAN, so the shots follow the layout.
  */
-export async function baileySuite(g: Game, shot: (name: string) => Promise<void>) {
+export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false) {
   g.travel('keep', true);
   await new Promise((r) => setTimeout(r, 400));
   document.body.classList.add('inspect-clean');
@@ -134,13 +134,32 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     }
   };
 
-  // The whole castle: from high in the south-east, and as a plan from almost straight above.
-  await view('overview', [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70);
-  await view('plan', [c.x, y0 + 160, c.z + 22], [c.x, y0, c.z + 1], 70);
+  const finish = () => {
+    g.player.obj.visible = true;
+    document.body.classList.remove('inspect-clean');
+    g.debug.timeScale = 1;
+    g.travel('keep', true);
+    return out;
+  };
+
+  // The castle rock from below (\`bailey:rock\` captures only these): its south face from the farm,
+  // the east face and the approach's cutting from the court, the cutting close up, and the west
+  // tear face from out over the Veil.
+  await view('rock-south', [P.gate.x + 4, 3, P.gate.z + 50], [P.gate.x + 4, 7, P.gate.z + 9], 45);
+  await view('rock-east', [P.gate.x + 100, 7, P.gate.z + 14], [P.gate.x + 62, 7, P.gate.z - 12], 45);
+  await view('rock-cutting', [P.gate.x + 74, 5, P.gate.z + 28], [P.gate.x + 58, 6, P.gate.z + 8], 22);
+  await view('rock-west', [-14, 16, 86], [28, 8, 64], 40);
   // The approach from below the rock: the ledge road climbing west under the south wall to the gate.
   await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
   // The spring's fall out of the castle rock into its pool and the stream leaving it, from below.
   await view('falls', [P.gate.x + 31, y0 - 5, P.gate.z + 30], [P.gate.x + 26.5, y0 - 6.5, P.gate.z + 12], 18);
+  // The rock's foot through the gameplay camera, from the spring's landing (frame cost measured).
+  await play('rock-foot', P.gate.x + 21, P.gate.z + 17, 1.0, true);
+  if (rockOnly) return finish();
+
+  // The whole castle: from high in the south-east, and as a plan from almost straight above.
+  await view('overview', [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70);
+  await view('plan', [c.x, y0 + 160, c.z + 22], [c.x, y0, c.z + 1], 70);
   // The architecture's colour and detail up close: the hall's front between its pavilions, the
   // gatehouse's outer face, the gate front from the terrace, a wall tower, the donjon and its spire,
   // the north skyline from far out in the south-east, and the roses on the curtain behind the bower.
@@ -178,10 +197,5 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await play('walls-southside', P.gate.x + 14, P.gate.z - 3.5, 1.0);
   // Frame cost in a meadow outside the castle, for comparison with the fountain's.
   await play('meadow', 56, 132, 1.0, true);
-
-  g.player.obj.visible = true;
-  document.body.classList.remove('inspect-clean');
-  g.debug.timeScale = 1;
-  g.travel('keep', true);
-  return out;
+  return finish();
 }

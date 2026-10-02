@@ -664,7 +664,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
     uTopRange: { value: new THREE.Vector2(...topRange) },
     uCliff: { value: new THREE.Color(cliff ?? 0x6a5e52) },
     uGroundTex: { value: groundTexture() },
-    uRockTex: { value: rockAtlas() },
+    uRockTex: { value: rockAtlas(cave ? 'strata' : 'natural') },
     uRockScale: { value: 1 / ROCK_TILE },
     uPaintAmt: { value: 0.28 },
     uMixTex: { value: noiseTexture() },
@@ -784,6 +784,19 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           if (rockK > 0.001) {
             vec3 fn = rockFaceN(vSurfPos);
             diffuseColor.rgb = rockPaint(diffuseColor.rgb, vSurfPos, fn, rockK);
+            ${cave ? '' : `// Weathered outdoor rock: dark rain streaks run down the faces (long, thin, broken), broad
+            // ochre and cool stains drift across them${rockTops ? '' : ', and moss and grass take hold on the ledges'}.
+            vec3 aw = abs(fn);
+            float stx = texture2D(uMixTex, vec2(vSurfPos.z * 0.12 + 0.3, vSurfPos.y * 0.01)).r;
+            float stz = texture2D(uMixTex, vec2(vSurfPos.x * 0.12 + 0.7, vSurfPos.y * 0.01)).r;
+            float streak = (stx * aw.x + stz * aw.z) / max(0.001, aw.x + aw.z);
+            float face = steep * rockK * (1.0 - smoothstep(0.35, 0.7, aw.y));
+            diffuseColor.rgb *= 1.0 - 0.32 * smoothstep(0.45, 0.75, streak) * face;
+            float drift2 = texture2D(uMixTex, vSurfPos.xz * 0.021 + vec2(vSurfPos.y * 0.017, 0.4)).r;
+            diffuseColor.rgb *= mix(vec3(0.92, 0.97, 1.06), vec3(1.12, 1.0, 0.8), smoothstep(0.3, 0.75, drift2) * face + (1.0 - face) * 0.5);
+            ${rockTops ? '' : `float mossN = texture2D(uMixTex, vSurfPos.xz * 0.19 + vec2(0.13, 0.77)).r;
+            float moss = smoothstep(0.55, 0.85, fn.y) * smoothstep(0.5, 0.68, mossN + fn.y * 0.1) * rockK;
+            diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.16, 0.25, 0.09), vec3(0.27, 0.36, 0.13), mossN), moss * 0.85);`}`}
           }
           ${cave && topShade < 1 ? CAVE_RISERS : ''}
           ${topShade < 1 ? `// Rock falls away into darkness as it climbs (eased in caves, so the first ledges stay readable).
