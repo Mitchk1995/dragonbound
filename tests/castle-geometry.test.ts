@@ -17,6 +17,7 @@ import { CURTAIN_WALL } from '../src/data/castle';
 const S = castleScene();
 const P = S.pieces;
 const fmt = (v: THREE.Vector3) => `(${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)})`;
+const inArea = (x: number, z: number) => x > CASTLE_AREA.x0 && x < CASTLE_AREA.x1 && z > CASTLE_AREA.z0 && z < CASTLE_AREA.z1;
 const kindOf = (p: Piece) => (p.kind.startsWith('building:') ? 'building' : p.kind);
 /** How deep two pieces' blocks may overlap at any seam (a hair, so blocks laid tight never count). */
 const TIGHT = 0.05;
@@ -199,7 +200,9 @@ describe('castle geometry', () => {
         }
         const at = hd.c.y - leaf.lo.y;
         if (at < 0.9 || at > 1.2) bad.push(`${p.name}: a door handle ${at.toFixed(2)} above the sill (a hand hangs at about 1.0)`);
-        if (overlap(hd, leaf) < -0.03) bad.push(`${p.name}: a door handle at ${fmt(hd.c)} stands off its leaf`);
+        // (On the boards facing the leaf, where it has them.)
+        const face = [leaf, ...p.solids.filter((s) => s.part.tag === 'door-board' && overlap(s, leaf) > -0.01)];
+        if (Math.max(...face.map((s) => overlap(hd, s))) < -0.03) bad.push(`${p.name}: a door handle at ${fmt(hd.c)} stands off its leaf`);
       }
       if (leaves.length && !p.solids.some((s) => s.part.tag === 'handle')) bad.push(`${p.name}: its doors have no handle`);
     }
@@ -260,6 +263,69 @@ describe('castle geometry', () => {
         });
       }))));
       if (!clear) bad.push(`${P[s.piece].name}: the way through its door at ${fmt(s.c)} is blocked on both sides`);
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
+  });
+
+  it('every door lines up with the path or wall walk that reaches it', () => {
+    const bad: string[] = [];
+    const { walkY, walkOff } = CURTAIN_WALL;
+    /** A door leaf's way through: its middle on the ground and the level direction square to its face. */
+    const way = (s: Solid) => {
+      const n = [0, 1, 2].filter((k) => Math.abs(s.u[k].y) < 0.5).reduce((a, k) => (s.e[k] < s.e[a] ? k : a));
+      return { c: s.c.clone().setY(s.lo.y), n: s.u[n].clone().setY(0).normalize() };
+    };
+    // A tower's door onto a wall walk faces straight down the walk, its middle on the walk's middle.
+    for (const w of P.filter((p) => p.kind === 'castle_wall')) {
+      const L = w.spawn!.len!, ends = w.spawn!.v ?? 0;
+      for (const sx of [-1, 1]) {
+        if (!(ends & (sx < 0 ? 1 : 2))) continue;
+        const end = w.obj.localToWorld(new THREE.Vector3((sx * L) / 2, walkY, walkOff));
+        const along = w.obj.localToWorld(new THREE.Vector3(sx, 0, 0)).sub(w.obj.getWorldPosition(new THREE.Vector3())).setY(0).normalize();
+        const leaf = S.solids.find((s) => s.part.tag === 'door-leaf' && P[s.piece] !== w && Math.abs(s.lo.y - end.y) < 0.2 && Math.hypot(s.c.x - end.x, s.c.z - end.z) < 1.4);
+        if (!leaf) continue;
+        const { c, n } = way(leaf), off = c.clone().sub(end), across = Math.abs(off.x * along.z - off.z * along.x);
+        const turn = (Math.acos(Math.min(1, Math.abs(n.dot(along)))) * 180) / Math.PI;
+        if (turn > 2) bad.push(`${P[leaf.piece].name}: its door onto ${w.name}'s walk is turned ${turn.toFixed(1)}° off the walk`);
+        if (across > 0.08) bad.push(`${P[leaf.piece].name}: its door onto ${w.name}'s walk stands ${across.toFixed(2)} off the walk's middle`);
+      }
+    }
+    // A door on the ground: where a walk of paving leads away from it (a band no wider than the door
+    // and a little either side, not a court or a lane running past), the walk's middle is the door's.
+    const L = S.layout, paved = (x: number, z: number) => {
+      const gx = Math.floor(x), gz = Math.floor(z);
+      if (gx < 0 || gz < 0 || gx >= L.w || gz >= L.h) return false;
+      const g = L.ground[gz * L.w + gx];
+      return g === Ground.Stone || g === Ground.Path;
+    };
+    const ways: { who: string; c: THREE.Vector3; n: THREE.Vector3; w: number }[] = [];
+    for (const b of (L.buildings ?? []).filter((q) => inArea(q.x + q.w / 2, q.z + q.d / 2))) for (const d of b.doors) {
+      const u = d.at + d.w / 2;
+      const [c, n] = d.side === 's' ? [[b.x + u, b.z + b.d], [0, 1]] : d.side === 'n' ? [[b.x + u, b.z], [0, -1]] : d.side === 'e' ? [[b.x + b.w, b.z + u], [1, 0]] : [[b.x, b.z + u], [-1, 0]];
+      ways.push({ who: `building:${b.id}'s ${d.side} door`, c: new THREE.Vector3(c[0], 0, c[1]), n: new THREE.Vector3(n[0], 0, n[1]), w: d.w });
+    }
+    for (const s of S.solids.filter((q) => q.part.tag === 'door-leaf' && q.part.info?.cls === 'single' && q.lo.y < S.ground(q.c.x, q.c.z) + 0.3)) {
+      const { c, n } = way(s);
+      for (const sg of [-1, 1]) ways.push({ who: `${P[s.piece].name}'s door`, c, n: n.clone().multiplyScalar(sg), w: DOORS.single.w });
+    }
+    for (const g of P.filter((p) => ['ward_gate', 'postern', 'outer_gatehouse'].includes(p.kind))) {
+      const c = g.obj.getWorldPosition(new THREE.Vector3()), n = g.obj.localToWorld(new THREE.Vector3(0, 0, 1)).sub(c).setY(0).normalize();
+      for (const sg of [-1, 1]) ways.push({ who: `${g.name}`, c: c.clone().addScaledVector(n, sg * (CURTAIN_WALL.T / 2)), n: n.clone().multiplyScalar(sg), w: g.spawn!.len ?? 4 });
+    }
+    for (const { who, c, n, w } of ways) {
+      const lat = new THREE.Vector3(-n.z, 0, n.x);
+      for (const t of [0.7, 1.7, 2.7]) {
+        const at = (s: number) => c.clone().addScaledVector(n, t).addScaledVector(lat, s);
+        const on = (s: number) => paved(at(s).x, at(s).z);
+        if (!on(0)) break;
+        let lo = 0, hi = 0;
+        while (lo > -w - 3 && on(lo - 0.02)) lo -= 0.02;
+        while (hi < w + 3 && on(hi + 0.02)) hi += 0.02;
+        // (A court, or a lane running past the door: nothing to line up with.)
+        if (hi - lo > w + 2.5) continue;
+        const mid = (lo + hi) / 2;
+        if (Math.abs(mid) > 0.12) bad.push(`${who}: the walk ${t.toFixed(1)} out from it runs ${mid.toFixed(2)} off its middle (${fmt(at(mid))})`);
+      }
     }
     expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
   });

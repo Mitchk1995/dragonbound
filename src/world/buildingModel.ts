@@ -10,7 +10,7 @@ import {
 import { studioEnv } from '../render/env';
 import { courseSpans } from '../render/masonry';
 import {
-  archDressing, archPane, archRing, archTympanum, roomMaterial, stone, roomPlate, ASHLAR_B, ASHLAR_L, audit, DOORS, pointedDoor, singleDoor, windowGlass, ASHLAR_W, BLOCKS, TRIM_L, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, HERALD_BLUE, HERALD_BLUE_D, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
+  archDressing, archPane, archRing, archTympanum, roomMaterial, stone, roomPlate, ASHLAR_B, ASHLAR_L, audit, DOORS, pointedDoor, singleDoor, windowGlass, ASHLAR_W, BLOCKS, TRIM_L, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
   GILT, LAMP_NAVY, PLOT_MARK, pointedArch, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, TRIM, TRIM_D, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
@@ -137,7 +137,7 @@ function holed(W: WallFrame, k: ModelKit, p: Obj, a: number, e: number, y0: numb
 
 /** Window glass: the castle's clear, faintly blue panes, see-through to the room behind. */
 function glassMats() {
-  return windowGlass(0.48);
+  return windowGlass();
 }
 
 type Put = (kk: ModelKit, pp: Obj, y0: number, y1: number) => void;
@@ -350,8 +350,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           const bh = btop - 0.07 - bbot - bwid * 0.6;
           if (bh > 0.8) livery(bk, fg, 0, btop, 0, bwid, bh);
         }
-        // The leaves: a pair of the lord's blue boarded leaves closing the whole doorway from the sill
-        // to the point of its arch, set a little back in the reveal, a ring handle on each at the
+        // The leaves: a pair of boarded leaves in the stained oak closing the whole doorway from the
+        // sill to the point of its arch, set a little back in the reveal, a ring handle on each at the
         // hero's hand. (On the camera side they go with the wall when the hero is inside.)
         const [dk, dp] = fade ? [mk, mid] : [k, built], dg = new THREE.Group(), lo = face - 0.24;
         if (ns) dg.position.set(uc, 0.05, (side === 'n' ? 0.5 : b.d - 0.5) + lo * W.out);
@@ -365,7 +365,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // (Not on the camera side: cut down with the wall they would read as stray planks.)
       if (!fade) for (const [hinge, dir] of [[u0, -1], [u1, 1]] as [number, number][]) {
         const leaf = dr.w / 2 - 0.1;
-        piece(leaf, 0.08, dH - 0.1, 0.1, hinge + (dir * leaf) / 2, -(WALL_T / 2 + 0.07), keep ? HERALD_BLUE : WOOD, 0.02);
+        piece(leaf, 0.08, dH - 0.1, 0.1, hinge + (dir * leaf) / 2, -(WALL_T / 2 + 0.07), keep ? DOOR_STAIN[1] : WOOD, 0.02);
       }
     }
     // Windows: glass in the middle of the wall (warm main lights, a sky-tinted top light), a stone
@@ -589,7 +589,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       const h0 = doorH + 0.75, h1 = h0 + 0.85;
       band(true, h0, h1, (kk, pp, a, e) => W.box(kk, pp, 1.1, e - a, 0.1, uc, (a + e) / 2, face + 0.02, DARK, 0, 0.01));
       for (const s of [-1, 1]) {
-        band(true, h0 + 0.02, h1 - 0.02, (kk, pp, a, e) => W.box(kk, pp, 0.52, e - a, 0.08, uc + s * 0.27, (a + e) / 2, face + 0.1, HERALD_BLUE, 0, 0.01));
+        // (Each shutter two boards of the castle's stained oak, the dark of the frame between them.)
+        for (const [i, bu] of [0.135, 0.405].entries()) band(true, h0 + 0.02, h1 - 0.02, (kk, pp, a, e) => W.box(kk, pp, 0.248, e - a, 0.08, uc + s * bu, (a + e) / 2, face + 0.1, DOOR_STAIN[(i + (s > 0 ? 1 : 0)) % 3], 0, 0.01));
         for (const y of [h0 + 0.2, h1 - 0.24]) band(true, y, y + 0.07, (kk, pp, a, e) => W.box(kk, pp, 0.44, e - a, 0.1, uc + s * 0.29, (a + e) / 2, face + 0.13, IRON, 0, 0.005));
       }
       band(true, h0 - 0.1, h0, (kk, pp, a, e) => W.box(kk, pp, 1.4, e - a, 0.24, uc, (a + e) / 2, face + 0.1, ASHLAR_L, 0, 0.01));
@@ -935,8 +936,8 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     // arch and down both jambs to the ground, the pale keystone on the axis, all flush in one plane,
     // and the blue-grey moulding close round it from foot to foot.
     for (const pc of archDressing(dr.w, apex, rise, { foot: 0, t: BAY_T, hood: BAY_HOOD, p: 0.14 })) whole(Math.max(pc.y, 0.01), (kk, pp) => stone(kk.mesh(pp, pc.geo, pc.color, [uc, 0, zc + P / 2])));
-    // The tympanum in the lord's deep blue, the gold diamond on it.
-    block(true, dr.w - 0.1, 0.1, uc, zf + 0.06, 3.8 + 0.36, apex - 0.05, HERALD_BLUE_D, 0.01);
+    // The tympanum in the bay's own stone, the lord's gilt diamond carved on it.
+    block(true, dr.w - 0.1, 0.1, uc, zf + 0.06, 3.8 + 0.36, apex - 0.05, ASHLAR_B, 0.01);
     whole((4.16 + apex) / 2, (kk, pp) => kk.box(pp, [0.7, 0.7, 0.05], [uc, (4.16 + apex) / 2, zf + 0.13], PAL.gold, [0, 0, Math.PI / 4]));
     const [ak, ap] = [fk, lifted];
     // The great tower over the door: the bay rises on above the roofline as a square tower reaching

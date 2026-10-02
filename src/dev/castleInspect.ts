@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CURTAIN_WALL } from '../data/castle';
 import { CASTLE_PLAN } from '../data/zoneMaps';
 import type { Game } from '../game';
 import { cellRole, fitBlocks, fitsOf, footprint, type BuildingSpec, type Floor } from '../world/building';
@@ -261,6 +262,14 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('island', [c.x + 150, y0 + 70, c.z + 165], [c.x + 60, -4, c.z + 70], 100);
   // The hero by the camera-side (south) curtain: the wall stands full height and dissolves round them.
   await play('walls-southside', P.gate.x + 14, P.gate.z - 3.5, 1.0);
+  // Along the wall walks at the hero's eye, down the walk's middle to the tower doors it leads to:
+  // the south walk east to its tower and west to the gatehouse's drum, the east walk north to the
+  // kitchen garden's corner tower and to the stable court's tower.
+  const walkY = y0 + CURTAIN_WALL.walkY + 1.6, mid = CURTAIN_WALL.walkOff;
+  await view('walk-south-east', [P.gate.x + 11, walkY, P.gate.z - mid], [P.gate.x + 20, walkY - 0.6, P.gate.z - mid], 10);
+  await view('walk-south-west', [P.gate.x + 15, walkY, P.gate.z - mid], [P.gate.x + 6, walkY - 0.6, P.gate.z - mid], 10);
+  await view('walk-kitchen', [120 - mid, walkY, 45], [120 - mid, walkY - 0.6, 36], 10);
+  await view('walk-stables', [120 - mid, walkY, 95], [120 - mid, walkY - 0.6, 86], 10);
   // Frame cost in a meadow outside the castle, for comparison with the fountain's.
   await play('meadow', 56, 132, 1.0, true);
   return finish();

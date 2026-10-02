@@ -1214,14 +1214,17 @@ export function arrowLoop(k: ModelKit, g: THREE.Object3D, x: number, y: number, 
 }
 
 /**
- * Bends a piece built flat (along X, its face toward +Z, z = 0 lying on a circle of radius R) round
- * that circle, centred on the origin: x becomes the arc length round it, z the distance out from it.
+ * Lays a piece built flat (along X, its face toward +Z, z = 0 lying on a circle of radius R centred on
+ * the origin) into that circle as a mason cuts a doorway through a round wall: every point keeps its
+ * height and its place across (moved `o` to the side), and goes straight back or out to its own depth
+ * in the wall, so the opening's sides stay square to the way through it while its faces follow the
+ * curve.
  */
-function bendRound(geo: THREE.BufferGeometry, R: number) {
+function cutRound(geo: THREE.BufferGeometry, R: number, o = 0) {
   const g = geo.clone(), p = g.getAttribute('position');
   for (let i = 0; i < p.count; i++) {
-    const t = p.getX(i) / R, rad = R + p.getZ(i);
-    p.setXYZ(i, Math.sin(t) * rad, p.getY(i), Math.cos(t) * rad);
+    const x = p.getX(i) + o, rad = R + p.getZ(i);
+    p.setXYZ(i, x, p.getY(i), Math.sqrt(Math.max(0, rad * rad - x * x)));
   }
   g.computeVertexNormals();
   return g;
@@ -1232,32 +1235,37 @@ function bendRound(geo: THREE.BufferGeometry, R: number) {
  * `back` into the drum and standing only `out` proud of its face, so the stone is cut away for it.
  */
 const walkDoor = () => ({ L: DOORS.single.w + 0.6, top: DOORS.single.h + 0.5, back: 0.34, out: 0.05 });
-/** The half angle a walk doorway's surround spans round a drum of radius r (at its middle depth). */
-const walkDoorSpan = (r: number) => walkDoor().L / 2 / (r + (walkDoor().out - walkDoor().back) / 2);
-
 /**
  * A drum's shaft of radius r with N sides between heights y0 and y1, its wall cut away where
  * doorways onto the wall walk open in it (`doors`: the bearings of their middles, sill at `sill`):
  * through each doorway's height the shaft is notched back to make room for the surround, so the
  * doorway stands in the drum's face instead of on it. Above and below, the plain drum.
  */
-function drumShaft(k: ModelKit, g: THREE.Object3D, r: number, y0: number, y1: number, N: number, color: number, doors: number[], sill: number) {
+function drumShaft(k: ModelKit, g: THREE.Object3D, r: number, y0: number, y1: number, N: number, color: number, doors: [number, number][], sill: number) {
   const cyl = (a: number, b: number) => wrapped(k.cyl(g, r, r, b - a, [0, (a + b) / 2, 0], color, undefined, N));
   if (!doors.length) return void cyl(y0, y1);
-  const top = sill + walkDoor().top, step = (Math.PI * 2) / N, inR = r - walkDoor().back + 0.04, half = walkDoorSpan(r) - 0.015;
+  const top = sill + walkDoor().top, step = (Math.PI * 2) / N, inR = r - walkDoor().back + 0.04, half = walkDoor().L / 2 - 0.035;
   cyl(y0, sill);
   cyl(top, y1);
   // The notched band in plan: round the drum's sides (its corners where a kit cylinder's are), in
-  // at each doorway to a shallow arc behind its surround and out again.
+  // at each doorway straight back along the way through it to a shallow arc behind its surround,
+  // round that and straight out again (the surround is cut the same way: see cutRound).
   const edge = (t: number) => (r * Math.cos(Math.PI / N)) / Math.cos((((t % step) + step) % step) - step / 2);
   const at = (t: number, rr: number) => new THREE.Vector2(Math.sin(t) * rr, -Math.cos(t) * rr);
-  const gaps = doors.map((d) => [d - half, d + half]).sort((p, q) => p[0] - q[0]);
+  /** The bearing of the point `x` across from a doorway's line (on bearing `a`) where it meets the drum's face. */
+  const onFace = (a: number, x: number) => {
+    let t = a + Math.asin(x / r);
+    for (let i = 0; i < 4; i++) t = a + Math.asin(x / edge(t));
+    return t;
+  };
+  const gaps = doors.map(([a, o]) => ({ a, o, s: onFace(a, o - half), e: onFace(a, o + half) })).sort((p, q) => p.s - q.s);
   const pts: THREE.Vector2[] = [];
   for (let i = 0; i < gaps.length; i++) {
-    const [s0, e0] = gaps[i], s1 = gaps[(i + 1) % gaps.length][0] + (i + 1 === gaps.length ? Math.PI * 2 : 0);
-    // (At each notch's mouth: on the drum's face, in to the arc, round it and out again.)
+    const { a, o, s: s0, e: e0 } = gaps[i], s1 = gaps[(i + 1) % gaps.length].s + (i + 1 === gaps.length ? Math.PI * 2 : 0);
+    // (At each notch's mouth: on the drum's face, straight in to the arc, round it and out again.)
+    const i0 = a + Math.asin((o - half) / inR), i1 = a + Math.asin((o + half) / inR);
     pts.push(at(s0, edge(s0)));
-    for (let j = 0; j <= 6; j++) pts.push(at(s0 + ((e0 - s0) * j) / 6, inR));
+    for (let j = 0; j <= 6; j++) pts.push(at(i0 + ((i1 - i0) * j) / 6, inR));
     pts.push(at(e0, edge(e0)));
     for (let c = Math.ceil(e0 / step + 1e-6); c * step < s1 - 1e-6; c++) pts.push(at(c * step, r));
   }
@@ -1282,27 +1290,27 @@ export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number
   const { w: W, h } = DOORS.single, rise = Math.min(W * 0.866, h * 0.62), { ys } = pointedArch(W, h, 8, rise);
   const wd = walkDoor(), L = foot ? W + 0.6 : wd.L, top = foot ? 3.9 - y : wd.top, back = foot ? 0.08 : wd.back, deep = foot ? 0.62 : wd.out;
   const R = r + (deep - back) / 2, dep = deep + back;
+  // (The doorway faces straight down the walk that comes to it, its middle on the walk's middle: the
+  // frame turned to the walk's bearing, everything in it set `o` across.)
   const f = new THREE.Group();
-  f.rotation.y = a + Math.asin(o / r);
+  f.rotation.y = a;
   g.add(f);
-  // The surround: the opening's outline, its top edge cut in short steps so it bends true.
+  // The surround: the stone round the opening in upright strips, each from the opening's outline (or
+  // the sill beside it) to the top, so every face of it lies flat once it follows the curve.
   {
-    const { arc } = pointedArch(W, h, 12, rise), sh = new THREE.Shape();
-    sh.moveTo(-L / 2, 0);
-    sh.lineTo(-W / 2, 0);
-    for (let i = 0; i < arc.length; i++) sh.lineTo(-arc[i][0], arc[i][1]);
-    for (let i = arc.length - 2; i >= 0; i--) sh.lineTo(arc[i][0], arc[i][1]);
-    sh.lineTo(W / 2, 0);
-    sh.lineTo(L / 2, 0);
-    for (let i = 0; i <= 12; i++) sh.lineTo(L / 2 - (L * i) / 12, top);
-    sh.closePath();
-    const flat = new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, -dep / 2);
-    const geo = bendRound(flat, R);
-    const jw = (L - W) / 2, tj = (W / 2 + jw / 2) / R;
+    const { arc } = pointedArch(W, h, 12, rise), jw = (L - W) / 2;
+    const edge: [number, number][] = [[-L / 2, 0], [-W / 2 - jw / 2, 0], [-W / 2, 0], ...arc.map(([x, yy]) => [-x, yy] as [number, number]), ...arc.slice(0, -1).reverse(), [W / 2, 0], [W / 2 + jw / 2, 0], [L / 2, 0]];
+    const strips = edge.slice(1).flatMap(([xb, yb], i) => {
+      if (xb - edge[i][0] < 1e-6) return [];
+      const [xa, ya] = edge[i], sh = new THREE.Shape([new THREE.Vector2(xa, ya), new THREE.Vector2(xb, yb), new THREE.Vector2(xb, top), new THREE.Vector2(xa, top)]);
+      return new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, -dep / 2);
+    });
+    const geo = cutRound(mergeGeometries(strips), R, o);
+    const zOn = (x: number) => Math.sqrt(R * R - x * x);
     // (For the geometry audit: its two jambs, turned with the curve, and the head over the arch.)
     geo.userData.boxes = [
-      ...[-1, 1].map((sx) => ({ c: [Math.sin(sx * tj) * R, top / 2, Math.cos(sx * tj) * R], h: [jw / 2, top / 2, dep / 2], ry: sx * tj })),
-      { c: [0, (h + top) / 2, R], h: [W / 2, (top - h) / 2, dep / 2], ry: 0 },
+      ...[-1, 1].map((sx) => o + sx * (W / 2 + jw / 2)).map((x) => ({ c: [x, top / 2, zOn(x)], h: [jw / 2, top / 2, dep / 2], ry: Math.asin(x / R) })),
+      { c: [o, (h + top) / 2, zOn(o)], h: [W / 2, (top - h) / 2, dep / 2], ry: Math.asin(o / R) },
     ];
     k.mesh(f, geo, ASHLAR_L, [0, y, 0]);
   }
@@ -1316,22 +1324,24 @@ export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number
     for (const [x, yy] of inner) sh.lineTo(-x, yy);
     for (let i = inner.length - 2; i >= 0; i--) sh.lineTo(inner[i][0], inner[i][1]);
     sh.closePath();
-    const geo = bendRound(new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, -0.05), r + deep + 0.04);
+    const geo = cutRound(new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, -0.05), r + deep + 0.04, o);
     geo.userData.hollow = true;
     k.mesh(f, geo, TRIM, [0, y, 0]);
     for (const sx of [-1, 1]) {
-      const t = (sx * (W / 2 + 0.19)) / (r + deep), rr = r + deep + 0.06;
-      cb(k, f, [0.2, 0.2, 0.14], [Math.sin(t) * rr, y + ys - 0.02, Math.cos(t) * rr], TRIM, [0, t, 0], 0.02);
+      const x = o + sx * (W / 2 + 0.19), rr = r + deep + 0.06;
+      cb(k, f, [0.2, 0.2, 0.14], [x, y + ys - 0.02, Math.sqrt(rr * rr - x * x)], TRIM, [0, Math.asin(x / rr), 0], 0.02);
     }
   }
-  // The threshold across the opening, from the leaf out over the face, a step proud of the walk's
-  // deck that runs in to it.
-  const t0 = foot ? r : r - back + 0.04, t1 = r + deep + 0.1, sill = y + (foot ? 0 : 0.05);
-  cb(k, f, [W + 0.02, 0.1, t1 - t0], [0, sill - 0.05, (t0 + t1) / 2], ASHLAR_L, undefined, 0.02);
-  // (The leaf stands at the back of the reveal: on the plinth's face at a drum's foot, in the cut
-  // into the drum on a wall walk.)
+  // The leaf stands square across the way at the back of the reveal: on the plinth's face at a drum's
+  // foot; in the cut into the drum on a wall walk, as far back as the cut lets it at both its edges.
+  const inR = r - back + 0.04, back0 = Math.max(...[-1, 1].map((sx) => Math.sqrt(inR * inR - (o + (sx * W) / 2) ** 2)));
+  const zLeaf = foot ? r + 0.53 : back0 + 0.06, sill = y + (foot ? 0 : 0.05);
+  // The threshold across the opening, from under the leaf out over the face, a step proud of the
+  // walk's deck that runs in to it.
+  const rt = r + deep + 0.1, t0 = foot ? r : zLeaf - 0.05, t1 = Math.sqrt(rt * rt - o * o);
+  cb(k, f, [W + 0.02, 0.1, t1 - t0], [o, sill - 0.05, (t0 + t1) / 2], ASHLAR_L, undefined, 0.02);
   const d = new THREE.Group();
-  d.position.set(0, sill, foot ? r + 0.53 : r - back + 0.09);
+  d.position.set(o, sill, zLeaf);
   f.add(d);
   pointedDoor(k, d, W, h, rise, 'single', false, 0.06);
 }
@@ -1376,7 +1386,7 @@ function drumTower(k: ModelKit, g: THREE.Object3D, r: number, H: number, corner:
   // bands level with the curtain's string courses (3.6, 5.6 and the wall walk's at 6.92), so every
   // line runs on round the drums without a step.
   wrapped(k.cyl(g, r + 0.15, r + 0.5, 1.1, [0, 0.55, 0], TRIM_D, undefined, N));
-  drumShaft(k, g, r, 1.1, P, N, ASHLAR, (opt.walks ?? []).map(([a, o]) => a + Math.asin(o / r)), DOORS.walk.y);
+  drumShaft(k, g, r, 1.1, P, N, ASHLAR, opt.walks ?? [], DOORS.walk.y);
   wrapped(k.cyl(g, r + 0.03, r + 0.03, 0.5, [0, 1.5, 0], ASHLAR_W, undefined, N));
   for (const y of [3.6, 5.6, 6.92]) wrapped(k.cyl(g, r + 0.1, r + 0.1, y === 3.6 ? 0.3 : 0.22, [0, y, 0], TRIM, undefined, N));
   // (The weathering course lies on the plinth's top, a lip proud of it, never out over its batter.)
@@ -1482,23 +1492,23 @@ function clothPoint(w: number, h: number, d: number) {
 }
 
 /**
- * The glass's own sheen, a repeating texture laid on a pane (about three units across): clear glass tinted a
- * cool blue, see-through, with one soft broad sheen of the sky's light running across it on the
- * diagonal, where it shows paler and less clear, as polished glass catches the light.
+ * The glass's own sheen, a repeating texture laid on a pane (about three units across): clear glass
+ * with the faintest cool tint, almost wholly see-through, and one soft broad sheen of the sky's light
+ * running across it on the diagonal, where it shows a little paler, as polished glass catches the light.
  */
 let sheenTex: THREE.DataTexture | null = null;
 export function glassSheen() {
   if (sheenTex) return sheenTex;
-  const N = 64, data = new Uint8Array(N * N * 4), deep = new THREE.Color(0x3a6290), pale = new THREE.Color(0xd8ecff), c = new THREE.Color();
+  const N = 64, data = new Uint8Array(N * N * 4), tint = new THREE.Color(0xc4dcf4), pale = new THREE.Color(0xf4faff), c = new THREE.Color();
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const t = (((x + y) / N) % 1 + 1) % 1, band = (m: number, w: number) => Math.max(0, 1 - Math.abs(t - m) / w);
     const streak = band(0.4, 0.3) ** 2;
-    c.copy(deep).lerp(pale, 0.15 + 0.55 * streak);
+    c.copy(tint).lerp(pale, streak);
     const i = (y * N + x) * 4;
     data[i] = Math.round(c.r * 255);
     data[i + 1] = Math.round(c.g * 255);
     data[i + 2] = Math.round(c.b * 255);
-    data[i + 3] = Math.round(255 * (0.42 + 0.4 * streak));
+    data[i + 3] = Math.round(255 * (0.18 + 0.16 * streak));
   }
   sheenTex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
   sheenTex.wrapS = sheenTex.wrapT = THREE.RepeatWrapping;
@@ -1513,21 +1523,22 @@ export function glassSheen() {
 }
 
 /**
- * The castle's window glass: clear panes tinted a cool blue with streaks of the sky's light across
- * them (glassSheen), polished so the sky glances off them, see-through to the room (or the dim
- * recess) behind. One material per kit, so a
- * building's cut takes it with its walls; it casts no shadow.
+ * The castle's window glass: clear panes with a slight cool tint and a soft sheen of the sky's light
+ * across them (glassSheen), polished so the sky glances off them at a slant, plainly see-through to
+ * the room (or the dim recess) behind. One material per kit, so a building's cut takes it with its
+ * walls; it casts no shadow.
  */
-export function windowGlass(opacity = 1) {
+export function windowGlass(opacity = 0.45) {
   const m = new THREE.MeshStandardMaterial({
     map: glassSheen(), transparent: true, opacity, depthWrite: false, roughness: 0.05, metalness: 0.0,
     envMap: studioEnv(), envMapIntensity: 1.2, flatShading: true,
   });
-  // (Like real glass it grows more reflective, less see-through, toward a glancing view.)
+  // (Like real glass it grows more reflective, less see-through, toward a glancing view: clear face
+  // on, a faint sky over it at a slant.)
   addPatch(m, { key: 'glass-fresnel', apply: (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{
-      float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 3.0);
-      diffuseColor.a = clamp(diffuseColor.a + fres * 0.5, 0.0, 1.0);
+      float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 4.0);
+      diffuseColor.a = clamp(diffuseColor.a + fres * 0.45, 0.0, 1.0);
     }
     #include <opaque_fragment>`);
   } });
@@ -1547,30 +1558,60 @@ export function glassMat(k: ModelKit) {
   return m;
 }
 /**
- * The room seen through a window: a lamplit chamber painted on a plate behind the glass (a dark
- * floor, the far wall warm where the light falls and dimmer toward the corners of the opening), so a
- * window reads as clear glass with a lit room deep behind it, never as a blind panel. Unlit rooms
- * show the same chamber in cool shadow.
+ * The room seen through a window, painted on a plate behind the glass as a chamber drawn in depth: its
+ * far wall of warm plaster lit by a candle sconce either side, a blue tapestry edged in gold hanging
+ * between them, side walls falling into shade toward the window, a board floor with a crimson rug
+ * running back to the far wall and dark beams overhead. So a window reads as clear glass onto a room,
+ * never as a blind panel. Unlit rooms show the same chamber in cool shadow.
  */
 let roomTex: THREE.DataTexture | null = null;
 function roomGlow() {
   if (roomTex) return roomTex;
-  const W = 32, H = 64, data = new Uint8Array(W * H * 4), c = new THREE.Color();
-  // (Cool blue-grey shadow, so through the blue glass the window reads blue; a faint warm glow of
-  // lamplight in its middle.)
-  const floor = new THREE.Color(0x162034), low = new THREE.Color(0x253758), high = new THREE.Color(0x48659a), warm = new THREE.Color(0x9a7a56);
+  const W = 64, H = 128, data = new Uint8Array(W * H * 4), c = new THREE.Color();
+  const plaster = new THREE.Color(0xc89e72), side = new THREE.Color(0x9a7654), floor = new THREE.Color(0x6a4a32), rug = new THREE.Color(0xa0322c);
+  const beam = new THREE.Color(0x3e2e20), ceil = new THREE.Color(0x7a5a42), blue = new THREE.Color(0x2c4a8c), gold = new THREE.Color(0xd2a64a), warm = new THREE.Color(0xffd08a);
+  // The far wall's size as a share of the opening, and the room's vanishing point.
+  const S = 0.56, cu = 0.5, cv = 0.56;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const v = (y + 0.5) / H, u = (x + 0.5) / W;
-    if (v < 0.2) c.copy(floor).lerp(low, v / 0.2 * 0.5);
-    else c.copy(low).lerp(high, Math.min(1, (v - 0.2) / 0.6));
-    const glow = Math.max(0, 1 - Math.hypot((u - 0.5) * 2.2, (v - 0.5) * 2.4));
-    c.lerp(warm, 0.35 * glow * glow);
-    // The reveal's shade in from the opening's sides.
-    c.multiplyScalar(1 - 0.45 * Math.abs(2 * u - 1) ** 2);
+    const u = (x + 0.5) / W, v = (y + 0.5) / H, du = u - cu, dv = v - cv;
+    const tu = Math.abs(du) / 0.5, tv = dv < 0 ? -dv / cv : dv / (1 - cv), t = Math.max(tu, tv);
+    if (t <= S) {
+      // The far wall, in its own coordinates (0..1 across and up).
+      const bu = (du + S * 0.5) / S, wv = (dv + S * cv) / S, wu = Math.abs(bu - 0.5);
+      c.copy(plaster).multiplyScalar(0.82 + 0.18 * (1 - wu * 2));
+      // The tapestry: gold edge, blue field, the gold diamond.
+      if (wu < 0.2 && wv > 0.28 && wv < 0.86) {
+        const edge = Math.min(0.2 - wu, wv - 0.28, 0.86 - wv) < 0.035;
+        const diamond = Math.abs(bu - 0.5) / 0.09 + Math.abs(wv - 0.58) / 0.12 < 1;
+        c.copy(edge || diamond ? gold : blue);
+      }
+      // The sconces' light pooled on the wall either side.
+      for (const su of [0.12, 0.88]) {
+        const d = Math.hypot((bu - su) * 1.4, wv - 0.56);
+        c.lerp(warm, 0.75 * Math.max(0, 1 - d / 0.22) ** 2);
+        if (d < 0.035) c.copy(warm);
+      }
+    } else {
+      // Which face of the room the point lies on, and how far out toward the window (0 at the far wall).
+      const depth = (t - S) / (1 - S);
+      if (tu >= tv) c.copy(side);
+      else if (dv < 0) {
+        // The floor: boards running back to the far wall, the rug down the middle.
+        const lat = du / Math.max(1e-3, -dv / cv);
+        c.copy(Math.abs(lat) < 0.2 ? rug : floor);
+        if (Math.abs(lat) >= 0.2 && Math.abs(((lat * 6) % 1 + 1) % 1 - 0.5) > 0.44) c.multiplyScalar(0.7);
+      } else {
+        // The ceiling: beams across it.
+        const along = Math.log(t / S) * 9;
+        c.copy(((along % 1) + 1) % 1 < 0.45 ? beam : ceil);
+      }
+      // Into shade toward the window, away from the candles.
+      c.multiplyScalar(1 - 0.32 * depth);
+    }
     const i = (y * W + x) * 4;
-    data[i] = Math.round(c.r * 255);
-    data[i + 1] = Math.round(c.g * 255);
-    data[i + 2] = Math.round(c.b * 255);
+    data[i] = Math.round(Math.min(1, c.r) * 255);
+    data[i + 1] = Math.round(Math.min(1, c.g) * 255);
+    data[i + 2] = Math.round(Math.min(1, c.b) * 255);
     data[i + 3] = 255;
   }
   roomTex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat);
@@ -1583,7 +1624,7 @@ function roomGlow() {
 /** The room behind a window (see roomGlow): one material per kit and lighting, so cuts take it. */
 export function roomMaterial(lit = true) {
   // (Its own light only: black under the sun, the painted room as emission.)
-  const glow = new THREE.Color(lit ? 0xffffff : 0x8a92a0);
+  const glow = new THREE.Color(lit ? 0xffffff : 0xaab0bc);
   const m = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 1, metalness: 0, emissive: glow, emissiveMap: roomGlow() });
   m.userData.baseEmissive = glow.clone();
   m.userData.baseIntensity = 1;
@@ -2076,46 +2117,99 @@ export function ringHandle(k: ModelKit, g: THREE.Object3D, x: number, y: number,
 }
 
 /**
+ * The castle's door wood: oak boards stained in the lord's blue and weathered, each board a shade
+ * apart, and the dark seen in the joints between them (the leaf's core).
+ */
+export const DOOR_STAIN = [0x32496f, 0x3a5079, 0x2c4163], DOOR_CORE = 0x121926;
+paintAs('grain', DOOR_STAIN);
+/** How thick a door's boards stand on its core, and how wide a joint between two boards. */
+const BOARD_T = 0.03, BOARD_GAP = 0.024;
+
+/** One upright board from bx0 to bx1, its foot on the sill, its head cut to `top`, `t` thick on z = 0..t. */
+const boardCache = new Map<string, THREE.BufferGeometry>();
+function boardGeo(key: string, bx0: number, bx1: number, top: (x: number) => number, t: number) {
+  const k = `${key},${bx0.toFixed(3)},${bx1.toFixed(3)},${t}`;
+  let g = boardCache.get(k);
+  if (g) return g;
+  const s = new THREE.Shape(), m = 4;
+  s.moveTo(bx0, 0.02);
+  s.lineTo(bx1, 0.02);
+  for (let j = 0; j <= m; j++) {
+    const x = bx1 - ((bx1 - bx0) * j) / m;
+    s.lineTo(x, top(x));
+  }
+  s.closePath();
+  g = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false, curveSegments: 1 });
+  g.computeVertexNormals();
+  boardCache.set(k, g);
+  return g;
+}
+
+/**
+ * A boarded leaf from x0 to x1 (built across X, up Y from the sill at y = 0, centred on z = 0), its
+ * head at `top(x)`: the dark core `dep` thick (the leaf the audit measures, `core` its outline),
+ * faced on both sides with upright boards about a quarter wide, cut to the head a little inside its
+ * edge and set a joint apart so the dark shows between them, each board its own shade of the stained
+ * oak; on both faces black iron strap hinges running from the hinge edge most of the way across,
+ * nailed with studs and ending in a point; and a ring handle at the hero's hand by the latch edge.
+ */
+function boardedLeaf(k: ModelKit, g: THREE.Object3D, o: { key: string; core: THREE.BufferGeometry; corePos: V3; x0: number; x1: number; top: (x: number) => number; dep: number; cls: keyof typeof DOORS; hinge: -1 | 1; latch: number; spring: number }) {
+  const { x0, x1, top, dep, hinge } = o, w = x1 - x0;
+  audit(k.mesh(g, o.core, DOOR_CORE, o.corePos), 'door-leaf', { cls: o.cls });
+  const n = Math.max(3, Math.round(w / 0.27)), bw = w / n, inset = 0.012;
+  const head = (x: number) => top(Math.min(x1 - inset, Math.max(x0 + inset, x))) - inset * 1.5;
+  for (let i = 0; i < n; i++) {
+    const bx0 = x0 + i * bw + (i ? BOARD_GAP / 2 : inset), bx1 = x0 + (i + 1) * bw - (i < n - 1 ? BOARD_GAP / 2 : inset);
+    const geo = boardGeo(o.key, bx0, bx1, head, BOARD_T), tone = DOOR_STAIN[(i * 2 + (o.hinge > 0 ? 1 : 0)) % 3];
+    for (const e of [-1, 1]) audit(k.mesh(g, geo, tone, [0, 0, e > 0 ? dep / 2 - 0.004 : -dep / 2 + 0.004 - BOARD_T]), 'door-board');
+  }
+  // The straps: one low, one under the springing of the head, and one between on a tall leaf.
+  const lo = 0.42, hi = o.spring - 0.32, levels = hi - lo > 1.7 ? [lo, (lo + hi) / 2, hi] : [lo, hi];
+  const face = dep / 2 + BOARD_T - 0.004, len = w * 0.8, from = hinge < 0 ? x0 : x1;
+  for (const e of [-1, 1]) {
+    const f = new THREE.Group();
+    f.rotation.y = e > 0 ? 0 : Math.PI;
+    g.add(f);
+    for (const y of levels) {
+      // (Tapering toward its point: a broad strap at the hinge, a narrower run, a diamond tip.)
+      const mid = from - hinge * len / 2;
+      k.box(f, [len, 0.09, 0.02], [e * mid, y, face + 0.01], IRON);
+      k.box(f, [0.13, 0.13, 0.02], [e * (from - hinge * (len + 0.03)), y, face + 0.01], IRON, [0, 0, Math.PI / 4]);
+      for (let sx = 0.08; sx < len - 0.02; sx += 0.2) k.box(f, [0.045, 0.045, 0.02], [e * (from - hinge * sx), y, face + 0.028], IRON);
+    }
+    ringHandle(k, f, e * o.latch, DOORS.handle, face);
+  }
+}
+
+/**
  * The leaves closing a pointed doorway `W` wide, apex `h` over the sill (on z = 0, facing +Z, the sill
- * at y = 0): one leaf, or a pair meeting on the centre line, each boarded in the lord's blue to the
- * shape of the arch (fine darker joints between its planks, on both faces) with a ring handle at the
- * hero's hand, so the doorway reads as a tall door from either side.
+ * at y = 0): one leaf, or a pair meeting on the centre line, each boarded in the stained oak to the
+ * shape of the arch, strapped in iron, with a ring handle at the hero's hand (boardedLeaf), so the
+ * doorway reads as a tall wooden door from either side.
  */
 export function pointedDoor(k: ModelKit, g: THREE.Object3D, W: number, h: number, rise: number, cls: keyof typeof DOORS, pair: boolean, dep = 0.1) {
-  const parts: (-1 | 0 | 1)[] = pair ? [-1, 1] : [0];
+  const parts: (-1 | 0 | 1)[] = pair ? [-1, 1] : [0], spring = h - rise;
   for (const part of parts) {
-    audit(k.mesh(g, pointedLeaf(W, h, rise, part, dep), HERALD_BLUE, [0, 0, 0]), 'door-leaf', { cls });
-    // Plank joints: three planks to a leaf of a pair, five across a single leaf.
-    const x0 = part === 1 ? 0 : -W / 2, x1 = part === -1 ? 0 : W / 2, n = pair ? 3 : 5;
-    for (let i = 1; i < n; i++) {
-      const x = x0 + ((x1 - x0) * i) / n, top = archHeight(W, h, rise, x) - 0.1;
-      for (const e of [-1, 1]) k.box(g, [0.03, top - 0.08, 0.012], [x, 0.04 + (top - 0.08) / 2, e * (dep / 2 + 0.004)], HERALD_BLUE_D);
-    }
-    // The handle by the meeting stiles (by the latch edge on a single leaf), on both faces.
-    const hx = part === 0 ? W / 2 - 0.22 : part * 0.2;
-    for (const e of [-1, 1]) {
-      const f = new THREE.Group();
-      f.rotation.y = e > 0 ? 0 : Math.PI;
-      g.add(f);
-      ringHandle(k, f, e * hx, DOORS.handle, dep / 2);
-    }
+    const x0 = part === 1 ? 0 : -W / 2, x1 = part === -1 ? 0 : W / 2;
+    boardedLeaf(k, g, {
+      key: `p${W},${h},${rise}`, core: pointedLeaf(W, h, rise, part, dep), corePos: [0, 0, 0], x0, x1,
+      top: (x) => archHeight(W, h, rise, x), dep, cls, hinge: part === 1 ? 1 : -1,
+      // (The handle by the meeting stiles, by the latch edge on a single leaf.)
+      latch: part === 0 ? W / 2 - 0.22 : part * 0.2, spring,
+    });
   }
 }
 
 /**
  * One leaf of a gate, `w` wide and `h` tall, hinged on its left edge at the origin and standing along
- * +X (facing +Z): boards of the lord's blue (darker joints on both faces), a ring handle at the
- * hero's hand on each face, so an open leaf reads from either side.
+ * +X (facing +Z): boarded in the stained oak and strapped in iron like every castle door, a ring
+ * handle at the hero's hand on each face, so an open leaf reads from either side.
  */
-export function royalLeaf(k: ModelKit, g: THREE.Object3D, w: number, h: number, cls: keyof typeof DOORS) {
-  audit(cb(k, g, [w, h, 0.1], [w / 2, h / 2, 0], HERALD_BLUE, undefined, 0.02), 'door-leaf', { cls });
-  for (let i = 1; i < 4; i++) for (const e of [-1, 1]) k.box(g, [0.03, h - 0.1, 0.012], [(i * w) / 4, h / 2, e * 0.054], HERALD_BLUE_D);
-  for (const e of [-1, 1]) {
-    const f = new THREE.Group();
-    f.rotation.y = e > 0 ? 0 : Math.PI;
-    g.add(f);
-    ringHandle(k, f, e * (w - 0.22), DOORS.handle, 0.05);
-  }
+export function royalLeaf(k: ModelKit, g: THREE.Object3D, w: number, h: number, cls: keyof typeof DOORS, dep = 0.1) {
+  boardedLeaf(k, g, {
+    key: `r${w},${h}`, core: chamferBox(w, h, dep, 0.02), corePos: [w / 2, h / 2, 0], x0: 0, x1: w,
+    top: () => h, dep, cls, hinge: -1, latch: w - 0.22, spring: h,
+  });
 }
 
 /**
@@ -2194,12 +2288,12 @@ function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: number
     archRing(k, f, 0, 0, z, P + 1.0, apex + 0.55, TRIM, { n: 5, t: 0.14, p: 0.1, out: 0, rise: rise + 0.55 });
     for (const sx of [-1, 1]) cb(k, f, [0.2, 0.3, 0.14], [sx * (P / 2 + 0.55), S + 0.02, z + 0.07], TRIM, undefined, 0.02);
     // The arch's head closed over a square opening, as at the gatehouse: a slim blue-grey lintel
-    // across at the springing and over it the plain tympanum in the lord's deep blue, both set back in
-    // the reveal (so from above they never read as a slab across the way), the leaves filling the
-    // opening below and the arch framing the whole doorway.
+    // across at the springing and over it a tympanum of the surround's pale dressed stone, both set
+    // back in the reveal (so from above they never read as a slab across the way), the leaves filling
+    // the opening below and the arch framing the whole doorway.
     // (Deep enough at the outer gate to carry its raised portcullis behind it.)
     cb(k, f, [P + 0.06, 0.3, opt.head ? 0.42 : 0.14], [0, S + 0.1, z - (opt.head ? 0.2 : 0.17)], TRIM, undefined, 0.02);
-    k.mesh(f, archTympanum(P, apex, 0.12, rise), HERALD_BLUE_D, [0, 0, z - 0.3]);
+    k.mesh(f, archTympanum(P, apex, 0.12, rise), ASHLAR_L, [0, 0, z - 0.3]);
     if (opt.lanterns?.includes(e)) for (const sx of [-1, 1]) wallLamp(k, f, sx * (P / 2 + 0.95), S - 0.6, z);
     if (opt.head && e > 0) {
       // The lord's crest over the arch: a blue shield rimmed in gold with the gold dragon diamond.
@@ -2750,7 +2844,7 @@ const BUILDERS: Record<string, Builder> = {
       dg.position.set(sx * cx, 0, 0);
       g.add(dg);
       wrapped(k.cyl(dg, R + 0.2, R + 0.55, 1.1, [0, 0.55, 0], TRIM_D, undefined, N));
-      drumShaft(k, dg, R, 1.1, H, N, ASHLAR, [(sx * Math.PI) / 2 + Math.asin((-sx * DOORS.walk.off) / R)], DOORS.walk.y);
+      drumShaft(k, dg, R, 1.1, H, N, ASHLAR, [[(sx * Math.PI) / 2, -sx * DOORS.walk.off]], DOORS.walk.y);
       wrapped(k.cyl(dg, R + 0.03, R + 0.03, 0.5, [0, 1.5, 0], ASHLAR_W, undefined, N));
       wrapped(k.cyl(dg, R + 0.12, R + 0.26, 0.22, [0, 1.15, 0], TRIM, undefined, N));
       for (const y of [3.6, 5.6, 6.92]) wrapped(k.cyl(dg, R + 0.1, R + 0.1, y === 3.6 ? 0.3 : 0.22, [0, y, 0], TRIM, undefined, N));
@@ -2794,7 +2888,7 @@ const BUILDERS: Record<string, Builder> = {
     // pale ashlar and blue-grey (0.6 deep, flush on one radius just proud of the face), springing
     // from moulded blue-grey imposts on pale jambs set flush in the same plane, a blue-grey hood
     // mould lying on the ring and ending on the imposts, and a big pale keystone. Outside, over the
-    // opening, the tympanum carries the lord's deep blue and gold diamond on a blue-grey lintel, the
+    // opening, a tympanum of the ring's pale stone carries the lord's gilt diamond on a blue-grey lintel, the
     // raised portcullis set back behind it with only its spikes showing; the keystone bears the
     // shield.
     const NV = 9, VD = 0.6, VP = 0.16;
@@ -2838,7 +2932,7 @@ const BUILDERS: Record<string, Builder> = {
       }
       s0.lineTo(-x0, y0);
       const tz = zc - D / 2 + 0.24;
-      k.mesh(g, new THREE.ExtrudeGeometry(s0, { depth: 0.12, bevelEnabled: false }), HERALD_BLUE_D, [0, spring, tz - 0.06]);
+      k.mesh(g, new THREE.ExtrudeGeometry(s0, { depth: 0.12, bevelEnabled: false }), ASHLAR_L, [0, spring, tz - 0.06]);
       k.box(g, [0.9, 0.9, 0.04], [0, spring + (y0 + apex - spring) / 2 - 0.1, tz - 0.08], PAL.gold, [0, 0, Math.PI / 4]);
       cb(k, g, [P + 0.04, 0.36, 0.34], [0, spring + 0.17, tz], TRIM, undefined, 0.02);
     }
@@ -3949,26 +4043,19 @@ const BUILDERS: Record<string, Builder> = {
     }
   },
   /**
-   * The great door's two oak leaves, studded and iron-banded, standing open inward from the jambs
+   * The great door's two leaves, boarded, studded and iron-strapped, standing open inward from the jambs
    * of an opening `len` wide (hinged at its edges, the prop on the wall's inner face).
    */
   great_doors: (k, g, arg) => {
-    // The hall's great door: two oak leaves standing open into the hall, boarded (darker joints
-    // between the boards) with a black iron ring at the hero's hand on each face.
+    // The hall's great door: two leaves standing open into the hall, boarded in the stained oak and
+    // strapped in iron like every castle door, a ring at the hero's hand on each face.
     const W = lenOf(arg) ?? 4, hw = DOORS.great.w, H = DOORS.great.h, a = 1.15;
     for (const sx of [-1, 1]) {
       const leaf = new THREE.Group();
       leaf.position.set(sx * (W / 2 - 0.1), 0, 0);
       leaf.rotation.y = sx < 0 ? a : Math.PI - a;
       g.add(leaf);
-      audit(cb(k, leaf, [hw, H, 0.14], [hw / 2, H / 2, 0], WOOD_D, undefined, 0.02), 'door-leaf', { cls: 'great' });
-      for (let i = 0; i < 4; i++) cb(k, leaf, [0.04, H - 0.1, 0.16], [0.2 + (i * (hw - 0.3)) / 3, H / 2, 0], 0x3a2618, undefined, 0.005);
-      for (const e of [-1, 1]) {
-        const f = new THREE.Group();
-        f.rotation.y = e > 0 ? 0 : Math.PI;
-        leaf.add(f);
-        ringHandle(k, f, e * (hw - 0.3), DOORS.handle, 0.07);
-      }
+      royalLeaf(k, leaf, hw, H, 'great', 0.14);
     }
   },
   /** A sundial: a dressed stone baluster with a bronze dial and its gnomon. */

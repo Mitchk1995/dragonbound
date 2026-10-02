@@ -11,7 +11,7 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * warm lights and cool darks. Patterns are large and calm so they read as painted detail from
  * the top-down camera, never as noise.
  *
- * Everything is generated at startup into two RGBA atlases (one pattern per channel), so every
+ * Everything is generated at startup into a few RGBA atlases (one pattern per channel), so every
  * painted material binds one texture and makes one fetch: box projection picks the face's
  * dominant axis, with the texture's V always along world/object up on side faces, so courses,
  * strata and plank seams never flip direction between faces.
@@ -21,10 +21,10 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * instances (rocks, walls).
  */
 
-export type PaintKind = 'masonry' | 'ashlar' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles' | 'foliage';
+export type PaintKind = 'masonry' | 'ashlar' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles' | 'foliage' | 'grain';
 
 interface PaintParams {
-  atlas: 0 | 1 | 2;
+  atlas: 0 | 1 | 2 | 3;
   channel: 0 | 1 | 2 | 3;
   /** Pattern repeats per unit (one tile = 1 / scale units). */
   scale: number;
@@ -47,6 +47,8 @@ export const PAINTS: Record<PaintKind, PaintParams> = {
   leaves: { atlas: 2, channel: 1, scale: 0.5, amount: 0.48 },
   needles: { atlas: 2, channel: 2, scale: 0.6, amount: 0.46 },
   foliage: { atlas: 2, channel: 3, scale: 0.42, amount: 0.5 },
+  /** A door's boards: the grain of each board, stained, with no seams (the boards are built apart). */
+  grain: { atlas: 3, channel: 0, scale: 0.5, amount: 0.42 },
 };
 
 const smooth = (a: number, b: number, x: number) => {
@@ -193,6 +195,24 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
       return posterize(0.31 + c.light * 0.36 + (c.tone - 0.5) * 0.2 - c.rim * 0.08 - c.tuck * 0.15 + dab + (drift(x, y) - 0.5) * 0.24 + (blot(x, y) - 0.5) * 0.06, 6);
     }, { size: [0.7, 1.25], lobes: 0.14, stretch: 0.25, turn: 0.7, order: 0.9 });
   },
+  grain: () => {
+    // Long grain running up the board: fine streaks and broader growth bands that drift across as
+    // they climb, a few dark knots with the grain swept round them, and the stain pooled darker in
+    // soft weathered patches.
+    const streak = tileNoise(621, 96, 2), bands = tileNoise(622, 20, 3), drift = fbm(623, 2, 2), weather = fbm(624, 3, 3);
+    const knots = Array.from({ length: 5 }, (_, i) => [hash(i, 1, 625) * SIZE, hash(i, 2, 625) * SIZE, 5 + hash(i, 3, 625) * 5]);
+    return (x, y) => {
+      let sweep = 0, knot = 0;
+      for (const [kx, ky, kr] of knots) for (const ox of [-SIZE, 0, SIZE]) for (const oy of [-SIZE, 0, SIZE]) {
+        const dx = x - kx - ox, dy = (y - ky - oy) * 0.45, d = Math.hypot(dx, dy);
+        knot = Math.max(knot, smooth(kr, kr * 0.5, d));
+        sweep += Math.sign(dx) * kr * 1.8 * Math.exp(-(d * d) / (kr * kr * 9));
+      }
+      const xx = x + (drift(x, y) - 0.5) * 26 + sweep;
+      const v = 0.5 + (streak(xx, y) - 0.5) * 0.34 + (posterize(bands(xx, y), 4) - 0.5) * 0.3 - posterize(weather(x, y), 3) * 0.16 + 0.06;
+      return v * (1 - 0.55 * knot);
+    };
+  },
 };
 
 interface Clump {
@@ -277,12 +297,12 @@ function clumps(seed: number, n: number, shade: (c: Clump, x: number, y: number)
   };
 }
 
-const atlases: (THREE.DataTexture | null)[] = [null, null, null];
+const atlases: (THREE.DataTexture | null)[] = [null, null, null, null];
 
 export const isPaintKind = (k: string): k is PaintKind => k in PAINTS;
 
 /** A painted atlas (built once, up to four patterns per texture, one per channel). */
-export function paintAtlas(atlas: 0 | 1 | 2): THREE.DataTexture {
+export function paintAtlas(atlas: 0 | 1 | 2 | 3): THREE.DataTexture {
   const hit = atlases[atlas];
   if (hit) return hit;
   const kinds = (Object.keys(PAINTS) as PaintKind[]).filter((k) => PAINTS[k].atlas === atlas);

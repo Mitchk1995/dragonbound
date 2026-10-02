@@ -845,7 +845,7 @@ export function buildKeep(seed: number): ZoneLayout {
   // privy garden to the seat in its niche against the wing.
   pave(54, 44, 57, 66);
   pave(75, 46, 78, 66);
-  pave(90, 52, 93, 55);
+  pave(90, 52, 93, 54);
   pave(31, 52, 42, 54);
   // The parterre's statue walks: each panel's champion stands on a short walk from the hedge
   // openings either side of it (a secondary axis, x = 51 and its mirror, from the terrace walk over
