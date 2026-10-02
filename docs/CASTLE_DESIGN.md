@@ -43,10 +43,10 @@ Lawn everywhere a walk, court or yard does not pave it. There are no barrels, cr
 - **Avenue:** six wide, paved, from the feast court through the fountain plaza and the gate to the terrace, with paired lamp posts up its length.
 - **Walks:** the terrace walk along the parterre's head, the cross walk, the west walk (the privy garden's central walk, then the parterre's west side), the east lane (the parterre's east side and the service lane), the south walk under the curtain, the wing walks either side of the cour, and short links to the barracks' east door and the postern.
 - **Great parterre:** four lawn panels round the round fountain plaza, mirrored about both axes. Each is edged in low clipped box with openings onto the walks, its plaza side an arc kept off the plaza; a champion faces the avenue between two flower beds, with clipped cones in its corners.
-- **Dragon fountain:** the centrepiece at the crossing of the axes, facing the gate: a round basin with a moulded kerb, a rock island and the bronze dragon twice life size, about 9 high. Four benches stand round it on the diagonals.
+- **Dragon fountain:** the centrepiece at the crossing of the axes, facing the gate: a round basin with a moulded kerb round a clear pool over a dark floor, a stacked rock island, and the bronze dragon rearing on it, more than twice life size and about 9 high: haunches down, forelegs raised and clawing, wings spread, head thrown up and water pouring from its open jaws. Four small jets arc in from stone pedestals on the kerb's diagonals; foam, spray and spreading rings mark where the water lands. Four benches stand round it on the diagonals.
 - **Cour d'honneur:** lawn panels either side of the avenue between the wings, each with a long flower bed and clipped cones.
 - **Feast court:** two stone champions before the great door, planters by the screens door, the well on the kitchen door's axis and the kitchen's woodpile against its wall.
-- **West niche:** a champion facing down the cross walk, clipped cones and flower beds either side.
+- **West niche:** a champion facing down the cross walk, clipped cones either side, and a long flower border along the wall's foot either side of those.
 - **Privy garden:** hedged from the parterre with its gate on the west walk; flower beds either side of the walk, a bench looking out to the postern, a champion on a pad at the walk's head.
 - **Donjon bower:** a gravel walk from the privy garden's champion up behind the donjon to a seat.
 - **Belvedere:** a paved lookout outside the postern with a parapet, a bench and a lamp.
@@ -73,6 +73,10 @@ A stair is a straight flight inside a room (`stairs` on a building). On the grou
 
 The residence range's stair climbs north along the screens passage's west side to the minstrel gallery.
 
+## Grass and water
+
+Every grassy cell on the island grows a continuous shell lawn: clipped short with mower stripes inside the castle, taller in the meadows. Still water in the fountain basin and the waterfall's step pools shares one pool water: a depth tint from pale at the rim to deep at the heart, drifting ripples, rings and broken foam where water lands, the zone's sky reflected toward grazing angles and sun glints on the ripples. The stream, spring and pond use the terrain's water, which has the same ripples, sky reflection, glints and a lace of foam at the shore. Falling water (the dragon's jaws, the jets, the waterfall) pours in long streaks, white with air toward its foot.
+
 ## Checking it
 
 `npm run inspect -- bailey` captures the castle for review: an overview and a plan, the approach, every yard and garden through the gameplay camera with the hero standing in it, the fountain and a lawn up close, the island beyond, and the hero by the south wall as it dissolves. It also measures the frame cost at the fountain and in a meadow.
@@ -80,5 +84,3 @@ The residence range's stair climbs north along the screens passage's west side t
 ## Still to build
 
 - Stage 2: the donjon's interior (the guard hall off the hall's dais, the map room above, the spiral stair linking them to the roof and the west wing's upper floor), and the west wing's solar and bedchamber.
-- The centrepiece's final model: the dragon rearing on its rock with water pouring from its jaws and jets from the kerb.
-- Full shell grass on every lawn in place of the scattered tufts, and realistic water in the basin, the stream and the pond.

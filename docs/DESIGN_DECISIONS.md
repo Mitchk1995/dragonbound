@@ -82,7 +82,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - Every path connected into one network, with nothing placed at random.
   - Full grass on every lawn, island-wide, instead of scattered tufts.
   - Realistic water in the fountain, the stream and the pond.
-  - Built so far: the layout (curtain, towers, gatehouse, approach along the ledge, buildings, walks, gardens and yards), with the existing statue and garden models. Still to come: the dragon fountain's final model, the full grass and the water.
+  - Built: the layout (curtain, towers, gatehouse, approach along the ledge, buildings, walks, gardens and yards), the full grass, the dragon fountain (the bronze dragon rearing on its rock, water pouring from its jaws, jets from the kerb) and the realistic water in its basin and the waterfall's pools.
 - **The 14 material and quest item icons are approved** (ores, bars, uncut gems, the Cinder Seal Fragment and the Cinder Key) and are in the game. Every item now has painted artwork.
 
 ### Already done before Round 5

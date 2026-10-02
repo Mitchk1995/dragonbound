@@ -1024,11 +1024,12 @@ export function buildKeep(seed: number): ZoneLayout {
   blockRect(G, 85.0, 36.6, 0.7, 0.4, 0);
 
   // The cross axis's west end: a champion in a niche against the west wall facing down the cross
-  // walk, clipped cones either side, a flower bed either side of those along the wall's foot.
+  // walk, clipped cones either side, and a long flower border along the wall's foot either side,
+  // mirrored about the cross axis, running from the cones to the west-mid tower and the south walk.
   G.prop('champion', 33.8, CROSS_AXIS, Math.PI / 2);
   blockDisc(G.l, 33.8, CROSS_AXIS, 1.6);
   for (const dz of [-3, 3]) cone(33.8, CROSS_AXIS + dz);
-  for (const dz of [-6, 6]) bed(33.6, CROSS_AXIS + dz, Math.PI / 2, 4, 0);
+  for (const dz of [-7.1, 7.1]) bed(33.6, CROSS_AXIS + dz, Math.PI / 2, 5.8, 0);
 
   // The privy garden down the west walk, hedged from the parterre with its gate on the walk: balls
   // either side of the gate, flower beds in pairs either side of the walk, a bench looking out to

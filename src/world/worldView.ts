@@ -5,6 +5,7 @@ import type { ZoneTheme } from '../data/zones';
 import { Cell, Fluid, Ground, Lawn, type ZoneLayout } from './layout';
 import { buildLawn } from './lawn';
 import { buildProp, OCCLUDING_PROPS, type Prop } from './props';
+import { setWaterSky } from './water';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
@@ -289,6 +290,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   // Terrain: continuous height grid (relief rises out of it), fluids, and a height query for scenery.
   const terrain = buildTerrain(layout, theme, seed);
+  // Pools and basins on props reflect this zone's sky.
+  setWaterSky(theme.hemi[0], theme.bg);
   for (const tm of terrain.meshes) group.add(tm);
   if (terrain.relief) makeOccludable(terrain.relief.material as THREE.Material);
   const heightAt = terrain.heightAt, floorAt = terrain.floorAt;
