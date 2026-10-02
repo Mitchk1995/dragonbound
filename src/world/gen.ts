@@ -353,7 +353,12 @@ export class Gen {
     }
     // Seal off walkable pockets nobody can reach (e.g. a sliver between an ore rock and the
     // wall), so a click never picks a destination there. Nothing visible changes.
-    for (let i = 0; i < w * h; i++) if (walk(i) && !reach[i]) l.cells[i] = Cell.Blocked;
+    l.sealed = [];
+    for (let i = 0; i < w * h; i++) {
+      if (!walk(i) || reach[i]) continue;
+      l.cells[i] = Cell.Blocked;
+      l.sealed.push(i);
+    }
     return cut;
   }
 

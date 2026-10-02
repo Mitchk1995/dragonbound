@@ -75,6 +75,14 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - The walls on the camera side stand full height (they dissolve round the hero like other tall things) instead of being cut down, which read as missing walls.
   - The wards are lush lawn, not patchy dirt, and designed as gardens. The inner court has a tiered fountain with running water, flower beds, clipped topiary, benches, two stone champions at the great door and a hedged privy garden. A bronze dragon greets you inside the outer gate.
   - No random barrels, crates or carts lying about.
+- **Castle v3: one bailey, redesigned after Mitchell's second walk round** (October 2; docs/CASTLE_DESIGN.md). He found the grass a scatter of tufts, the paths disconnected, the water unrealistic, the yard's placement random (the dragon stood in the archery range), the yard too small and cut in half for no reason. Decided:
+  - One bailey with no cross wall, and a larger yard (the curtain encloses about 43% more).
+  - The gate on the keep's axis: gate, avenue, fountain, cour d'honneur, feast court and great door in one straight line, with the yards and gardens mirrored about it.
+  - The dragon as the centrepiece, bigger, on a fountain at the crossing of the axes.
+  - Every path connected into one network, with nothing placed at random.
+  - Full grass on every lawn, island-wide, instead of scattered tufts.
+  - Realistic water in the fountain, the stream and the pond.
+  - Built so far: the layout (curtain, towers, gatehouse, approach along the ledge, buildings, walks, gardens and yards), with the existing statue and garden models. Still to come: the dragon fountain's final model, the full grass and the water.
 - **The 14 material and quest item icons are approved** (ores, bars, uncut gems, the Cinder Seal Fragment and the Cinder Key) and are in the game. Every item now has painted artwork.
 
 ### Already done before Round 5

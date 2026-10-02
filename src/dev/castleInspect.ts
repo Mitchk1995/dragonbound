@@ -1,5 +1,8 @@
+import * as THREE from 'three';
+import { CASTLE_PLAN } from '../data/zoneMaps';
 import type { Game } from '../game';
 import { cellRole, fitBlocks, fitsOf, footprint, type BuildingSpec, type Floor } from '../world/building';
+import { OCCLUDE } from '../world/worldView';
 import { perf } from './inspect';
 
 /** The residence range's rooms on each floor: [id, label, x, z] in cells from its corner. */
@@ -70,4 +73,101 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
   g.travel('keep', true);
   g.debug.timeScale = 1;
   return { rooms: out, furnishings: [fitsOf(keep).length, fitsOf(keep, 1).length] };
+}
+
+/**
+ * Dev-only audit of the bailey (`npm run inspect -- bailey`): the whole castle from above and as a
+ * plan, the approach, every yard through the gameplay camera with the hero standing in it, the
+ * centrepiece and a lawn up close, the island beyond and the camera-side wall dissolving round the
+ * hero. Every position comes from CASTLE_PLAN, so the shots follow the layout.
+ */
+export async function baileySuite(g: Game, shot: (name: string) => Promise<void>) {
+  g.travel('keep', true);
+  await new Promise((r) => setTimeout(r, 400));
+  document.body.classList.add('inspect-clean');
+  g.debug.timeScale = 0;
+  g.player.stop();
+  const P = CASTLE_PLAN, Z = P.zones;
+  const xs = P.curtain.map((p) => p.x), zs = P.curtain.map((p) => p.z);
+  const c = { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
+  const y0 = g.zone.groundY(P.fountain.x, P.fountain.z);
+  const out: Record<string, unknown> = {};
+
+  /** The hero standing at (x, z), seen through the game's own camera at `zoom`. */
+  const play = async (name: string, x: number, z: number, zoom: number, measure = false) => {
+    const at = g.zone.nav.nearestWalkable(x, z)!;
+    g.player.obj.visible = true;
+    g.player.pos.set(at.x, g.zone.groundY(at.x, at.z), at.z);
+    g.player.stop();
+    g.camPos.copy(g.player.pos);
+    g.camZoom = zoom;
+    g.update(0);
+    if (measure) out[`perf-${name}`] = await perf(g, 40);
+    await shot(`bailey-${name}`);
+  };
+  /** A free camera at `eye` looking at `look` (world units), no fog, shadows cast over `span`. */
+  const view = async (name: string, eye: number[], look: number[], span = 30) => {
+    const fog = g.scene.fog as THREE.Fog, sc = g.sun.shadow.camera;
+    const keep = { near: fog.near, far: fog.far, l: sc.left, r: sc.right, t: sc.top, b: sc.bottom, f: sc.far };
+    g.player.obj.visible = false;
+    g.debug.hold = () => {
+      fog.near = 400;
+      fog.far = 900;
+      Object.assign(sc, { left: -span, bottom: -span, right: span, top: span, far: 60 + span * 3 });
+      sc.updateProjectionMatrix();
+      const k = 1 + span / 30;
+      g.sun.position.set(look[0] + 14 * k, look[1] + 28 * k, look[2] + 10 * k);
+      g.sun.target.position.set(look[0], look[1], look[2]);
+      g.fill.position.set(look[0] - 18, look[1] + 14, look[2] - 6);
+      g.camera.position.set(eye[0], eye[1], eye[2]);
+      g.camera.lookAt(look[0], look[1], look[2]);
+      OCCLUDE.uOccOn.value = 0;
+      g.draw();
+      return true;
+    };
+    try { await shot(`bailey-${name}`); }
+    finally {
+      g.debug.hold = null;
+      Object.assign(fog, { near: keep.near, far: keep.far });
+      Object.assign(sc, { left: keep.l, right: keep.r, top: keep.t, bottom: keep.b, far: keep.f });
+      sc.updateProjectionMatrix();
+    }
+  };
+
+  // The whole castle: from high in the south-east, and as a plan from almost straight above.
+  await view('overview', [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70);
+  await view('plan', [c.x, y0 + 160, c.z + 22], [c.x, y0, c.z + 1], 70);
+  // The approach from below the rock: the ledge road climbing west under the south wall to the gate.
+  await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
+  // Through the gameplay camera: inside the gate looking up the yard, the centrepiece, the great door.
+  await play('entry', P.gate.x, P.gate.z - 4, 1.3);
+  await play('centre', P.fountain.x, P.fountain.z + 8, 1.0, true);
+  await play('door', P.door.x, P.door.z + 3.5, 1.0);
+  // The fountain and its water up close, low down.
+  await view('fountain-close', [P.fountain.x + 6, y0 + 3.2, P.fountain.z + 11], [P.fountain.x, y0 + 3.4, P.fountain.z], 14);
+  // Every other yard and garden, and the way in.
+  await play('ledge-road', P.gate.x + 34, P.gate.z + 6, 1.3);
+  await play('terrace', P.gate.x, P.gate.z + 8, 1.2);
+  await play('parterre', Z.parterre.x, Z.parterre.z + 2.5, 1.0);
+  await play('cour', Z.cour.x, Z.cour.z, 1.2);
+  await play('privy-garden', Z.privy.x, Z.privy.z, 1.0);
+  await play('bower', Z.bower.x, Z.bower.z, 1.0);
+  await play('belvedere', Z.belvedere.x, Z.belvedere.z, 1.0);
+  await play('kitchen-garden', Z.kitchen.x, Z.kitchen.z, 1.1);
+  await play('training', Z.training.x, Z.training.z - 3, 1.2);
+  await play('stables', Z.service.x, Z.service.z, 1.1);
+  // A lawn up close (the parterre's north-west panel), low across the grass.
+  await view('lawn-close', [Z.parterre.x - 8.5, y0 + 1.2, Z.parterre.z + 3.4], [Z.parterre.x + 1, y0 + 0.3, Z.parterre.z - 3.5], 12);
+  // The island beyond the castle: meadows, the approach, the portal court.
+  await view('island', [c.x + 150, y0 + 70, c.z + 165], [c.x + 60, -4, c.z + 70], 100);
+  // The hero by the camera-side (south) curtain: the wall stands full height and dissolves round them.
+  await play('walls-southside', P.gate.x + 14, P.gate.z - 3.5, 1.0);
+  // Frame cost in a meadow outside the castle, for comparison with the fountain's.
+  await play('meadow', 56, 132, 1.0, true);
+
+  g.player.obj.visible = true;
+  document.body.classList.remove('inspect-clean');
+  g.debug.timeScale = 1;
+  g.travel('keep', true);
+  return out;
 }

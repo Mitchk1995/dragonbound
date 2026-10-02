@@ -1,34 +1,71 @@
-# Dragonspire Castle (castle v2) as built
+# Dragonspire Castle (castle v3) as built
 
-The castle on the island's crown follows the castle-v2 blueprint in [blueprints/castle-v2](blueprints/castle-v2/). Its plan is in `src/data/zoneMaps.ts`: `KEEP_BUILDINGS` for the enterable buildings, the `CASTLE` constants for the walls, towers and gates. The same doors, partitions, stairs and furniture footprints drive rendering and collision. Blueprint coordinates move onto the island by `(+28, +12)`. North is negative Z.
+The castle stands on the home island's crown. Its plan is in `src/data/zoneMaps.ts`: `KEEP_BUILDINGS` for the enterable buildings, and the castle constants (`CURTAIN`, `GATE`, `POSTERN`, `TOWERS`, `DONJON`, `FOUNTAIN`, exported for the dev tools as `CASTLE_PLAN`) for the walls, towers, gates and the centrepiece. The same doors, partitions, stairs and furniture footprints drive rendering and collision. Coordinates are island cells; north is negative Z. A range "x a..b" gives cell edges, so the cells are a to b − 1.
+
+## The idea
+
+One great bailey, with no cross wall, laid out on the keep's axis.
+
+- **Main axis, x = 66**, straight up the screen: the gate in the south wall, the avenue, the dragon fountain, the cour d'honneur between the mirrored west wing and barracks, the feast court and the hall's great door.
+- **Cross axis, z = 82**: from a champion in a niche on the west wall, through the fountain, to the stable yard in the east.
+- **Mirrored about the axis:** the west wing and the barracks, the parterre's panels and walks, the south wall's towers and its two wall stairs.
+- **Every walk joins another:** the paving inside the curtain is one connected network, and every lawn, garden and yard can be walked into from the gate. Tests hold all of this (`tests/keep.test.ts`).
+
+| Zone | Where (x, z) |
+|---|---|
+| Residence (donjon, residence range, kitchen) | 43..92, 24..40 |
+| Feast court and kitchen yard | 57..101, 36..46 |
+| Cour d'honneur | 54..78, 46..66 |
+| Great parterre and fountain | 36..97, 66..98 |
+| Privy garden | 32..42, 34..65 |
+| Donjon bower | 38..56, 24..38 |
+| Kitchen garden | 94..119, 27..48 |
+| Training yard (lists, pells, butts) | 97..119, 48..70 |
+| Service court (smithy, stables, paddock) | 97..119, 70..99 |
 
 ## The outer works
 
-- **Curtain:** an eight-sided wall following the rock, 2.2 thick with a wall walk at +7, full height all round. Where it stands between the camera and the hero it dissolves around them, like every tall thing on the island.
-- **Towers:** seven round towers, open-topped at +7 with crenellations to 9 or 10. The west corner at blueprint `(8, 30)` has none.
-- **Outer gatehouse:** two round towers standing out from the south-east face either side of a vaulted, portcullised passage 3 wide. The approach ramp climbs to it from the portal court.
-- **Cross wall:** a full-height diagonal wall splitting the castle into the lower ward and the inner court, with the inner gatehouse at its middle.
-- **Postern:** a narrow gate in the west wall, out to a path along the crown.
-- **Wall stairs:** solid stone flights to the wall walk, one along the cross wall, one along the south-east curtain. The wall walk itself is not playable yet.
-- **Donjon:** the round tower at the north-west high corner, radius 7 and 13 high. Stage 1 builds it solid; stage 2 opens it (guard hall, map room, spiral stair).
+- **Curtain:** seven faces, clockwise from the north-west corner (31, 38), (50, 22.5), (100, 22.5), (120, 36), (120, 86), (101, 100), (31, 100): straight north, east, south and west faces with chamfered north-west, north-east and south-east corners. 2.2 thick with a wall walk at +7 and full height all round; where it stands between the camera and the hero it dissolves round them, like every tall thing on the island. About 6,480 cells inside.
+- **Towers:** eleven round towers, open-topped at +7 with crenellations to 9 or 10: one at each corner, one midway along the east and the west faces, and two on the south face either side of the gate. Every tower stands on the crown's level, never down on the road or cliff beside it.
+- **Gatehouse:** on the axis in the south face (66, 100): two D-towers standing out from the wall either side of a vaulted, portcullised passage.
+- **Postern:** a narrow gate in the west wall (31, 52.5), out to the belvedere.
+- **Wall stairs:** two solid stone flights against the south wall's inner face, mirrored either side of the gate, each climbing from the south walk to its south-face tower. The wall walk itself is not playable yet.
+- **Donjon:** the round tower at the north-west (50, 40), radius 7 and 13 high, touching the west wing. It is solid until stage 2 opens it.
 
-## The wards
+## The approach
 
-Both wards are lawn, with paved roads and yards; there are no barrels, crates or carts lying about.
+The approach road leaves the portal court north-west, climbs to the foot of the castle rock and turns west along a ledge under the south wall, ending on the axis in the middle of the gate terrace. It climbs at one steady grade (about 1 in 6) and reaches the crown's level where the ledge meets the terrace. A parapet runs along the road's open side and round the terrace, built in short lengths that step down with the road; lamp posts stand inside it, and the terrace has the two real lamps. The spring wells up below the ledge among boulders.
 
-- **Lower ward:** the outer gate's road crosses it to the inner gate. A bronze dragon on a plinth greets you inside the outer gate. Barracks along the south wall, stables and smithy on the east side, the lists (a lawn with one tilt barrier down the middle and archery butts), and the flagged muster yard with pells and a weapon rack.
-- **Inner court:** a garden. The road runs on to the flagged forecourt along the keep (the feast court and the kitchen yard, with the well by the kitchen door). Two stone champions flank the great door. A tiered fountain stands at the court's heart on a round plaza, walks running out from it, flower beds and clipped topiary round it and benches by its north walk. The privy garden in the south-west corner is hedged, with flower beds round a third champion.
+## The bailey
+
+Lawn everywhere a walk, court or yard does not pave it. There are no barrels, crates or carts lying about.
+
+- **Avenue:** six wide, paved, from the feast court through the fountain plaza and the gate to the terrace, with paired lamp posts up its length.
+- **Walks:** the terrace walk along the parterre's head, the cross walk, the west walk (the privy garden's central walk, then the parterre's west side), the east lane (the parterre's east side and the service lane), the south walk under the curtain, the wing walks either side of the cour, and short links to the barracks' east door and the postern.
+- **Great parterre:** four lawn panels round the round fountain plaza, mirrored about both axes. Each is edged in low clipped box with openings onto the walks, its plaza side an arc kept off the plaza; a champion faces the avenue between two flower beds, with clipped cones in its corners.
+- **Dragon fountain:** the centrepiece at the crossing of the axes, facing the gate: a round basin with a moulded kerb, a rock island and the bronze dragon twice life size, about 9 high. Four benches stand round it on the diagonals.
+- **Cour d'honneur:** lawn panels either side of the avenue between the wings, each with a long flower bed and clipped cones.
+- **Feast court:** two stone champions before the great door, planters by the screens door, the well on the kitchen door's axis and the kitchen's woodpile against its wall.
+- **West niche:** a champion facing down the cross walk, clipped cones and flower beds either side.
+- **Privy garden:** hedged from the parterre with its gate on the west walk; flower beds either side of the walk, a bench looking out to the postern, a champion on a pad at the walk's head.
+- **Donjon bower:** a gravel walk from the privy garden's champion up behind the donjon to a seat.
+- **Belvedere:** a paved lookout outside the postern with a parapet, a bench and a lamp.
+- **Kitchen garden:** herb beds either side of its gravel walk and along the herb path, a bench at the head of each.
+- **Training yard:** beaten earth, fenced, closed on the east by the curtain. The lists (north) with the tilt barrier, and the pell and archery yard (south) with its weapon rack, pells and butts, each gated from the east lane.
+- **Service court:** the stable yard before the smithy and the stables, the horse trough on the stables door's axis, the grindstone by the smithy door, and a fenced lawn paddock with a haystack.
 
 ## Buildings
 
-Every castle building has a flat roof with a crenellated parapet (no pitched roofs); chimneys rise above the parapet and a stone lantern lets the hall's hearth smoke out. Windows are tall lancets with hood moulds, few and placed symmetrically: the hall's south front has three on each floor.
+Every castle building has a flat roof with a crenellated parapet (no pitched roofs); chimneys rise above the parapet and a stone lantern lets the hall's hearth smoke out. Windows are tall lancets with hood moulds, few and placed symmetrically.
 
-| Building | Rooms | Notes |
-|---|---|---|
-| Residence range (`keep`, 27 × 16, two storeys) | Great hall, screens passage, buttery, service passage, pantry | The hall is open to its roof. Upstairs, galleries run round its north and west sides to the minstrel gallery over the screens, and the steward's chamber lies over the service end. The keep's entrance bay, gate tower and banner stand over the great door. |
-| Kitchen (9 × 12) | Great kitchen | Tall and open to its roof, two hearths (north and east), it shares its west wall with the residence range through the service passage. |
-| West wing (12 × 18) | Guardroom and armory, chapel | Its upper floor (solar, bedchamber) is reached from the donjon in stage 2. |
-| Barracks, stables, smithy | One room each | In the lower ward. |
+| Building | Where | Rooms | Notes |
+|---|---|---|---|
+| Residence range (`keep`, 27 × 16, two storeys) | 57, 24 | Great hall, screens passage, buttery, service passage, pantry | The great door is on the castle's axis. The hall is open to its roof; upstairs, galleries run round its north and west sides to the minstrel gallery over the screens, and the steward's chamber lies over the service end. |
+| Kitchen (9 × 12) | 83, 24 | Great kitchen | Tall and open to its roof, two hearths; it shares its west wall with the residence range. Its door opens on the kitchen yard. |
+| West wing (12 × 18) | 42, 47 | Guardroom and armory, chapel | Its upper floor (solar, bedchamber) is reached from the donjon in stage 2. |
+| Barracks (12 × 18) | 78, 47 | Guardroom, dormitory | The west wing's mirror across the cour; its east door opens on the lane to the lists. |
+| Smithy (6 × 6) | 97, 70 | Forge | At the head of the service court, its door on the stable yard. |
+| Stables (17 × 6) | 102, 70 | Stalls | Along the east curtain, sharing the smithy's east wall. |
 
 ## Stairs and floors
 
@@ -36,8 +73,12 @@ A stair is a straight flight inside a room (`stairs` on a building). On the grou
 
 The residence range's stair climbs north along the screens passage's west side to the minstrel gallery.
 
-## Still to build (stage 2)
+## Checking it
 
-- The donjon's interior: the guard hall off the hall's dais, the map room above, and the spiral stair linking them to the roof and the west wing's upper floor.
-- The west wing's solar and bedchamber.
-- The postern's cliff stair, once the island edge below it is settled.
+`npm run inspect -- bailey` captures the castle for review: an overview and a plan, the approach, every yard and garden through the gameplay camera with the hero standing in it, the fountain and a lawn up close, the island beyond, and the hero by the south wall as it dissolves. It also measures the frame cost at the fountain and in a meadow.
+
+## Still to build
+
+- Stage 2: the donjon's interior (the guard hall off the hall's dais, the map room above, the spiral stair linking them to the roof and the west wing's upper floor), and the west wing's solar and bedchamber.
+- The centrepiece's final model: the dragon rearing on its rock with water pouring from its jaws and jets from the kerb.
+- Full shell grass on every lawn in place of the scattered tufts, and realistic water in the basin, the stream and the pond.

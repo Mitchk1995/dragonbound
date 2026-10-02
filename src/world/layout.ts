@@ -96,6 +96,8 @@ export interface ZoneLayout {
   buildings?: BuildingSpec[];
   /** Chance (percent) of a tree on each raised relief cell; the theme's reliefTrees otherwise. */
   canopy?: Uint8Array;
+  /** Walkable cells nobody could reach, sealed off by Gen.connect (a designed area should leave none). */
+  sealed?: number[];
 }
 
 export interface Burn {

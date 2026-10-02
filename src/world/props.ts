@@ -701,6 +701,68 @@ function fallingWater(w: number, h: number, time: { value: number }, seed: numbe
   return m;
 }
 
+/**
+ * The bronze dragon itself (facing +Z, its hind feet at height `y`): sitting up on its haunches like
+ * a heraldic beast, chest out, head raised with glowing eyes, wings half spread and raised so it
+ * reads from above, the tail curled round beside it. Green with age; the claws, horns and tail
+ * spade are worn bright gold.
+ */
+function dragonBeast(k: ModelKit, g: THREE.Object3D, y: number) {
+  const B = 0x4f8a78, BD = 0x3a6a5c, BL = 0x6aa892, GOLD = 0xb8944a;
+  // Haunches and hind feet.
+  for (const s of [-1, 1]) {
+    cb(k, g, [0.52, 0.66, 1.0], [s * 0.42, y + 0.33, -0.28], BD, [0, s * 0.12, 0], 0.16);
+    cb(k, g, [0.3, 0.14, 0.46], [s * 0.46, y + 0.07, 0.24], B, undefined, 0.04);
+    for (const c of [-1, 0, 1]) k.box(g, [0.07, 0.07, 0.14], [s * 0.46 + c * 0.09, y + 0.05, 0.5], GOLD);
+  }
+  // The body rising from the hips to the chest, the paler breast forward of it.
+  limb(k, g, [0, y + 0.42, -0.42], [0, y + 1.6, 0.26], [0.92, 0.8, 0.7, 0.62], B);
+  limb(k, g, [0, y + 0.55, -0.05], [0, y + 1.5, 0.4], [0.6, 0.4, 0.5, 0.34], BL);
+  // Forelegs braced on the plinth's front edge, gold claws over the edge.
+  for (const s of [-1, 1]) {
+    limb(k, g, [s * 0.34, y + 1.25, 0.3], [s * 0.3, y + 0.6, 0.48], [0.26, 0.28, 0.22, 0.24], B);
+    limb(k, g, [s * 0.3, y + 0.62, 0.48], [s * 0.3, y + 0.08, 0.6], [0.2, 0.22, 0.18, 0.2], B);
+    cb(k, g, [0.3, 0.14, 0.36], [s * 0.3, y + 0.07, 0.68], B, undefined, 0.04);
+    for (const c of [-1, 0, 1]) k.box(g, [0.07, 0.07, 0.14], [s * 0.3 + c * 0.09, y + 0.05, 0.9], GOLD);
+  }
+  // The neck in an S up from the chest, spines down its back.
+  limb(k, g, [0, y + 1.5, 0.28], [0, y + 2.2, 0.42], [0.5, 0.46, 0.4, 0.38], B);
+  limb(k, g, [0, y + 2.15, 0.42], [0, y + 2.72, 0.6], [0.4, 0.38, 0.34, 0.32], B);
+  for (const [py, pz] of [[1.75, 0.16], [2.15, 0.22], [2.55, 0.36]]) k.mesh(g, prism(0.12, 0.3, 0.6), GOLD, [0, y + py, pz], [-0.9, 0, 0]);
+  // The head: skull, a long snout, the jaw, glowing eyes and swept-back horns.
+  cb(k, g, [0.5, 0.42, 0.52], [0, y + 2.86, 0.72], B, undefined, 0.1);
+  limb(k, g, [0, y + 2.84, 0.92], [0, y + 2.72, 1.38], [0.38, 0.3, 0.26, 0.2], BL);
+  limb(k, g, [0, y + 2.64, 0.82], [0, y + 2.56, 1.26], [0.32, 0.1, 0.22, 0.08], BD);
+  for (const s of [-1, 1]) {
+    k.box(g, [0.06, 0.07, 0.1], [s * 0.22, y + 2.93, 0.96], 0xffd070, undefined, 0xffa040, 1.4);
+    limb(k, g, [s * 0.17, y + 3.0, 0.62], [s * 0.32, y + 3.36, 0.1], [0.14, 0.14, 0.02, 0.02], GOLD);
+    limb(k, g, [s * 0.24, y + 2.8, 0.6], [s * 0.4, y + 2.9, 0.3], [0.08, 0.08, 0.02, 0.02], GOLD);
+  }
+  // Wings, half spread and raised: the arm bone to the wrist, three fingers fanning back and down,
+  // membranes stretched between them with a scalloped trailing edge.
+  for (const s of [-1, 1]) {
+    const sh: V3 = [s * 0.36, y + 1.45, 0.02], wr: V3 = [s * 1.25, y + 2.65, -0.2], root: V3 = [s * 0.36, y + 0.95, -0.5];
+    const tips: V3[] = [[s * 2.0, y + 2.25, -0.8], [s * 1.8, y + 1.45, -1.05], [s * 1.2, y + 0.95, -0.95]];
+    limb(k, g, sh, wr, [0.16, 0.16, 0.12, 0.12], BL);
+    limb(k, g, wr, [s * 1.3, y + 2.85, -0.05], [0.08, 0.08, 0.01, 0.01], GOLD);
+    for (const t of tips) limb(k, g, wr, t, [0.08, 0.08, 0.05, 0.05], BL);
+    sail(k, g, [sh, wr, root], BD);
+    for (let i = 0; i < tips.length; i++) {
+      const a = i === 0 ? root : tips[tips.length - i];
+      const b = tips[tips.length - 1 - i];
+      const m: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+      const notch: V3 = [m[0] + (wr[0] - m[0]) * 0.22, m[1] + (wr[1] - m[1]) * 0.22, m[2] + (wr[2] - m[2]) * 0.22];
+      sail(k, g, [wr, a, notch], BD);
+      sail(k, g, [wr, notch, b], BD);
+    }
+  }
+  // The tail curling round the plinth, ending in a gold spade.
+  const tail: V3[] = [[0, y + 0.32, -0.8], [0.55, y + 0.24, -1.02], [0.98, y + 0.18, -0.72], [1.08, y + 0.13, -0.15], [0.9, y + 0.1, 0.3]];
+  const tr = [0.42, 0.32, 0.24, 0.16];
+  for (let i = 0; i < 4; i++) limb(k, g, tail[i], tail[i + 1], [tr[i], tr[i] * 0.8, (tr[i + 1] ?? 0.1), (tr[i + 1] ?? 0.1) * 0.8], i % 2 ? BD : B);
+  k.mesh(g, wedge(0.34, 0.06, 0.34), GOLD, [0.86, y + 0.1, 0.48], [0, 0.4, 0]);
+}
+
 const BUILDERS: Record<string, Builder> = {
   /**
    * A waterfall pouring down a stepped rock face (front = +Z, back against the cliff): three tiers
@@ -1066,9 +1128,9 @@ const BUILDERS: Record<string, Builder> = {
   // ─── Castle v2 (docs/blueprints/castle-v2): curtain, towers, gates ─────────────
   // Every wall piece is built along local X with its outer face toward -Z (the inner face, the wall
   // walk's rail side, toward +Z). They stand full height and fade round the hero like any tall wall.
-  /** A curtain wall `len` long (`v` = 1: the thinner cross wall). */
+  /** A curtain wall `len` long. */
   castle_wall: (k, g, arg) => {
-    const L = lenOf(arg) ?? 10, T = vOf(arg) === 1 ? 1.8 : 2.2, H = 7;
+    const L = lenOf(arg) ?? 10, T = 2.2, H = 7;
     cb(k, g, [L, 0.8, T + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
     cb(k, g, [L, H - 0.8, T], [0, 0.8 + (H - 0.8) / 2, 0], STONE, undefined, 0.04);
     cb(k, g, [L, 0.2, T + 0.16], [0, 3.6, 0], STONE_D, undefined, 0.03);
@@ -1132,20 +1194,6 @@ const BUILDERS: Record<string, Builder> = {
       k.mesh(g, taper(0.1, 0.1, 0.01, 0.01, 0.2), IRON, [x, 3.7, -T / 2 + 0.4], [Math.PI, 0, 0]);
     }
     k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], STONE_D);
-  },
-  /** The inner gatehouse in the cross wall: a tower block 5.2 long, height 9, over a vaulted passage `len` wide. */
-  inner_gatehouse: (k, g, arg) => {
-    const P = lenOf(arg) ?? 3, L = 5.2, D = 3.2, H = 9;
-    cb(k, g, [L + 0.5, 0.8, D + 0.5], [0, 0.4, 0], STONE_DD, undefined, 0.06);
-    for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2, 4.5, D], [sx * (P / 2 + (L - P) / 4), 2.25, 0], STONE, undefined, 0.04);
-    cb(k, g, [L, H - 4.5, D], [0, 4.5 + (H - 4.5) / 2, 0], STONE, undefined, 0.04);
-    for (const y of [3.6, 7]) cb(k, g, [L + 0.16, 0.2, D + 0.16], [0, y, 0], STONE_D, undefined, 0.03);
-    for (const e of [-1, 1]) {
-      cb(k, g, [P + 0.6, 0.5, 0.3], [0, 4.6, e * (D / 2 - 0.1)], STONE_L, undefined, 0.04);
-      for (let u = -L / 2 + 0.4; u < L / 2; u += 1.2) cb(k, g, [0.66, 0.7, 0.5], [u, H + 0.35, e * (D / 2 - 0.25)], STONE_L, undefined, 0.05);
-    }
-    for (let x = -P / 2 + 0.3; x < P / 2; x += 0.5) k.box(g, [0.1, 0.7, 0.1], [x, 4.15, -D / 2 + 0.5], IRON);
-    k.box(g, [P - 0.1, 0.04, D], [0, 0.02, 0], STONE_D);
   },
   /** The postern: a narrow arched gate `len` wide through a short stretch of full-height curtain. */
   postern: (k, g, arg) => {
@@ -1507,64 +1555,49 @@ const BUILDERS: Record<string, Builder> = {
    * tail spade are worn bright gold where hands touch them.
    */
   dragon_statue: (k, g) => {
-    const B = 0x4f8a78, BD = 0x3a6a5c, BL = 0x6aa892, GOLD = 0xb8944a;
     cb(k, g, [2.8, 0.5, 2.8], [0, 0.25, 0], STONE_D, undefined, 0.06);
     cb(k, g, [2.3, 0.7, 2.3], [0, 0.85, 0], STONE, undefined, 0.06);
     cb(k, g, [1.3, 0.36, 0.05], [0, 0.85, 1.16], STONE_L, undefined, 0.02);
     cb(k, g, [2.45, 0.14, 2.45], [0, 1.25, 0], STONE_L, undefined, 0.03);
-    const y = 1.32;
-    // Haunches and hind feet.
-    for (const s of [-1, 1]) {
-      cb(k, g, [0.52, 0.66, 1.0], [s * 0.42, y + 0.33, -0.28], BD, [0, s * 0.12, 0], 0.16);
-      cb(k, g, [0.3, 0.14, 0.46], [s * 0.46, y + 0.07, 0.24], B, undefined, 0.04);
-      for (const c of [-1, 0, 1]) k.box(g, [0.07, 0.07, 0.14], [s * 0.46 + c * 0.09, y + 0.05, 0.5], GOLD);
+    dragonBeast(k, g, 1.32);
+  },
+  /**
+   * The bailey's centrepiece (facing +Z, toward the gate): a round basin, a 16-sided moulded kerb
+   * (outer radius 5.6) on a low plinth step round a clear pool, a stacked rock island at its heart
+   * and the bronze dragon twice life size on the rock, about 9 high.
+   */
+  dragon_fountain: (k, g) => {
+    const N = 16, RO = 5.6, RI = 4.9, H = 0.75, RM = (RO + RI) / 2;
+    k.cyl(g, 6.1, 6.1, 0.2, [0, 0.1, 0], STONE_D, undefined, N);
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2 + Math.PI / N, c = 2 * RM * Math.sin(Math.PI / N) + 0.06;
+      cb(k, g, [c, H, RO - RI], [Math.sin(a) * RM, 0.2 + H / 2, Math.cos(a) * RM], i % 2 ? STONE_L : STONE, [0, a, 0], 0.05);
+      cb(k, g, [c + 0.08, 0.12, RO - RI + 0.2], [Math.sin(a) * RM, 0.2 + H + 0.04, Math.cos(a) * RM], STONE_L, [0, a, 0], 0.03);
     }
-    // The body rising from the hips to the chest, the paler breast forward of it.
-    limb(k, g, [0, y + 0.42, -0.42], [0, y + 1.6, 0.26], [0.92, 0.8, 0.7, 0.62], B);
-    limb(k, g, [0, y + 0.55, -0.05], [0, y + 1.5, 0.4], [0.6, 0.4, 0.5, 0.34], BL);
-    // Forelegs braced on the plinth's front edge, gold claws over the edge.
-    for (const s of [-1, 1]) {
-      limb(k, g, [s * 0.34, y + 1.25, 0.3], [s * 0.3, y + 0.6, 0.48], [0.26, 0.28, 0.22, 0.24], B);
-      limb(k, g, [s * 0.3, y + 0.62, 0.48], [s * 0.3, y + 0.08, 0.6], [0.2, 0.22, 0.18, 0.2], B);
-      cb(k, g, [0.3, 0.14, 0.36], [s * 0.3, y + 0.07, 0.68], B, undefined, 0.04);
-      for (const c of [-1, 0, 1]) k.box(g, [0.07, 0.07, 0.14], [s * 0.3 + c * 0.09, y + 0.05, 0.9], GOLD);
+    // The basin floor, dark under the water so the pool has depth.
+    k.cyl(g, RI, RI, 0.1, [0, 0.05, 0], 0x1a2e30, [0, Math.PI / N, 0], N);
+    // The rock island: stacked slabs, broad enough for the dragon's feet, claws and tail.
+    for (const [i, [x, z, w, h, d, y]] of ([[0.2, 0, 5.2, 0.7, 5.0, 0], [0.3, -0.1, 4.7, 0.6, 4.7, 0.6], [0.3, 0.1, 4.3, 0.5, 4.5, 1.1]] as number[][]).entries()) {
+      slab(k, g, 91 + i, [w, h, d], [x, y, z], i % 2 ? STONE_D : STONE_DD, i * 0.7);
     }
-    // The neck in an S up from the chest, spines down its back.
-    limb(k, g, [0, y + 1.5, 0.28], [0, y + 2.2, 0.42], [0.5, 0.46, 0.4, 0.38], B);
-    limb(k, g, [0, y + 2.15, 0.42], [0, y + 2.72, 0.6], [0.4, 0.38, 0.34, 0.32], B);
-    for (const [py, pz] of [[1.75, 0.16], [2.15, 0.22], [2.55, 0.36]]) k.mesh(g, prism(0.12, 0.3, 0.6), GOLD, [0, y + py, pz], [-0.9, 0, 0]);
-    // The head: skull, a long snout, the jaw, glowing eyes and swept-back horns.
-    cb(k, g, [0.5, 0.42, 0.52], [0, y + 2.86, 0.72], B, undefined, 0.1);
-    limb(k, g, [0, y + 2.84, 0.92], [0, y + 2.72, 1.38], [0.38, 0.3, 0.26, 0.2], BL);
-    limb(k, g, [0, y + 2.64, 0.82], [0, y + 2.56, 1.26], [0.32, 0.1, 0.22, 0.08], BD);
-    for (const s of [-1, 1]) {
-      k.box(g, [0.06, 0.07, 0.1], [s * 0.22, y + 2.93, 0.96], 0xffd070, undefined, 0xffa040, 1.4);
-      limb(k, g, [s * 0.17, y + 3.0, 0.62], [s * 0.32, y + 3.36, 0.1], [0.14, 0.14, 0.02, 0.02], GOLD);
-      limb(k, g, [s * 0.24, y + 2.8, 0.6], [s * 0.4, y + 2.9, 0.3], [0.08, 0.08, 0.02, 0.02], GOLD);
-    }
-    // Wings, half spread and raised: the arm bone to the wrist, three fingers fanning back and down,
-    // membranes stretched between them with a scalloped trailing edge.
-    for (const s of [-1, 1]) {
-      const sh: V3 = [s * 0.36, y + 1.45, 0.02], wr: V3 = [s * 1.25, y + 2.65, -0.2], root: V3 = [s * 0.36, y + 0.95, -0.5];
-      const tips: V3[] = [[s * 2.0, y + 2.25, -0.8], [s * 1.8, y + 1.45, -1.05], [s * 1.2, y + 0.95, -0.95]];
-      limb(k, g, sh, wr, [0.16, 0.16, 0.12, 0.12], BL);
-      limb(k, g, wr, [s * 1.3, y + 2.85, -0.05], [0.08, 0.08, 0.01, 0.01], GOLD);
-      for (const t of tips) limb(k, g, wr, t, [0.08, 0.08, 0.05, 0.05], BL);
-      sail(k, g, [sh, wr, root], BD);
-      for (let i = 0; i < tips.length; i++) {
-        const a = i === 0 ? root : tips[tips.length - i];
-        const b = tips[tips.length - 1 - i];
-        const m: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-        const notch: V3 = [m[0] + (wr[0] - m[0]) * 0.22, m[1] + (wr[1] - m[1]) * 0.22, m[2] + (wr[2] - m[2]) * 0.22];
-        sail(k, g, [wr, a, notch], BD);
-        sail(k, g, [wr, notch, b], BD);
-      }
-    }
-    // The tail curling round the plinth, ending in a gold spade.
-    const tail: V3[] = [[0, y + 0.32, -0.8], [0.55, y + 0.24, -1.02], [0.98, y + 0.18, -0.72], [1.08, y + 0.13, -0.15], [0.9, y + 0.1, 0.3]];
-    const tr = [0.42, 0.32, 0.24, 0.16];
-    for (let i = 0; i < 4; i++) limb(k, g, tail[i], tail[i + 1], [tr[i], tr[i] * 0.8, (tr[i + 1] ?? 0.1), (tr[i + 1] ?? 0.1) * 0.8], i % 2 ? BD : B);
-    k.mesh(g, wedge(0.34, 0.06, 0.34), GOLD, [0.86, y + 0.1, 0.48], [0, 0.4, 0]);
+    const beast = new THREE.Group();
+    beast.position.y = 1.6;
+    beast.scale.setScalar(2.2);
+    dragonBeast(k, beast, 0);
+    g.add(beast);
+    const pool = new THREE.MeshStandardMaterial({ color: 0x3a8a9a, roughness: 0.15, emissive: 0x0e2a30, transparent: true, opacity: 0.82 });
+    pool.userData.decal = true;
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(RI, RI, 0.02, N), pool);
+    water.position.set(0, 0.55, 0);
+    water.rotation.y = Math.PI / N;
+    water.name = 'fountain-pool';
+    g.add(water);
+  },
+  /** A low clipped box hedge along local X, `len` long, 0.5 high and 0.5 thick (parterre edging). */
+  box_hedge: (k, g, arg) => {
+    const L = Math.max(0.6, arg ?? 3);
+    cb(k, g, [L, 0.42, 0.5], [0, 0.21, 0], 0x3e6a2e, undefined, 0.08);
+    cb(k, g, [L - 0.06, 0.1, 0.42], [0, 0.46, 0], 0x4a7a34, undefined, 0.05);
   },
   /**
    * A knight in stone on a stepped plinth (facing +Z), the lord's champion: plate armour and a
@@ -2485,7 +2518,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'outer_gatehouse', 'inner_gatehouse', 'postern', 'wall_flight', 'donjon', 'forge_canopy']);
+export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'outer_gatehouse', 'postern', 'wall_flight', 'donjon', 'forge_canopy', 'dragon_fountain']);
 
 /** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
 export const PROP_KINDS = Object.keys(BUILDERS);
