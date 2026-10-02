@@ -308,12 +308,23 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           W.box(lk, lp, 0.32, 0.06, 0.32, lu, 2.6, face + 0.5, LAMP_NAVY, 0, 0.02);
           W.box(lk, lp, 0.1, 0.1, 0.1, lu, 3.12, face + 0.5, PAL.gold, Math.PI / 4, 0.01);
         }
+        // The house banner over the door, so the way in reads from across the court.
+        {
+          const [bk, bp] = at(fade, doorH + 0.8), fg = new THREE.Group();
+          if (ns) fg.position.set(uc, 0, (side === 'n' ? 0.5 : b.d - 0.5) + (face + 0.06) * W.out);
+          else fg.position.set((side === 'w' ? 0.5 : b.w - 0.5) + (face + 0.06) * W.out, 0, uc);
+          fg.rotation.y = side === 's' ? 0 : side === 'n' ? Math.PI : side === 'e' ? Math.PI / 2 : -Math.PI / 2;
+          bp.add(fg);
+          livery(bk, fg, 0, doorH + 2.45, 0, Math.min(1.4, dr.w * 0.6), 1.45);
+        }
       }
       if (!keep) piece(dr.w, wallH - 0.21, wallH + 0.03, WALL_T + 0.16, uc, 0, CAP);
       // (Not on the camera side: cut down with the wall they would read as stray planks.)
       if (!fade) for (const [hinge, dir] of [[u0, -1], [u1, 1]] as [number, number][]) {
+        // (A castle door's leaves are the lord's blue planks with gold straps, like every gate's.)
         const leaf = dr.w / 2 - 0.1;
-        piece(leaf, 0.08, doorH - 0.1, 0.1, hinge + (dir * leaf) / 2, -(WALL_T / 2 + 0.07), WOOD, 0.02);
+        piece(leaf, 0.08, doorH - 0.1, 0.1, hinge + (dir * leaf) / 2, -(WALL_T / 2 + 0.07), keep ? HERALD_BLUE : WOOD, 0.02);
+        if (keep) for (const y of [0.7, doorH - 0.8]) piece(leaf * 0.85, y, y + 0.08, 0.13, hinge + (dir * leaf) / 2, -(WALL_T / 2 + 0.07), PAL.gold, 0.01);
       }
     }
     // Windows: glass in the middle of the wall (warm main lights, a sky-tinted top light), a stone
@@ -990,14 +1001,15 @@ const inRect = ([x0, z0, x1, z1]: [number, number, number, number], lx: number, 
  */
 /**
  * The top of a chimney stack (its coping's top at y): a slate cap course and a pair of round flue
- * pots in dark slate, each with a gilt finial ring, so no open void shows from above.
+ * pots in dark slate, each with a gilt ring and a little slate hood, so no open void shows from above.
  */
 export function chimneyPots(fk: ModelKit, p: Obj, x: number, y: number, z: number) {
   cb(fk, p, [1.15, 0.14, 1.15], [x, y + 0.07, z], ROOF_BLUE, undefined, 0.03);
   for (const s of [-1, 1]) {
     fk.cyl(p, 0.2, 0.24, 0.55, [x + s * 0.28, y + 0.42, z], 0x4a4f58, undefined, 8);
     fk.cyl(p, 0.24, 0.24, 0.06, [x + s * 0.28, y + 0.72, z], GILT, undefined, 8);
-    fk.cyl(p, 0.14, 0.14, 0.02, [x + s * 0.28, y + 0.75, z], 0x2a2c32, undefined, 8);
+    // A little slate hood on each pot (the flue's smoke comes out under it), never an open void.
+    fk.mesh(p, taper(0.42, 0.42, 0.06, 0.06, 0.2), ROOF_BLUE, [x + s * 0.28, y + 0.9, z]);
   }
 }
 

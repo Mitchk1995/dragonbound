@@ -30,7 +30,7 @@ describe('lawn', () => {
     expect(meadow).toBeGreaterThan(clipped);
     // The parterre's lawn is clipped, the meadow by the farm is not.
     const at = (x: number, z: number) => lawn[z * L.w + x];
-    expect(at(CASTLE_PLAN.zones.parterre.x - 6, CASTLE_PLAN.zones.parterre.z - 3)).toBe(Lawn.Clipped);
+    expect(at(CASTLE_PLAN.zones.parterre.x - 10, Math.floor(CASTLE_PLAN.zones.parterre.z) - 1)).toBe(Lawn.Clipped);
     expect(at(56, 136)).toBe(Lawn.Meadow);
   });
 

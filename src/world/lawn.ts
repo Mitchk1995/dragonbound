@@ -18,7 +18,7 @@ import { strandField } from './strands';
  */
 
 /** Blade height per lawn kind, in world units. */
-const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.08, [Lawn.Garden]: 0.12 };
+const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.05, [Lawn.Garden]: 0.12 };
 /** Shells per graphics preset. */
 export const LAWN_SHELLS = { high: 8, medium: 6, low: 4 } as const;
 const MAX_SHELLS = 8;
@@ -174,8 +174,8 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
         {
           vec2 wp = vLawnPos.xz;
           bool clipped = vLawn.y < 0.2;
-          // Fine blades on clipped lawns (about a hundred to a cell), coarser in meadows.
-          float bladeScale = clipped ? 10.0 : 7.5;
+          // Fine blades on clipped lawns (a couple of hundred to a cell, mown short), coarser in meadows.
+          float bladeScale = clipped ? 15.0 : 7.5;
           vec2 p1 = wp * bladeScale;
           // How small a blade is on screen: tiny blades shimmer, so the far lawn settles into one
           // layer and loses its upper shells.
@@ -191,7 +191,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           float stripe = clipped ? clamp(sin(wp.x * 1.5708) * 2.5, -1.0, 1.0) : 0.0;
           float n2 = texture2D(uLawnNoise, wp * 0.13 + vec2(0.41, 0.17)).r;
           float foot = vLawnX.y;
-          float tall = (0.82 + 0.36 * n2) * (1.0 + 0.45 * foot);
+          float tall = (0.82 + 0.36 * n2) * (1.0 + (clipped ? 0.1 : 0.45) * foot);
           // Clipped lawns stand up straight (leaning a little with the mower's stripe); meadow grass flops.
           vec3 lean0 = clipped ? vec3(stripe * 0.06, 0.04, 0.32) : vec3(0.0, 0.1, 0.9);
           float gap = clipped ? uLawnGap.x : uLawnGap.y;
@@ -233,7 +233,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           }
           if (bloom.x >= 0.0) col = bloom;
           // Mower stripes on clipped lawns; broad lighter and darker drifts across meadows.
-          col *= clipped ? 1.0 + 0.07 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
+          col *= clipped ? 1.0 + 0.1 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
           diffuseColor.rgb = col;
         }`,
       );

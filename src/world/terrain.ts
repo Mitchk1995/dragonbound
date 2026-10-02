@@ -28,6 +28,8 @@ const BED_Y = -1.0;
 const FLOOR_CAP = 0.6;
 /** How far outdoor cliff faces are weathered back into the rock at most (bays, undercuts). */
 const WEATHER = 1.6;
+/** How far a gully cuts back into an outdoor face beyond the weathering. */
+const GULLY = 1.3;
 export const WATER_Y = -0.28;
 /** Brightness of the ground under a lawn (its root layer). */
 const LAWN_ROOT = 0.5;
@@ -77,7 +79,9 @@ export function bedding(seed: number) {
   for (let y = -12; y < 90; y += rng() < 0.15 ? 0.9 + rng() * 0.5 : 2.4 + rng() * 3.4) L.push(y);
   // The beds dip and roll across the land (up to about 20 degrees), so ledges run slantwise across a
   // face and climb or drop along it, never level the full width.
-  const tilt = (x: number, z: number) => (n(x * 0.035, z * 0.035) - 0.5) * 7 + (n(x * 0.11 + 31, z * 0.11) - 0.5) * 1.1;
+  // A second, shorter swell (a few metres over a dozen cells) ends each ledge after a short run and
+  // sets the next one higher or lower, so no line runs the full width of a face.
+  const tilt = (x: number, z: number) => (n(x * 0.035, z * 0.035) - 0.5) * 9 + (n(x * 0.085 + 31, z * 0.085) - 0.5) * 4.6 + (n(x * 0.2 + 17, z * 0.2 + 5) - 0.5) * 0.9;
   const dens = (x: number, z: number) => 0.8 + 0.45 * n(x * 0.045 + 57, z * 0.045 + 13);
   const q = (y: number, x: number, z: number) => (y + tilt(x, z)) * dens(x, z);
   const index = (s: number) => {
@@ -468,8 +472,8 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       }
       const wd = sf.wet[k];
       if (wd < 1.3 && fluidN[k] < count[k]) {
-        setCh(k, EARTH, c.setHex(0x3e3224).lerp(c2.setHex(0x4e4030), sstep(0, 1.3, wd)));
-        share(k, EARTH, 1 - sstep(0.5, 1.3, wd), x, z);
+        setCh(k, EARTH, c.setHex(0x5a5436).lerp(c2.setHex(0x6c6a44), sstep(0, 1.1, wd)));
+        share(k, EARTH, 1 - sstep(0.2, 1.0, wd), x, z);
       }
     }
   }
@@ -526,6 +530,29 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       }
     }
   }
+  // The highest walkable ground within two cells of each vertex (where a cliff's lip meets a road
+  // or a terrace above it).
+  const floorNear = new Float32Array(nV).fill(-1e6);
+  for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+    let m = -1e6;
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const xx = x + dx, zz = z + dz;
+      if (xx < 0 || zz < 0 || xx > w || zz > h) continue;
+      const kk = vi(xx, zz);
+      if (count[kk] > raisedN[kk]) m = Math.max(m, base[kk]);
+    }
+    floorNear[vi(x, z)] = m;
+  }
+  // The highest rock within three cells of each vertex (a ledge well below it is partway down a face).
+  const topNear = new Float32Array(nV);
+  for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+    let m = -1e6;
+    for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
+      const xx = x + dx, zz = z + dz;
+      if (xx >= 0 && zz >= 0 && xx <= w && zz <= h) m = Math.max(m, rockH[vi(xx, zz)]);
+    }
+    topNear[vi(x, z)] = m;
+  }
   // Rock along the land's edge stays put: its open side meets the island's underside there.
   const edgeKeep = new Float32Array(nV).fill(1);
   if (!theme.wallRise) {
@@ -576,14 +603,20 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
    */
   const warp = (x: number, y: number, z: number): [number, number] => {
     if (theme.wallRise) return [x, z];
-    const ramp = sstep(FLOOR_CAP + 0.1, 2.4, y - gridAt(base, x, z)) * gridAt(edgeKeep, x, z);
+    // The rock's own top stays put where it meets the ground above it (a road, a terrace, the crown),
+    // so the lip runs on flush under whatever stands there and the face falls back below it.
+    const top = gridAt(floorNear, x, z), lip = 1 - sstep(top - 2.6, top - 0.6, y);
+    const ramp = sstep(FLOOR_CAP + 0.1, 2.4, y - gridAt(base, x, z)) * gridAt(edgeKeep, x, z) * lip;
     if (ramp <= 0) return [x, z];
     const gx = gridAt(upX, x, z), gz = gridAt(upZ, x, z), gl = Math.hypot(gx, gz);
     const wgt = sstep(0.2, 1.0, gl);
     if (wgt <= 0) return [x, z];
     const mass = sstep(0.4, 0.6, sculpt(x * 0.19 + 5, z * 0.19 + 9));
     const bed = sculpt(x * 0.3 + y * 0.45 + 3, z * 0.3 - y * 0.3 + 11);
-    const d = (WEATHER * ramp * wgt * (0.62 * (1 - mass) + 0.38 * bed)) / gl;
+    // Gullies: narrow, deep clefts cut back into the face from top to foot along the crests of a
+    // ridged noise, so the beds are broken into separate buttresses (the same at every height).
+    const gn = sculpt(x * 0.075 + 41, z * 0.075 + 23), gully = sstep(0.6, 0.93, 1 - Math.abs(gn * 2 - 1));
+    const d = (ramp * wgt * (WEATHER * (0.62 * (1 - mass) + 0.38 * bed) + GULLY * gully)) / gl;
     return [x + gx * d, z + gz * d];
   };
   /**
@@ -684,6 +717,24 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
      * lies on its plane.
      */
     const bandY = (k: number, v: V) => (natural ? beds.bandY(k, v.x, v.z, v.f, v.r) : k <= groundOf(v) ? v.f + Math.min(v.r - v.f, FLOOR_CAP) : k * CAVE_TERRACE);
+    /**
+     * A ledge partway down a face (well below the rock's top near it) is bare rock, not the turf of
+     * the crown: its colour and ground weights go over to the cliff's own, so grass grows only on the
+     * top and moss takes the lower ledges in patches (the shader's), never a green stripe per bed.
+     */
+    const ledgeT = (v: V, y: number) => (natural && theme.mesaTop !== undefined ? sstep(1.2, 3.0, gridAt(topNear, v.x, v.z) - y) : 0);
+    const ledgeCol = (c3: number[], v: V, y: number) => {
+      const t = ledgeT(v, y);
+      if (t <= 0) return c3;
+      const rc = cliffC.setHex(cliffShades[0]).lerp(c2.setHex(cliffShades[1]), noise(v.x * 0.21 + 50, v.z * 0.21));
+      return [c3[0] + (rc.r - c3[0]) * t, c3[1] + (rc.g - c3[1]) * t, c3[2] + (rc.b - c3[2]) * t];
+    };
+    const ledgeA = (v: V, y: number) => {
+      const t = ledgeT(v, y);
+      if (t <= 0) return v.a;
+      const tot = v.a[0] + v.a[1] + v.a[2] + v.a[3];
+      return [v.a[0] * (1 - t), v.a[1] * (1 - t), v.a[2] * (1 - t), v.a[3] * (1 - t) + tot * t];
+    };
     const shadeOf = (k: number, v: V, lift = 1) => {
       const f = tone(k, v.x, v.z);
       return [v.c[0] * f * (1 + 0.03 * lift), v.c[1] * f, v.c[2] * f * (1 - 0.04 * lift)];
@@ -708,7 +759,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         if (poly.length >= 3) {
           for (let i = 1; i < poly.length - 1; i++) {
             const q = [poly[0], poly[i], poly[i + 1]];
-            tri(q.map((v) => [v.x, bandY(k, v), v.z]), q.map((v) => shadeOf(k, v, k > 0 ? 1 : 0)), q.map((v) => v.a), [0, 1, 0]);
+            tri(q.map((v) => [v.x, bandY(k, v), v.z]), q.map((v) => ledgeCol(shadeOf(k, v, k > 0 ? 1 : 0), v, bandY(k, v))), q.map((v) => ledgeA(v, bandY(k, v))), [0, 1, 0]);
           }
           // Where this band's edge runs along the island's edge, the skirt drops from it.
           if (skirtOn) for (let i = 0; i < poly.length; i++) {
@@ -745,7 +796,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const lv0 = indexOf(grid[0].s);
       if (grid.every((q) => indexOf(q.s) === lv0 && lv0 > groundOf(q))) {
         const q00 = at2(0, 0), q10 = at2(S, 0), q01 = at2(0, S), q11 = at2(S, S);
-        for (const q of [[q00, q01, q11], [q00, q11, q10]]) tri(q.map((v) => [v.x, bandY(lv0, v), v.z]), q.map((v) => shadeOf(lv0, v)), q.map((v) => v.a), [0, 1, 0]);
+        for (const q of [[q00, q01, q11], [q00, q11, q10]]) tri(q.map((v) => [v.x, bandY(lv0, v), v.z]), q.map((v) => ledgeCol(shadeOf(lv0, v), v, bandY(lv0, v))), q.map((v) => ledgeA(v, bandY(lv0, v))), [0, 1, 0]);
         if (skirtOn) for (const [p, q] of [[q00, q01], [q10, q11], [q00, q10], [q01, q11]]) {
           const alongZ = p.x === q.x;
           const side = alongZ ? voidSide(true, p.x, (p.z + q.z) / 2) : voidSide(false, p.z, (p.x + q.x) / 2);

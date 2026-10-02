@@ -47,8 +47,8 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
     uPoolT: time,
     uNoise: { value: noiseTexture() },
     uPoolR: { value: r },
-    uShallow: { value: new THREE.Color(0x3f8fa8) },
-    uDeep: { value: new THREE.Color(0x123a52) },
+    uShallow: { value: new THREE.Color(0x3f9a9e) },
+    uDeep: { value: new THREE.Color(0x0e4450) },
     uImp: { value: Array.from({ length: MAX_IMPACTS }, (_, i) => new THREE.Vector3(...(imps[i] ?? [0, 0, 0]))) },
     uRefl: { value: mirror?.texture ?? null },
     uReflMat: { value: mirror?.texMat ?? new THREE.Matrix4() },
@@ -115,7 +115,7 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
             vec2 dv = vPoolL - uImp[i].xy;
             float d = max(length(dv), 1e-3);
             float ph = 9.0 * d / s - 6.0 * uPoolT;
-            g += dv / d * exp(-d / s) * (9.0 * cos(ph) - sin(ph)) * 0.04 * smoothstep(0.05, 0.25, d);
+            g += dv / d * exp(-d / s) * (9.0 * cos(ph) - sin(ph)) * 0.022 * smoothstep(0.05, 0.25, d);
           }
           vec3 gv = (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz;
           normal = normalize(normal - gv + dot(gv, normal) * normal);
@@ -141,10 +141,21 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
           ${mirror ? `// The statue mirrored over the pool, wavering with the ripples; the sky round it.
           vec4 rc = uReflMat * vec4(vPoolW, 1.0);
           vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-          vec4 mir = texture2D(uRefl, rc.xy / rc.w + (normal.xy - flatN.xy) * 0.035);
-          float cover = clamp(mir.a, 0.0, 1.0) * uReflOn;
-          envC = mix(envC, mir.rgb * (0.9 + 0.35 * fres), cover * 0.95);
-          diffuseColor.rgb *= 1.0 - cover * 0.75;` : ''}
+          // A soft, coherent image: sampled through the calm surface (only a gentle waver, never
+          // torn by the impact rings), blurred over a small disc of taps, and only as strong as the
+          // angle allows (faint seen from above, clearer at a glancing look), tinted by the water.
+          vec2 ruv = rc.xy / rc.w + (calm.xy - flatN.xy) * 0.012;
+          vec4 mir = vec4(0.0);
+          for (int j = 0; j < 7; j++) {
+            float a = float(j) * 2.39996;
+            vec2 o = j == 0 ? vec2(0.0) : vec2(cos(a), sin(a)) * (0.0035 + 0.0012 * float(j));
+            mir += texture2D(uRefl, ruv + o);
+          }
+          mir /= 7.0;
+          float glance = 1.0 - ndv;
+          float cover = smoothstep(0.15, 0.85, mir.a) * uReflOn * (0.3 + 0.45 * glance * glance);
+          envC = mix(envC, mix(mir.rgb, mir.rgb * poolTint * 2.2, 0.35) * (0.85 + 0.3 * fres), cover);
+          diffuseColor.rgb *= 1.0 - cover * 0.5;` : ''}
           diffuseColor.rgb *= (1.0 - fres) * 0.7;
           totalEmissiveRadiance += poolTint * 0.18 + envC;
           // Caustic light over the shallow floor near the kerb.
@@ -162,7 +173,7 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
         }`,
       );
   };
-  mat.customProgramCacheKey = () => (mirror ? 'pool3-mirror' : 'pool3');
+  mat.customProgramCacheKey = () => (mirror ? 'pool4-mirror' : 'pool4');
   mat.userData.decal = true;
   mat.userData.noOcclude = true;
   return mat;

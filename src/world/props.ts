@@ -237,7 +237,7 @@ export function brokenFoam(seed: number, r: number, n: number, a: number) {
   const parts: THREE.BufferGeometry[] = [];
   for (let i = 0; i < n; i++) {
     const ang = hash01(seed, i, 1) * Math.PI * 2, d = Math.sqrt(hash01(seed, i, 2)) * r * 0.8;
-    const br = r * (0.16 + 0.22 * hash01(seed, i, 3)) * (1.2 - (0.5 * d) / r);
+    const br = r * (0.1 + 0.15 * hash01(seed, i, 3)) * (1.2 - (0.5 * d) / r);
     parts.push(softDisc(seed * 31 + i, Math.max(0.05, br), [0.94, 0.97, 0.98], a * (1 - (0.55 * d) / r)).clone().translate(Math.cos(ang) * d, 0.001 * i, Math.sin(ang) * d));
   }
   geo = mergeGeometries(parts)!;
@@ -915,14 +915,14 @@ function dragonBeast(k: ModelKit, g: THREE.Object3D, pose: BeastPose): THREE.Vec
     tips.forEach((t, i) => limb(k, g, wr, t, [0.08 - i * 0.008, 0.08 - i * 0.008, 0.035, 0.035], BD));
     // The membranes are the same casting as the body, a shade darker; verdigris has gathered only
     // in the recess by the body and along the inner trailing edge.
-    sail(k, g, [sh, el, root], VERDIGRIS_D);
+    sail(k, g, [sh, el, root], BRONZE_D);
     sail(k, g, [el, wr, root], BRONZE_D);
     const edge = [root, ...tips.slice().reverse()];
     for (let i = 0; i < edge.length - 1; i++) {
       const a = edge[i], b = edge[i + 1];
       const m: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
       const notch: V3 = [m[0] + (wr[0] - m[0]) * 0.2, m[1] + (wr[1] - m[1]) * 0.2, m[2] + (wr[2] - m[2]) * 0.2];
-      sail(k, g, [wr, a, notch], i === 0 ? VERDIGRIS : BRONZE_D);
+      sail(k, g, [wr, a, notch], i === 0 ? VERDIGRIS_D : BRONZE_D);
       sail(k, g, [wr, notch, b], BRONZE_D);
     }
   }
@@ -2034,9 +2034,11 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [0.14, 3.6, 0.14], [0, tip + 1.6 + 1.8, 0], IRON, undefined, 0.02);
     flag(k, g, 0, tip + 5.0, 0, 3.2, 2.0, 1);
     // Tall pointed lancets, each centred on a face of the drum (the same window as the halls'), stacked
-    // one per storey in columns either side of the south, mirrored east and west.
+    // one per storey in columns either side of the south, mirrored east and west (except the east
+    // column nearest the keep, which would stand jammed in the angle where the drum meets the range).
     const ap = r * Math.cos(Math.PI / N), step = (Math.PI * 2) / N;
     for (const col of [3, 6]) for (const sgn of [-1, 1]) {
+      if (col === 6 && sgn > 0) continue;
       const a = sgn * (col + 0.5) * step;
       const face = new THREE.Group();
       face.position.set(Math.sin(a) * ap, 0, Math.cos(a) * ap);
@@ -2207,13 +2209,48 @@ const BUILDERS: Record<string, Builder> = {
    */
   parapet: (k, g, arg) => {
     // The castle's own stone: a cream breast wall under one continuous blue-grey coping, on a
-    // blue-grey base course and lip.
+    // plain blue-grey plinth running down into the rock (no lip to stand out as a shelf).
     const L = Math.max(2, arg ?? 6);
-    cb(k, g, [L + 0.08, 1.5, 0.7], [0, -0.62, 0.42], TRIM_D, undefined, 0.03);
-    cb(k, g, [L + 0.1, 0.14, 0.82], [0, -1.32, 0.46], TRIM_D, undefined, 0.02);
+    cb(k, g, [L + 0.08, 3.0, 0.7], [0, -1.37, 0.42], TRIM_D, undefined, 0.03);
     cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], TRIM_D, undefined, 0.04);
     cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], ASHLAR, undefined, 0.04);
     cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], TRIM, undefined, 0.03);
+  },
+  /**
+   * An open balustrade along local X, `len` long (its outer face toward +Z like the parapet's): a
+   * blue-grey plinth running down into the rock, turned balusters of pale stone, a blue-grey handrail.
+   */
+  balustrade: (k, g, arg) => {
+    const L = Math.max(1, arg ?? 4);
+    cb(k, g, [L + 0.1, 2.0, 0.62], [0, -0.9, 0.05], TRIM_D, undefined, 0.03);
+    cb(k, g, [L + 0.1, 0.26, 0.62], [0, 0.13, 0], TRIM_D, undefined, 0.03);
+    for (let u = -L / 2 + 0.2; u <= L / 2 - 0.15; u += 0.34) {
+      k.cyl(g, 0.07, 0.1, 0.56, [u, 0.55, 0], ASHLAR_L, undefined, 6);
+      k.mesh(g, new THREE.IcosahedronGeometry(0.1, 0), ASHLAR_L, [u, 0.5, 0]);
+    }
+    cb(k, g, [L + 0.12, 0.16, 0.5], [0, 0.9, 0], TRIM, undefined, 0.03);
+  },
+  /**
+   * A low dressed wall along local X, `len` long, rising `v` from its -X end to its +X end in one even
+   * slope (kerbing a ramp): cream ashlar on a blue-grey base run down into the ground, a blue-grey
+   * coping. Its origin is at the middle of its run.
+   */
+  ramp_kerb: (k, g, arg) => {
+    const L = Math.max(1, lenOf(arg) ?? 4), rise = vOf(arg) || 0, pitch = Math.atan2(rise, L), S = Math.hypot(L, rise);
+    const r: V3 = [0, 0, pitch];
+    cb(k, g, [S + 0.1, 1.2, 0.62], [0, -0.45, 0], TRIM_D, r, 0.03);
+    cb(k, g, [S, 0.5, 0.48], [0, 0.4, 0], ASHLAR, r, 0.04);
+    cb(k, g, [S + 0.08, 0.12, 0.6], [0, 0.69, 0], TRIM, r, 0.03);
+  },
+  /**
+   * A pier closing the end of a parapet run: a square shaft of the castle's cream on a blue-grey
+   * base, a moulded blue-grey cap and a low pyramid of stone on top.
+   */
+  parapet_pier: (k, g) => {
+    cb(k, g, [1.15, 1.6, 1.15], [0, -0.6, 0.2], TRIM_D, undefined, 0.03);
+    cb(k, g, [0.95, 1.2, 0.95], [0, 0.6, 0.2], ASHLAR, undefined, 0.04);
+    cb(k, g, [1.15, 0.16, 1.15], [0, 1.26, 0.2], TRIM, undefined, 0.03);
+    k.mesh(g, taper(0.95, 0.95, 0.12, 0.12, 0.42), ASHLAR_L, [0, 1.55, 0.2]);
   },
   /**
    * A kerb along local X, `len` long: a chamfered blue-grey slab 0.5 wide standing 0.05 proud of the
@@ -2244,34 +2281,39 @@ const BUILDERS: Record<string, Builder> = {
    */
   wall_climber: (k, g, arg) => {
     const L = Math.max(1.5, lenOf(arg) ?? 4), rose = vOf(arg) === 1, R: number | undefined = typeof arg === 'object' ? arg?.bend : undefined;
-    const top = rose ? 4.2 : 5.0, LEAF = rose ? CLIMBER_ROSE_LEAF : CLIMBER_IVY, seed = Math.round(L * 10) + (rose ? 7 : 0);
+    const top = rose ? 5.0 : 5.4, LEAF = rose ? CLIMBER_ROSE_LEAF : CLIMBER_IVY, seed = Math.round(L * 10) + (rose ? 7 : 0);
     /** How far the face falls back at u along it (round a drum). */
     const sag = (u: number) => (R ? R - Math.sqrt(Math.max(0, R * R - u * u)) : 0);
     const turn = (u: number) => Math.asin(Math.max(-1, Math.min(1, u / (R ?? 1e9))));
     // Woody stems first: a few leaders climbing from the foot, branching out, under the leaves.
     const leaders = Math.max(2, Math.round(L / 1.2));
     for (let i = 0; i < leaders; i++) {
-      const u0 = -L / 2 + (L * (i + 0.5)) / leaders, h = top * (0.55 + 0.35 * hash01(seed, i, 9));
-      const u1 = u0 * 0.7 + (hash01(seed, i, 8) - 0.5) * 0.6;
+      // (Kept inside the leaf sheet: in its middle and short of its ragged top, so no bare stem shows.)
+      const u0 = (-L / 2 + (L * (i + 0.5)) / leaders) * 0.6, h = top * (0.35 + 0.2 * hash01(seed, i, 9));
+      const u1 = u0 * 0.8 + (hash01(seed, i, 8) - 0.5) * 0.3;
       limb(k, g, [u0, 0.05, 0.06 - sag(u0)], [u1, h, 0.06 - sag(u1)], [0.07, 0.05, 0.03, 0.02], WOOD_D);
     }
-    if (rose) for (let i = 0; i <= 4; i++) {
-      const u = -L / 2 + 0.3 + (i * (L - 0.6)) / 4;
-      cb(k, g, [0.05, top - 0.3, 0.05], [u, (top - 0.3) / 2, 0.04 - sag(u)], WOOD_D, undefined, 0.01);
+    // The roses' trellis: a few slender posts and two rails fixed to the wall, all inside the sheet.
+    if (rose) {
+      for (let i = 0; i <= 2; i++) {
+        const u = (-L / 2 + 0.3 + (i * (L - 0.6)) / 2) * 0.5;
+        cb(k, g, [0.05, top * 0.5, 0.05], [u, top * 0.25, 0.04 - sag(u)], WOOD_D, undefined, 0.01);
+      }
+      for (const y of [top * 0.2, top * 0.42]) cb(k, g, [L * 0.5, 0.05, 0.05], [0, y, 0.05], WOOD_D, undefined, 0.01);
     }
     // A sheet of flat leaf cards hugging the face: dense at the foot, the sheet narrowing and thinning
     // as it climbs to a ragged top (each column of leaves reaching its own height).
     const STEP = 0.2, cols = Math.max(8, Math.round(L / STEP));
     for (let c = 0; c < cols; c++) {
       const u0 = -L / 2 + (L * (c + 0.5)) / cols, edge = Math.abs(u0) / (L / 2);
-      const h = top * (0.55 + 0.45 * hash01(seed, c)) * (1 - 0.55 * edge * edge);
+      const h = top * (0.7 + 0.3 * hash01(seed, c)) * (1 - 0.35 * edge * edge);
       for (let y = 0.15 + (c % 2) * STEP * 0.5, j = 0; y < h; y += STEP, j++) {
         const f = y / h;
         // The sheet tapers: toward its top only the middle carries on.
-        if (edge > 1 - 0.6 * f * f) continue;
+        if (edge > 1 - 0.45 * f * f) continue;
         if (hash01(seed, c, j) > 0.98 - 0.55 * f * f) continue;
         const u = u0 + (hash01(seed + 2, c, j) - 0.5) * 0.1, yy = y + (hash01(seed + 6, c, j) - 0.5) * 0.08;
-        const sz = 0.15 + hash01(seed + 1, c, j) * 0.08;
+        const sz = 0.19 + hash01(seed + 1, c, j) * 0.1;
         const m = k.mesh(g, CLIMBER_LEAF, LEAF[Math.floor(hash01(seed + 3, c, j) * LEAF.length)], [u, yy, 0.06 + hash01(seed + 7, c, j) * 0.05 - sag(u)], [(hash01(seed + 8, c, j) - 0.5) * 0.5, turn(u), hash01(seed + 5, c, j) * 3]);
         m.scale.set(sz, sz * 1.25, 0.025);
         if (rose && hash01(seed + 4, c, j) > 0.8) k.gem(g, 0.08, [u, yy + 0.04, 0.16 - sag(u)], CLIMBER_BLOOM[(c + j) % 3]);
@@ -2358,8 +2400,17 @@ const BUILDERS: Record<string, Builder> = {
   },
   /** Clipped topiary in a square stone planter (`len`: 0 a ball, 1 a cone). */
   topiary: (k, g, arg) => {
-    const cone = (lenOf(arg) ?? 0) === 1;
+    const cone = (lenOf(arg) ?? 0) === 1, standard = (lenOf(arg) ?? 0) === 2;
     cb(k, g, [0.95, 0.7, 0.95], [0, 0.35, 0], STONE_L, undefined, 0.05);
+    if (standard) {
+      // A clipped standard: a tall clean stem through a smaller clipped ball to a round head.
+      cb(k, g, [1.05, 0.12, 1.05], [0, 0.72, 0], TRIM, undefined, 0.03);
+      k.box(g, [0.75, 0.05, 0.75], [0, 0.76, 0], 0x3a2a1e);
+      cb(k, g, [0.14, 2.2, 0.14], [0, 1.85, 0], WOOD_D, undefined, 0.02);
+      k.mesh(g, new THREE.IcosahedronGeometry(0.42, 1), 0x4a7a34, [0, 1.45, 0]).scale.set(1, 0.85, 1);
+      k.mesh(g, new THREE.IcosahedronGeometry(0.78, 1), 0x3e6e2e, [0, 2.95, 0]);
+      return;
+    }
     cb(k, g, [1.05, 0.12, 1.05], [0, 0.72, 0], STONE, undefined, 0.03);
     k.box(g, [0.75, 0.05, 0.75], [0, 0.76, 0], 0x3a2a1e);
     if (cone) {
@@ -2440,27 +2491,19 @@ const BUILDERS: Record<string, Builder> = {
       refl.render(renderer, scene, camera, water);
     };
     // Where the jaw stream lands: a churn of foam on the water, heaving foam, drifting spray.
-    const foamDisc = new THREE.Mesh(softDisc(91, 0.9, [0.9, 0.95, 0.96], 0.75), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+    const foamDisc = new THREE.Mesh(brokenFoam(91, 1.0, 11, 0.75), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
     foamDisc.position.set(0, WY + 0.03, 4.4);
     foamDisc.name = 'foam-spread';
     foamDisc.material.userData.decal = foamDisc.material.userData.noOcclude = true;
     foamDisc.renderOrder = 3;
     g.add(foamDisc);
-    const foamMat = new THREE.MeshStandardMaterial({ color: 0xeaf4f4, roughness: 0.7, emissive: 0x3a5a60, flatShading: true });
-    foamMat.userData.noOcclude = true;
+    // A small patch of broken foam where each spout's jet lands.
     const foam: THREE.Mesh[] = [];
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2, r = i ? 0.3 + hash01(i, 5) * 0.35 : 0;
-      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13 + hash01(i, 3) * 0.12, 0), foamMat);
-      f.position.set(Math.sin(a) * r, WY, 4.4 + Math.cos(a) * r * 0.8);
+    for (const [i, [x, z]] of impacts.slice(1).entries()) {
+      const f = new THREE.Mesh(brokenFoam(95 + i, 0.4, 5, 0.6), foamDisc.material);
+      f.position.set(x, WY + 0.025, z);
       f.name = 'foam';
-      g.add(f);
-      foam.push(f);
-    }
-    for (const [x, z] of impacts.slice(1)) {
-      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), foamMat);
-      f.position.set(x, WY, z);
-      f.name = 'foam';
+      f.renderOrder = 3;
       g.add(f);
       foam.push(f);
     }
@@ -2478,11 +2521,11 @@ const BUILDERS: Record<string, Builder> = {
       tick: (t) => {
         time.value = t;
         foam.forEach((f, i) => {
-          const s = 0.75 + 0.35 * Math.sin(t * 3.4 + i * 1.7);
-          f.scale.set(s * 1.2, s * (0.55 + 0.25 * Math.sin(t * 4.6 + i)), s * 1.2);
-          f.position.y = WY + 0.03 * Math.sin(t * 2.9 + i * 2.3);
+          f.scale.setScalar(0.9 + 0.15 * Math.sin(t * 3.4 + i * 1.7));
+          f.rotation.y = 0.3 * Math.sin(t * 0.8 + i);
         });
         foamDisc.scale.setScalar(1 + 0.08 * Math.sin(t * 2.3));
+        foamDisc.rotation.y = 0.25 * Math.sin(t * 0.6);
         // Spray puffs rise from the landing, swell and fade, one after another.
         spray.forEach((sp, i) => {
           const p = (t * 0.55 + i / spray.length) % 1;
@@ -2756,6 +2799,22 @@ const BUILDERS: Record<string, Builder> = {
     }
   },
   /**
+   * A rounded stone breaking a stream's surface (the water flowing toward +Z), a smaller one beside
+   * it, and a short trail of broken foam drifting downstream from them.
+   */
+  stream_stone: (k, g, arg) => {
+    const sd = Math.round((lenOf(arg) ?? 1) * 7);
+    chunk(k, g, 980 + sd, [0.75, 0.62, 0.62], [0, -0.66, 0], 0x7a7470, hash01(sd, 1) * 3);
+    chunk(k, g, 981 + sd, [0.42, 0.42, 0.38], [0.5 * (hash01(sd, 2) > 0.5 ? 1 : -1), -0.7, 0.25], 0x6a6466, hash01(sd, 3) * 3);
+    const m = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false });
+    m.userData.decal = m.userData.noOcclude = true;
+    const f = new THREE.Mesh(brokenFoam(200 + sd, 0.55, 6, 0.6), m);
+    f.position.set(0, -0.255, 0.55);
+    f.scale.set(0.8, 1, 1.5);
+    f.renderOrder = 3;
+    g.add(f);
+  },
+  /**
    * Where a stream spills off the island's edge (flowing toward +Z): the water curls over the lip in a
    * widening sheet and falls away into the Veil, fading as it drops, mist drifting up off it.
    */
@@ -2902,6 +2961,12 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [L, 0.2, 0.3], [0, 0.1, 0], WOOD_D, undefined, 0.02);
     cb(k, g, [L + 0.06, 0.06, 0.36], [0, 0.22, 0], WOOD_L, undefined, 0.01);
     for (let u = -L / 2 + 0.3; u < L / 2; u += 1.5) cb(k, g, [0.14, 0.32, 0.14], [u, 0.16, 0], WOOD_D, undefined, 0.02);
+    // A marker post at each end (the line a raised timber sill between them), capped in the livery.
+    for (const e of [-1, 1]) {
+      cb(k, g, [0.24, 1.1, 0.24], [e * (L / 2 + 0.1), 0.55, 0], WOOD_D, undefined, 0.02);
+      cb(k, g, [0.3, 0.2, 0.3], [e * (L / 2 + 0.1), 1.2, 0], HERALD_BLUE, undefined, 0.02);
+      k.mesh(g, new THREE.OctahedronGeometry(0.1, 0), PAL.gold, [e * (L / 2 + 0.1), 1.38, 0]);
+    }
   },
   /**
    * A horse (facing +Z), standing, or grazing with its head down when `len` is 1; `v` its coat. A
@@ -2950,7 +3015,7 @@ const BUILDERS: Record<string, Builder> = {
    */
   spring_fall: (k, g, arg) => {
     const Y = lenOf(arg) ?? 10, time = { value: 0 };
-    const ROCK = 0x857f80, ROCK_D = 0x6a6468, WET = 0x4a464c, MOSS = 0x4e7034, FERN = [0x3e6e2e, 0x4a7a34, 0x5a8a3c];
+    const ROCK = 0x857f80, ROCK_D = 0x6a6468, WET = 0x56525a, MOSS = 0x4e7034, FERN = [0x3e6e2e, 0x4a7a34, 0x5a8a3c];
     const cY = Y * 0.6, ledge = Y * 0.3;
     // The shoulder of rock the spring breaks out of: big blocks either side running up to the road's
     // lip, overhanging rock over the cleft, and down the middle a band of wet, dark rock half again
@@ -2970,15 +3035,21 @@ const BUILDERS: Record<string, Builder> = {
       chunk(k, g, 950 + sx, [0.9, 1.5, 1.0], [sx * 0.62, cY - 0.25, -0.95], ROCK, sx * 0.55);
       chunk(k, g, 952 + sx, [0.7, 0.9, 0.8], [sx * 0.35, cY + 0.75, -1.0], ROCK_D, -sx * 0.4);
     }
-    chunk(k, g, 954, [0.7, 1.0, 0.5], [0, cY + 0.05, -1.35], 0x2e2a2e, 0.2);
-    chunk(k, g, 955, [0.4, 0.7, 0.4], [0.05, cY + 0.15, -1.55], 0x1c1a1e, -0.3);
+    // Inside it the wet rock only darkens by steps (no black box), and spurs of rock stand into the
+    // gap from both sides at different heights, so its outline is ragged from the cleft to the ledge.
+    chunk(k, g, 954, [0.7, 1.0, 0.5], [0, cY + 0.05, -1.35], 0x3e3a40, 0.2);
+    chunk(k, g, 955, [0.4, 0.6, 0.4], [0.05, cY + 0.2, -1.5], 0x302c32, -0.3);
+    for (const [x, y, sy, sd] of [[-0.62, ledge + 1.0, 1.3, 957], [0.66, ledge + 1.8, 1.0, 958], [-0.58, cY - 1.5, 0.8, 959], [0.6, ledge + 0.45, 0.7, 961]]) {
+      chunk(k, g, sd, [0.62, sy, 0.9], [x, y, -1.1], x < 0 ? ROCK : ROCK_D, x * 0.8);
+    }
     chunk(k, g, 956, [1.1, 1.0, 0.9], [0, cY + 1.05, -0.95], ROCK, 0.35);
     chunk(k, g, 939, [1.0, 0.36, 0.9], [0, cY - 0.25, -0.85], MOSS, 0.1);
     for (const [x, y, z, r] of [[-0.85, cY + 1.05, -0.5, 0.32], [0.8, cY + 1.15, -0.52, 0.28], [-0.95, cY + 0.25, -0.4, 0.26], [0.95, cY + 0.15, -0.45, 0.3], [-0.25, cY + 1.45, -0.6, 0.24], [0.35, cY + 1.4, -0.55, 0.22]] as number[][]) {
       ball(k, g, r, [x, y, z], FERN[Math.floor(hash01(x, y) * 3)], [1.4, 0.7, 1.0]);
       for (let i = 0; i < 3; i++) limb(k, g, [x, y, z], [x + (i - 1) * 0.25, y - 0.45 - hash01(i, x) * 0.3, z + 0.18], [0.12, 0.03, 0.02, 0.01], FERN[(i + 1) % 3]);
     }
-    for (const [x, y] of [[-1.3, cY + 1.6], [1.25, cY + 1.8], [0, Y - 0.9], [-1.6, Y - 1.0], [1.5, Y - 0.95]]) chunk(k, g, 940 + Math.round(x * 10), [0.9, 0.2, 0.7], [x, y, -0.9], MOSS, x);
+    // Cushions of moss on the rock's shoulders over the cleft (rounded, never flat tiles).
+    for (const [x, y] of [[-1.3, cY + 1.6], [1.25, cY + 1.8], [0, Y - 0.9], [-1.6, Y - 1.0], [1.5, Y - 0.95]]) ball(k, g, 0.38, [x, y, -0.9], FERN[Math.floor(hash01(x, 7) * 3)], [1.3, 0.5, 1.0]);
     // The ledge the first fall lands on: a chunky shelf of the cliff's own rock run across between the
     // shoulders (joined to the face on both sides), wet and dark on top, the water sheeting off its lip.
     chunk(k, g, 945, [3.3, ledge + 0.3, 1.6], [0, -0.3, -0.55], ROCK_D, 0.05);
@@ -3002,9 +3073,9 @@ const BUILDERS: Record<string, Builder> = {
     // Churning water where the fall lands: patches of broken foam that heave out of step, and broken
     // arcs of foam spreading from the landing and fading, each at its own pace, drifting downstream.
     const foam: THREE.Mesh[] = [];
-    const foamAt: [V3, number, number][] = [[[0, -0.22, 1.25], 0.95, 12], [[0.1, -0.215, 1.6], 0.7, 8], [[0, ledge + 0.08, 0.3], 0.45, 6]];
+    const foamAt: [V3, number, number][] = [[[0, -0.22, 1.25], 0.95, 20], [[0.1, -0.215, 1.7], 0.75, 12], [[0, ledge + 0.08, 0.3], 0.45, 8]];
     foamAt.forEach(([at, r, n], i) => {
-      const f = new THREE.Mesh(brokenFoam(80 + i, r, n, 0.8), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+      const f = new THREE.Mesh(brokenFoam(80 + i, r, n, 0.6), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
       f.position.set(...at);
       f.material.userData.decal = f.material.userData.noOcclude = true;
       f.renderOrder = 3;
