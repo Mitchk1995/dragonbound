@@ -54,8 +54,9 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 ### Order of work
 
 1. Build the home island, then the castle.
-2. Blueprint the levels 1–10 region.
-3. Combat feel pass.
+2. Polish the castle, then the rest of the home island, and the characters, one area at a time, each judged by Mitchell from pictures before moving on (October 2).
+3. Blueprint the levels 1–10 region.
+4. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 
@@ -69,6 +70,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
 - **Items never cross their slot's rim:** every item picture fills the same share of its box.
 - **All bows lie the same way in their icons:** tilted like the Recurve (top tip to the upper right, string below), which Mitchell liked; the Worn Shortbow, Hunter's Bow and Emberstring icons were turned to match.
 - **Castle v2 stage 1 is built on the crown** (docs/CASTLE_DESIGN.md): the curtain with its seven towers, the outer and inner gatehouses, the postern, both wards and their yards, the residence range with its open hall and galleries, the kitchen, the west wing, barracks, stables and smithy. The donjon stands solid until stage 2 opens it with the west wing's upper floor; the wall walk is not playable yet.
+- **Castle v3, from Mitchell's second walk round (October 2):** one big bailey with no middle wall, clearly larger; the bronze dragon, much bigger, as the centrepiece fountain on the gate-to-great-door axis; designed, connected paths and gardens; full lawn grass, not tufts; realistic water. Then: the castle buildings should match the colourful gardens and look more royal (Claude chose cream stone with blue-grey trim and royal blue and gold livery); the castle rock must look like a natural mountain, not the same shape stacked.
 - **Castle look, from Mitchell's first walk round** (docs/CASTLE_DESIGN.md):
   - No house-style pitched roofs on castle buildings: every one has a flat roof behind a crenellated parapet.
   - Fewer, better windows: tall lancets, placed symmetrically.

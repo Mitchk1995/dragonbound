@@ -7,6 +7,10 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - The owner cares about the game, not the code or GitHub. Report in game terms: what changed in play, where to see it, and any game decision you need. Leave out code, files, branches, commits, PRs and CI unless the owner asks.
 - Handle all repository housekeeping yourself, start to finish: branch, commit, open the PR, fix CI, merge, then delete the branch and any worktree. When you finish, nothing is left uncommitted and no stray branch, worktree or scratch folder remains.
 - Ask the owner only about the game: feel, look, design direction and priorities.
+- **Show, don't tell.** Progress, options and questions go to the owner as pictures (in-game captures, concept images), with a line or two of text at most. No score tables, long lists or walls of text; the owner won't open the game to check.
+- **One thing at a time.** Finish one area or feature until the owner judges it good from pictures, then move on. The owner's eye is the judge; critic agents are a tool for finding defects, not a loop to grind. Stop and show the owner when progress stalls.
+- **Be frugal.** Keep usage low: small focused jobs, no big parallel agent runs unless the owner asks, and keep the repo, branches and scratch output clean.
+- **Mechanics and non-visual systems go to Codex** (GPT 6.1 Sol, max effort, run headless with the Codex app's newest bundled `codex.exe`); Claude does design, planning, look and feel.
 
 ## Where things are
 
