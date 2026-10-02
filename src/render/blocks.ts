@@ -30,12 +30,18 @@ export function chamferBox(w: number, h: number, d: number, c = 0.06) {
   const hx = w / 2, hy = h / 2, hz = d / 2;
   const cc = Math.max(0, Math.min(c, hx * 0.49, hy * 0.49, hz * 0.49));
   return cached(`cb${w},${h},${d},${cc}`, () => {
-    if (cc <= 0.001) return new THREE.BoxGeometry(w, h, d).toNonIndexed();
-    const pts: THREE.Vector3[] = [];
-    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
-      pts.push(V(sx * hx, sy * (hy - cc), sz * (hz - cc)), V(sx * (hx - cc), sy * hy, sz * (hz - cc)), V(sx * (hx - cc), sy * (hy - cc), sz * hz));
+    let g: THREE.BufferGeometry;
+    if (cc <= 0.001) g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+    else {
+      const pts: THREE.Vector3[] = [];
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+        pts.push(V(sx * hx, sy * (hy - cc), sz * (hz - cc)), V(sx * (hx - cc), sy * hy, sz * (hz - cc)), V(sx * (hx - cc), sy * (hy - cc), sz * hz));
+      }
+      g = new ConvexGeometry(pts);
     }
-    return new ConvexGeometry(pts);
+    // (A true box: its bounds are its faces, for the geometry audit.)
+    g.userData.box = true;
+    return g;
   });
 }
 
