@@ -8,8 +8,58 @@ above the script, else `D:\gameplanning`), so set it when working in a worktree.
 Scripts author inside a root rotated +90° about X, so **all coordinates are three.js: Y up, +Z forward**.
 Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 
-Style: chunky stylized fantasy low-poly (Warcraft 3 / Torchlight). Flat shading, bold silhouettes, oversized
-hands/weapons/pauldrons, 1–2 accent colours. Keep each model under ~3k triangles.
+## The look: read this before building or reviewing anything
+
+Every builder, critic and reviewer works from this section. Judge work against this style, not against generic realism
+or smoothness. The owner's specific picks are recorded in `docs/DESIGN_DECISIONS.md`; read the entries for the area
+you are working on.
+
+**What Dragonbound looks like.** A chunky, stylized, low-poly fantasy world in the line of Warcraft 3 and Torchlight,
+seen from a Diablo-style three-quarter overhead camera. It is bright and colourful, with bold silhouettes that read at
+play distance and a handful of strong colours per object rather than fine detail. It looks like hand-made toy-like
+craft, not a photograph.
+
+**Blocky on purpose.** Chamfered blocks, slabs, wedges and tapered beams are the house language for characters, gear,
+creatures, statues, horses, props, trees (leafy blocks) and the castle. Chunky and blocky is never a defect, and a
+reviewer must not ask for it to be smoothed or sculpted. Organic shapes are used where they read better: wings, hair,
+cloth, flames, rock, water and terrain.
+
+**But built, not dumped.** "Blocky" means blocks that are *designed together*: they meet face to face, share edges and
+read as one carved or built object. The owner's standing complaint is "shapes placed together instead of stitched into
+a shape that makes sense". These are always defects:
+- clipping or interpenetration;
+- floating or detached parts;
+- gaps and visible seams in something that should be continuous (a ring, a border, a base course, a rail, a path);
+- one primitive jammed into another;
+- misalignment or something off-centre where symmetry is intended;
+- like objects in different sizes;
+- trim that stops and starts.
+
+Continuous things are one shape: a basin is one turned ring, a hedge border is one outline, a plinth is one band.
+
+**Believable construction.** Things are built as they could really stand and be used: doors tall beside the hero with
+handles at hand height, towers that you can walk into from the wall walk, paths that are proper paths with clean edges,
+water that comes from somewhere and goes somewhere. "Realistic" in owner notes means *believable and well made*, not
+photoreal.
+
+**Surfaces.** Flat or soft stylized shading with painted textures, plus a few accents of real material:
+- forged metal;
+- glass that genuinely looks see-through and blue-tinted;
+- running water.
+
+Texture scale is consistent: one brick or block size on every face, nothing stretched.
+
+**The castle and the island.** The castle is in cream limestone with blue-grey trim, royal blue and gold livery, flat
+crenellated roofs and spires in a hierarchy, and lush gardens. The rock is dark blue-grey, natural, weathered and mossy.
+Grass is full lawn, never scattered tufts. Clutter is never random; everything is placed on purpose.
+
+**Characters.** Oversized hands, weapons and pauldrons, with one or two accent colours. Keep each model under about 3k
+triangles.
+
+**Reviewing.** A critic first states the style above in one line, then looks for construction defects and departures
+from the owner's picks. A critic never proposes a different style.
+
+## Building models
 
 **Pipeline (owner's rule):** an image-generated concept (with examples of our art as reference) comes first, the 3D model
 is built from that image, then the icon is made from the model. **Every item model matches its approved image**
