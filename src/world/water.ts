@@ -137,10 +137,10 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
           ${mirror ? `// The statue mirrored over the pool, wavering with the ripples; the sky round it.
           vec4 rc = uReflMat * vec4(vPoolW, 1.0);
           vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-          vec4 mir = texture2D(uRefl, rc.xy / rc.w + (normal.xy - flatN.xy) * 0.35);
+          vec4 mir = texture2D(uRefl, rc.xy / rc.w + (normal.xy - flatN.xy) * 0.1);
           float cover = clamp(mir.a, 0.0, 1.0) * uReflOn;
-          envC = mix(envC, mir.rgb * (0.55 + 0.6 * fres), cover);
-          diffuseColor.rgb *= 1.0 - cover * 0.6;` : ''}
+          envC = mix(envC, mir.rgb * (0.8 + 0.5 * fres), cover * 0.85);
+          diffuseColor.rgb *= 1.0 - cover * 0.75;` : ''}
           diffuseColor.rgb *= (1.0 - fres) * 0.7;
           totalEmissiveRadiance += poolTint * 0.18 + envC;
           // Caustic light over the shallow floor near the kerb.

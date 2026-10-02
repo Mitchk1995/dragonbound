@@ -18,23 +18,25 @@ One great bailey, with no cross wall, laid out on the keep's axis.
 | Cour d'honneur | 54..78, 46..66 |
 | Great parterre and fountain | 36..97, 66..98 |
 | Privy garden | 32..42, 34..65 |
-| Donjon bower | 38..56, 24..38 |
-| Kitchen garden | 94..119, 27..48 |
-| Training yard (lists, pells, butts) | 97..119, 48..70 |
-| Service court (smithy, stables, paddock) | 97..119, 70..99 |
+| Bower (rose arbour at the head of the west walk) | 34..41, 36..42 |
+| Kitchen garden (four quarters round a sundial) | 101..119, 32..49 |
+| Training yard (lists and archery lane) | 101..119, 49..70 |
+| Service court (smithy, stables, stable yard, paddock) | 101..119, 70..99 |
+
+The formal bailey (x 31..101) is mirrored about the axis: a clipped yew hedge on x = 100.5, the mirror of the west curtain, frames it from the service quarter, open where the cross walk passes into the stable yard.
 
 ## The outer works
 
 - **Curtain:** seven faces, clockwise from the north-west corner (31, 38), (50, 22.5), (100, 22.5), (120, 36), (120, 86), (101, 100), (31, 100): straight north, east, south and west faces with chamfered north-west, north-east and south-east corners. 2.2 thick with a wall walk at +7 and full height all round; where it stands between the camera and the hero it dissolves round them, like every tall thing on the island. About 6,480 cells inside.
-- **Towers:** eleven round towers, open-topped at +7 with crenellations to 9 or 10: one at each corner, one midway along the east and the west faces, and two on the south face either side of the gate. Every tower stands on the crown's level, never down on the road or cliff beside it.
-- **Gatehouse:** on the axis in the south face (66, 100): two D-towers standing out from the wall either side of a vaulted, portcullised passage.
+- **Towers:** eleven round towers rising a storey above the wall walk to a corbelled, crenellated parapet ring (the curtain stops at each drum): one at each corner, one midway along the east and the west faces, and two on the south face either side of the gate. Every tower stands on the crown's level, never down on the road or cliff beside it.
+- **Gatehouse:** on the axis in the south face (66, 100): two D-towers standing out from the wall either side of a passage four cells wide under a pointed arch of dressed voussoirs, the portcullis raised in the arch, a machicolated, crenellated block rising a storey over the curtain between the drums, the lord's banner over the arch.
 - **Postern:** a narrow gate in the west wall (31, 52.5), out to the belvedere.
 - **Wall stairs:** two solid stone flights against the south wall's inner face, mirrored either side of the gate, each climbing from the south walk to its south-face tower. The wall walk itself is not playable yet.
 - **Donjon:** the round tower at the north-west (50, 40), radius 7 and 13 high, touching the west wing. It is solid until stage 2 opens it.
 
 ## The approach
 
-The approach road leaves the portal court north-west, climbs to the foot of the castle rock and turns west along a ledge under the south wall, ending on the axis in the middle of the gate terrace. It climbs at one steady grade (about 1 in 6) and reaches the crown's level where the ledge meets the terrace. A parapet runs along the road's open side and round the terrace, built in short lengths that step down with the road; lamp posts stand inside it, and the terrace has the two real lamps. The spring wells up below the ledge among boulders.
+The approach road leaves the portal court north-west, climbs to the foot of the castle rock and turns west along a ledge under the south wall, ending on the axis in the middle of the gate terrace. It climbs at one steady grade to the foot of the south wall's east end (beside a dressed retaining wall) and runs level with the crown along the whole ledge, a grass verge between it and the wall. A parapet runs along the road's open side and round the terrace, built in short lengths that step down with the road; lamp posts stand inside it, and the terrace has the two real lamps. Below the ledge the spring's water falls from a culvert in the rock face into its pool, and the stream runs on from it unbroken.
 
 ## The bailey
 
@@ -47,12 +49,12 @@ Lawn everywhere a walk, court or yard does not pave it. There are no barrels, cr
 - **Cour d'honneur:** lawn panels either side of the avenue between the wings, each with a long flower bed and clipped cones.
 - **Feast court:** two stone champions before the great door, planters by the screens door, the well on the kitchen door's axis and the kitchen's woodpile against its wall.
 - **West niche:** a champion facing down the cross walk, clipped cones either side, and a long flower border along the wall's foot either side of those.
-- **Privy garden:** hedged from the parterre with its gate on the west walk; flower beds either side of the walk, a bench looking out to the postern, a champion on a pad at the walk's head.
-- **Donjon bower:** a gravel walk from the privy garden's champion up behind the donjon to a seat.
+- **Privy garden:** hedged from the parterre with its gate on the west walk; clipped standard trees in pairs either side of the walk with flower beds between them; the postern's cross walk ends at a seat against the wing.
+- **Bower:** a rose arbour with its seat at the head of the west walk, in the open, on a paved court between clipped balls; the lawn behind the donjon is a grove of trees.
 - **Belvedere:** a paved lookout outside the postern with a parapet, a bench and a lamp.
-- **Kitchen garden:** herb beds either side of its gravel walk and along the herb path, a bench at the head of each.
-- **Training yard:** beaten earth, fenced, closed on the east by the curtain. The lists (north) with the tilt barrier, and the pell and archery yard (south) with its weapon rack, pells and butts, each gated from the east lane.
-- **Service court:** the stable yard before the smithy and the stables, the horse trough on the stables door's axis, the grindstone by the smithy door, and a fenced lawn paddock with a haystack.
+- **Kitchen garden:** four box-edged quarters of herb beds round a cross of stone walks meeting at a sundial; the walks end at the feast court, a seat under the north wall between blossom trees, a seat against the east wall and the training yard's gate.
+- **Training yard:** beaten earth, fenced from the kitchen garden with one gate on its walk, closed by the hedge, the stable range and the curtain. The lists (north) with a row of pells and two weapon racks, a divider with a gate on the same line, and the archery lane (south): three butts at its west end, the shooting line and the archers' bench at the east.
+- **Service court:** the stable yard before the smithy and the stables (one range under one parapet, three stall doors), the grindstone against the smithy, blossom trees in planters flanking the paddock gate on the stables' axis; the paddock behind it with a field shelter against the diagonal wall, hay under it, the trough on the gate's axis and two horses.
 
 ## Buildings
 
@@ -64,8 +66,8 @@ Every castle building has a flat roof with a crenellated parapet (no pitched roo
 | Kitchen (9 × 12) | 83, 24 | Great kitchen | Tall and open to its roof, two hearths; it shares its west wall with the residence range. Its door opens on the kitchen yard. |
 | West wing (12 × 18) | 42, 47 | Guardroom and armory, chapel | Its upper floor (solar, bedchamber) is reached from the donjon in stage 2. |
 | Barracks (12 × 18) | 78, 47 | Guardroom, dormitory | The west wing's mirror across the cour; its east door opens on the lane to the lists. |
-| Smithy (6 × 6) | 97, 70 | Forge | At the head of the service court, its door on the stable yard. |
-| Stables (17 × 6) | 102, 70 | Stalls | Along the east curtain, sharing the smithy's east wall. |
+| Smithy (6 × 6) | 101, 70 | Forge | At the west end of the stable range, its door on the stable yard. |
+| Stables (13 × 6) | 106, 70 | Stalls | Sharing the smithy's east wall, running to the east curtain. |
 
 ## Stairs and floors
 
