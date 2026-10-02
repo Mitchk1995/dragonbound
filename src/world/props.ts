@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from '../render/resources';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL, type V3 } from '../render/kit';
@@ -120,7 +121,7 @@ function raggedDisc(seed: number, spokes: number, inner: number, outer: number, 
   geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.computeVertexNormals();
-  fanCache.set(key, geo);
+  fanCache.set(key, shareResource(geo));
   return geo;
 }
 
@@ -185,7 +186,7 @@ function softDisc(seed: number, r: number, rgb: [number, number, number], a: num
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
-  softCache.set(key, geo);
+  softCache.set(key, shareResource(geo));
   return geo;
 }
 
@@ -259,7 +260,7 @@ function crustPlates(seed: number) {
     geo.computeVertexNormals();
     return geo;
   });
-  plateCache.set(seed, geos);
+  plateCache.set(seed, geos.map(shareResource));
   return geos;
 }
 
@@ -374,7 +375,7 @@ function anvilIron(cracked: boolean) {
     }
   }
   const out = [geoOf([...iron, ...rest]), geoOf(face), geoOf(marks)];
-  anvilCache.set(cracked, out);
+  anvilCache.set(cracked, out.map(shareResource));
   return out;
 }
 

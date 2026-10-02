@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from './resources';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { BASES } from '../data/items';
 import { chamferBox, prism, rockBlock } from './blocks';
@@ -38,7 +39,7 @@ export function ingot(w: number, d: number, h: number, slope: number, bevel: num
       pts.push(V(sx * (tw - bevel), h, sz * (td - bevel)));
     }
     g = new ConvexGeometry(pts);
-    cache.set(key, g);
+    cache.set(key, shareResource(g));
   }
   return g;
 }
@@ -54,7 +55,7 @@ function bipyramid(r: number, body: number, tip: number) {
       for (const y of [-body / 2, body / 2]) pts.push(V(Math.cos(a) * r, y, Math.sin(a) * r));
     }
     g = new ConvexGeometry(pts);
-    cache.set(key, g);
+    cache.set(key, shareResource(g));
   }
   return g;
 }
@@ -74,7 +75,7 @@ function crystalPoint(r: number, body: number, tip: number, seed = 0) {
       pts.push(V(Math.cos(a) * rr, 0, Math.sin(a) * rr), V(Math.cos(a) * rr * 0.92, body, Math.sin(a) * rr * 0.92));
     }
     g = new ConvexGeometry(pts);
-    cache.set(key, g);
+    cache.set(key, shareResource(g));
   }
   return g;
 }
@@ -212,7 +213,7 @@ function torus(r: number, tube: number, seg = 10) {
   let g = cache.get(key);
   if (!g) {
     g = new THREE.TorusGeometry(r, tube, 5, seg);
-    cache.set(key, g);
+    cache.set(key, shareResource(g));
   }
   return g;
 }

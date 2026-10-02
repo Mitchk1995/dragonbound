@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from '../render/resources';
 import { PAL } from '../render/kit';
 import type { Enemy } from './enemy';
 
@@ -44,6 +45,8 @@ function visual(kind: ProjectileKind): THREE.Mesh {
         mats[kind] = new THREE.MeshStandardMaterial({ color: 0x8a7a6a, flatShading: true });
         break;
     }
+    shareResource(geos[kind]!);
+    shareResource(mats[kind]!);
   }
   return new THREE.Mesh(geos[kind], mats[kind]);
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from './resources';
 import { mulberry32 } from '../core/rng';
 
 /**
@@ -216,7 +217,7 @@ function makeTexture(key: string, gen: Gen) {
   tex.anisotropy = 8;
   tex.needsUpdate = true;
   tex.name = key;
-  cache.set(key, tex);
+  cache.set(key, shareResource(tex));
   return tex;
 }
 
@@ -368,7 +369,7 @@ export function groundTexture(): THREE.Texture {
   tex.generateMipmaps = true;
   tex.anisotropy = 8;
   tex.needsUpdate = true;
-  cache.set('ground', tex);
+  cache.set('ground', shareResource(tex));
   return tex;
 }
 
@@ -447,7 +448,7 @@ export function charTexture(): THREE.Texture {
   tex.anisotropy = 8;
   tex.needsUpdate = true;
   tex.name = 'char';
-  cache.set('char', tex);
+  cache.set('char', shareResource(tex));
   return tex;
 }
 
@@ -517,6 +518,6 @@ export function forgeTexture(): THREE.Texture {
   tex.anisotropy = 8;
   tex.needsUpdate = true;
   tex.name = 'forge';
-  cache.set('forge', tex);
+  cache.set('forge', shareResource(tex));
   return tex;
 }

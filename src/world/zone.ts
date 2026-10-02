@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from '../render/resources';
 import { KEEP_ARCHES, ZONES, type ZoneDef } from '../data/zones';
 import type { PortalSpec } from './portalFx';
 import type { Enemy, PackState } from '../entities/enemy';
@@ -140,7 +141,7 @@ export class ZoneRuntime {
         const lit = this.g.story.portalState(it.id).open;
         if (lit !== (it.state === 'lit')) {
           // Rebuild the arch so the swirl and light match.
-          it.obj.removeFromParent();
+          disposeObject(it.obj);
           const fresh = new Interactable('portal', it.id, it.x, it.z, it.obj.rotation.y, this.stationArg('portal', it.id));
           fresh.obj.position.y = it.obj.position.y;
           fresh.state = lit ? 'lit' : 'dark';
@@ -180,14 +181,7 @@ export class ZoneRuntime {
   }
 
   dispose() {
-    this.group.removeFromParent();
-    this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh || o instanceof THREE.Points || o instanceof THREE.Line) {
-        o.geometry.dispose();
-        const m = o.material as THREE.Material | THREE.Material[];
-        if (Array.isArray(m)) m.forEach((x) => x.dispose());
-        else m.dispose();
-      }
-    });
+    disposeObject(this.group);
+    this.cut.clear();
   }
 }

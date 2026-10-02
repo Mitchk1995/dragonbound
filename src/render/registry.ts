@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObjects, shareResource } from './resources';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CLOTH_COLORS, HAIR_COLORS, SKIN_TONES } from '../data/appearance';
@@ -214,6 +215,13 @@ export function registerModelScene(name: string, scene: THREE.Group) {
   });
   // Bows stay unmerged: BowDraw finds the static string by its shape.
   if (!name.startsWith('gear_bow_') && name !== 'gear_u_emberstring') mergeRigidParts(scene, name);
+  scene.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    shareResource(node.geometry);
+    for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+      for (const value of Object.values(material)) if (value instanceof THREE.Texture) shareResource(value);
+    }
+  });
   const box = new THREE.Box3().setFromObject(scene);
   loaded.set(name, { scene, height: box.max.y - box.min.y });
 }
@@ -411,7 +419,7 @@ export class HeroDresser {
   }
 
   dress(look: Appearance | null, equipment: Partial<Record<Slot, Item | null>>, override?: { weaponModel?: string; weaponPalette?: Palette }) {
-    for (const o of this.attached) o.removeFromParent();
+    disposeObjects(this.attached);
     this.attached = [];
     const a = look ?? { name: '', skin: 1, hair: 1, hairColor: 1, beard: 0, cloth: 0, cloth2: 5 };
     const dye = { cloth: CLOTH_COLORS[a.cloth] ?? CLOTH_COLORS[0], cloth2: CLOTH_COLORS[a.cloth2] ?? CLOTH_COLORS[5] };

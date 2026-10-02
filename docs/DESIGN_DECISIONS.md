@@ -1,5 +1,5 @@
 # Dragonbound design decisions
-*October 1 2026*
+*October 2 2026*
 
 Dragonbound is a long-term action RPG with combat led by Diablo II, some Diablo IV influence, richer active skills, and OSRS-style gathering and progression. The immediate design target is a complete, cohesive levels 1–10 region that makes combat, mining, equipment, quests and exploration feel like one adventure.
 
@@ -8,6 +8,12 @@ This reference brings the agreed direction, working ideas and open choices toget
 **Decision status:** Agreed direction records the intended experience. Working proposals describe ideas still being shaped. Open decisions need a choice or testing. Existing reference values describe the October 1 catalog and are not final balance for the first region.
 
 **This is the single design plan.** Any agent (Claude or Codex) that hears a decision from Mitchell records it here, in the same session; decisions that only live in a chat get lost. Newer direct decisions take precedence over older text, so record what changed, in the section below or in place.
+
+## Foundation work (October 2)
+
+- Mitchell approved nonvisual foundation work, starting with faster launches, save protection and memory cleanup. The current phase has mostly been visual redesign; this work preserves the existing appearance and gameplay rules while supporting the coming mechanics phase.
+- Mitchell also approved improvements to context/file handling and agent development: keep guidance in `AGENTS.md` and this plan, make authoritative context easier to find, keep scratch output from disrupting the game, and provide one consistent, sequential check command. Appearance work continues separately in its own checkout.
+- Mitchell requested an independent reviewer followed by automatic merging and cleanup for this work and future work; this is now part of `AGENTS.md` rather than a reminder he needs to repeat.
 
 ## Latest decisions (Round 5, October 1 evening)
 

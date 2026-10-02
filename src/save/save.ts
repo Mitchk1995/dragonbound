@@ -1,8 +1,9 @@
 import { xpForLevel } from '../progression/skills';
 import { SKILLS, type Item, type SkillId, type Slot } from '../types';
+import { parseSave, SAVE_VERSION } from '../../electron/save-format.mjs';
 
 /** v3 dropped the combat stance (combat XP now follows the weapon style; see combatXpSplit). */
-export const SAVE_VERSION = 3;
+export { SAVE_VERSION };
 export const INVENTORY_SIZE = 28;
 export const BANK_BASE_SIZE = 120;
 
@@ -158,30 +159,29 @@ export function getBackend(): SaveBackend {
   if (api) {
     return {
       read: () => api.readSave(),
-      write: async (json) => void (await api.writeSave(json)),
+      write: async (json) => {
+        if (!await api.writeSave(json)) throw new Error('Progress could not be saved.');
+      },
       describe: () => 'save file',
     };
   }
   // A damaged primary must not hide a usable backup or replace it on the next save.
   const readStoredJson = (key: string): string | null => {
+    let text: string | null;
     try {
-      const text = localStorage.getItem(key);
-      if (!text) return null;
-      const parsed = JSON.parse(text);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-      return text;
+      text = localStorage.getItem(key);
     } catch {
       return null;
     }
+    return text && parseSave(text) ? text : null;
   };
   return {
     read: async () => readStoredJson(LS_KEY) ?? readStoredJson(LS_KEY + '.backup'),
     write: async (json) => {
-      try {
-        const prev = readStoredJson(LS_KEY);
-        if (prev) localStorage.setItem(LS_KEY + '.backup', prev);
-        localStorage.setItem(LS_KEY, json);
-      } catch {}
+      if (!parseSave(json)) throw new Error('Progress could not be saved safely.');
+      const prev = readStoredJson(LS_KEY);
+      if (prev) localStorage.setItem(LS_KEY + '.backup', prev);
+      localStorage.setItem(LS_KEY, json);
     },
     describe: () => 'browser storage',
   };
@@ -190,11 +190,6 @@ export function getBackend(): SaveBackend {
 export async function loadSave(backend: SaveBackend): Promise<SaveData | null> {
   const text = await backend.read();
   if (!text) return null;
-  try {
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    return migrate(parsed);
-  } catch {
-    return null;
-  }
+  const parsed = parseSave(text);
+  return parsed ? migrate(parsed) : null;
 }

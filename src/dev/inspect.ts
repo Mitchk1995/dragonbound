@@ -19,7 +19,7 @@ import type { Slot } from '../types';
  * the dev server with DRAGONBOUND_INSPECT=<suites>; this drives the real game through every zone,
  * point of interest, model, pose and panel and writes full-window PNGs plus report.json to
  * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
- * perf, trees (tree style comparison, see treeLineup.ts), approved (approved artwork, see approvedInspect.ts).
+ * perf, memory, trees (tree style comparison, see treeLineup.ts), approved (approved artwork, see approvedInspect.ts).
  * Castle plans and rooms: castle.
  */
 
@@ -107,6 +107,7 @@ export async function runInspect(g: Game, suites: string) {
     if (want('zones') || zoneArg) report.zones = await zonesSuite(g, shot, zoneArg?.slice(6).split('+'));
     if (want('castle')) report.castle = await (await import('./castleInspect')).castleSuite(g, shot);
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
+    if (suites.split(',').includes('memory')) report.memory = await (await import('./memoryCheck')).memoryCheck(g);
     if (want('effects')) await effectsSuite(g, shot);
     if (want('boss')) await bossSuite(g, shot);
     if (want('ui')) await uiSuite(g, shot);
