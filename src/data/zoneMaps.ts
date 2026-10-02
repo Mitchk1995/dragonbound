@@ -173,7 +173,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     // the curtain: the door in the middle on the court's axis, an arched stall opening either side of
     // it (half-doors, a horse looking out), the hay loft's door over the middle; hay, the trough and
     // straw along the north wall. One parapet height with the smithy.
-    id: 'stables', style: 'keep', interior: 'keep', x: 107, z: 70, w: 12, d: 6, wallH: 5.6, roof: ROOF.terracotta, shared: ['w'],
+    id: 'stables', style: 'keep', interior: 'keep', x: 107, z: 70, w: 12, d: 5, wallH: 5.6, roof: ROOF.terracotta, shared: ['w'],
     doors: [{ side: 's', at: 5, w: 2 }],
     windows: [{ side: 's', at: 2.5, stall: true }, { side: 's', at: 9.5, stall: true }],
     fits: [
@@ -185,15 +185,15 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   {
     // The castle's smithy at the west end of the stable range, under the training yard: its forge,
     // anvil and tool rack.
-    id: 'smithy', style: 'keep', interior: 'keep', x: 102, z: 70, w: 6, d: 6, wallH: 5.6, roof: ROOF.darkSlate, joined: ['e'],
+    id: 'smithy', style: 'keep', interior: 'keep', x: 102, z: 70, w: 6, d: 5, wallH: 5.6, roof: ROOF.darkSlate, joined: ['e'],
     // Its door opens north onto the training yard it serves, so the stable court's front stays one
     // symmetric face about the stables' door.
     doors: [{ side: 'n', at: 2, w: 2 }],
     windows: [],
     fits: [
-      { kind: 'bellows', x: 1.5, z: 4.4, block: [0.6, 0.6] },
-      { kind: 'anvil_small', x: 3.0, z: 3.4, block: [0.45, 0.45] },
-      { kind: 'tool_rack', x: 4.6, z: 4.6, rot: -Math.PI / 2, block: [0.3, 0.9] },
+      { kind: 'bellows', x: 1.5, z: 3.4, block: [0.6, 0.6] },
+      { kind: 'anvil_small', x: 3.0, z: 2.5, block: [0.45, 0.45] },
+      { kind: 'tool_rack', x: 4.6, z: 3.5, rot: -Math.PI / 2, block: [0.3, 0.9] },
     ],
   },
   {
@@ -854,7 +854,7 @@ export function buildKeep(seed: number): ZoneLayout {
     if (Math.hypot(x + 0.5 - tx, z + 0.5 - tz) < tr + 1.3) G.l.ground[G.idx(x, z)] = Ground.Stone;
   }
   // The stable court before the smithy and the stables.
-  pave(102, 76, 119, 90);
+  pave(102, 75, 119, 90);
 
   // ─── Buildings ─────────────────────────────────────────────────────────────
   for (const b of KEEP_BUILDINGS) G.building(b);
@@ -1492,7 +1492,7 @@ export function buildKeep(seed: number): ZoneLayout {
   // tower); the paddock's gate on the same axis between stone piers, the trough just inside it, the
   // field shelter (flat-roofed, behind a parapet) against the east wall facing the gate's lawn, the
   // two horses side by side before it, a fence across its foot short of the curtain.
-  for (const x of [STABLE_AXIS - 3.5, STABLE_AXIS + 3.5]) bed(x, 76.75, 0, 2.0, 1);
+  for (const x of [STABLE_AXIS - 3.5, STABLE_AXIS + 3.5]) bed(x, 75.75, 0, 2.0, 1);
   for (const x of [STABLE_AXIS - 2.2, STABLE_AXIS + 2.2]) place('topiary', x, 84.6, 0, { len: 1, block: 0.5 });
   place('fit_trough', STABLE_AXIS, 78.6, 0, { block: [0.9, 0.35] });
   // The corner tower's drum stands into the court's east side (on the court's paving); a planted bed
@@ -1611,6 +1611,10 @@ export function buildKeep(seed: number): ZoneLayout {
   // The spring's water comes out of the castle rock: a culvert under the ledge road spills a fall
   // down the rock face into the spring pool.
   G.prop('spring_fall', 92.5, 111.6, 0).len = 10.9;
+  // A second spring breaks out at the brink of the crown's west buttress, between rounded masses of
+  // the rock, and falls the island's whole height into the Veil.
+  G.reserve(19.6, 80.5, 2.8);
+  G.prop('edge_fall', 19.6, 80.5, -Math.PI / 2, 1, 1.8).v = 1;
   // The hero is staged here for character creation and the pose tools; keep every camera spot
   // around it clear, or the near plane slices whatever prop sits there.
   for (const c of STAGE_CAMERAS) G.reserve(KEEP_STAGE.x + c.x, KEEP_STAGE.z + c.z, 2);

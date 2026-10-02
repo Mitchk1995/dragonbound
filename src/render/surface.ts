@@ -652,8 +652,9 @@ export const GROUND_TIME = { value: 0 };
  *   crisp, natural edges picked by their own painted patterns (a height blend: grass tufts and
  *   pebbles poke through first, grass creeps into the paving's joints), instead of a soft smear.
  * `moss`: moss in the paving's grout lines (the drowned city).
+ * `rockMoss`: how far moss spreads over grassy-topped rock (0 patches on the flattest ledges, 1 lush).
  */
-export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null, topRange: [number, number] = [0.8, 3.4], cave = false, waterY: number | null = null, waterTint = 0x2e6a70, rockTops = true, sharp = false, moss = false) {
+export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null, topRange: [number, number] = [0.8, 3.4], cave = false, waterY: number | null = null, waterTint = 0x2e6a70, rockTops = true, sharp = false, moss = false, rockMoss = 0) {
   const wet = waterY !== null;
   const uniforms = {
     uTime: GROUND_TIME,
@@ -663,6 +664,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
     uTopShade: { value: topShade },
     uTopRange: { value: new THREE.Vector2(...topRange) },
     uCliff: { value: new THREE.Color(cliff ?? 0x6a5e52) },
+    uRockMoss: { value: rockMoss },
     uGroundTex: { value: groundTexture() },
     uRockTex: { value: rockAtlas(cave ? 'strata' : 'natural') },
     uRockScale: { value: 1 / ROCK_TILE },
@@ -692,6 +694,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
         uniform float uWaterY;
         uniform vec3 uWaterTint;
         uniform vec3 uCliff;
+        uniform float uRockMoss;
         uniform float uTopShade;
         uniform vec2 uTopRange;
         varying vec4 vSplat;
@@ -800,12 +803,14 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
             float hk = smoothstep(-1.0, 13.0, vSurfPos.y);
             diffuseColor.rgb *= mix(mix(vec3(1.0), vec3(0.9, 0.86, 0.8), face), mix(vec3(1.0), vec3(1.04, 1.06, 1.12), face), hk) * (1.0 + 0.12 * face);
             ${rockTops ? '' : `float mossN = texture2D(uMixTex, vSurfPos.xz * 0.19 + vec2(0.13, 0.77)).r;
-            // Moss laid from straight above in world space: only on faces that truly face up (the
-            // geometry's own normal, not the painted facets, so it never traces the strata), in a few
-            // broad patches with a ragged edge, soil and grit speckled through it.
+            // Moss laid from straight above in world space: only on faces that face up (the
+            // geometry's own normal, not the painted facets, so it never traces the strata), in broad
+            // patches with a ragged edge, soil and grit speckled through it. Lush rock (uRockMoss)
+            // carries it over most tops and down the rounded shoulders.
             float mossP = texture2D(uMixTex, vSurfPos.xz * 0.035 + vec2(0.52, 0.31)).r;
             float edgeN = texture2D(uMixTex, vSurfPos.xz * 0.6 + vec2(0.21, 0.44)).r;
-            float moss = smoothstep(0.78, 0.95, gn.y) * smoothstep(0.6, 0.72, mossP + (edgeN - 0.5) * 0.22) * rockK;
+            float mossUp = mix(0.78, 0.5, uRockMoss), mossCut = mix(0.6, 0.36, uRockMoss);
+            float moss = smoothstep(mossUp, mossUp + 0.17, gn.y) * smoothstep(mossCut, mossCut + 0.12, mossP + (edgeN - 0.5) * 0.22) * rockK;
             vec3 mossC = mix(vec3(0.13, 0.2, 0.07), vec3(0.21, 0.3, 0.1), mossN);
             mossC = mix(mossC, vec3(0.24, 0.2, 0.15), smoothstep(0.62, 0.8, edgeN) * 0.6);
             diffuseColor.rgb = mix(diffuseColor.rgb, mossC, moss * 0.8);`}`}

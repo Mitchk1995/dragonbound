@@ -160,6 +160,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
   // The spring's fall out of the castle rock into its pool and the stream leaving it, from below.
   await view('falls', [P.gate.x + 31, y0 - 5, P.gate.z + 30], [P.gate.x + 26.5, y0 - 6.5, P.gate.z + 12], 18);
+  // The spring breaking out at the brink of the crown's west buttress and falling into the Veil.
+  await view('falls-west', [4, y0 + 6, 92], [19.6, y0 - 4, 80.5], 24);
   // The rock's foot through the gameplay camera, from the spring's landing (frame cost measured).
   await play('rock-foot', P.gate.x + 21, P.gate.z + 17, 1.0, true);
   if (rockOnly) return finish();
@@ -179,6 +181,11 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 70], [P.gate.x, y0 + 6, 60], 60);
   await view('ivy-curtain', [38, y0 + 4, 48], [38, y0 + 4, 39], 12);
   await view('hall-door', [62, y0 + 5, 66], [54, y0 + 2.5, 60.5], 12);
+  // The ward gates in the inner curtain, from the bailey and from the service ward.
+  for (const [i, gz] of [[1, P.fountain.z], [2, 45]]) {
+    await view(`ward-gate-${i}`, [P.screen[0].x - 9, y0 + 6, gz + 9], [P.screen[0].x, y0 + 3, gz], 14);
+    await view(`ward-gate-${i}-ward`, [P.screen[0].x + 9, y0 + 6, gz + 9], [P.screen[0].x, y0 + 3, gz], 14);
+  }
   // Through the gameplay camera: inside the gate looking up the yard, the centrepiece, the great door.
   await play('entry', P.gate.x, P.gate.z - 4, 1.3);
   await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.35, true);

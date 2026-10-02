@@ -61,7 +61,7 @@ const BASALT = 0x2e2626, BASALT_L = 0x453a36, BASALT_D = 0x201a1a;
 /** Standing water on a cave floor: dark and glossy (reflects like coal and obsidian). */
 const PUDDLE = 0x1a3238;
 /** Rock wet with spray behind and beside a waterfall: darker, with a glossy sheen. */
-const ROCK_WET = 0x56525a;
+const ROCK_WET = 0x444a56;
 /** The castle's lamp and lantern metal: dark navy-lacquered iron, picked out in gold. */
 export const LAMP_NAVY = 0x27324a;
 const METALS = new Set([IRON, IRON_L, PAL.gold, LAMP_NAVY]);
@@ -1235,75 +1235,18 @@ export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, 
   if (opt.key !== undefined) cb(k, g, [0.3, 0.42, p + 0.04], [x, y0 + h + out + 0.12, z + p / 2], opt.key, undefined, 0.02);
 }
 
-/** Stained glass: each colour glows in itself. */
-export const GLASS = { ruby: 0xc8304a, sapphire: 0x2f5fd0, gold: 0xf2b84a } as const;
-
-/**
- * The castle's one stained-glass scheme, for every principal building (one commission): two lights
- * of royal blue sprinkled with gold quarries, divided by a cream stone mullion that forks into Y
- * tracery in the head, a ruby lozenge in the eye of the Y. Built in window space (sill at y = 0,
- * centred on x = 0, in the plane z = 0) and cached per size: [geometry, colour, glows].
- */
-const royalCache = new Map<string, [THREE.BufferGeometry, number, boolean][]>();
-function royalGlass(w: number, h: number): [THREE.BufferGeometry, number, boolean][] {
-  const key = `${w},${h}`;
-  let parts = royalCache.get(key);
-  if (parts) return parts;
-  const { ys, ah } = pointedArch(w, h);
-  const m = new THREE.Matrix4(), place = (geo: THREE.BufferGeometry, x: number, y: number, z: number, rz = 0) => {
-    const c = geo.clone();
-    c.applyMatrix4(m.makeRotationZ(rz).setPosition(x, y, z));
-    return c.index ? c.toNonIndexed() : c;
-  };
-  const merge = (list: THREE.BufferGeometry[]) => {
-    const g = mergeGeometries(list.map((x) => { x.deleteAttribute('uv'); return x; }))!;
-    g.computeVertexNormals();
-    return g;
-  };
-  const stone: THREE.BufferGeometry[] = [], gold: THREE.BufferGeometry[] = [];
-  // The mullion up to the springing, forking into the Y's two arms.
-  stone.push(place(chamferBox(0.07, ys, 0.09, 0), 0, ys / 2, 0.02));
-  const arm = Math.hypot(w * 0.3, ah * 0.62), ang = Math.atan2(ah * 0.62, w * 0.3);
-  for (const sx of [-1, 1]) stone.push(place(chamferBox(arm, 0.06, 0.09, 0), sx * w * 0.15, ys + ah * 0.31, 0.02, sx > 0 ? ang : Math.PI - ang));
-  // Gold quarries down each light, offset row to row.
-  for (let y = 0.22, j = 0; y < ys - 0.12; y += 0.3, j++) for (const sx of [-1, 1]) {
-    gold.push(place(chamferBox(0.09, 0.09, 0.06, 0), sx * w * (j % 2 ? 0.17 : 0.33), y, 0.01, Math.PI / 4));
-  }
-  parts = [
-    [archPane(w, h, 0.04), GLASS.sapphire, true],
-    [merge(gold), GLASS.gold, true],
-    [place(chamferBox(w * 0.2, w * 0.2, 0.06, 0), 0, ys + ah * 0.72, 0.01, Math.PI / 4), GLASS.ruby, true],
-    [merge(stone), ASHLAR_L, false],
-  ];
-  royalCache.set(key, parts);
-  return parts;
-}
-
-/**
- * Stained glass in a pointed opening `w` wide, apex `h` above its sill at y (on a face at z, facing
- * +Z): the castle's royal scheme (royalGlass). `put` places a piece (a geometry built in window space,
- * its colour and whether it glows, at the window's x, y, z).
- */
-export function stainedGlass(put: (geo: THREE.BufferGeometry, color: number, emissive: number, x: number, y: number, z: number) => void, x: number, y: number, z: number, w: number, h: number) {
-  for (const [geo, c, glow] of royalGlass(w, h)) put(geo, c, glow ? c : 0, x, y, z);
-}
-
 /**
  * A tall pointed lancet on a face at z (facing +Z), its sill at y: the opening sunk into a dressed
- * surround (jambs to the springing, voussoirs round the head) in pale ashlar, a pane of glass glowing
- * with the lit room behind it (or dark, or `stained` glass), a blue-grey hood mould following the
+ * surround (jambs to the springing, voussoirs round the head) in pale ashlar, a plain pane of glass
+ * softly lit by the room behind it (or dark), a slender mullion, a blue-grey hood mould following the
  * arch with its label stops, and a projecting sill.
  */
-export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true, stained = false) {
+export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true) {
   const { ys } = pointedArch(w, h);
-  if (stained) {
-    stainedGlass((geo, c, em, px, py, pz) => k.mesh(g, geo, c, [px, py, pz], undefined, em, em ? 0.9 : 1), x, y, z + 0.03, w, h);
-  } else {
-    // The glass stands just proud of the face (the surround stands prouder), so it always shows.
-    k.mesh(g, archPane(w, h, 0.05), lit ? 0xffc870 : 0x1e2430, [x, y, z + 0.03], undefined, lit ? 0xffa040 : 0, lit ? 0.9 : 1);
-    // A slender mullion up to the springing, leading across it.
-    cb(k, g, [0.06, ys, 0.06], [x, y + ys / 2, z + 0.07], ASHLAR_L, undefined, 0.01);
-  }
+  // The glass stands just proud of the face (the surround stands prouder), so it always shows.
+  k.mesh(g, archPane(w, h, 0.05), lit ? 0x8a6a48 : 0x1e2430, [x, y, z + 0.03], undefined, lit ? 0xffa850 : 0, lit ? 0.45 : 1);
+  // A slender mullion up to the springing, leading across it.
+  cb(k, g, [0.06, ys, 0.06], [x, y + ys / 2, z + 0.07], ASHLAR_L, undefined, 0.01);
   for (const sx of [-1, 1]) cb(k, g, [0.2, ys + 0.02, 0.24], [x + sx * (w / 2 + 0.1), y + ys / 2, z - 0.02], ASHLAR_L, undefined, 0.02);
   archRing(k, g, x, y, z - 0.14, w, h, ASHLAR_L, { n: 4, t: 0.2, p: 0.24, out: 0 });
   archRing(k, g, x, y, z - 0.04, w + 0.42, h + 0.26, TRIM, { n: 4, t: 0.12, p: 0.16, out: 0 });
@@ -2096,7 +2039,7 @@ const BUILDERS: Record<string, Builder> = {
       d.position.set(Math.sin(a) * rr, y, Math.cos(a) * rr);
       d.rotation.y = a;
       g.add(d);
-      // Each a gabled lucarne, all four alike: a narrow cream front with its stained lancet under a
+      // Each a gabled lucarne, all four alike: a narrow cream front with its lancet under a
       // tall, steep slate gable (its ridge running back level into the cone, the cone closing over its
       // back), a cream tympanum in the gable, a blue-grey eave and a gilt finial on the gable's point;
       // shallow, so from the side it shows its roof and gable, never a long box.
@@ -2104,7 +2047,7 @@ const BUILDERS: Record<string, Builder> = {
       k.mesh(d, wedge(2.0, 1.45, 1.5), SLATE_BLUE, [0, 1.87, -0.05], [0, Math.PI / 2, 0]);
       k.mesh(d, wedge(0.1, 1.2, 1.2), ASHLAR_B, [0, 1.76, 0.88], [0, Math.PI / 2, 0]);
       cb(k, d, [1.35, 0.12, 0.22], [0, 1.16, 0.84], TRIM, undefined, 0.02);
-      lancet(k, d, 0, 0.12, 0.82, 0.48, 0.92, false, true);
+      lancet(k, d, 0, 0.12, 0.82, 0.48, 0.92, false);
       k.mesh(d, new THREE.OctahedronGeometry(0.15, 0), PAL.gold, [0, 2.78, 0.95]);
       cb(k, d, [0.05, 0.34, 0.05], [0, 2.58, 0.95], PAL.gold, undefined, 0.01);
     }
@@ -2122,7 +2065,7 @@ const BUILDERS: Record<string, Builder> = {
       face.position.set(Math.sin(a) * ap, 0, Math.cos(a) * ap);
       face.rotation.y = a;
       g.add(face);
-      for (const y of col === 2 ? [2.2, 6.0, 9.6] : [6.0, 9.6]) lancet(k, face, 0, y, 0.02, 0.72, 2.3, true, true);
+      for (const y of col === 2 ? [2.2, 6.0, 9.6] : [6.0, 9.6]) lancet(k, face, 0, y, 0.02, 0.72, 2.3);
     }
   },
   stall: (k, g, v) => {
@@ -2282,16 +2225,11 @@ const BUILDERS: Record<string, Builder> = {
   },
   /**
    * A low stone parapet along local X (`arg` = length): a solid breast wall and its coping on a
-   * blue-grey coping line; under it, on its open (+Z) side, a short battered footing of the castle's
-   * honey stone (a blue-grey plinth course at its foot and a string course a third of the way up, in
-   * line with the curtain's bands), so the road stands on a deliberate, narrow footing and the rock
-   * rises to meet it below (the crags lap up over it here and there; worldView).
+   * blue-grey coping line, standing straight on the rock's lip (no built footing under it: the rock
+   * masses rise to meet the road; worldView).
    */
   parapet: (k, g, arg) => {
     const L = Math.max(2, arg ?? 6);
-    k.mesh(g, taper(L + 0.08, 0.95, L + 0.08, 0.6, 1.9, 0, -0.175), ASHLAR_W, [0, -0.95, 0.545]);
-    cb(k, g, [L + 0.1, 0.3, 1.05], [0, -1.75, 0.595], TRIM_D, undefined, 0.03);
-    cb(k, g, [L + 0.1, 0.14, 0.9], [0, -1.15, 0.52], TRIM, undefined, 0.02);
     cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], TRIM, undefined, 0.04);
     cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], ASHLAR, undefined, 0.04);
     cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], TRIM, undefined, 0.03);
@@ -2694,9 +2632,9 @@ const BUILDERS: Record<string, Builder> = {
     for (const sx of [-1, 1]) for (let y = 1.0, i = 0; y < H - 1.2; y += 0.56, i++) {
       cb(k, g, i % 2 ? [0.62, 0.5, 0.44] : [0.44, 0.5, 0.62], [sx * (W / 2 - 0.2), y + 0.25, D1 - (i % 2 ? 0.2 : 0.29)], i % 2 ? TRIM_L : TRIM, undefined, 0.03);
     }
-    // Stained lancets on the two upper storeys (the ground floor is left blank behind the champion
+    // Lancets on the two upper storeys (the ground floor is left blank behind the champion
     // that stands before it).
-    for (const y of [6.1, 10.1]) lancet(k, g, 0, y, D1, 0.82, 2.5, true, true);
+    for (const y of [6.1, 10.1]) lancet(k, g, 0, y, D1, 0.82, 2.5);
     // Corbels, the parapet standing out on them, its coping, merlons, and the leads behind.
     for (let i = 0; i < 5; i++) cb(k, g, [0.34, 0.42, 0.5], [-W / 2 + 0.4 + (i * (W - 0.8)) / 4, H - 0.24, D1 + 0.14], TRIM, undefined, 0.03);
     for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(k, g, [0.5, 0.42, 0.34], [sx * (W / 2 + 0.14), H - 0.24, D0 + 0.8 + i * 0.9], TRIM, undefined, 0.03);
@@ -2709,10 +2647,11 @@ const BUILDERS: Record<string, Builder> = {
   /**
    * A gate through a stretch of full-height curtain (the ward's gates in the inner curtain), the
    * passage `len` wide under a pointed arch of dressed voussoirs with a hood mould on both faces, the
-   * blue leaves standing open in the reveal on the ward side, a lantern either side of the arch on both faces and a raised,
-   * crenellated head over the gate with the lord's crest on its inner (+Z) face.
+   * blue leaves standing open in the reveal on the ward side, a lantern either side of the arch on its
+   * bailey (+Z) face (the ward face stays plain: the stable range stands close beside the cross-axis
+   * gate there) and a raised, crenellated head over the gate with the lord's crest on its bailey face.
    */
-  ward_gate: (k, g, arg) => gateway(k, g, lenOf(arg) ?? 4, { head: true, door: -1, lanterns: [-1, 1] }),
+  ward_gate: (k, g, arg) => gateway(k, g, lenOf(arg) ?? 4, { head: true, door: -1, lanterns: [1] }),
   /**
    * The postern: a narrow gate `len` wide through a stretch of full-height curtain under a pointed
    * arch of pale dressed stone on both faces, its blue leaves standing open in the reveal on the
@@ -2791,7 +2730,7 @@ const BUILDERS: Record<string, Builder> = {
    * The round stair turret east of the great door (radius `len`, its platform at `v` + 1.4): the
    * donjon's answer across the axis, so the door is framed by two round masses. Built in the
    * donjon's own language (a battered blue-grey plinth, cream ashlar, blue-grey bands at the
-   * donjon's heights, slits climbing with the stair, two stained lancets toward the court), a gilt
+   * donjon's heights, slits climbing with the stair, two lancets toward the court), a gilt
    * frieze and corbelled crown, and a blue-slate spire a stage lower than the door tower's.
    */
   door_turret: (k, g, arg) => {
@@ -2810,7 +2749,7 @@ const BUILDERS: Record<string, Builder> = {
       const face = new THREE.Group();
       face.position.set(0, 0, ap);
       g.add(face);
-      lancet(k, face, 0, y, 0.02, 0.62, 1.9, true, true);
+      lancet(k, face, 0, y, 0.02, 0.62, 1.9);
     }
     for (const [a, y] of [[2.5, 3.0], [3.5, 5.8], [4.5, 8.6], [-2.5, 3.6], [-3.5, 7.2]]) {
       const t = a * step;
@@ -3003,18 +2942,34 @@ const BUILDERS: Record<string, Builder> = {
     g.add(f);
   },
   /**
-   * Where a stream spills off the island's edge (flowing toward +Z): the water curls over the lip in a
-   * widening sheet and falls away into the Veil, fading as it drops, mist drifting up off it.
+   * Water spilling off the island's edge (flowing toward +Z): it curls over the lip in a widening sheet
+   * and falls away into the Veil, fading as it drops, mist drifting up off it. `v` 0: the end of a
+   * stream; 1: a spring breaking out at the brink of the castle rock from a mossy cleft between
+   * rounded masses of the rock, ferns and moss over them, falling the rock's whole height.
    */
-  edge_fall: (k, g) => {
-    const time = { value: 0 };
-    const pts = pour(new THREE.Vector3(0, -0.25, -0.6), new THREE.Vector3(0, -18, 4.5), 0.05, 30);
-    const { geo, len } = crossedRibbons(pts, 2.2, 4.2);
+  edge_fall: (k, g, arg) => {
+    const time = { value: 0 }, spring = vOf(arg) === 1;
+    const ROCK = 0x5e6572, ROCK_D = 0x4e5462, MOSS = [0x5a7a34, 0x66863a, 0x4e6e30];
+    const pts = pour(new THREE.Vector3(0, -0.25, -0.6), new THREE.Vector3(0, spring ? -26 : -18, spring ? 5.5 : 4.5), 0.05, 30);
+    const { geo, len } = crossedRibbons(pts, spring ? 1.6 : 2.2, 4.2);
     const fall = new THREE.Mesh(geo, fallingWaterMaterial(time, 83, len, 4.2, true));
     fall.name = 'waterfall';
     fall.renderOrder = 2;
     g.add(fall);
-    for (const sx of [-1, 1]) chunk(k, g, 970 + sx, [0.9, 0.5, 0.8], [sx * 1.5, -0.35, -0.2], 0x6a5e52, sx);
+    if (spring) {
+      // The cleft: rounded masses either side of the spout and a broad one over its head, wet and
+      // dark round the water, moss over their crowns and ferns along the lip.
+      for (const sx of [-1, 1]) {
+        chunk(k, g, 980 + sx, [1.8, 1.7, 2.0], [sx * 1.45, -0.5, -0.9], sx < 0 ? ROCK : ROCK_D, sx * 0.4);
+        chunk(k, g, 982 + sx, [1.1, 0.9, 1.2], [sx * 2.4, -0.4, -0.1], ROCK_D, -sx * 0.5);
+        ball(k, g, 0.55, [sx * 1.45, 1.15, -0.95], MOSS[(sx + 1) / 2], [1.4, 0.4, 1.3]);
+        ball(k, g, 0.3, [sx * 2.4, 0.45, -0.1], MOSS[2], [1.3, 0.45, 1.2]);
+      }
+      chunk(k, g, 984, [2.4, 1.3, 1.6], [0, 0.2, -1.9], ROCK, 0.1);
+      chunk(k, g, 985, [1.2, 0.5, 0.9], [0, -0.45, -0.75], ROCK_WET, 0);
+      ball(k, g, 0.7, [0, 1.42, -1.9], MOSS[1], [1.6, 0.4, 1.1]);
+      for (const [x, z, r] of [[-0.8, -0.35, 0.22], [0.75, -0.3, 0.2], [-2.0, 0.35, 0.18], [1.9, 0.4, 0.2]]) ball(k, g, r, [x, 0.0, z], MOSS[Math.abs(Math.round(x * 3)) % 3], [1.5, 0.5, 1.3]);
+    } else for (const sx of [-1, 1]) chunk(k, g, 970 + sx, [0.9, 0.5, 0.8], [sx * 1.5, -0.35, -0.2], ROCK, sx);
     const mist: THREE.Sprite[] = [];
     for (let i = 0; i < 6; i++) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistTexture(), color: 0xf2f4f8, transparent: true, depthWrite: false, opacity: 0.3 }));
@@ -3029,7 +2984,7 @@ const BUILDERS: Record<string, Builder> = {
         time.value = t;
         mist.forEach((sp, i) => {
           const p = (t * 0.12 + i / mist.length) % 1;
-          sp.position.set(Math.sin(i * 2.3) * 1.2, -3 - i * 2.2 + p * 2.5, 1.2 + i * 0.5);
+          sp.position.set(Math.sin(i * 2.3) * 1.2, -3 - i * (spring ? 3.6 : 2.2) + p * 2.5, 1.2 + i * (spring ? 0.7 : 0.5));
           sp.scale.setScalar(2.5 + p * 3);
           sp.material.opacity = 0.32 * Math.sin(p * Math.PI);
         });
@@ -3191,7 +3146,7 @@ const BUILDERS: Record<string, Builder> = {
    */
   spring_fall: (k, g, arg) => {
     const Y = lenOf(arg) ?? 10, time = { value: 0 };
-    const ROCK = 0x857f80, ROCK_D = 0x6a6468, WET = ROCK_WET, FERN = [0x5e7e34, 0x6c8c3c, 0x7a9a46];
+    const ROCK = 0x5e6572, ROCK_D = 0x4e5462, WET = ROCK_WET, FERN = [0x5e7e34, 0x6c8c3c, 0x7a9a46];
     /**
      * A cushion of moss draped over a ledge: broad flat lobes run together along it, sunk into the
      * rock and spilling a little over its front, never a row of round buttons.

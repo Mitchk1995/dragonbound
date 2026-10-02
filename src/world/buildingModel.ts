@@ -9,7 +9,7 @@ import {
 import { studioEnv } from '../render/env';
 import {
   archPane, ASHLAR_B, ASHLAR_L, ASHLAR_W, BLOCKS, TRIM_L, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, HERALD_BLUE, HERALD_BLUE_D, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
-  GILT, LAMP_NAVY, PLOT_MARK, pointedArch, royalLeaf, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, SLATE_BLUE, spandrels, spire, stainedGlass, STONE, STONE_D, STONE_DD, STONE_L, TRIM, TRIM_D, WOOD, WOOD_D, WOOD_L, type Prop,
+  GILT, LAMP_NAVY, PLOT_MARK, pointedArch, royalLeaf, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, SLATE_BLUE, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, TRIM, TRIM_D, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
 /**
@@ -38,8 +38,6 @@ const PLANKS = [0x8a6440, 0x7a5636, 0x94704a];
 const SHUTTER = 0x3e5a58;
 /** Interior cloth (rugs, runners, cushions) stays crimson; the castle's exterior livery is blue (props.ts). */
 const RUG = 0x7a2020, RUG_TRIM = 0xc8a040;
-/** The castle's service buildings: plain glass, not the principal buildings' stained glass. */
-const SERVICE = new Set(['kitchen', 'stables', 'smithy']);
 /** Dark oak for the timber framing: clean flat colour (grain streaks read as stripes on long beams). */
 export const TIMBER = 0x4b3122;
 
@@ -158,10 +156,6 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   built.add(ground);
   const { w, d, wallH } = b;
   const timber = b.style === 'timber', hall = b.style === 'hall', keep = b.style === 'keep';
-  // Every principal castle building glazes the lancets it shows the bailey in the one royal stained
-  // glass; the service buildings (kitchen, stables, smithy) and the back walls against the curtain
-  // keep plain warm leaded panes (you still see into the lit rooms through them).
-  const royal = (side: Side) => keep && !SERVICE.has(b.id) && side !== 'n';
   const storeyH = b.storeyH ?? wallH;
   const multi = !!b.upper && storeyH < wallH;
   /** The upper floor's cut (none on single-storey buildings). */
@@ -383,19 +377,13 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       }
       if (keep) {
         // A castle lancet: the opening closes to a true pointed head (the stone of the wall fills its
-        // upper corners right through), one warm leaded pane (or stained glass) set deep in the middle
+        // upper corners right through), one plain pane of warm glass set deep in the middle
         // of the wall, a slender mullion, pale jambs and voussoirs, a blue-grey hood mould following
         // the arch outside with its label stops, and a plain sill.
         const { ys, arc } = pointedArch(ww, wh, 6);
         W.shape(gk, gp, spandrels(ww, wh, WALL_T - 0.02), UPPER, wi.at, wy, 0);
-        if (royal(side)) {
-          // Stained glass stands forward in the reveal, just behind the outer face, so its colours
-          // read from the high camera as they do on the keep's front.
-          stainedGlass((geo, c, em, u, y, off) => W.shape(gk, gp, geo, c, u, y, off, undefined, em), wi.at, wy, face - 0.1, ww, wh);
-        } else {
-          W.shape(gk, gp, archPane(ww, wh, 0.04), 0, wi.at, wy, 0, gm.warm);
-          W.box(gk, gp, 0.06, ys, 0.08, wi.at, wy + ys / 2, 0.03, ASHLAR_L, 0, 0.01);
-        }
+        W.shape(gk, gp, archPane(ww, wh, 0.04), 0, wi.at, wy, 0, gm.warm);
+        W.box(gk, gp, 0.06, ys, 0.08, wi.at, wy + ys / 2, 0.03, ASHLAR_L, 0, 0.01);
         W.box(gk, gp, ww + 0.5, 0.14, 0.3, wi.at, wy - 0.07, face + 0.08, ASHLAR_L, 0, 0.02);
         for (const s of [-1, 1]) W.box(gk, gp, 0.14, ys, 0.16, wi.at + s * (ww / 2 + 0.07), wy + ys / 2, face + 0.04, ASHLAR_L, 0, 0.02);
         for (const s of [-1, 1]) for (let i = 0; i < arc.length - 1; i++) {
@@ -941,7 +929,7 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     const [ak, ap] = [fk, lifted];
     // The great tower over the door: the bay rises on above the roofline as a square tower reaching
     // back over the hall's leads, two stages high, so the castle's crown stands on its axis: a string
-    // course at each stage, quoins in the two blue-greys, a stained lancet on each face of the upper
+    // course at each stage, quoins in the two blue-greys, a lancet on each face of the upper
     // stage (two on the front over the door), a gilt frieze and a corbelled, crenellated parapet, and
     // inside it the tallest spire in the castle (taller than the donjon's), the lord's flag over it.
     const TWH = wallH + 10.6, zb0 = d - 6.4, zb1 = zf + P, tz = (zb0 + zb1) / 2, td = zb1 - zb0, tw = u1 - u0;
@@ -951,14 +939,14 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
       cb(ak, ap, [i % 2 ? 0.6 : 0.42, 0.52, i % 2 ? 0.42 : 0.6], [uc + sx * (tw / 2 - 0.16 + (i % 2 ? 0 : 0.05)), y + 0.26, tz + sz * (td / 2 - 0.16 + (i % 2 ? 0.05 : 0))], i % 2 ? TRIM_L : TRIM, undefined, 0.03);
     }
     // Its windows: on the front a lancet over the great door and a taller one above; one on each side.
-    lancet(ak, ap, uc, wallH + 0.9, zb1, 0.9, 2.4, false, true);
-    lancet(ak, ap, uc, wallH + 5.4, zb1, 1.0, 2.9, true, true);
+    lancet(ak, ap, uc, wallH + 0.9, zb1, 0.9, 2.4, false);
+    lancet(ak, ap, uc, wallH + 5.4, zb1, 1.0, 2.9);
     for (const sx of [-1, 1]) {
       const f = new THREE.Group();
       f.position.set(uc + sx * (tw / 2), 0, tz);
       f.rotation.y = sx * Math.PI / 2;
       ap.add(f);
-      lancet(ak, f, 0, wallH + 5.4, 0, 1.0, 2.9, true, true);
+      lancet(ak, f, 0, wallH + 5.4, 0, 1.0, 2.9);
     }
     // The gilt frieze under the parapet on the three faces the bailey sees.
     {

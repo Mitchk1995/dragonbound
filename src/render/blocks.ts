@@ -116,32 +116,80 @@ export function slabBlock(seed: number) {
   });
 }
 
+/** How many distinct rock masses the kit holds (rockMass 0..ROCK_MASSES - 1). */
+export const ROCK_MASSES = 10;
+
 /**
- * A crag: a tall, faceted rock column for cliff faces (unit size: about 1 across, base on y = 0,
- * 1 high). An irregular ring of 5 to 7 sides, its upper rings drawn in and pushed off-centre so it
- * leans and narrows unevenly, and a top broken off at a slant. Scaled per instance into buttresses,
- * pillars and spurs.
+ * A weathered rock mass for cliff faces (unit size: about 1 across, base on y = 0, 1 high): a
+ * rounded, faceted lump of stone. Each of the kit's masses has its own profile, from a low dome to
+ * a tall rounded block with a broad weathered shoulder, a slab-topped ledge or a leaning knuckle;
+ * its rings are jittered point by point and turned against each other, so no two facets line up and
+ * no two masses read alike. Overlapped at different sizes and turns along a face they build one
+ * irregular massif, never a row of the same shape.
  */
-export function cragColumn(seed: number) {
-  return cached(`cg${seed}`, () => {
-    const rng = mulberry32(seed * 4243 + 17);
-    const n = 5 + Math.floor(rng() * 3), a0 = rng() * Math.PI * 2;
-    const tilt = rng() * Math.PI * 2, slope = 0.22 + rng() * 0.4;
-    const lean = [(rng() - 0.5) * 0.18, (rng() - 0.5) * 0.18];
+export function rockMass(v: number) {
+  return cached(`rm${v}`, () => {
+    const rng = mulberry32(v * 7411 + 29);
+    // [height, radius] rings from the foot to the crown: the shoulders round off at different heights.
+    const profiles: [number, number][][] = [
+      [[0, 1], [0.42, 0.98], [0.72, 0.88], [0.9, 0.7], [1, 0.42]],
+      [[0, 1], [0.5, 0.96], [0.8, 0.9], [0.95, 0.74], [1, 0.56]],
+      [[0, 1], [0.34, 0.94], [0.64, 0.82], [0.86, 0.62], [1, 0.36]],
+      [[0, 1], [0.55, 1.0], [0.8, 0.94], [0.94, 0.8], [1, 0.62]],
+      [[0, 1], [0.38, 0.96], [0.68, 0.86], [0.88, 0.68], [1, 0.46]],
+    ];
+    const prof = profiles[v % profiles.length];
+    const n = 7 + Math.floor(rng() * 3), squash = 0.72 + rng() * 0.28;
+    // Some lean: the upper rings slide off-centre, so the crown hangs out over one side.
+    const lean = v % 3 === 2 ? [(rng() - 0.5) * 0.34, (rng() - 0.5) * 0.34] : [(rng() - 0.5) * 0.1, (rng() - 0.5) * 0.1];
+    const radii = Array.from({ length: n }, () => 0.82 + rng() * 0.3);
     const pts: THREE.Vector3[] = [];
-    const radii = Array.from({ length: n }, () => 0.36 + rng() * 0.16);
-    for (const [y, shrink, off] of [[0, 1, 0], [0.45 + rng() * 0.15, 0.86 + rng() * 0.1, 0.5], [0.86, 0.62 + rng() * 0.16, 1]]) {
-      for (let i = 0; i < n; i++) {
-        const a = a0 + (i / n) * Math.PI * 2 + (rng() - 0.5) * 0.35, r = radii[i] * shrink * (0.92 + rng() * 0.14);
-        const x = Math.cos(a) * r + lean[0] * off, z = Math.sin(a) * r + lean[1] * off;
-        // The top ring is broken off at a slant.
-        // (Its high side just reaches the top, the rest falling away by up to `slope` below it,
-        // chipped a little point by point, so no two crowns are flat or alike.)
-        const yy = y < 0.8 ? y : 1 - (1 - Math.cos(a - tilt)) * slope * 0.5 - rng() * 0.05;
-        pts.push(V(x, Math.min(1, yy), z));
+    prof.forEach(([y, r], ri) => {
+      const a0 = rng() * Math.PI * 2;
+      const m = ri === prof.length - 1 ? Math.max(3, n - 3) : n;
+      for (let i = 0; i < m; i++) {
+        const a = a0 + (i / m) * Math.PI * 2 + (rng() - 0.5) * 0.5;
+        const rr = 0.5 * r * radii[(i + ri * 2) % n] * (0.9 + rng() * 0.2);
+        const yy = y === 0 ? 0 : Math.min(1, y + (rng() - 0.5) * 0.08);
+        pts.push(V(Math.cos(a) * rr + lean[0] * y, yy, Math.sin(a) * rr * squash + lean[1] * y));
+      }
+    });
+    return new ConvexGeometry(pts);
+  });
+}
+
+/**
+ * The moss over a rock mass (rockMass(v)): its upward faces, the top all covered and the steeper
+ * shoulders only here and there, so the moss drapes over the crown in a ragged sheet; each face split
+ * in four and its points lifted off the stone by their own amounts, so the sheet is a soft, lumpy
+ * cushion, never a flat painted plate.
+ */
+export function rockMassMoss(v: number) {
+  return cached(`rmm${v}`, () => {
+    const src = rockMass(v), pos = src.getAttribute('position');
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), e = new THREE.Vector3(), nrm = new THREE.Vector3();
+    const out: number[] = [];
+    // Each point is lifted straight up by an amount that depends on the point alone, so faces
+    // sharing it stay joined.
+    const put = (p: THREE.Vector3) => out.push(p.x, p.y + 0.025 + hash01(v, Math.round(p.x * 200), Math.round(p.y * 200), Math.round(p.z * 200)) * 0.07, p.z);
+    for (let t = 0; t < pos.count; t += 3) {
+      a.fromBufferAttribute(pos, t);
+      b.fromBufferAttribute(pos, t + 1);
+      c.fromBufferAttribute(pos, t + 2);
+      // (The hull's faces wind counter-clockwise seen from outside: this is the outward normal.)
+      nrm.subVectors(b, a).cross(e.subVectors(c, a)).normalize();
+      if (nrm.y < 0.36 + hash01(v, t) * 0.3) continue;
+      const ab = a.clone().lerp(b, 0.5), bc = b.clone().lerp(c, 0.5), ca = c.clone().lerp(a, 0.5);
+      for (const [p0, p1, p2] of [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]) {
+        put(p0);
+        put(p1);
+        put(p2);
       }
     }
-    return new ConvexGeometry(pts);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+    g.computeVertexNormals();
+    return g;
   });
 }
 

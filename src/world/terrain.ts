@@ -616,7 +616,10 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     // Gullies: narrow, deep clefts cut back into the face from top to foot along the crests of a
     // ridged noise, so the beds are broken into separate buttresses (the same at every height).
     const gn = sculpt(x * 0.075 + 41, z * 0.075 + 23), gully = sstep(0.6, 0.93, 1 - Math.abs(gn * 2 - 1));
-    const d = (ramp * wgt * (WEATHER * (0.62 * (1 - mass) + 0.38 * bed) + GULLY * gully)) / gl;
+    // (Lush, mossy rock is only lightly cut back: the rock masses standing out of it shape the face,
+    // and its lip never hangs out as a dark overhang over a face cut deep beneath it.)
+    const cut = theme.rockMoss ? 0.35 : 1;
+    const d = (cut * ramp * wgt * (WEATHER * (0.62 * (1 - mass) + 0.38 * bed) + GULLY * gully)) / gl;
     return [x + gx * d, z + gz * d];
   };
   /**
@@ -850,7 +853,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     for (const k of ['position', 'normal', 'color', 'aSplat', ...(sharp ? ['aCol0', 'aCol1', 'aCol2', 'aCol3'] : [])]) g.setAttribute(k, geo.getAttribute(k));
     g.setIndex(index);
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
-    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange, !!theme.wallRise, wet ? WATER_Y : null, theme.water?.[1], theme.mesaTop === undefined, sharp, theme.wall === 'ruin');
+    applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange, !!theme.wallRise, wet ? WATER_Y : null, theme.water?.[1], theme.mesaTop === undefined, sharp, theme.wall === 'ruin', theme.rockMoss ?? 0);
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
     // Towering cave walls would throw the whole floor into sun shadow (there is no sun

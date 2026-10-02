@@ -38,6 +38,8 @@ export interface ZoneTheme {
   wallRise?: number;
   /** Ground on top of cliffs/mesas (their steep faces are rock); undefined = rock all over. */
   mesaTop?: Ground;
+  /** How far moss spreads over outdoor rock (0: patches on the flattest ledges, 1: lush over every crown and shoulder). */
+  rockMoss?: number;
   /** The land dims over its last cells before the Void that ends it (an organic outline). */
   edgeFade?: boolean;
 }
@@ -68,10 +70,12 @@ export const ZONES: Record<string, ZoneDef> = {
       bg: 0xc39a9c, fog: [70, 160], hemi: [0xc8b8d4, 0x8a7058, 1.9], sun: [0xffd9b2, 2.3], exposure: 1.1,
       ambient: 'void', trees: 'grove', wall: 'castle',
       ground: { [Ground.Grass]: [0x4a7a3a, 0x5a8a44], [Ground.Stone]: [0x928e88, 0x827e78], [Ground.Path]: [0x8a7a5e, 0x7a6a50], [Ground.Dirt]: [0x6e6048, 0x5e5240] },
-      // The castle rock and the upland: weathered grey-mauve granite faces (framing the cream castle), grass over their tops.
-      cliff: [0x857f80, 0x5f5a60],
+      // The castle rock and the upland: dark blue-grey rock softened by moss (framing the cream
+      // castle), grass over their tops, pines rooted on the ledges.
+      cliff: [0x5e6572, 0x464c5a],
       mesaTop: Ground.Grass,
-      reliefTrees: 0.04,
+      rockMoss: 1,
+      reliefTrees: 0.08,
       forest: { grove: 0.75, pine: 0.25 },
       flowers: [0xf0d060, 0xe86a8a, 0xb0a0ff, 0xffffff],
       water: [0x4aa0b8, 0x1a4a62],
