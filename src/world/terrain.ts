@@ -854,6 +854,10 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     g.setIndex(index);
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     applyGround(mat, theme.lava ?? 0, theme.topShade ?? 1, theme.cliff?.[0] ?? null, theme.topRange, !!theme.wallRise, wet ? WATER_Y : null, theme.water?.[1], theme.mesaTop === undefined, sharp, theme.wall === 'ruin', theme.rockMoss ?? 0);
+    // (Outdoor rock is weathered back hard in its gullies, and where a thin rib of it is cut back
+    // from both sides its faces can fold through each other: drawn from both sides, a fold shows as
+    // rock in shadow, never a slit the sky shows through.)
+    if (name === 'relief' && !theme.wallRise) mat.side = THREE.DoubleSide;
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
     // Towering cave walls would throw the whole floor into sun shadow (there is no sun

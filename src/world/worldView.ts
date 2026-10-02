@@ -861,6 +861,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         if (y === null || y - floorAt(px, pz) < 0.7) continue;
         const [wx, wz] = terrain.warp(px, y, pz);
         const r = rng();
+        // (Only where the ledge runs on well round it, so no pad or tuft hangs out over its lip.)
+        if (terrain.ledge(px, pz, 0.9) === null) continue;
         // Trees only in a few pockets (where a broad noise is high), bare rock between: never a row
         // of trees along every ledge.
         if (r < treeP(i) * 6 && pocketNoise(px * 0.07, pz * 0.07) > 0.62 && terrain.ledge(px, pz, 1.1) !== null) addTree(wx, wz, 0.65 + rng() * 0.25, y);
