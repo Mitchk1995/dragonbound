@@ -638,8 +638,7 @@ export class Panels {
     });
     const quit = el.querySelector<HTMLElement>('[data-act="title"]')!;
     quit.addEventListener('click', async () => {
-      await g.persist();
-      location.reload();
+      if (await g.flushSave()) location.reload();
     });
     quit.addEventListener('mouseenter', () => this.ui.tooltip.text(`<div class="tt-name">Save &amp; quit</div><div class="tt-dim">Progress also saves automatically to your ${esc(g.backend.describe())}.</div>`, quit.getBoundingClientRect()));
     quit.addEventListener('mouseleave', () => this.ui.tooltip.hide());

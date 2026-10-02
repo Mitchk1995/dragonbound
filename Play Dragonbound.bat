@@ -17,10 +17,7 @@ echo Getting the latest version...
 git pull --ff-only --quiet origin main || echo Could not update, starting the version already on this PC.
 
 :install
-rem Picks up new or changed game files; a few seconds when nothing changed.
-call npm install --no-audit --no-fund --loglevel=error || goto :fail
-
-echo Building and starting Dragonbound...
+rem The launcher only installs or builds when its inputs changed.
 call npm run play || goto :fail
 exit /b 0
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from './resources';
 
 /**
  * A small "studio" environment for reflective materials: warm light overhead, a neutral horizon,
@@ -56,7 +57,7 @@ export function studioEnv(): THREE.DataTexture {
       data[i + 3] = THREE.DataUtils.toHalfFloat(1);
     }
   }
-  env = new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.HalfFloatType);
+  env = shareResource(new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.HalfFloatType));
   env.mapping = THREE.EquirectangularReflectionMapping;
   env.colorSpace = THREE.LinearSRGBColorSpace;
   env.magFilter = env.minFilter = THREE.LinearFilter;

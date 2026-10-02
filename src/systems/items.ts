@@ -4,6 +4,7 @@ import { BASES, PETS, UNIQUES } from '../data/items';
 import { MANA_TUNING } from '../data/tuning';
 import { GroundItem } from '../entities/groundItem';
 import { Pet } from '../entities/pet';
+import { disposeObject } from '../render/resources';
 import type { Game } from '../game';
 import { itemName, itemReq, itemValue, makeItem, stacksInBank } from '../loot/itemGen';
 import { SKILL_INFO } from '../progression/skills';
@@ -52,7 +53,7 @@ export class Items {
     }
     g.zone.items = g.zone.items.filter((it) => {
       if (it.gone) {
-        it.group.removeFromParent();
+        disposeObject(it.group);
         g.text.removeLabel(it);
       }
       return !it.gone;
@@ -384,7 +385,7 @@ export class Items {
 
   setPet(id: string | null) {
     const g = this.g;
-    if (g.pet) g.pet.obj.removeFromParent();
+    if (g.pet) disposeObject(g.pet.obj);
     g.pet = null;
     g.save.activePet = id;
     if (!id) return;

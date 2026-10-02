@@ -20,6 +20,8 @@ import { PAL } from './render/kit';
 import { zoneLighting } from './render/env';
 import { makeModel } from './render/registry';
 import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
+import { SaveWriter } from './save/writer';
+import { disposeObject } from './render/resources';
 import { Combat } from './systems/combat';
 import { Fx } from './systems/fx';
 import { Items } from './systems/items';
@@ -63,6 +65,9 @@ export class Game {
   save: SaveData = newSave();
   hasSave = false;
   backend: SaveBackend = getBackend();
+  private saveWriter = new SaveWriter((json) => this.backend.write(json));
+  private savesInFlight = 0;
+  private saveWarned = false;
   stats!: PlayerStats;
   levels: Record<SkillId, number> = { melee: 1, ranged: 1, magic: 1, defence: 1, hitpoints: 10, mining: 1, smithing: 1 };
   mode: Mode = 'title';
@@ -229,7 +234,7 @@ export class Game {
 
   private beginPlay() {
     this.mode = 'play';
-    this.titleDragon?.obj.removeFromParent();
+    if (this.titleDragon) disposeObject(this.titleDragon.obj);
     this.titleDragon = null;
     this.player.obj.visible = true;
     this.player.dress();
@@ -242,8 +247,8 @@ export class Game {
   // ─── Zones & travel ──────────────────────────────────────────────────────
 
   private enterZone(id: string) {
-    if (this.zoneOrNull) this.zoneOrNull.dispose();
     this.fx.clear();
+    if (this.zoneOrNull) this.zoneOrNull.dispose();
     this.particles.clear();
     this.glow.clear();
     this.text.clear();
@@ -460,7 +465,7 @@ export class Game {
     this.combat.separateUnits();
     z.enemies = z.enemies.filter((e) => {
       if (e.dead && e.deadT > 3) {
-        e.obj.removeFromParent();
+        disposeObject(e.obj);
         return false;
       }
       return true;
@@ -480,7 +485,7 @@ export class Game {
     this.ui.update(raw);
 
     this.saveT -= raw;
-    if (this.saveT <= 0 || (this.dirty && this.saveT < 17)) this.persist();
+    if (!this.savesInFlight && (this.saveT <= 0 || (this.dirty && this.saveT < 17))) void this.persist();
   }
 
   /**
@@ -859,16 +864,41 @@ export class Game {
 
   // ─── Saving ──────────────────────────────────────────────────────────────
 
-  async persist() {
+  async persist(): Promise<boolean> {
     this.saveT = 20;
     this.dirty = false;
-    if (!this.save.character || !this.ownsSave) return;
-    await this.backend.write(JSON.stringify(this.save));
+    if (!this.save.character || !this.ownsSave) return true;
+    this.savesInFlight++;
+    try {
+      const json = JSON.stringify(this.save);
+      // Browser storage writes synchronously, including the beforeunload handler.
+      await (window.electronAPI ? this.saveWriter.write(json) : this.backend.write(json));
+      this.saveWarned = false;
+      return true;
+    } catch {
+      this.dirty = true;
+      this.saveT = 20; // The normal dirty-save grace retries after three seconds, not every frame.
+      if (!this.saveWarned) this.announce('Your progress could not be saved. Keep the game open; it will try again.', 'deny');
+      this.saveWarned = true;
+      return false;
+    } finally { this.savesInFlight--; }
+  }
+
+  /** Finish saving any progress earned while an earlier close-time snapshot was being written. */
+  async flushSave(): Promise<boolean> {
+    do { if (!await this.persist()) return false; } while (this.dirty);
+    return true;
   }
 
   async resetSave() {
+    const previous = this.save;
     this.save = newSave();
-    await this.backend.write(JSON.stringify(this.save));
-    location.reload();
+    try {
+      await this.saveWriter.write(JSON.stringify(this.save));
+      location.reload();
+    } catch {
+      this.save = previous;
+      this.announce('Your progress could not be reset. Please try again.', 'deny');
+    }
   }
 }

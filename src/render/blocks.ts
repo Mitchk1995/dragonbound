@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { mulberry32 } from '../core/rng';
+import { shareResource } from './resources';
 
 /**
  * Modular block shapes for world props: chamfered boxes, wedges, tapered blocks, faceted rock
@@ -13,7 +14,7 @@ const cache = new Map<string, THREE.BufferGeometry>();
 function cached(key: string, make: () => THREE.BufferGeometry) {
   let g = cache.get(key);
   if (!g) {
-    g = make();
+    g = shareResource(make());
     g.computeBoundingSphere();
     cache.set(key, g);
   }

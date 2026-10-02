@@ -41,6 +41,24 @@ describe('browser save recovery', () => {
     expect(recovered?.skills.mining).toBe(5000);
   });
 
+  it.each(['{}', '{"skills":null}', '{"skills":[]}', '{"skills":{"mining":-1}}', '{"version":3,"skills":{"mining":1},"inventory":[{}]}'])('recovers from structurally damaged JSON without discarding the backup (%s)', async (bad) => {
+    const good = characterSave('Recovered');
+    stored.set(PRIMARY, bad);
+    stored.set(BACKUP, good);
+    expect((await loadSave(getBackend()))?.gold).toBe(1234);
+    await getBackend().write(characterSave('New progress'));
+    expect(stored.get(BACKUP)).toBe(good);
+  });
+
+  it('refuses to downgrade a save from a newer game', async () => {
+    const newer = JSON.stringify({ ...JSON.parse(characterSave('Future')), version: 999 });
+    stored.set(PRIMARY, newer);
+    stored.set(BACKUP, characterSave('Older'));
+    await expect(loadSave(getBackend())).rejects.toThrow('newer Dragonbound');
+    await expect(getBackend().write(characterSave('New progress'))).rejects.toThrow('newer Dragonbound');
+    expect(stored.get(PRIMARY)).toBe(newer);
+  });
+
   it('loads a backup when the primary is absent', async () => {
     stored.set(BACKUP, characterSave('Recovered'));
     expect((await loadSave(getBackend()))?.character?.name).toBe('Recovered');
@@ -74,12 +92,17 @@ describe('browser save recovery', () => {
     expect((await loadSave(getBackend()))?.character?.name).toBe('New progress');
   });
 
-  it('returns no save instead of throwing when browser storage is unavailable', async () => {
+  it('reports a failed browser write so play can stay open and retry', async () => {
     vi.stubGlobal('localStorage', {
       getItem: () => { throw new Error('Storage disabled'); },
       setItem: () => { throw new Error('Storage disabled'); },
     });
     expect(await loadSave(getBackend())).toBeNull();
-    await expect(getBackend().write(characterSave('New progress'))).resolves.toBeUndefined();
+    await expect(getBackend().write(characterSave('New progress'))).rejects.toThrow('Storage disabled');
+  });
+
+  it('reports a desktop write refusal', async () => {
+    vi.stubGlobal('window', { electronAPI: { writeSave: async () => false } });
+    await expect(getBackend().write(characterSave('New progress'))).rejects.toThrow('could not be saved');
   });
 });

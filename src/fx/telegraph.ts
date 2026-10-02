@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from '../render/resources';
 
 export type Shape =
   | { kind: 'circle'; r: number }
@@ -96,11 +97,6 @@ export class Telegraph {
   }
 
   dispose() {
-    this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        (o.material as THREE.Material).dispose();
-      }
-    });
+    disposeObject(this.group);
   }
 }

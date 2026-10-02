@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from '../render/resources';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../core/rng';
@@ -342,6 +343,8 @@ export function treeSet(style: TreeStyle = TREE_STYLE.value): TreeSet {
   let s = sets.get(style);
   if (!s) {
     s = style === 'faceted' ? facetedSet() : blockSet();
+    for (const geometry of Object.values(s.trunk)) shareResource(geometry);
+    for (const geometries of Object.values(s.canopy)) for (const geometry of geometries) shareResource(geometry);
     sets.set(style, s);
   }
   return s;

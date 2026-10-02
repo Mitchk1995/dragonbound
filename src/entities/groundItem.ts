@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shareResource } from '../render/resources';
 import { BASES } from '../data/items';
 import { itemName } from '../loot/itemGen';
 import { buildMaterialModel } from '../render/models';
@@ -47,8 +48,8 @@ function groundModel(item: Item): THREE.Group {
   return g;
 }
 
-const coinGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.04, 8);
-const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd040, metalness: 0.6, roughness: 0.3, emissive: 0x6a4a00 });
+const coinGeo = shareResource(new THREE.CylinderGeometry(0.12, 0.12, 0.04, 8));
+const coinMat = shareResource(new THREE.MeshStandardMaterial({ color: 0xffd040, metalness: 0.6, roughness: 0.3, emissive: 0x6a4a00 }));
 
 /** Loot on the ground: an item or a gold pile. Pops out of a kill in an arc, then waits to be picked up. */
 export class GroundItem {

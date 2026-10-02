@@ -699,7 +699,7 @@ function planarReflection(y: number) {
     busy = false;
     on.value = 1;
   };
-  return { texture: rt.texture, texMat, on, render };
+  return { texture: rt.texture, texMat, on, render, dispose: () => rt.dispose() };
 }
 
 function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, mirror = false) {
@@ -861,7 +861,10 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
   };
   mat.customProgramCacheKey = () => (lava ? 'fluid4-lava' : refl ? 'fluid4-mirror' : 'fluid4-water');
   const mesh = new THREE.Mesh(geo, mat);
-  if (refl) mesh.onBeforeRender = (renderer, scene, camera) => refl.render(renderer, scene, camera, mesh);
+  if (refl) {
+    mesh.onBeforeRender = (renderer, scene, camera) => refl.render(renderer, scene, camera, mesh);
+    mat.addEventListener('dispose', () => refl.dispose());
+  }
   mesh.name = lava ? 'lava' : 'water';
   mesh.receiveShadow = !lava;
   mesh.renderOrder = 1;
