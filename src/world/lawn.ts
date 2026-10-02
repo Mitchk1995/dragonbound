@@ -18,7 +18,7 @@ import { strandField } from './strands';
  */
 
 /** Blade height per lawn kind, in world units. */
-const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.14, [Lawn.Garden]: 0.16 };
+const HEIGHT: Record<number, number> = { [Lawn.Meadow]: 0.24, [Lawn.Clipped]: 0.08, [Lawn.Garden]: 0.12 };
 /** Shells per graphics preset. */
 export const LAWN_SHELLS = { high: 8, medium: 6, low: 4 } as const;
 const MAX_SHELLS = 8;
@@ -233,7 +233,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           }
           if (bloom.x >= 0.0) col = bloom;
           // Mower stripes on clipped lawns; broad lighter and darker drifts across meadows.
-          col *= clipped ? 1.0 + 0.03 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
+          col *= clipped ? 1.0 + 0.07 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
           diffuseColor.rgb = col;
         }`,
       );

@@ -132,9 +132,8 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     windows: [
       { side: 'e', at: 7.5 }, { side: 'e', at: 10.0 },
       ...[2.5, 5.75, 9.0, 12.25, 15.5].map((at) => ({ side: 'e' as const, at, floor: 1 as const })),
-      // The chapel's south gable, in stained glass.
-      { side: 's', at: 3.5, stained: 'chapel' }, { side: 's', at: 8.5, stained: 'chapel' },
-      ...[3.0, 6.0, 9.0].map((at) => ({ side: 's' as const, at, floor: 1 as const, stained: 'chapel' as const })),
+      // The chapel's south gable.
+      { side: 's', at: 3.5 }, { side: 's', at: 8.5 }, ...[3.0, 6.0, 9.0].map((at) => ({ side: 's' as const, at, floor: 1 as const })),
     ],
     fits: [
       // Guardroom and armory: the rack along the west wall, suits of plate, the armourer's bench.
@@ -462,11 +461,14 @@ const PLAZA_R = 10.5, ARC_R = 11.5;
 const BOWER = { x: 37.5, z: 39 };
 /** The service ward's own axis (x) through the kitchen garden, and the stable court's (the stables' door). */
 const WARD_AXIS = 110.5, STABLE_AXIS = 113;
-/** Round towers: [x, z, radius, height]. */
+/**
+ * Round towers: [x, z, radius, height]. The six at the curtain's corners rise a stage higher than the
+ * wall towers and carry spires (corner_tower); the wall towers between them stay flat and crenellated.
+ */
 const TOWERS = [
-  [31, 38, 3.0, 9], [50, 22.5, 3.6, 10], [101, 22.5, 3.6, 10], [120, 36, 3.4, 9], [120, 61, 3.4, 9], [120, 86, 3.4, 9],
-  [120, 100, 3.6, 10], [101, 100, 3.4, 9], [31, 100, 3.4, 9], [31, 69, 3.2, 9], [101, 69, 3.2, 9], [46, 100, 3.0, 9], [86, 100, 3.0, 9],
-].map(([x, z, r, h]) => ({ x, z, r, h }));
+  [31, 38, 3.0, 12], [50, 22.5, 3.6, 12], [101, 22.5, 3.6, 12], [120, 36, 3.4, 12], [120, 61, 3.4, 9], [120, 86, 3.4, 9],
+  [120, 100, 3.6, 12], [101, 100, 3.4, 9], [31, 100, 3.4, 12], [31, 69, 3.2, 9], [101, 69, 3.2, 9], [46, 100, 3.0, 9], [86, 100, 3.0, 9],
+].map(([x, z, r, h]) => ({ x, z, r, h, corner: CURTAIN.some((c) => c.x === x && c.z === z) }));
 const DONJON = { x: 50, z: 40, r: 7, h: 13 };
 const inCastle = (x: number, z: number) => inPoly(x, z, CURTAIN.map((p) => [p.x, p.z]));
 
@@ -482,7 +484,7 @@ export const CASTLE_PLAN = {
   door: { x: AXIS, z: 40 },
   zones: {
     parterre: { x: 51, z: 75 }, cour: { x: AXIS, z: 54 }, privy: { x: 37.5, z: 52 }, bower: { x: BOWER.x, z: BOWER.z + 1.5 },
-    belvedere: { x: 27, z: 53 }, kitchen: { x: WARD_AXIS, z: 44 }, orchard: { x: 96, z: 33 }, training: { x: WARD_AXIS, z: 63 },
+    belvedere: { x: 24.5, z: 53 }, kitchen: { x: WARD_AXIS, z: 44 }, orchard: { x: 96, z: 33 }, training: { x: WARD_AXIS, z: 63 },
     service: { x: STABLE_AXIS - 1, z: 84 }, paddock: { x: STABLE_AXIS, z: 93.5 },
   },
 };
@@ -555,23 +557,25 @@ export function buildKeep(seed: number): ZoneLayout {
   road('east', [[166, 138.1], [167, 118], [198, 100], [218, 94], [230, 84], [240, 79.5], [244, 79.5]], 2.6, Ground.Path, 0);
   road('upland', [[198, 100], [197, 84], [194, 74], [192, 56], [198, 44], [198, 36.5], [194, 36.5]], 2.4, Ground.Path, 0);
 
-  // The approach climbs at one steady grade from where it leaves the court to the foot of the south
-  // wall's east end (x 104), and from there runs level with the crown along the whole ledge to the
-  // gate terrace: the wall and its towers stand on the same level as the road, with a grass verge
-  // between them, never on a bank above it.
+  // The approach climbs at one steady grade from the court up a cutting in the castle rock to a level
+  // landing at the turn under the castle's south-east corner (x 124), and from there runs level with
+  // the crown along the whole ledge, through the outer gate, to the gate terrace: the wall and its
+  // towers stand on the same level as the road, with a grass verge between them, never on a bank
+  // above it.
+  const CLIMB_TOP = 124;
   {
     const poly = roads.approach;
     let total = 0;
     const cum = [0];
     for (let k = 0; k < poly.length - 1; k++) cum.push((total += Math.hypot(poly[k + 1].x - poly[k].x, poly[k + 1].z - poly[k].z)));
     let top = total;
-    for (let k = 0; k < poly.length; k++) if (poly[k].x <= 104) {
+    for (let k = 0; k < poly.length; k++) if (poly[k].x <= CLIMB_TOP + 1.5) {
       top = cum[k];
       break;
     }
     G.along(poly, 4.4 + 2, 0, (i, x, z) => {
       const sAt = distToPoly(x + 0.5, z + 0.5, poly).t * total;
-      if (G.reserved[i] === 1) level[i] = 11 * Math.min(1, Math.max(0, (sAt - 8) / (top - 8)));
+      if (G.reserved[i] === 1) level[i] = 11 * Math.min(1, Math.max(0, (sAt - 3) / (top - 3)));
     });
     // The rock beside the climb stands up to the crown: the shoulder north of the road under the
     // castle's south-east corner is filled level with the crown, so the road climbs along a rock
@@ -581,10 +585,19 @@ export function buildKeep(seed: number): ZoneLayout {
       if (G.l.cells[i] === Cell.Void || G.reserved[i] === 1) continue;
       if (inPoly(x + 0.5, z + 0.5, [[100, 100], [121, 86], [127, 84], [130, 96], [128, 104.4], [100, 104.4]])) level[i] = 11;
     }
+    // South of the ledge the rock stands up to the crown too, between the ledge road and the climb:
+    // the climb runs up a cutting in solid rock to the landing, with no pit beside it.
+    for (let z = 104; z < 126; z++) for (let x = 102; x < 126; x++) {
+      const i = G.idx(x, z);
+      if (G.l.cells[i] === Cell.Void || G.reserved[i] === 1) continue;
+      // (Its outline wanders, so the shoulder's lip reads as rock, not a cut rectangle.)
+      const wx = x + 0.5 + (G.noise(x * 0.18 + 7, z * 0.18) - 0.5) * 5, wz = z + 0.5 + (G.noise(x * 0.18, z * 0.18 + 7) - 0.5) * 5;
+      if (inPoly(wx, wz, [[103, 109.5], [121.5, 109.5], [123.5, 116], [121, 123.5], [112, 120], [104.5, 114.5]])) level[i] = 11;
+    }
   }
   // The gate terrace before the gatehouse, and the belvedere outside the postern: paved, level with
   // the crown.
-  for (const [x0, z0, x1, z1] of [[56, 102, 76, 109], [24, 49.5, 30.5, 56.5]]) {
+  for (const [x0, z0, x1, z1] of [[56, 102, 76, 109], [21.5, 49.5, 28, 56.5], [27.5, 52, 30.2, 54], [117, 104, 127, 109.5]]) {
     G.floor((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2, 0, Ground.Stone);
     G.rect((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2, 0, (i) => (level[i] = 11));
   }
@@ -688,6 +701,19 @@ export function buildKeep(seed: number): ZoneLayout {
     }
   }
 
+  // Slivers of land sticking out into the void (a cell with void on most sides) break off: left in,
+  // they stand up as lone needles of rock with the island's side dropping all round them.
+  for (let pass = 0; pass < 3; pass++) for (let z = 1; z < h - 1; z++) for (let x = 1; x < w - 1; x++) {
+    const i = G.idx(x, z);
+    if (G.l.cells[i] === Cell.Void || G.reserved[i] === 1) continue;
+    let vd = 0;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (G.l.cells[G.idx(x + dx, z + dz)] === Cell.Void) vd++;
+    if (vd >= 5) {
+      G.l.cells[i] = Cell.Void;
+      G.l.elev[i] = 0;
+    }
+  }
+
   // ─── Portal court: arrival dais, the portal ring, the Warden, the board ─────
   G.prop('landing', ISLAND.landing.x, ISLAND.landing.z);
   G.l.entry = { x: ISLAND.landing.x, z: ISLAND.landing.z - 1.8 };
@@ -745,6 +771,7 @@ export function buildKeep(seed: number): ZoneLayout {
   pave(57, 40, 100, 46);
   pave(100, 44, 102, 46);
   pave(84, 36, 93, 40);
+  pave(96, 25, 97, 40, Ground.Path);
   // The wing walks either side of the cour d'honneur (the west one round the donjon's foot to the
   // feast court), the barracks' east door out to the lane, and the postern's cross walk through the
   // privy garden to the seat in its niche against the wing.
@@ -771,6 +798,7 @@ export function buildKeep(seed: number): ZoneLayout {
   pave(118, 38, 119, 52, Ground.Path);
   pave(103, 44, 118, 46, Ground.Path);
   pave(109, 38, 112, 53, Ground.Path);
+  pave(103, 51, 118, 52, Ground.Path);
   // The training yard: beaten earth, the walks worn into it lighter (the aisle from the gate, the lane
   // along the pells, the way through the divider's gate, the shooting line and a lane to each butt).
   pave(102, 53, 117, 72, Ground.Dirt);
@@ -846,11 +874,11 @@ export function buildKeep(seed: number): ZoneLayout {
     // The gatehouse's D-towers stand out from the curtain's outer face either side of the passage.
     if (onEdge(GATE, a, b)) {
       const L = Math.hypot(b.x - a.x, b.z - a.z), ux = (b.x - a.x) / L, uz = (b.z - a.z) / L;
-      for (const sx of [-1, 1]) towerBase(GATE.x + ux * sx * GATE_HALF + uz * 1.5, GATE.z + uz * sx * GATE_HALF - ux * 1.5, 2.6);
+      for (const sx of [-1, 1]) towerBase(GATE.x + ux * sx * (GATE_HALF + 0.4) + uz * 1.5, GATE.z + uz * sx * (GATE_HALF + 0.4) - ux * 1.5, 2.6);
     }
   }
   for (const t of TOWERS) {
-    const p = G.prop('round_tower', t.x, t.z);
+    const p = G.prop(t.corner ? 'corner_tower' : 'round_tower', t.x, t.z);
     p.len = t.r;
     p.v = t.h;
     towerBase(t.x, t.z, t.r);
@@ -905,19 +933,12 @@ export function buildKeep(seed: number): ZoneLayout {
     G.prop('wall_flight', (foot + top) / 2, z, rot).len = L;
     blockRect(G, (foot + top) / 2, z, L / 2, 0.65, rot);
   }
-  // In the ward, a pair of flights climbs the north-east wall's inner face from the head of the
-  // kitchen garden's walk, one each way, so that face has its wall walk reached like the others.
+  // In the ward, a square stair turret stands against the north-east wall at the head of the kitchen
+  // garden's walk (its door on the walk), up to that wall's walk.
   {
-    const [c, d] = [CURTAIN[2], CURTAIN[3]], L = Math.hypot(d.x - c.x, d.z - c.z), ux = (d.x - c.x) / L, uz = (d.z - c.z) / L;
-    // The wall's inner side is (-uz, ux); the flight stands against the face, 0.65 out from it.
-    const off = 1.1 + 0.65, at = (t: number) => ({ x: c.x + ux * t - uz * off, z: c.z + uz * t + ux * off });
-    const t0 = (WARD_AXIS - c.x) / ux, FL = 6.2;
-    for (const [foot, top] of [[t0 - 2.2, t0 - 2.2 - FL], [t0 + 2.2, t0 + 2.2 + FL]]) {
-      const m = at((foot + top) / 2), dir = top > foot ? 1 : -1;
-      const rot = Math.atan2(-uz * dir, ux * dir);
-      G.prop('wall_flight', m.x, m.z, rot).len = FL;
-      blockRect(G, m.x, m.z, FL / 2, 0.65, rot);
-    }
+    const p = G.prop('stair_turret', WARD_AXIS, 30.8, 0);
+    p.len = 4.2;
+    blockRect(G, WARD_AXIS, 30.8, 2.1, 2.2, 0);
   }
 
   // ─── Stations (bank, furnace and shop first: the inspect tool frames the first few) ──
@@ -1107,8 +1128,8 @@ export function buildKeep(seed: number): ZoneLayout {
   const bed = (x: number, z: number, rot: number, len: number, v: number) => place('flower_bed', x, z, rot, { len, v, block: [len / 2, 0.65] });
   const cone = (x: number, z: number) => place('topiary', x, z, 0, { len: 1, block: 0.5 });
   const ball = (x: number, z: number) => place('topiary', x, z, 0, { len: 0, block: 0.5 });
-  /** An ornamental tree (v: 0 clipped green, 1 pink blossom, 2 gold), in a stone planter when `potted`. */
-  const tree = (x: number, z: number, v: number, s = 1, potted = false) => place('garden_tree', x, z, (x * 7 + z * 3) % 6.28, { v, len: potted ? 1 : 0, s, block: potted ? 0.8 : 0.45 });
+  /** An ornamental tree (v: 0 clipped green, 1 pink blossom, 2 gold), in a stone planter (square to the paving) when `potted`. */
+  const tree = (x: number, z: number, v: number, s = 1, potted = false) => place('garden_tree', x, z, potted ? 0 : (x * 7 + z * 3) % 6.28, { v, len: potted ? 1 : 0, s, block: potted ? 0.8 : 0.45 });
   /** A garden bench with a back, facing `facing` (radians: 0 faces +Z, south). */
   const seat = (x: number, z: number, facing: number, block: number | [number, number] = [1.1, 0.3]) => place('garden_bench', x, z, facing, { block });
   /** The angle that faces from (x, z) toward (tx, tz). */
@@ -1201,39 +1222,38 @@ export function buildKeep(seed: number): ZoneLayout {
       bed(X(55), z, Math.PI / 2, 3, z < CROSS_AXIS ? 1 : 3);
     }
     for (const [x, z] of [[40.5, 70.5], [40.5, 78.5], [40.5, 85.5], [40.5, 92.5]]) tree(X(x), z, z < CROSS_AXIS ? 1 : 2, 0.95);
+    // The embroidery: each bed set in a lozenge of clipped box (the ground inside it planted, so
+    // blocked), and flower borders running inside the panel's outer hedges between its corner trees.
+    for (const z of [74.5, 89]) for (const cx of [47, 55]) {
+      const c = X(cx), rx = 2.0, rz = 2.8, pts = [[c - rx, z], [c, z - rz], [c + rx, z], [c, z + rz]];
+      for (let k = 0; k < 4; k++) {
+        const [ax, az] = pts[k], [bx, bz] = pts[(k + 1) % 4];
+        G.prop('box_hedge', (ax + bx) / 2, (az + bz) / 2, Math.atan2(-(bz - az), bx - ax)).len = Math.hypot(bx - ax, bz - az) + 0.3;
+      }
+      for (let qz = Math.floor(z - rz); qz <= z + rz; qz++) for (let qx = Math.floor(c - rx); qx <= c + rx; qx++) {
+        const i = G.idx(qx, qz);
+        if (Math.abs(qx + 0.5 - c) / rx + Math.abs(qz + 0.5 - z) / rz <= 1.05 && G.l.cells[i] === Cell.Ground && G.l.ground[i] === Ground.Grass) G.l.cells[i] = Cell.Blocked;
+      }
+    }
+    for (const [z0, z1, v] of [[71.6, 77.4, 1], [86.6, 91.4, 3]]) bed(X(40.75), (z0 + z1) / 2, Math.PI / 2, z1 - z0, v);
+    for (const [z, v] of [[70.7, 0], [92.3, 2]]) {
+      bed(X(45.2), z, 0, 6.6, v);
+      bed(X(55.3), z, 0, 4.2, v);
+    }
     for (const [x, z] of [[59.8, 71.4], [54, 78.4], [54, 85.6], [59.8, 92.6]]) cone(X(x), z);
   }
+  // Inside the gate, a pair of clipped yews either side of the avenue frames the arrival before the
+  // plaza opens.
+  for (const x of [AXIS - 5, AXIS + 5]) cone(x, 95.8);
   // The avenue's rhythm: lamp posts in pairs up its length.
   for (const z of [94, 70, 58, 46]) for (const x of [AXIS - 2.4, AXIS + 2.4]) G.prop('lamp_post', x, z, 0, 1, 0.4);
-  // Kerbs: blue-grey slabs edging the avenue from the gate to the feast court and the cross walk
-  // across the parterre, broken wherever another walk crosses; a ring round the fountain plaza, open
-  // where the four walks come in; and paler inlay bands across the avenue at the gate's threshold
-  // and at the head of the feast court before the great door.
+  // Kerbs: a ring round the fountain plaza flush under the arcs of box (open where the four walks
+  // come in), and paler inlay bands across the avenue at the gate's threshold and at the head of the
+  // feast court before the great door. (Every lawn's edge against paving is kerbed below, once the
+  // lawns are laid.)
   {
-    const paved = (x: number, z: number) => G.l.ground[G.idx(x, z)] === Ground.Stone || G.l.ground[G.idx(x, z)] === Ground.Path;
-    const byPlaza = (x: number, z: number) => Math.hypot(x + 0.5 - FOUNTAIN.x, z + 0.5 - FOUNTAIN.z) < ARC_R + 0.7;
-    /**
-     * Kerbs along the edge row of a walk (cells i0..i1 at `row`, along X or Z) wherever the cell
-     * beyond its edge (row + out) is not paved, laid on the line `at`.
-     */
-    const kerbs = (alongX: boolean, row: number, out: number, i0: number, i1: number, at: number) => {
-      let s = -1;
-      for (let i = i0; i <= i1; i++) {
-        const cell = (r: number): [number, number] => (alongX ? [i, r] : [r, i]);
-        const ok = i < i1 && paved(...cell(row)) && !paved(...cell(row + out)) && !byPlaza(...cell(row));
-        if (ok && s < 0) s = i;
-        if (!ok && s >= 0) {
-          G.prop('kerb', alongX ? (s + i) / 2 : at, alongX ? at : (s + i) / 2, alongX ? 0 : Math.PI / 2).len = i - s;
-          s = -1;
-        }
-      }
-    };
-    kerbs(false, AXIS - 3, -1, 46, 98, AXIS - 2.75);
-    kerbs(false, AXIS + 2, 1, 46, 98, AXIS + 2.75);
-    kerbs(true, CROSS_AXIS - 2, -1, 39, 93, CROSS_AXIS - 1.75);
-    kerbs(true, CROSS_AXIS + 1, 1, 39, 93, CROSS_AXIS + 1.75);
     const ring = G.prop('kerb_ring', FOUNTAIN.x, FOUNTAIN.z);
-    ring.len = PLAZA_R - 0.25;
+    ring.len = ARC_R - 0.55;
     ring.v = 3.2;
     for (const z of [46.4, 98.4]) {
       const band = G.prop('kerb', AXIS, z, 0);
@@ -1260,10 +1280,11 @@ export function buildKeep(seed: number): ZoneLayout {
   }
   G.prop('great_doors', AXIS, BUILDING.keep.z + BUILDING.keep.d - 0.95, 0).len = 4;
   place('well', 88.5, 42.5, 0, { block: 1.1 });
-  place('fit_woodpile', 85.0, 36.8, 0, { block: [0.7, 0.45] });
-  // The orchard behind the kitchen (the corner between it and the north-east wall): fruit trees in a
-  // true grid, two rows of three.
-  for (const x of [94.6, 98.0]) for (const z of [28.0, 31.6, 35.2]) tree(x, z, 3, 0.9);
+  for (const x of [86.2, 90.8]) ball(x, 37.0);
+  // The orchard behind the kitchen (between it and the inner curtain): a gravel walk up its middle
+  // from the feast court to a bench under the north wall, apple trees in a true grid either side of it.
+  for (const x of [94.5, 98.5]) for (const z of [27.2, 30.6, 34.0, 37.4]) tree(x, z, 3, 0.85);
+  seat(96.5, 24.9, 0);
 
   // The cross axis's ends: in the west a champion in a niche against the curtain facing down the
   // cross walk, clipped cones either side and a long flower border along the wall's foot either
@@ -1288,7 +1309,7 @@ export function buildKeep(seed: number): ZoneLayout {
   }
   place('wall_niche', 41.75, POSTERN.z, -Math.PI / 2, { block: [1.5, 0.3] });
   seat(40.8, POSTERN.z, -Math.PI / 2);
-  for (const z of [44.6, 60.4]) G.prop('lamp_post', 39.4, z, 0, 1, 0.4);
+  for (const z of [44.6, 60.4]) for (const x of [35.6, 39.4]) G.prop('lamp_post', x, z, 0, 1, 0.4);
   // The bower at the head of the walk: a rose pergola standing on the paving with its seat inside
   // looking down the walk, a lantern under its arches, clipped balls either side of its court.
   place('pergola', BOWER.x, BOWER.z - 1.6, 0, { block: [1.7, 0.8] });
@@ -1305,20 +1326,24 @@ export function buildKeep(seed: number): ZoneLayout {
     if (x1 - x0 > 1) rail('hedge', x0, z, x1, z, 1.5);
   }
 
-  // The belvedere outside the postern: a parapet round its three open sides, a bench in the middle
-  // looking out west over the Veil, a lamp either side of the postern.
-  parapet([24.3, 49.8], [24.3, 56.2]);
-  parapet([29.2, 49.6], [24.6, 49.6]);
-  parapet([24.6, 56.4], [29.2, 56.4]);
-  seat(26.4, POSTERN.z, -Math.PI / 2);
-  for (const z of [POSTERN.z - 2.6, POSTERN.z + 2.6]) G.prop('lamp_post', 29.3, z, 0, 1, 0.4);
+  // The belvedere outside the postern, out on the lip of the headland: a short paved walk from the
+  // postern's steps, a parapet round its three open sides, a bench in the middle looking out west
+  // over the Veil, a lamp in each outer corner and a pair of urns where the walk comes in.
+  parapet([21.8, 49.8], [21.8, 56.2]);
+  parapet([27.6, 49.6], [22.1, 49.6]);
+  parapet([22.1, 56.4], [27.6, 56.4]);
+  seat(23.4, POSTERN.z, -Math.PI / 2);
+  for (const z of [POSTERN.z - 2.7, POSTERN.z + 2.7]) {
+    G.prop('lamp_post', 22.6, z, 0, 1, 0.4);
+    place('urn', 26.9, z, 0, { block: 0.6 });
+  }
 
   // ─── The service ward ───
   // The kitchen garden: four square quarters, each a lawn panel boxed in clipped box on all four
   // sides, two herb beds in each; the cross of walks between them meets at the sundial on the ward's
   // axis, a lane runs round the outside, and the north walk climbs to the terrace under the north-east
   // wall, where a pair of flights goes up to the wall walk.
-  for (const [x0, x1] of [[103, 109], [112, 118]]) for (const [z0, z1] of [[38, 44], [46, 52]]) {
+  for (const [x0, x1] of [[103, 109], [112, 118]]) for (const [z0, z1] of [[38, 44], [46, 51]]) {
     const a = x0 + 0.5, b = x1 - 0.5, c = z0 + 0.5, d = z1 - 0.5;
     line('box_hedge', a, c, b, c);
     line('box_hedge', b, c, b, d);
@@ -1327,6 +1352,10 @@ export function buildKeep(seed: number): ZoneLayout {
     for (const x of [x0 + 2, x0 + 4]) place('herb_bed', x, (z0 + z1) / 2, Math.PI / 2, { block: [1.5, 0.65] });
   }
   place('sundial', WARD_AXIS, 45, 0, { block: 0.75 });
+  // Under the north-east wall, the herb court before the stair turret: a raised herb bed either side
+  // of the walk, clipped cones either side of the turret's door.
+  for (const x of [WARD_AXIS - 4.7, WARD_AXIS + 4.7]) place('herb_bed', x, 35.9, 0, { block: [1.5, 0.65] });
+  for (const x of [WARD_AXIS - 2.9, WARD_AXIS + 2.9]) cone(x, 34.1);
 
   // The training yard, fenced off the kitchen garden with its gate on the garden's south walk; a tall
   // yew hedge closes its east side against the curtain. In the lists (north) a row of pells either
@@ -1344,19 +1373,14 @@ export function buildKeep(seed: number): ZoneLayout {
   for (const x of [WARD_AXIS - 4, WARD_AXIS + 4]) place('weapon_rack', x, 53.35, 0, { block: [1.0, 0.3] });
   G.prop('shooting_line', WARD_AXIS, 63.7, 0).len = 10;
   for (const x of [106.5, 110.5, 114.5]) place('target', x, 67.6, Math.PI, { block: 0.5 });
-  seat(103.6, 66.4, Math.PI / 2);
 
-  // The stable court: the grindstone and the anvil either side of the smithy door, flowers under the
-  // stable's stall openings, the trough before its door on the court's axis, a tree in a planter on
-  // each stall's line; the paddock's gate on the same axis between stone piers, the trough just inside
-  // it, the field shelter (flat-roofed, behind a parapet) against the east wall facing the gate's
-  // lawn, the two horses side by side before it.
-  place('fit_grindstone', 103.0, 79.3, 0, { block: 0.5 });
-  place('fit_anvil_small', 107.0, 79.3, 0, { block: 0.5 });
-  for (const x of [STABLE_AXIS - 3.5, STABLE_AXIS + 3.5]) {
-    bed(x, 78.75, 0, 2.0, 1);
-    tree(x, 86.6, 1, 1, true);
-  }
+  // The stable court: flowers under the stable's stall openings, the trough before its door on the
+  // court's axis, a blossom tree in a square planter either side of the axis (clear of the corner
+  // tower); the paddock's gate on the same axis between stone piers, the trough just inside it, the
+  // field shelter (flat-roofed, behind a parapet) against the east wall facing the gate's lawn, the
+  // two horses side by side before it, a fence across its foot short of the curtain.
+  for (const x of [STABLE_AXIS - 3.5, STABLE_AXIS + 3.5]) bed(x, 78.75, 0, 2.0, 1);
+  for (const x of [STABLE_AXIS - 2.4, STABLE_AXIS + 2.4]) tree(x, 84.8, 1, 0.8, true);
   place('fit_trough', STABLE_AXIS, 80.6, 0, { block: [0.9, 0.35] });
   rail('fence', 102.1, 90.5, STABLE_AXIS - 1.4, 90.5);
   rail('fence', STABLE_AXIS + 1.4, 90.5, 118.9, 90.5);
@@ -1366,8 +1390,9 @@ export function buildKeep(seed: number): ZoneLayout {
   place('field_shelter', 116.8, 94.0, -Math.PI / 2, { len: 5.6, block: [2.8, 1.4] });
   // (Its back stands against the curtain: the strip of ground behind it is walled in.)
   for (let z = 91; z < 97; z++) G.l.cells[G.idx(118, z)] = Cell.Blocked;
-  place('horse', 111.4, 94.0, Math.PI / 2, { block: 0.7 });
-  place('horse', 111.4, 96.6, Math.PI / 2, { block: 0.7, v: 1 });
+  rail('fence', 102.1, 98.4, 118.9, 98.4);
+  place('horse', 105.6, 92.6, Math.PI / 2, { block: 0.7 });
+  place('horse', 109.4, 92.9, Math.PI / 2, { block: 0.7, v: 1 });
 
   // The farm past the stream: the hay paddock at the end of the field lane, fenced all round with its
   // gate between stone piers where the lane arrives; the trough just inside the gate on its axis, the
@@ -1399,48 +1424,26 @@ export function buildKeep(seed: number): ZoneLayout {
   // Where the stream leaves the island over its old south edge, it falls away into the Veil.
   G.prop('edge_fall', 80.6, 191.6, Math.atan2(79 - 84, 194 - 186));
 
-  // The approach: a parapet along the ledge road's open side and round the gate terrace, lamp posts
-  // just inside it.
-  for (const [a, b] of [[[56.3, 101.2], [56.3, 109.3]], [[56.5, 109.3], [78, 109.3]], [[78, 109.3], [110, 108.1]], [[110, 108.1], [122.5, 109.0]]]) parapet(a, b);
-  for (const [x, z] of [[116, 107.8], [98, 107.85], [86, 108.3]]) G.prop('lamp_post', x, z, 0, 1, 0.4);
+  // The approach: a parapet along the ledge road's open side and round the gate terrace and the
+  // landing at the head of the climb, lamp posts just inside it. The outer gate stands across the
+  // ledge road west of the landing (its south jamb on the parapet's line, its north wing tied into
+  // the curtain), so the climb arrives on a level landing framed by lamps and turns through an arch
+  // onto the ledge.
+  const OUTER_GATE = { x: 111.5, z: 106.1, P: 4.6 };
+  for (const [a, b] of [[[56.3, 101.2], [56.3, 109.3]], [[56.5, 109.3], [78, 109.3]], [[78, 109.3], [OUTER_GATE.x - 1.15, 108.15]], [[OUTER_GATE.x + 1.15, 108.15], [126.8, 109.9]]]) parapet(a, b);
+  for (const [x, z] of [[98, 107.85], [86, 108.3], [117.5, 108.5], [125.5, 108.9]]) G.prop('lamp_post', x, z, 0, 1, 0.4);
+  {
+    const gt = OUTER_GATE, L = gt.P + 2.4;
+    const p = G.prop('outer_gate', gt.x, gt.z, -Math.PI / 2);
+    p.len = gt.P;
+    // How far its north wing runs on to the curtain's outer face.
+    p.v = gt.z - L / 2 - 101.1;
+    for (const sz of [-1, 1]) blockRect(G, gt.x, gt.z + sz * (gt.P / 2 + 0.6), 1.1, 0.6, 0);
+    blockRect(G, gt.x, (101.1 + gt.z - L / 2) / 2, 1.1, (gt.z - L / 2 - 101.1) / 2 + 0.1, 0);
+  }
   // The spring's water comes out of the castle rock: a culvert under the ledge road spills a fall
   // down the rock face into the spring pool.
   G.prop('spring_fall', 92.5, 111.6, 0).len = 10.9;
-  // Where the road climbs beside the crown's rock (east of the south wall) a dressed retaining wall
-  // holds the rock back: short straight lengths set end to end along the road's edge, each standing
-  // on the ground at its foot, its coping level with the crown (so the top runs level and the courses
-  // step down with the road).
-  {
-    const poly = roads.approach, toward = { x: 112, z: 92 };
-    const pts: Vec2[] = [];
-    let carry = 0;
-    for (let k = 0; k < poly.length - 1; k++) {
-      const a = poly[k], b = poly[k + 1], L = Math.hypot(b.x - a.x, b.z - a.z);
-      for (let s = carry; s < L; s += 1.8) {
-        const p = { x: a.x + ((b.x - a.x) * s) / L, z: a.z + ((b.z - a.z) * s) / L };
-        if (p.x >= 103.5 && p.z <= 114) pts.push(p);
-      }
-      carry = (carry - L) % 1.8;
-      if (carry < 0) carry += 1.8;
-    }
-    const off = pts.map((p, k) => {
-      const q = pts[Math.min(pts.length - 1, k + 1)], o = pts[Math.max(0, k - 1)];
-      const L = Math.hypot(q.x - o.x, q.z - o.z) || 1;
-      let nx = -(q.z - o.z) / L, nz = (q.x - o.x) / L;
-      if (nx * (toward.x - p.x) + nz * (toward.z - p.z) < 0) (nx = -nx), (nz = -nz);
-      return { x: p.x + nx * 2.6, z: p.z + nz * 2.6 };
-    });
-    for (let k = 0; k < off.length - 1; k++) {
-      const a = off[k], b = off[k + 1], L = Math.hypot(b.x - a.x, b.z - a.z);
-      if (L < 0.3 || L > 3) continue;
-      const m = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, foot = level[G.idx(Math.floor(m.x), Math.floor(m.z))];
-      if (11 - foot < 0.5) continue;
-      const p = G.prop('revetment', m.x, m.z, Math.atan2(-(b.z - a.z), b.x - a.x));
-      p.len = L + 0.3;
-      p.v = 11.6 - foot;
-    }
-  }
-
   // The hero is staged here for character creation and the pose tools; keep every camera spot
   // around it clear, or the near plane slices whatever prop sits there.
   for (const c of STAGE_CAMERAS) G.reserve(KEEP_STAGE.x + c.x, KEEP_STAGE.z + c.z, 2);
@@ -1541,6 +1544,18 @@ export function buildKeep(seed: number): ZoneLayout {
   }, 0);
   // The farm's hay paddock stays open grass inside its fence (no tree or bush seeded in it).
   for (let z = 118; z <= 131; z++) for (let x = 44; x <= 59; x++) if (G.l.cells[G.idx(x, z)] === Cell.Tree) G.l.cells[G.idx(x, z)] = Cell.Ground;
+  // No fins or needles: a rock cell standing more than a few metres above the ground on both
+  // opposite sides of it (a one-cell ridge between two lower places) is cut down to just above the
+  // higher of them, so every crag has a body behind it.
+  for (let pass = 0; pass < 3; pass++) for (let z = 1; z < h - 1; z++) for (let x = 1; x < w - 1; x++) {
+    const i = G.idx(x, z);
+    if (G.l.cells[i] !== Cell.Cliff) continue;
+    const top = (j: number) => (G.l.cells[j] === Cell.Void ? -Infinity : level[j] + (G.l.cells[j] === Cell.Cliff ? G.l.elev[j] : 0));
+    const t = top(i);
+    let cap = Infinity;
+    for (const [a, b] of [[i - 1, i + 1], [i - w, i + w]]) if (top(a) < t - 3 && top(b) < t - 3) cap = Math.min(cap, Math.max(top(a), top(b), level[i]) + 1.2);
+    if (cap < t) G.l.elev[i] = Math.max(0.9, cap - level[i]);
+  }
   G.connect();
   // Trees grow on the crown's crags, but not round the belvedere, whose view stays open.
   const canopy = (G.l.canopy = new Uint8Array(w * h).fill(4));
@@ -1568,6 +1583,44 @@ export function buildKeep(seed: number): ZoneLayout {
     if (r >= PLAZA_R - 0.2) lawn[i] = Lawn.Clipped;
   }
   G.l.lawnCut = [{ x: FOUNTAIN.x, z: FOUNTAIN.z, r: ARC_LAWN }];
+  // Kerbs: inside the curtain every lawn meets the paving along a dressed stone kerb, and the gravel
+  // and beaten earth meet the flagstones (and the gravel meets the lawns) the same way: one slab laid
+  // on the harder side of every such cell edge, runs merged, so no lawn or path ends in a raw cut.
+  // (Round the fountain the ring kerb does this.)
+  {
+    const kerbs: { x: number; z: number; rot: number; len: number }[] = (G.l.kerbs = []);
+    const inside = (x: number, z: number) => x >= 0 && z >= 0 && x < w && z < h && inCastle(x + 0.5, z + 0.5);
+    const hard = (x: number, z: number) => inside(x, z) && G.l.cells[G.idx(x, z)] === Cell.Ground && G.l.ground[G.idx(x, z)] === Ground.Stone;
+    const soft = (x: number, z: number) => inside(x, z) && (G.l.ground[G.idx(x, z)] === Ground.Path || G.l.ground[G.idx(x, z)] === Ground.Dirt) && (G.l.cells[G.idx(x, z)] === Cell.Ground || G.l.cells[G.idx(x, z)] === Cell.Blocked);
+    const green = (x: number, z: number) => inside(x, z) && lawn[G.idx(x, z)] !== Lawn.None && G.l.ground[G.idx(x, z)] === Ground.Grass;
+    const edge = (ax: number, az: number, bx: number, bz: number) => (hard(ax, az) && (green(bx, bz) || soft(bx, bz))) || (soft(ax, az) && green(bx, bz));
+    const clear = (x: number, z: number) => Math.hypot(x - FOUNTAIN.x, z - FOUNTAIN.z) > ARC_R + 1.2;
+    // Edges between rows z - 1 and z (along X), then between columns x - 1 and x (along Z); the kerb
+    // straddles the edge, set a little toward whichever side is the harder one (so a narrow walk
+    // keeps most of its width between its two kerbs).
+    for (let z = 1; z < h; z++) for (const [a, b, off] of [[z - 1, z, -0.08], [z, z - 1, 0.08]]) {
+      let s = -1;
+      for (let x = 0; x <= w; x++) {
+        const ok = x < w && edge(x, a, x, b) && clear(x + 0.5, z);
+        if (ok && s < 0) s = x;
+        if (!ok && s >= 0) {
+          kerbs.push({ x: (s + x) / 2, z: z + off, rot: 0, len: x - s });
+          s = -1;
+        }
+      }
+    }
+    for (let x = 1; x < w; x++) for (const [a, b, off] of [[x - 1, x, -0.08], [x, x - 1, 0.08]]) {
+      let s = -1;
+      for (let z = 0; z <= h; z++) {
+        const ok = z < h && edge(a, z, b, z) && clear(x, z + 0.5);
+        if (ok && s < 0) s = z;
+        if (!ok && s >= 0) {
+          kerbs.push({ x: x + off, z: (s + z) / 2, rot: Math.PI / 2, len: z - s });
+          s = -1;
+        }
+      }
+    }
+  }
   return G.l;
 }
 

@@ -8,8 +8,8 @@ import {
 } from './building';
 import { studioEnv } from '../render/env';
 import {
-  archPane, ASHLAR, ASHLAR_L, ASHLAR_W, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, HERALD_BLUE_D, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
-  PLOT_MARK, pointedArch, spandrels, STAINED_CHAPEL, STAINED_HALL, stainedGlass, STONE, STONE_D, STONE_DD, STONE_L, TRIM, TRIM_D, WOOD, WOOD_D, WOOD_L, type Prop,
+  archPane, ASHLAR_B, ASHLAR_L, ASHLAR_W, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, HERALD_BLUE, HERALD_BLUE_D, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
+  GILT, PLOT_MARK, pointedArch, ROOF_BLUE, ROOF_BLUE_L, SLATE_BLUE, spandrels, spire, stainedGlass, STONE, STONE_D, STONE_DD, STONE_L, TRIM, TRIM_D, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
 /**
@@ -38,6 +38,8 @@ const PLANKS = [0x8a6440, 0x7a5636, 0x94704a];
 const SHUTTER = 0x3e5a58;
 /** Interior cloth (rugs, runners, cushions) stays crimson; the castle's exterior livery is blue (props.ts). */
 const RUG = 0x7a2020, RUG_TRIM = 0xc8a040;
+/** The castle's service buildings: plain glass, not the principal buildings' stained glass. */
+const SERVICE = new Set(['kitchen', 'stables', 'smithy']);
 /** Dark oak for the timber framing: clean flat colour (grain streaks read as stripes on long beams). */
 export const TIMBER = 0x4b3122;
 
@@ -156,6 +158,10 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   built.add(ground);
   const { w, d, wallH } = b;
   const timber = b.style === 'timber', hall = b.style === 'hall', keep = b.style === 'keep';
+  // Every principal castle building glazes the lancets it shows the bailey in the one royal stained
+  // glass; the service buildings (kitchen, stables, smithy) and the back walls against the curtain
+  // keep plain warm leaded panes (you still see into the lit rooms through them).
+  const royal = (side: Side) => keep && !SERVICE.has(b.id) && side !== 'n';
   const storeyH = b.storeyH ?? wallH;
   const multi = !!b.upper && storeyH < wallH;
   /** The upper floor's cut (none on single-storey buildings). */
@@ -165,7 +171,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   const S = keep
     ? { base: TRIM_D, step: TRIM, foot: ASHLAR_W, course: ASHLAR_L, line: TRIM, light: ASHLAR_L }
     : { base: STONE_DD, step: STONE_D, foot: STONE, course: STONE_L, line: STONE_D, light: STONE_L };
-  const UPPER = timber ? PLASTER : keep ? ASHLAR : STONE;
+  const UPPER = timber ? PLASTER : keep ? ASHLAR_B : STONE;
   const CAP = timber ? TIMBER : STONE_D;
   const FRAME = timber ? TIMBER : S.light;
   const doorH = hall || keep ? 3.8 : timber ? 2.8 : 3.1;
@@ -285,6 +291,19 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       piece(dr.w + 0.8, doorH, doorH + 0.36, WALL_T + 0.22, uc, 0, FRAME, 0.04);
       if (hall || !timber) piece(0.5, doorH + 0.05, doorH + 0.55, WALL_T + 0.3, uc, 0, S.light, 0.04);
       piece(dr.w, doorH + 0.36, wallH, face * 2, uc, 0, UPPER, 0.02);
+      if (keep && dr.w < 4 && !shared.has(side) && !b.windows.some((wi) => wi.stall)) {
+        // A castle door: a blue-grey hood over it with label stops, a step before it and a lantern
+        // on a bracket either side, so it reads as a way in from across the court.
+        const [dk, dp] = at(fade, doorH);
+        W.box(dk, dp, dr.w + 1.3, 0.2, 0.3, uc, doorH + 0.5, face + 0.12, TRIM, 0, 0.02);
+        for (const s of [-1, 1]) {
+          W.box(dk, dp, 0.2, 0.34, 0.3, uc + s * (dr.w / 2 + 0.55), doorH + 0.3, face + 0.12, TRIM, 0, 0.02);
+          const [lk, lp] = at(fade, 2.4);
+          W.box(lk, lp, 0.08, 0.08, 0.5, uc + s * (dr.w / 2 + 0.95), 3.05, face + 0.25, IRON, 0, 0.01);
+          W.box(lk, lp, 0.26, 0.34, 0.26, uc + s * (dr.w / 2 + 0.95), 2.8, face + 0.5, IRON, 0, 0.02);
+          W.box(lk, lp, 0.18, 0.24, 0.18, uc + s * (dr.w / 2 + 0.95), 2.8, face + 0.5, 0xffd080, 0, 0.01, 0xffb040, 2);
+        }
+      }
       if (!keep) piece(dr.w, wallH - 0.21, wallH + 0.03, WALL_T + 0.16, uc, 0, CAP);
       // (Not on the camera side: cut down with the wall they would read as stray planks.)
       if (!fade) for (const [hinge, dir] of [[u0, -1], [u1, 1]] as [number, number][]) {
@@ -311,8 +330,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         // the arch outside with its label stops, and a plain sill.
         const { ys, arc } = pointedArch(ww, wh, 6);
         W.shape(gk, gp, spandrels(ww, wh, WALL_T - 0.02), UPPER, wi.at, wy, 0);
-        if (wi.stained) {
-          stainedGlass((geo, c, em, u, y, off) => W.shape(gk, gp, geo, c, u, y, off, undefined, em), wi.at, wy, 0, ww, wh, wi.stained === 'chapel' ? STAINED_CHAPEL : STAINED_HALL);
+        if (royal(side)) {
+          stainedGlass((geo, c, em, u, y, off) => W.shape(gk, gp, geo, c, u, y, off, undefined, em), wi.at, wy, 0, ww, wh);
         } else {
           W.shape(gk, gp, archPane(ww, wh, 0.04), 0, wi.at, wy, 0, gm.warm);
           W.box(gk, gp, 0.06, ys, 0.08, wi.at, wy + ys / 2, 0.03, ASHLAR_L, 0, 0.01);
@@ -365,9 +384,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           if (g1 - g0 < 1.3) continue;
           const p = (g0 + g1) / 2;
           // Pilasters in the body stone, their weathered set-offs in the dressings' blue-grey.
-          piece(1.0, 1.1, mid, 0.5, p, WALL_T / 2 + 0.25, ASHLAR, 0.05);
+          piece(1.0, 1.1, mid, 0.5, p, WALL_T / 2 + 0.25, ASHLAR_B, 0.05);
           piece(1.12, mid - 0.05, mid + 0.25, 0.62, p, WALL_T / 2 + 0.3, TRIM, 0.04);
-          piece(0.74, mid + 0.25, wallH - 0.1, 0.34, p, WALL_T / 2 + 0.17, ASHLAR, 0.04);
+          piece(0.74, mid + 0.25, wallH - 0.1, 0.34, p, WALL_T / 2 + 0.17, ASHLAR_B, 0.04);
         }
       }
       // The floor line: a string course outside, and inside (on the walls that
@@ -513,10 +532,15 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // wall the hearth backs onto, and a louver on the ridge over an open hearth.
       for (const f of b.fits ?? []) {
         if (f.kind === 'open_hearth') {
-          // A square stone lantern on the leads, its louvred openings dark, a small capped top.
-          cb(fk, lifted, [1.8, 1.4, 1.8], [f.x, wallH + 0.9, f.z], ASHLAR, undefined, 0.04);
-          for (const [dx, dz] of [[0.91, 0], [-0.91, 0], [0, 0.91], [0, -0.91]]) fk.box(lifted, [dz ? 0.8 : 0.04, 0.6, dz ? 0.04 : 0.8], [f.x + dx, wallH + 1.0, f.z + dz], DARK);
+          // A square stone louvre on the leads over the hearth: dark openings crossed by stone slats,
+          // a blue-grey cornice and a blue-slate cap with a gilt finial.
+          cb(fk, lifted, [1.8, 1.4, 1.8], [f.x, wallH + 0.9, f.z], ASHLAR_B, undefined, 0.04);
+          for (const [dx, dz] of [[0.91, 0], [-0.91, 0], [0, 0.91], [0, -0.91]]) {
+            fk.box(lifted, [dz ? 0.8 : 0.04, 0.6, dz ? 0.04 : 0.8], [f.x + dx, wallH + 1.0, f.z + dz], DARK);
+            for (const y of [0.82, 1.0, 1.18]) fk.box(lifted, [dz ? 0.8 : 0.06, 0.05, dz ? 0.06 : 0.8], [f.x + dx * 1.02, wallH + y, f.z + dz * 1.02], TRIM, dz ? [0.5, 0, 0] : [0, 0, 0.5]);
+          }
           cb(fk, lifted, [2.1, 0.24, 2.1], [f.x, wallH + 1.72, f.z], TRIM, undefined, 0.03);
+          spire(fk, lifted, f.x, wallH + 1.84, f.z, 1.0, 1.3, 4);
           continue;
         }
         if (f.kind !== 'fireplace' && f.kind !== 'hearth_oven') continue;
@@ -524,7 +548,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         const r = f.rot ?? 0, bx = -Math.sin(r), bz = -Math.cos(r);
         const x = Math.abs(bx) > Math.abs(bz) ? (bx > 0 ? w - 0.9 : 0.9) : f.x, z = Math.abs(bx) > Math.abs(bz) ? f.z : bz < 0 ? 0.9 : d - 0.9;
         const top = roofTop + 1.4;
-        cb(fk, lifted, [1.5, top - wallH, 1.5], [x, (wallH + top) / 2, z], ASHLAR, undefined, 0.05);
+        cb(fk, lifted, [1.5, top - wallH, 1.5], [x, (wallH + top) / 2, z], ASHLAR_B, undefined, 0.05);
         cb(fk, lifted, [1.8, 0.3, 1.8], [x, top + 0.1, z], TRIM, undefined, 0.04);
         fk.box(lifted, [1.0, 0.06, 1.0], [x, top + 0.27, z], DARK);
       }
@@ -806,7 +830,7 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     const BH = wallH, dh = 3.8;
     for (const [ua, ub] of [[u0, dr.at], [dr.at + dr.w, u1]]) {
       block(true, ub - ua, P + 0.4, (ua + ub) / 2, zc + 0.1, 0, 0.45, TRIM_D, 0.05);
-      block(true, ub - ua, P, (ua + ub) / 2, zc, 0.45, BH, ASHLAR, 0.04);
+      block(true, ub - ua, P, (ua + ub) / 2, zc, 0.45, BH, ASHLAR_B, 0.04);
     }
     const uc = dr.at + dr.w / 2;
     /** A whole piece (not split at the cuts), in the band its height `y` falls in. */
@@ -821,9 +845,9 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     };
     for (let y = spring; y < apex - 0.01; y += 0.2) {
       const y1 = Math.min(apex, y + 0.2), hw = half((y + y1) / 2);
-      for (const e of [-1, 1]) block(true, dr.w / 2 - hw, P, uc + e * (hw + (dr.w / 2 - hw) / 2), zc, y, y1 + 0.01, ASHLAR, 0);
+      for (const e of [-1, 1]) block(true, dr.w / 2 - hw, P, uc + e * (hw + (dr.w / 2 - hw) / 2), zc, y, y1 + 0.01, ASHLAR_B, 0);
     }
-    block(true, dr.w, P, uc, zc, apex, BH, ASHLAR, 0.04);
+    block(true, dr.w, P, uc, zc, apex, BH, ASHLAR_B, 0.04);
     // The ceremonial arch: voussoirs alternating pale ashlar and blue-grey, a blue-grey hood mould.
     const ring = (out: number, t: number, p: number, even: number, odd: number) => {
       for (const e of [-1, 1]) for (let i = 0; i < arc.length - 1; i += 2) {
@@ -847,21 +871,25 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     // reaching back over the wall onto the roof deck, with a string course, a paired arched window,
     // a corbelled, crenellated parapet and a slate spire.
     const TWH = wallH + 4.6, zb0 = d - 3.4, zb1 = zf + P, tz = (zb0 + zb1) / 2, td = zb1 - zb0, tw = u1 - u0;
-    cb(ak, ap, [tw, TWH - wallH + 0.1, td], [uc, (wallH - 0.1 + TWH) / 2, tz], ASHLAR, undefined, 0.04);
+    cb(ak, ap, [tw, TWH - wallH + 0.1, td], [uc, (wallH - 0.1 + TWH) / 2, tz], ASHLAR_B, undefined, 0.04);
     cb(ak, ap, [tw + 0.2, 0.24, td + 0.2], [uc, wallH + 0.05, tz], TRIM, undefined, 0.03);
     // Its window: a tall pointed lancet in the hall's stained glass, over the great door.
-    lancet(ak, ap, uc, wallH + 0.9, zb1, 0.9, 2.4, false, STAINED_HALL);
+    lancet(ak, ap, uc, wallH + 0.9, zb1, 0.9, 2.4, false, true);
     // Corbels, parapet, its coping and merlons round a flat deck; the flag on its pole.
     for (let i = 0; i < 6; i++) {
       const t = -tw / 2 + 0.4 + (i * (tw - 0.8)) / 5;
       cb(ak, ap, [0.34, 0.4, 0.5], [uc + t, TWH - 0.2, zb1 + 0.12], TRIM, undefined, 0.03);
     }
-    cb(ak, ap, [tw + 0.7, 0.6, td + 0.7], [uc, TWH + 0.3, tz], ASHLAR, undefined, 0.05);
+    cb(ak, ap, [tw + 0.7, 0.6, td + 0.7], [uc, TWH + 0.3, tz], ASHLAR_B, undefined, 0.05);
     cb(ak, ap, [tw + 0.8, 0.16, td + 0.8], [uc, TWH + 0.66, tz], TRIM, undefined, 0.03);
-    for (let i = 0; i < 5; i++) cb(ak, ap, [0.72, 0.7, 0.5], [u0 + 0.2 + (i * (tw - 0.4)) / 4, TWH + 1.09, zb1 + 0.2], ASHLAR, undefined, 0.04);
-    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) cb(ak, ap, [0.5, 0.7, 0.72], [uc + s * (tw / 2 + 0.2), TWH + 1.09, zb0 + 0.5 + (i * (td - 1)) / 2], ASHLAR, undefined, 0.04);
-    cb(ak, ap, [0.12, 2.6, 0.12], [uc, TWH + 2.0, tz], IRON, undefined, 0.02);
-    flag(ak, ap, uc, TWH + 3.2, tz, 1.8, 1.1);
+    for (let i = 0; i < 5; i++) cb(ak, ap, [0.72, 0.7, 0.5], [u0 + 0.2 + (i * (tw - 0.4)) / 4, TWH + 1.09, zb1 + 0.2], ASHLAR_B, undefined, 0.04);
+    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) cb(ak, ap, [0.5, 0.7, 0.72], [uc + s * (tw / 2 + 0.2), TWH + 1.09, zb0 + 0.5 + (i * (td - 1)) / 2], ASHLAR_B, undefined, 0.04);
+    // On the castle's axis, over the great door: a blue-slate spire inside the merlons (the keep's
+    // crown, answering the donjon's), the flag on a pole over its finial.
+    const sr = Math.min(tw, td) / 2 - 0.35, shh = sr * 2.6;
+    spire(ak, ap, uc, TWH + 0.74, tz, sr, shh, 8);
+    cb(ak, ap, [0.12, 2.6, 0.12], [uc, TWH + 1.0 + shh + 1.8, tz], IRON, undefined, 0.02);
+    flag(ak, ap, uc, TWH + 1.0 + shh + 3.0, tz, 2.3, 1.4);
     // The lord's banner on the bay, over the door: blue and gold (all of it above the upper cut, so
     // it goes whole).
     const zb = zf + P + 0.04, by = storeyH + CUT_H + 0.1, bw = 1.9;
@@ -943,53 +971,72 @@ function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
     // parapet runs there); the east and west walls leave the corner merlons to the north and south.
     const lo = ns && shared.has('w') ? 0.9 : 0, hi = ns && shared.has('e') ? L - 0.9 : L;
     for (let t = lo + 0.5; t < hi - 0.3; t += 0.95) W.box(fk, p, 0.36, 0.4, 0.5, t, wallH - 0.22, WALL_T / 2 + 0.15, TRIM, 0, 0.03);
-    W.box(fk, p, hi - lo + 0.2, 1.0, 0.7, (lo + hi) / 2, wallH + 0.5, o, ASHLAR, 0, 0.03);
+    W.box(fk, p, hi - lo + 0.2, 1.0, 0.7, (lo + hi) / 2, wallH + 0.5, o, ASHLAR_B, 0, 0.03);
     W.box(fk, p, hi - lo + 0.3, 0.16, 0.84, (lo + hi) / 2, wallH + 1.05, o, TRIM, 0, 0.03);
     const a = lo + 0.41, e = hi - 0.41, n = Math.max(1, Math.round((e - a) / 1.6));
     for (let i = 0; i <= n; i++) {
       const end = i === 0 || i === n;
       if (end && (!ns || (i === 0 && (shared.has('w') || joined.has('w'))) || (i === n && (shared.has('e') || joined.has('e'))))) continue;
-      W.box(fk, p, 0.82, 0.74, 0.7, a + (i * (e - a)) / n, wallH + 1.5, o, ASHLAR, 0, 0.04);
+      W.box(fk, p, 0.82, 0.74, 0.7, a + (i * (e - a)) / n, wallH + 1.5, o, ASHLAR_B, 0, 0.04);
     }
   }
-  // The leads: grey sheets with standing rolls across the short way.
-  const along = w >= d;
-  fk.box(p, [w - 1.8, 0.06, d - 1.8], [w / 2, wallH + 0.22, d / 2], LEAD);
-  const span = along ? w - 1.8 : d - 1.8, cross = along ? d - 1.8 : w - 1.8;
-  for (let t = -span / 2 + 1.3; t < span / 2 - 0.4; t += 1.3) {
-    if (along) fk.box(p, [0.09, 0.07, cross], [w / 2 + t, wallH + 0.27, d / 2], LEAD_ROLL);
-    else fk.box(p, [cross, 0.07, 0.09], [w / 2, wallH + 0.27, d / 2 + t], LEAD_ROLL);
+  // The leads: blue lead laid on the diagonal in a two-tone diamond chequer, a pale stone band round
+  // them inside the parapet and a thin gilt fillet just inside the band.
+  const along = w >= d, iw = w - 1.8, id = d - 1.8, y = wallH + 0.22;
+  fk.box(p, [iw, 0.06, id], [w / 2, y, d / 2], ROOF_BLUE);
+  const DIA = 1.5, hd = DIA / 2, side = DIA / Math.SQRT2;
+  for (let i = 0; i * hd <= iw; i++) for (let j = 0; j * hd <= id; j++) {
+    if ((i + j) % 2) continue;
+    const x = 0.9 + i * hd, z = 0.9 + j * hd;
+    if (x - hd < 1.35 || x + hd > w - 1.35 || z - hd < 1.35 || z + hd > d - 1.35) continue;
+    fk.box(p, [side - 0.06, 0.03, side - 0.06], [x, y + 0.045, z], i % 2 ? ROOF_BLUE_L : ROOF_BLUE, [0, Math.PI / 4, 0]);
   }
+  for (const [bx, bz, bw, bd] of [[w / 2, 1.13, iw, 0.46], [w / 2, d - 1.13, iw, 0.46], [1.13, d / 2, 0.46, id - 0.92], [w - 1.13, d / 2, 0.46, id - 0.92]]) fk.box(p, [bw, 0.05, bd], [bx, y + 0.05, bz], ASHLAR_L);
+  for (const [bx, bz, bw, bd] of [[w / 2, 1.42, iw - 0.92, 0.08], [w / 2, d - 1.42, iw - 0.92, 0.08], [1.42, d / 2, 0.08, id - 1.0], [w - 1.42, d / 2, 0.08, id - 1.0]]) fk.box(p, [bw, 0.06, bd], [bx, y + 0.05, bz], GILT);
   if (w * d >= 150 && !b.doors.some((x) => x.side === 's' && x.w >= 4)) {
     // The stair turret on the middle of the back (north) wall, up from below onto the leads.
     const tx = w / 2, tz = 1.3, TH = wallH + 2.9;
-    cb(fk, p, [2.4, TH - wallH, 2.4], [tx, (wallH + TH) / 2, tz], ASHLAR, undefined, 0.04);
+    cb(fk, p, [2.4, TH - wallH, 2.4], [tx, (wallH + TH) / 2, tz], ASHLAR_B, undefined, 0.04);
     cb(fk, p, [2.7, 0.2, 2.7], [tx, TH - 0.6, tz], TRIM, undefined, 0.03);
-    cb(fk, p, [2.8, 0.5, 2.8], [tx, TH + 0.1, tz], ASHLAR, undefined, 0.04);
-    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(fk, p, [0.7, 0.6, 0.7], [tx + dx * 1.05, TH + 0.65, tz + dz * 1.05], ASHLAR, undefined, 0.04);
-    cb(fk, p, [0.9, 1.8, 0.1], [tx, wallH + 1.2, tz + 1.21], DARK, undefined, 0.01);
-    cb(fk, p, [1.2, 0.2, 0.18], [tx, wallH + 2.15, tz + 1.24], ASHLAR_L, undefined, 0.02);
+    cb(fk, p, [2.8, 0.5, 2.8], [tx, TH + 0.1, tz], ASHLAR_B, undefined, 0.04);
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(fk, p, [0.7, 0.6, 0.7], [tx + dx * 1.05, TH + 0.65, tz + dz * 1.05], ASHLAR_B, undefined, 0.04);
+    // Its door onto the leads: the lord's blue in a pale stone frame, gilt studs and ring.
+    cb(fk, p, [1.2, 2.05, 0.12], [tx, wallH + 1.25, tz + 1.2], ASHLAR_L, undefined, 0.02);
+    cb(fk, p, [0.86, 1.78, 0.1], [tx, wallH + 1.14, tz + 1.24], HERALD_BLUE, undefined, 0.01);
+    for (const yy of [0.6, 1.2, 1.75]) fk.box(p, [0.7, 0.06, 0.04], [tx, wallH + yy, tz + 1.3], PAL.gold);
+    fk.box(p, [0.1, 0.1, 0.05], [tx + 0.26, wallH + 1.15, tz + 1.31], PAL.gold);
     // Chimney stacks in the side walls, level with each other.
     const stacks: [number, number][] = along ? [[w / 2, 0.6], [w / 2, d - 0.6]] : [[0.6, d * 0.55], [w - 0.6, d * 0.55]];
     for (const [cx, cz] of stacks) {
-      cb(fk, p, [1.3, 2.6, 1.3], [cx, wallH + 1.3, cz], ASHLAR, undefined, 0.04);
+      cb(fk, p, [1.3, 2.6, 1.3], [cx, wallH + 1.3, cz], ASHLAR_B, undefined, 0.04);
       cb(fk, p, [1.55, 0.26, 1.55], [cx, wallH + 2.7, cz], TRIM, undefined, 0.03);
       fk.box(p, [0.8, 0.06, 0.8], [cx, wallH + 2.84, cz], DARK);
     }
-    // Two glazed lanterns over the long room, on its axis, under low lead caps.
+    // Two glazed lanterns over the long room, on its axis: lit lights between pale mullions under a
+    // blue-slate cap with a gilt finial; and a roof garden either side of them, clipped box balls in
+    // stone planters in two rows, mirrored about the building's axis.
     for (const f of [0.45, 0.78]) {
       const lx = along ? w * f : w / 2, lz = along ? d / 2 : d * f;
       cb(fk, p, [1.8, 0.5, 1.8], [lx, wallH + 0.5, lz], TRIM, undefined, 0.04);
       cb(fk, p, [1.5, 0.9, 1.5], [lx, wallH + 1.2, lz], ASHLAR_L, undefined, 0.04);
-      for (const [dx, dz] of [[0.76, 0], [-0.76, 0], [0, 0.76], [0, -0.76]]) fk.box(p, [dz ? 0.9 : 0.04, 0.55, dz ? 0.04 : 0.9], [lx + dx, wallH + 1.2, lz + dz], 0xffc870, undefined, 0xffa040, 0.7);
-      fk.mesh(p, taper(1.9, 1.9, 0.5, 0.5, 0.5), LEAD_ROLL, [lx, wallH + 2.0, lz]);
+      for (const [dx, dz] of [[0.76, 0], [-0.76, 0], [0, 0.76], [0, -0.76]]) {
+        fk.box(p, [dz ? 0.9 : 0.04, 0.55, dz ? 0.04 : 0.9], [lx + dx, wallH + 1.2, lz + dz], 0xffc870, undefined, 0xffa040, 0.7);
+        fk.box(p, [dz ? 0.08 : 0.06, 0.6, dz ? 0.06 : 0.08], [lx + dx * 1.02, wallH + 1.2, lz + dz * 1.02], ASHLAR_L);
+      }
+      cb(fk, p, [1.75, 0.16, 1.75], [lx, wallH + 1.72, lz], TRIM, undefined, 0.02);
+      spire(fk, p, lx, wallH + 1.8, lz, 0.95, 1.1, 4);
+      for (const s of [-1, 1]) {
+        const px = along ? lx : lx + s * 2.6, pz = along ? lz + s * 2.6 : lz;
+        cb(fk, p, [0.95, 0.55, 0.95], [px, wallH + 0.5, pz], ASHLAR_B, undefined, 0.04);
+        cb(fk, p, [1.05, 0.1, 1.05], [px, wallH + 0.8, pz], TRIM, undefined, 0.02);
+        cb(fk, p, [0.95, 0.85, 0.95], [px, wallH + 1.25, pz], 0x4a7a34, [0, 0.4, 0], 0.3);
+        cb(fk, p, [0.7, 0.6, 0.7], [px, wallH + 1.42, pz], 0x56883c, [0, 1.1, 0], 0.22);
+      }
     }
   }
   return wallH + 1.9;
 }
 
-/** The castle's lead roofs and their standing rolls. */
-const LEAD = 0x5a5f68, LEAD_ROLL = 0x6c717a;
 
 // ─── Furnishings ─────────────────────────────────────────────────────────────
 

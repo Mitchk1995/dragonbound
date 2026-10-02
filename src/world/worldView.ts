@@ -4,13 +4,13 @@ import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { Cell, Fluid, Ground, Lawn, type ZoneLayout } from './layout';
 import { buildLawn } from './lawn';
-import { buildProp, OCCLUDING_PROPS, type Prop } from './props';
+import { buildProp, OCCLUDING_PROPS, TRIM_D, type Prop } from './props';
 import { setWaterSky } from './water';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
-import { cragColumn, hash01, rockBlock, slabBlock, taper } from '../render/blocks';
+import { chamferBox, cragColumn, hash01, rockBlock, slabBlock, taper } from '../render/blocks';
 import { useStrataRock } from '../render/rock';
 
 import type { SurfaceKind } from '../render/textures';
@@ -380,7 +380,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const rocks: THREE.Matrix4[] = [], rockCols: THREE.Color[] = [];
   const rims: THREE.Matrix4[] = [], rimCols: THREE.Color[] = [];
   const walls: THREE.Matrix4[] = [], wallCols: THREE.Color[] = [];
-  const under: THREE.Matrix4[] = [];
+  const under: THREE.Matrix4[] = [], underCols: THREE.Color[] = [];
+  // The island's underside in its own rock (the cliff's darker tone), never a dead brown-black.
+  const underA = new THREE.Color(theme.cliff?.[1] ?? 0x5e544a).multiplyScalar(0.85), underB = new THREE.Color(theme.cliff?.[0] ?? 0x7a6e62).multiplyScalar(0.8);
   const bushes: THREE.Matrix4[] = [], bushCols: THREE.Color[] = [];
   const flowers: THREE.Matrix4[] = [], flowerCols: THREE.Color[] = [];
   const reeds: THREE.Matrix4[] = [];
@@ -536,14 +538,18 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         let rim = false;
         for (let dz = -1; dz <= 1 && !rim; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz) !== Cell.Void) rim = true;
         if (rim) {
-          // From the land's own level (a raised edge gets a taller face) down into the void.
-          let top = 0;
-          for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz) !== Cell.Void) top = Math.max(top, floorAt(x + dx + 0.5, z + dz + 0.5));
-          const depth = 3 + rng() * 5;
-          p.set(x + 0.5, (top - depth) / 2 + 0.1, z + 0.5);
+          // Hanging under the island's side (terrain.ts drops a sheer skirt from the edge itself):
+          // from well below the lowest land beside it down into the void, so no column ever stands
+          // up past the edge as a plate or a spike.
+          let top = Infinity;
+          for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz) !== Cell.Void) top = Math.min(top, floorAt(x + dx + 0.5, z + dz + 0.5));
+          top -= 3.2;
+          const bot = Math.min(top, 0) - 3 - rng() * 6;
+          p.set(x + 0.5, (top + bot) / 2, z + 0.5);
           q.setFromEuler(e.set(0, rng() * 3, 0));
-          s.set(1.6 + rng(), top + depth, 1.6 + rng());
+          s.set(1.6 + rng(), top - bot, 1.6 + rng());
           under.push(m.compose(p, q, s).clone());
+          underCols.push(underA.clone().lerp(underB, rng()).offsetHSL(0, 0, (rng() - 0.5) * 0.06));
         }
       } else if (cell === Cell.Ground && !layout.fluid[i]) {
         const g = layout.ground[i];
@@ -586,13 +592,13 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   // different sizes, in clusters, leaning a little), boulders fallen at the foot and scree spilling
   // from it over the ground below, and plants rooted wherever the rock lies flat: grass and shrubs
   // on the ledges and along the top lip, the odd small tree on a broad ledge. Nothing is set on a
-  // road or paving, or near a prop (the parapets, the revetment, the falls keep their own faces).
+  // road or paving, or near a prop (the parapets and the falls keep their own faces).
   const crags: THREE.Matrix4[] = [], cragCols: THREE.Color[] = [];
   const ledgeTufts: THREE.Matrix4[] = [], ledgeTuftCols: THREE.Color[] = [];
   if (rockCells.length) {
     const propNear = new Uint8Array(w * h), cragAt = new Uint8Array(w * h);
     // Room kept round props by kind (parapets and lamps stand above the rock, not in front of it).
-    const room: Record<string, number> = { spring_fall: 3, edge_fall: 3, revetment: 2, parapet: -1, lamp_post: -1 };
+    const room: Record<string, number> = { spring_fall: 3, edge_fall: 3, parapet: -1, lamp_post: -1 };
     for (const pr of layout.props) {
       const r = room[pr.kind] ?? 1;
       if (r < 0) continue;
@@ -639,8 +645,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
           cragAt[i] = 1;
           const tall = rng() < 0.3;
           for (let k = 0, nk = rng() < 0.45 ? 2 : 1; k < nk; k++) {
-            const W = Math.min(3.6, 1.2 + faceH * 0.14 + rng() * 1.2) * (k ? 0.7 : 1), D = W * (0.75 + rng() * 0.35);
             const H = Math.min(faceH - 0.5, Math.max(1.6, faceH * (tall && !k ? 0.86 + rng() * 0.08 : 0.38 + rng() * 0.45) * (k ? 0.75 : 1)));
+            // Stout masses, never needles: at least about half as broad (the column is ~0.9 across) as tall.
+            const W = Math.max(Math.min(3.6, 1.2 + faceH * 0.14 + rng() * 1.2) * (k ? 0.7 : 1), H * 0.62), D = W * (0.75 + rng() * 0.35);
             const along = k ? (rng() < 0.5 ? -1 : 1) * W * 0.75 : (rng() - 0.5) * 0.4;
             const back = W / 2 - 0.7 + (k ? 0.25 : 0);
             p.set(cx - ox * back + tx * along, foot - 0.3, cz - oz * back + tz * along);
@@ -792,11 +799,23 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   ])!;
   inst(flowerGeo, flowers, flowerCols, 0, false, undefined, false);
   if (under.length) {
-    inst(taper(0.3, 0.3, 1.3, 1.3, 1), under, null, 0x4a3e38, false, 'rock');
-    // A solid core under the whole island so it reads as one mass.
-    const coreMat = new THREE.MeshStandardMaterial({ color: 0x3a302c, flatShading: true });
+    inst(taper(0.3, 0.3, 1.3, 1.3, 1), under, underCols, 0, false, 'rock');
+    // A solid core under the whole island so it reads as one mass, in the same rock as its side.
+    const coreMat = new THREE.MeshStandardMaterial({ color: underA.clone().multiplyScalar(0.85), flatShading: true });
     applyPaint(coreMat, 'rock', 'world', 0.5);
-    const core = new THREE.Mesh(new THREE.ConeGeometry(w * 0.38, 16, 9).rotateX(Math.PI), coreMat);
+    // Many broken facets (radius and height wandering round it), never a few big flat planes.
+    const coreGeo = new THREE.ConeGeometry(w * 0.36, 16, 36, 4).rotateX(Math.PI).toNonIndexed();
+    {
+      const cp = coreGeo.getAttribute('position') as THREE.BufferAttribute, cn = smoothNoise(seed + 77);
+      for (let i = 0; i < cp.count; i++) {
+        const x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i), a = Math.atan2(z, x), r = Math.hypot(x, z);
+        if (r < 1e-3) continue;
+        const f = 0.84 + 0.3 * cn(Math.cos(a) * 3 + 9, Math.sin(a) * 3 + y * 0.12);
+        cp.setXYZ(i, x * f, y - cn(Math.cos(a) * 5, Math.sin(a) * 5) * 2.5 * (r / (w * 0.36)), z * f);
+      }
+      coreGeo.computeVertexNormals();
+    }
+    const core = new THREE.Mesh(coreGeo, coreMat);
     // Top at y = -1.2: below the deepest pond bed, or it would cap the water.
     core.position.set(w / 2, -9.2, h / 2);
     group.add(core);
@@ -841,33 +860,71 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     applyWind(mat);
   });
 
+  let debrisTick: ((t: number) => void) | null = null;
   if (theme.ambient === 'void') {
     const skyGroup = new THREE.Group();
     voidSky(skyGroup);
     followers.push(skyGroup);
     group.add(skyGroup);
-    // Drifting debris islands in the distance: painted rock like the island's own underside, lit
-    // a little by the void's glow so they read as stone, not black blobs.
-    const debrisMat = new THREE.MeshStandardMaterial({ color: 0x8a7a6c, flatShading: true, roughness: 0.95, emissive: 0x241a2c });
+    // Drifting islets far out in the Veil: a few deliberate clusters of rock, each a little island
+    // of its own (a grass cap on top, roots hanging under it), bobbing slowly. They keep well clear
+    // of the island and float below its land, so nothing hangs beside the castle or crowds its sky.
+    const debrisMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.cliff?.[0] ?? 0x8a7a6c), flatShading: true, roughness: 0.95, emissive: 0x241a2c });
     applyPaint(debrisMat, 'rock', 'object', 0.8);
-    // Each drifts out over the void: on a big island it is pushed out past the shore, never left
-    // half-sunk in the fields.
-    const overLand = (x: number, z: number, r: number) => {
-      for (let dz = -r; dz <= r; dz += 2) for (let dx = -r; dx <= r; dx += 2) if (at(Math.floor(x + dx), Math.floor(z + dz)) !== Cell.Void) return true;
-      return false;
+    const capMat = new THREE.MeshStandardMaterial({ color: new THREE.Color((theme.ground[Ground.Grass] ?? [0x5a8a44])[0]).multiplyScalar(1.15), flatShading: true, roughness: 0.9 });
+    const rootMat = new THREE.MeshStandardMaterial({ color: 0x4a3626, flatShading: true, roughness: 1 });
+    const clearOf = (x: number, z: number, r: number) => {
+      for (let dz = -r; dz <= r; dz += 3) for (let dx = -r; dx <= r; dx += 3) if (at(Math.floor(x + dx), Math.floor(z + dz)) !== Cell.Void) return false;
+      return true;
     };
-    for (let i = 0; i < 14; i++) {
-      const a = rng() * Math.PI * 2;
-      let r = 55 + rng() * 50;
-      const size = 2 + rng() * 5;
-      while (r < 400 && overLand(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r, size + 4)) r += 4;
-      const rock = new THREE.Mesh(rockBlock(20 + i, size, size * 0.8, size * 0.9), debrisMat);
-      rock.position.set(w / 2 + Math.cos(a) * r, -10 + rng() * 25, h / 2 + Math.sin(a) * r);
-      // Mostly upright (a flat top catching the light), turned freely about the vertical.
-      rock.rotation.set((rng() - 0.5) * 0.6, rng() * 6.3, (rng() - 0.5) * 0.6);
-      rock.name = 'debris';
-      group.add(rock);
+    const bobbers: { o: THREE.Object3D; y: number; ph: number }[] = [];
+    for (let c = 0; c < 4; c++) {
+      const a = (c / 4) * Math.PI * 2 + 0.6 + (rng() - 0.5) * 0.5;
+      let r = 120;
+      while (r < 420 && !clearOf(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r, 34)) r += 6;
+      const cx = w / 2 + Math.cos(a) * r, cz = h / 2 + Math.sin(a) * r, cy = -20 + rng() * 10;
+      for (let i = 0, n = 3 + Math.floor(rng() * 2); i < n; i++) {
+        const size = i ? 2 + rng() * 2.5 : 5 + rng() * 3;
+        const islet = new THREE.Group();
+        islet.position.set(cx + (rng() - 0.5) * 22, cy + (rng() - 0.5) * 6, cz + (rng() - 0.5) * 22);
+        islet.rotation.y = rng() * 6.3;
+        // Rock body tapering down under a flat top, the grass cap on it, roots trailing below.
+        const body = new THREE.Mesh(rockBlock(20 + c * 5 + i, size, size * 0.9, size * 0.85), debrisMat);
+        body.rotation.x = Math.PI;
+        body.position.y = 0.05;
+        islet.add(body);
+        const cap = new THREE.Mesh(rockBlock(60 + c * 5 + i, size * 0.92, size * 0.14, size * 0.8), capMat);
+        cap.position.y = -0.02;
+        islet.add(cap);
+        for (let k = 0; k < 3; k++) {
+          const root = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.12, size * (0.5 + rng() * 0.5), 4), rootMat);
+          root.position.set((rng() - 0.5) * size * 0.5, -size * 0.75, (rng() - 0.5) * size * 0.5);
+          root.rotation.z = (rng() - 0.5) * 0.3;
+          islet.add(root);
+        }
+        islet.traverse((o) => (o.name = 'debris'));
+        group.add(islet);
+        bobbers.push({ o: islet, y: islet.position.y, ph: rng() * 6.3 });
+      }
     }
+    debrisTick = (t) => bobbers.forEach((b) => (b.o.position.y = b.y + Math.sin(t * 0.35 + b.ph) * 0.45));
+  }
+
+  // The kerbs edging paving against lawns and gravel (layout.kerbs): one merged mesh of dressed
+  // blue-grey slabs standing a hair proud of the ground.
+  if (layout.kerbs?.length) {
+    const km = new THREE.Matrix4();
+    const parts = layout.kerbs.map((kb) => {
+      const g = chamferBox(kb.len + 0.02, 0.12, 0.4, 0.03).clone();
+      g.applyMatrix4(km.makeRotationY(kb.rot).setPosition(kb.x, Math.max(floorAt(kb.x, kb.z), heightAt(kb.x, kb.z)) + 0.0, kb.z));
+      return g;
+    });
+    const kerbMat = new THREE.MeshStandardMaterial({ color: TRIM_D, roughness: 0.9, flatShading: true });
+    applyPaint(kerbMat, 'masonry', 'world');
+    const kerbMesh = new THREE.Mesh(mergeGeometries(parts)!, kerbMat);
+    kerbMesh.receiveShadow = true;
+    kerbMesh.name = 'kerbs';
+    group.add(kerbMesh);
   }
 
   const props: Prop[] = [];
@@ -888,5 +945,5 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     group.add(bp.obj);
     return bp;
   });
-  return { group, followers, props, buildings, heightAt, floorAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; } };
+  return { group, followers, props, buildings, heightAt, floorAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; debrisTick?.(t); } };
 }

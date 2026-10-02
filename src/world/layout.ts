@@ -128,6 +128,8 @@ export interface ZoneLayout {
   strands?: Strand[];
   /** Round pools (a spring, a pond): dished hollows with a soft, round shore. */
   pools?: { x: number; z: number; r: number }[];
+  /** Stone kerbs edging paving where it meets a lawn (centre, turn and length), drawn as one mesh. */
+  kerbs?: { x: number; z: number; rot: number; len: number }[];
 }
 
 export interface Strand {

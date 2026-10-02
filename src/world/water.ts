@@ -143,8 +143,8 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
           vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
           vec4 mir = texture2D(uRefl, rc.xy / rc.w + (normal.xy - flatN.xy) * 0.035);
           float cover = clamp(mir.a, 0.0, 1.0) * uReflOn;
-          envC = mix(envC, mir.rgb * (0.75 + 0.4 * fres), cover * 0.8);
-          diffuseColor.rgb *= 1.0 - cover * 0.6;` : ''}
+          envC = mix(envC, mir.rgb * (0.9 + 0.35 * fres), cover * 0.95);
+          diffuseColor.rgb *= 1.0 - cover * 0.75;` : ''}
           diffuseColor.rgb *= (1.0 - fres) * 0.7;
           totalEmissiveRadiance += poolTint * 0.18 + envC;
           // Caustic light over the shallow floor near the kerb.

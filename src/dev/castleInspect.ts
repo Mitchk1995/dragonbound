@@ -149,6 +149,11 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('rock-east', [P.gate.x + 100, 7, P.gate.z + 14], [P.gate.x + 62, 7, P.gate.z - 12], 45);
   await view('rock-cutting', [P.gate.x + 74, 5, P.gate.z + 28], [P.gate.x + 58, 6, P.gate.z + 8], 22);
   await view('rock-west', [-14, 16, 86], [28, 8, 64], 40);
+  // The head of the climb: the landing, the outer gate across the ledge road and the castle's
+  // south-east corner over them, from out over the court.
+  await view('landing', [P.gate.x + 72, y0 + 12, P.gate.z + 22], [P.gate.x + 50, y0 + 2, P.gate.z + 6], 24);
+  // The crown's north-east rim and the fracture notch beyond the castle.
+  await view('ne-rim', [165, y0 + 26, 92], [138, y0 - 2, 42], 40);
   // The approach from below the rock: the ledge road climbing west under the south wall to the gate.
   await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
   // The spring's fall out of the castle rock into its pool and the stream leaving it, from below.

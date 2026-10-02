@@ -27,7 +27,7 @@ const BED_Y = -1.0;
 /** Highest a relief vertex below the first terrace may stand (cells with a corner above it are relief). */
 const FLOOR_CAP = 0.6;
 /** How far outdoor cliff faces are weathered back into the rock at most (bays, undercuts). */
-const WEATHER = 1.25;
+const WEATHER = 1.6;
 export const WATER_Y = -0.28;
 /** Brightness of the ground under a lawn (its root layer). */
 const LAWN_ROOT = 0.5;
@@ -72,8 +72,12 @@ export function bedding(seed: number) {
   const n = smoothNoise(seed + 401);
   const rng = mulberry32(seed * 31 + 402);
   const L: number[] = [];
-  for (let y = -12; y < 90; y += rng() < 0.12 ? 0.6 + rng() * 0.3 : 1.4 + rng() * 2.0) L.push(y);
-  const tilt = (x: number, z: number) => (n(x * 0.03, z * 0.03) - 0.5) * 2.6 + (n(x * 0.11 + 31, z * 0.11) - 0.5) * 0.7;
+  // Mostly tall beds (two to six high), now and then a thin one, so a face reads as a few big masses
+  // rather than a stack of equal slabs.
+  for (let y = -12; y < 90; y += rng() < 0.15 ? 0.9 + rng() * 0.5 : 2.4 + rng() * 3.4) L.push(y);
+  // The beds dip and roll across the land (up to about 20 degrees), so ledges run slantwise across a
+  // face and climb or drop along it, never level the full width.
+  const tilt = (x: number, z: number) => (n(x * 0.035, z * 0.035) - 0.5) * 7 + (n(x * 0.11 + 31, z * 0.11) - 0.5) * 1.1;
   const dens = (x: number, z: number) => 0.8 + 0.45 * n(x * 0.045 + 57, z * 0.045 + 13);
   const q = (y: number, x: number, z: number) => (y + tilt(x, z)) * dens(x, z);
   const index = (s: number) => {
@@ -174,7 +178,10 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         }
         if (relief) {
           raisedN[k]++;
-          raisedH[k] += elev;
+          // The rock's absolute top (its own ground plus its height), so a corner shared by rock
+          // standing on different levels averages their real tops instead of stacking the lower
+          // rock's height on the higher ground (which raised needles where crags met a cliff).
+          raisedH[k] += elev + (layout.level ? layout.level[i] : 0);
         }
         if (fluid) fluidN[k]++;
         count[k]++;
@@ -185,20 +192,22 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   // take the same shading as a ratio at the end.
   const rawCol = col.slice();
   // Ground level at each vertex: the highest walkable cell touching it (so a plateau's edge stays on
-  // the plateau and the cliff below rises from the lower ground), else the highest cell touching it.
+  // the plateau and the cliff below rises from the lower ground), else the lowest cell touching it
+  // (rock all round: it rises from its lowest foot to the average of its tops).
   const base = new Float32Array(nV);
   if (layout.level) {
     const lv = layout.level;
     for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
-      let walk = -Infinity, any = -Infinity;
+      let walk = -Infinity, any = -Infinity, low = Infinity;
       for (const [cx, cz] of [[x - 1, z - 1], [x, z - 1], [x - 1, z], [x, z]]) {
         const cell = at(cx, cz);
         if (cell === Cell.Void) continue;
         const v = lv[cz * w + cx];
         any = Math.max(any, v);
+        low = Math.min(low, v);
         if (!isRelief(cell, theme)) walk = Math.max(walk, v);
       }
-      base[vi(x, z)] = walk > -Infinity ? walk : any > -Infinity ? any : 0;
+      base[vi(x, z)] = walk > -Infinity ? walk : any > -Infinity ? low : 0;
     }
   }
   /** Distance from a grid vertex to the nearest dry (non-fluid, non-void) cell, searched out to 5. */
@@ -334,7 +343,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       let y = (noise(x * 0.15, z * 0.15) - 0.5) * 0.06 + (noise(x * 0.5 + 40, z * 0.5) - 0.5) * 0.03;
       if (fullRelief(k)) {
         // Fully inside relief: rugged top (noise breaks up the flat mesa look).
-        const top = raisedH[k] / raisedN[k];
+        const top = raisedH[k] / raisedN[k] - base[k];
         if (theme.wallRise) {
           // Cave rock: one continuous mass climbing in broad terraces (wide ledges, short steep
           // risers) whose edges wander slowly, so the walls read as layered strata in a single
@@ -523,6 +532,40 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     const voidD = distField((k) => count[k] < 4);
     for (let k = 0; k < nV; k++) edgeKeep[k] = sstep(0.5, 2.5, voidD[k]);
   }
+  // ─── The island's side ───────────────────────────────────────────────────────
+  // Where land ends at the void (a floating island), a sheer skirt of rock drops from the very edge
+  // of the ground or the cliff top, so the land is a closed mass: no gap ever opens between a raised
+  // edge and the rocky underside below it (the sky would show through the rock).
+  const skirtOn = theme.ambient === 'void';
+  const SK = { P: [] as number[], N: [] as number[], C: [] as number[], A: [] as number[] };
+  const skn = new THREE.Vector3(), ska = new THREE.Vector3(), skb = new THREE.Vector3();
+  /** One quad of the skirt from the edge a..b (tops ya, yb) down to `bottom`, facing (nx, nz). */
+  const skirtQuad = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, bottom: number, nx: number, nz: number, ca: number[], cb2: number[]) => {
+    const quad = [[ax, ay, az, ca], [bx, by, bz, cb2], [bx, bottom, bz, cb2], [ax, bottom, az, ca]] as [number, number, number, number[]][];
+    for (const t of [[0, 1, 2], [0, 2, 3]]) {
+      let [i0, i1, i2] = t;
+      ska.set(quad[i1][0] - quad[i0][0], quad[i1][1] - quad[i0][1], quad[i1][2] - quad[i0][2]);
+      skb.set(quad[i2][0] - quad[i0][0], quad[i2][1] - quad[i0][1], quad[i2][2] - quad[i0][2]);
+      skn.crossVectors(ska, skb);
+      if (skn.lengthSq() < 1e-10) continue;
+      if (skn.x * nx + skn.z * nz < 0) [i1, i2] = [i2, i1];
+      for (const i of [i0, i1, i2]) {
+        SK.P.push(quad[i][0], quad[i][1], quad[i][2]);
+        SK.N.push(nx, 0, nz);
+        SK.C.push(...quad[i][3]);
+        SK.A.push(0, 0, 0, 1);
+      }
+    }
+  };
+  /** Which way an edge on the line x = X (or z = Z) at `m` along it looks out over the void, if it does. */
+  const voidSide = (alongZ: boolean, line: number, m: number): number => {
+    const c = Math.floor(m);
+    const lo = alongZ ? at(line - 1, c) : at(c, line - 1), hi = alongZ ? at(line, c) : at(c, line);
+    if (lo === Cell.Void && hi !== Cell.Void) return -1;
+    if (hi === Cell.Void && lo !== Cell.Void) return 1;
+    return 0;
+  };
+  const SKIRT_DEPTH = 6;
   const sculpt = smoothNoise(seed + 501);
   /**
    * Where a point of outdoor rock moves to (x, z) once weathered: pushed back into the rock along
@@ -538,7 +581,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     const gx = gridAt(upX, x, z), gz = gridAt(upZ, x, z), gl = Math.hypot(gx, gz);
     const wgt = sstep(0.2, 1.0, gl);
     if (wgt <= 0) return [x, z];
-    const mass = sstep(0.32, 0.68, sculpt(x * 0.19 + 5, z * 0.19 + 9));
+    const mass = sstep(0.4, 0.6, sculpt(x * 0.19 + 5, z * 0.19 + 9));
     const bed = sculpt(x * 0.3 + y * 0.45 + 3, z * 0.3 - y * 0.3 + 11);
     const d = (WEATHER * ramp * wgt * (0.62 * (1 - mass) + 0.38 * bed)) / gl;
     return [x + gx * d, z + gz * d];
@@ -667,6 +710,16 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
             const q = [poly[0], poly[i], poly[i + 1]];
             tri(q.map((v) => [v.x, bandY(k, v), v.z]), q.map((v) => shadeOf(k, v, k > 0 ? 1 : 0)), q.map((v) => v.a), [0, 1, 0]);
           }
+          // Where this band's edge runs along the island's edge, the skirt drops from it.
+          if (skirtOn) for (let i = 0; i < poly.length; i++) {
+            const p = poly[i], q = poly[(i + 1) % poly.length];
+            const alongZ = p.x === q.x && Number.isInteger(p.x), alongX = p.z === q.z && Number.isInteger(p.z);
+            if (!alongZ && !alongX) continue;
+            const side = alongZ ? voidSide(true, p.x, (p.z + q.z) / 2) : voidSide(false, p.z, (p.x + q.x) / 2);
+            if (!side) continue;
+            const bottom = Math.min(p.f, q.f) - SKIRT_DEPTH;
+            skirtQuad(p.x, bandY(k, p), p.z, q.x, bandY(k, q), q.z, bottom, alongZ ? side : 0, alongX ? side : 0, shadeOf(k, p), shadeOf(k, q));
+          }
         }
         // The sheer face up to this bed, along the cut where s crosses its plane.
         if (k > k0) {
@@ -693,6 +746,11 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       if (grid.every((q) => indexOf(q.s) === lv0 && lv0 > groundOf(q))) {
         const q00 = at2(0, 0), q10 = at2(S, 0), q01 = at2(0, S), q11 = at2(S, S);
         for (const q of [[q00, q01, q11], [q00, q11, q10]]) tri(q.map((v) => [v.x, bandY(lv0, v), v.z]), q.map((v) => shadeOf(lv0, v)), q.map((v) => v.a), [0, 1, 0]);
+        if (skirtOn) for (const [p, q] of [[q00, q01], [q10, q11], [q00, q10], [q01, q11]]) {
+          const alongZ = p.x === q.x;
+          const side = alongZ ? voidSide(true, p.x, (p.z + q.z) / 2) : voidSide(false, p.z, (p.x + q.x) / 2);
+          if (side) skirtQuad(p.x, bandY(lv0, p), p.z, q.x, bandY(lv0, q), q.z, Math.min(p.f, q.f) - SKIRT_DEPTH, alongZ ? side : 0, alongZ ? 0 : side, shadeOf(lv0, p), shadeOf(lv0, q));
+        }
         continue;
       }
       for (let jv = 0; jv < S; jv++) for (let ju = 0; ju < S; ju++) {
@@ -758,6 +816,32 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     relief.geometry = caveRelief();
   }
   if (relief) meshes.push(relief);
+  if (skirtOn) {
+    // The skirt under the flat ground's edge (the relief's own edge laid its skirt as it was cut).
+    const cut = new Set<number>();
+    for (let i = 0; i < caveCells.length; i += 2) cut.add(caveCells[i + 1] * w + caveCells[i]);
+    const colAt = (k: number) => [col[k * 3], col[k * 3 + 1], col[k * 3 + 2]];
+    for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+      if (at(x, z) === Cell.Void || cut.has(z * w + x)) continue;
+      for (const [ax, az, bx, bz, nx, nz] of [[x, z, x, z + 1, -1, 0], [x + 1, z, x + 1, z + 1, 1, 0], [x, z, x + 1, z, 0, -1], [x, z + 1, x + 1, z + 1, 0, 1]]) {
+        if (at(x + nx, z + nz) !== Cell.Void) continue;
+        const ka = vi(ax, az), kb = vi(bx, bz);
+        skirtQuad(ax, pos[ka * 3 + 1], az, bx, pos[kb * 3 + 1], bz, Math.min(base[ka], base[kb]) - SKIRT_DEPTH, nx, nz, colAt(ka), colAt(kb));
+      }
+    }
+    if (SK.P.length) {
+      const skirt = make([], 'skirt', false);
+      skirt.geometry.dispose();
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(SK.P, 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(SK.N, 3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(SK.C, 3));
+      g.setAttribute('aSplat', new THREE.Float32BufferAttribute(SK.A, 4));
+      skirt.geometry = g;
+      skirt.castShadow = true;
+      meshes.push(skirt);
+    }
+  }
 
   // Fluids: one surface mesh per kind over its cells (plus a one-cell skirt so it meets the shore).
   const ticks: ((t: number) => void)[] = [];
@@ -840,7 +924,7 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
     uReflOn: refl?.on ?? { value: 0 },
   };
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, roughness: lava ? 0.55 : 0.1, metalness: 0,
+    color: 0xffffff, roughness: lava ? 0.55 : 0.3, metalness: 0,
     transparent: !lava, opacity: lava ? 1 : 0.86, depthWrite: lava,
   });
   const common = `
@@ -974,7 +1058,8 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
              float spec = pow(max(dot(normalize(rw), sunDir), 0.0), 400.0);
              // Two samples at unrelated scales and angles multiplied, so the sparkles never line up on the noise lattice.
              float twinkle = smoothstep(0.42, 0.62, fluidN(fp * 1.13 + vec2(uTime * 0.11, -uTime * 0.07)) * fluidN(mat2(0.8, 0.6, -0.6, 0.8) * fp * 1.71 - vec2(uTime * 0.05, uTime * 0.09)));
-             totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * (spec * twinkle * 1.3 + pow(max(dot(normalize(rw), sunDir), 0.0), 18.0) * 0.06);`}`,
+             // (Capped, so a glint never burns the surface out to white.)
+             totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * min(spec * twinkle * 0.9 + pow(max(dot(normalize(rw), sunDir), 0.0), 18.0) * 0.05, 0.45);`}`,
       );
   };
   mat.customProgramCacheKey = () => (lava ? 'fluid4-lava' : refl ? 'fluid4-mirror' : 'fluid4-water');

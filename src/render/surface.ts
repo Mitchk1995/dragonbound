@@ -795,7 +795,9 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
             float drift2 = texture2D(uMixTex, vSurfPos.xz * 0.021 + vec2(vSurfPos.y * 0.017, 0.4)).r;
             diffuseColor.rgb *= mix(vec3(0.92, 0.97, 1.06), vec3(1.12, 1.0, 0.8), smoothstep(0.3, 0.75, drift2) * face + (1.0 - face) * 0.5);
             ${rockTops ? '' : `float mossN = texture2D(uMixTex, vSurfPos.xz * 0.19 + vec2(0.13, 0.77)).r;
-            float moss = smoothstep(0.55, 0.85, fn.y) * smoothstep(0.5, 0.68, mossN + fn.y * 0.1) * rockK;
+            // Only in patches on the upward ledges (a broad mask), never a line along every bed.
+            float mossP = texture2D(uMixTex, vSurfPos.xz * 0.045 + vec2(0.52, 0.31)).r;
+            float moss = smoothstep(0.7, 0.92, fn.y) * smoothstep(0.5, 0.68, mossN + fn.y * 0.1) * smoothstep(0.5, 0.66, mossP) * rockK;
             diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.16, 0.25, 0.09), vec3(0.27, 0.36, 0.13), mossN), moss * 0.85);`}`}
           }
           ${cave && topShade < 1 ? CAVE_RISERS : ''}
