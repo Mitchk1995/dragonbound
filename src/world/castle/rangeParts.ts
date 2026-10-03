@@ -74,8 +74,8 @@ export function slateRoof(k: ModelKit, g: Obj, o: SlateRoofSpec): Pitch {
     const ny = 1 / sec, nz = (sgn * t) / sec;
     cb(k, g, [len, th, L], [x, ym + off * ny, zm + off * nz], color, [sgn * A, 0, 0], 0.03);
   };
-  // The slopes: the south one to its lip over the cornice, the north one into the gutter, each a hair
-  // past the ridge so the two meet under the capping.
+  // The slopes: the south one to its lip over the cornice, the north one into the gutter, meeting on
+  // the ridge under its capping.
   slab(zr, lip, 1, SLATES, TH);
   slab(GUTTER.z, zr, -1, SLATES, TH);
   // The ridge: a lead roll along it.
@@ -185,9 +185,8 @@ const ring = (r: number, n: number, cx = 0, cy = 0) => Array.from({ length: n },
 /**
  * The chapel's rose window (diameter D, its centre at y = 0, facing +Z, `T` deep centred on z = 0):
  * its plate of the dressed stone pierced by seven round lights, one in the middle and six round it,
- * and the corners of the square opening it stands in filled back to the circle. The lights' centres
- * and radii come back with it, so the glass can be set in them. (Both pieces are open shapes: the
- * audit reads them as hollow.)
+ * and the corners of the square opening it stands in filled back to the circle (the glass stands
+ * behind the plate). Both pieces are open shapes: the audit reads them as hollow.
  */
 export function rosePlate(D: number, T: number) {
   const R = D / 2, lights: [number, number, number][] = [[0, 0, R * 0.24]];
@@ -203,7 +202,7 @@ export function rosePlate(D: number, T: number) {
   corners.holes.push(new THREE.Path(ring(R - 0.01, 40).reverse()));
   const fillGeo = new THREE.ExtrudeGeometry(corners, { depth: T - 0.02, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, -(T - 0.02) / 2);
   fillGeo.userData.hollow = true;
-  return { plate: plateGeo, fill: fillGeo, lights };
+  return { plate: plateGeo, fill: fillGeo };
 }
 
 /** The ring of voussoirs round a rose window (radius R, `t` wide), standing `p` proud of the face at z = 0: one stone per `n`th of the circle, a hair apart. */

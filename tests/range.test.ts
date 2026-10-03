@@ -43,7 +43,7 @@ describe('the north range and the bailey\'s buildings', () => {
     expect(hearth.z).toBeCloseTo(pitchOf(B.great_hall.d, B.great_hall.wallH, R.ridge).zr, 6);
     // The flèche stands over the chapel's south door.
     const door = B.chapel.doors.find((d) => d.side === 's')!;
-    expect(R && B.chapel.look!.roof!.fleche!.u).toBe(door.at + door.w / 2);
+    expect(B.chapel.look!.roof!.fleche!.u).toBe(door.at + door.w / 2);
   });
 
   it('the kitchen, the solar, the stables and the barracks keep flat roofs behind battlements, the stables and barracks under the wall walk', () => {
