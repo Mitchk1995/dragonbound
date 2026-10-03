@@ -30,8 +30,8 @@ const V1 = new THREE.Vector3();
 
 /** Dragon head/neck levelling and sword wrist angle; tuned against tests/poses.test.ts. */
 export const HEAD_LEVEL = 0.35;
-export const HEAD_FLY_LEVEL = -0.1;
-export const NECK_FLY_EXTEND = 0.25;
+export const HEAD_FLY_LEVEL = -0.2;
+export const NECK_FLY_EXTEND = 0.3;
 export const SWING_WRIST = 1.23;
 
 /** Where the blow lands in every attack animation (see COMBAT_TUNING.impact). */

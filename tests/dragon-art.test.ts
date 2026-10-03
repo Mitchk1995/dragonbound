@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Rig, newAnimState, type AnimState } from '../src/render/anim';
 import { makeModel, registerModelScene } from '../src/render/registry';
 
@@ -141,15 +141,14 @@ describe('drakeling', () => {
 });
 
 describe('dragons, animated as the game does', () => {
-  afterEach(() => vi.restoreAllMocks());
   /** The model posed `secs` into an animation, its rig's clock started at `phase` (0..1) of its 10 s random start window. */
   const pose = (name: string, st: Partial<AnimState>, secs: number, phase = 0) => {
     const m = makeModel(name);
     const holder = new THREE.Group();
     holder.add(m.root);
-    vi.spyOn(Math, 'random').mockReturnValue(phase);
+    const random = vi.spyOn(Math, 'random').mockReturnValue(phase);
     const rig = new Rig(m.root);
-    vi.restoreAllMocks();
+    random.mockRestore();
     const s = { ...newAnimState(), ...st };
     rig.update(0, s);
     for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, s);
