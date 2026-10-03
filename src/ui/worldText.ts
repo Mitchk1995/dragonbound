@@ -3,7 +3,7 @@ import type { Enemy } from '../entities/enemy';
 import type { GroundItem } from '../entities/groundItem';
 import type { Game } from '../game';
 import type { DigitKind } from './digitGlyphs';
-import { isDigitText, paintDigits } from './digitText';
+import { isDigitText, paintDigits, preloadDigits } from './digitText';
 
 interface Floater {
   el: HTMLElement;
@@ -30,6 +30,7 @@ export class WorldText {
   private layerBars: HTMLElement;
 
   constructor(private root: HTMLElement, private g: Game) {
+    preloadDigits();
     this.layerBars = this.layer();
     this.layerLabels = this.layer();
     this.layerNums = this.layer();

@@ -43,3 +43,8 @@ export function paintDigits(el: HTMLElement, text: string, kind: DigitKind) {
     el.appendChild(d);
   }
 }
+
+/** Start loading every atlas so the first number of a session never shows an empty box. */
+export function preloadDigits() {
+  for (const set of Object.values(DIGIT_SETS)) new Image().src = set.file;
+}
