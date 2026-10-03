@@ -1,9 +1,10 @@
 """Dragons: Drakeling (minion), Cinderwing (boss) and the Ember Whelp pet.
 
 Blocky, modular build: bodies are stacked chamfered slabs (hips, belly, chest, withers), necks and tails are
-chains of shrinking boxes, heads are a box skull with a tapered box snout and jaw, legs are box segments,
-horns and claws are angled wedge segments. Only the bat-wing membranes, the whelp's flame and the glowing cracks
-are flat faceted panels. The drakeling and Cinderwing follow their approved concept sheets (docs/concepts). Faces +Z; right-side parts (legFR/legBR/wingR) at -X, left at +X. Rig names match
+chains of shrinking boxes (Cinderwing's tail one smooth eight-sided taper cut into mitred segments), heads are a box
+skull with a tapered snout and jaw (the drakeling's carved as one solid), legs are box segments standing in paws whose
+claws grow out of the toes, horns are angled wedge segments. Only the bat-wing membranes, the whelp's flame and the
+glowing cracks are flat faceted panels. The drakeling and Cinderwing follow their approved concept sheets (docs/concepts). Faces +Z; right-side parts (legFR/legBR/wingR) at -X, left at +X. Rig names match
 src/render/anim.ts: body, neck1.., head, jaw, tail1.., wingL/wingR, legFL/legFR/legBL/legBR, all under a
 scaled 'inner' empty (the animation's flight lift and bob are in that scaled space).
 """
@@ -168,8 +169,9 @@ def finish(scene_name, file_name):
 
 # ─── Parts for the drakeling and Cinderwing (their approved sheets, October 3) ──
 # Both are built from docs/concepts/drakeling.jpg and cinderwing.jpg: chamfered block bodies in a leather harness with
-# gilt fittings, one eye a side sunk in a socket of blocks (a brow ridge above it, a cheek below, a wall in front) so
-# it reads only from the side and the brow never covers it, and raised bat wings rooted on the shoulder blades.
+# gilt fittings, one eye a side sunk in a socket (carved into the drakeling's one-piece skull; walled with blocks on
+# Cinderwing: a brow ridge above it, a cheek below, a wall in front) so it reads only from the side and the brow never
+# covers it, paws with toes and claws, and raised bat wings rooted on the shoulder blades.
 
 def obox(parent, size, centre, xdir, ydir, color, bevel=0.0, taper=None, emissive=None, strength=2.0):
     """Box whose local X and Y run along `xdir` and `ydir` (Y is squared up to X; Z completes the frame)."""
@@ -181,10 +183,11 @@ def obox(parent, size, centre, xdir, ydir, color, bevel=0.0, taper=None, emissiv
                emissive=emissive, strength=strength)
 
 
-def crack(parent, origin, u, n, length, w, rng, steps=5, branches=1, color=0xFFB848):
+def crack(parent, origin, u, n, length, w, rng, steps=5, branches=1, color=0xFFB848, path=None):
     """A glowing crack across a flat face (outward normal `n`): a jagged path from `origin` along `u`, each step kinked
     sideways at random, thinning toward its end, with short forks. Drawn as one thin ribbon lying just off the face
-    (two triangles a segment), so a boss covered in cracks stays inside its triangle budget."""
+    (two triangles a segment), so a boss covered in cracks stays inside its triangle budget. The path's points are
+    added to the list `path`, if given, so other cracks can fork off it."""
     origin, u, n = Vector(origin), Vector(u).normalized(), Vector(n).normalized()
     v = n.cross(u)
     step = length / steps
@@ -193,6 +196,8 @@ def crack(parent, origin, u, n, length, w, rng, steps=5, branches=1, color=0xFFB
     for i in range(steps):
         side = -side if rng.random() < 0.75 else side
         pts.append(pts[-1] + u * step * rng.uniform(0.7, 1.3) + v * side * step * rng.uniform(0.25, 0.7))
+    if path is not None:
+        path.extend(pts)
     segs = [(a, b, w * (1 - 0.5 * i / steps)) for i, (a, b) in enumerate(zip(pts, pts[1:]))]
     for k in range(branches):
         i = rng.randint(1, steps - 1)
@@ -205,6 +210,104 @@ def crack(parent, origin, u, n, length, w, rng, steps=5, branches=1, color=0xFFB
         x = n.cross(d) * (ww / 2)
         bm.faces.new([bm.verts.new(q) for q in (a - x, b - x, b + x, a + x)])
     return _common._mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color, GLOW_E, GLOW_S)
+
+
+def oct_ring(c, xd, yd, w, h, k=0.28):
+    """Eight points round centre `c` in the plane of the unit directions `xd` (across) and `yd` (up): a w x h rectangle
+    with its corners cut by k of its smaller side, in order round the ring."""
+    c, xd, yd = Vector(c), Vector(xd).normalized(), Vector(yd).normalized()
+    a, b, e = w / 2, h / 2, k * min(w, h)
+    if not k:   # square corners: just the four
+        return [c + xd * x + yd * y for x, y in ((a, -b), (a, b), (-a, b), (-a, -b))]
+    return [c + xd * x + yd * y for x, y in ((a, e - b), (a, b - e), (a - e, b), (e - a, b), (-a, b - e), (-a, e - b),
+                                             (e - a, -b), (a - e, -b))]
+
+
+def loft(parent, rings, color, emissive=None, strength=2.0):
+    """Closed solid through rings of points (each the same count, in the same order round), capped flat at both ends; a
+    ring of one point ends the solid in a tip there. Rings that are scaled and shifted copies of each other give flat
+    faces between them."""
+    bm = bmesh.new()
+    vs = [[bm.verts.new(Vector(p)) for p in r] for r in rings]
+    for r0, r1 in zip(vs, vs[1:]):
+        if len(r0) == 1 or len(r1) == 1:
+            ring, tip = (r1, r0[0]) if len(r0) == 1 else (r0, r1[0])
+            for i in range(len(ring)):
+                bm.faces.new((ring[i], ring[(i + 1) % len(ring)], tip))
+            continue
+        for i in range(len(r0)):
+            j = (i + 1) % len(r0)
+            bm.faces.new((r0[i], r0[j], r1[j], r1[i]))
+    for r in (vs[0], vs[-1]):
+        if len(r) > 2:
+            bm.faces.new(r)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _common._mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color, emissive, strength)
+
+
+def carve(base, *cutters):
+    """Cut the cutters out of `base` (exact boolean difference) and remove them: sockets and nostrils sunk into one solid
+    skull, with no separate blocks stuck on round them."""
+    bpy.context.view_layer.update()
+    for o in cutters:
+        m = base.modifiers.new('carve', 'BOOLEAN')
+        m.operation = 'DIFFERENCE'
+        m.solver = 'EXACT'
+        m.object = o
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(base.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+    for p in me.polygons:
+        p.use_smooth = False
+    old = [base.data] + [o.data for o in cutters]
+    base.modifiers.clear()
+    base.data = me
+    for o in cutters:
+        bpy.data.objects.remove(o, do_unlink=True)
+    for m in old:
+        bpy.data.meshes.remove(m)
+    return base
+
+
+def talon(parent, root, fwd, w, h, reach, ground, color):
+    """Hooked claw growing out of a toe's front face, pointing along the level direction `fwd`: `root` is the middle of
+    its underside where it leaves the toe. A blocky wedge `w` wide and `h` tall there, its top curving down to a point on
+    the ground (y = `ground`) `reach` ahead. Its sections stand square to `fwd`, so every face is flat."""
+    root, f = Vector(root), Vector(fwd).normalized()
+    x, up = Vector((0, 1, 0)).cross(f).normalized(), Vector((0, 1, 0))
+    at = lambda d, y: Vector((root.x, ground + y, root.z)) + f * d
+    lo = root.y - ground
+    return loft(parent, [oct_ring(at(-0.03, lo + h / 2), x, up, w, h, 0),
+                         oct_ring(at(reach * 0.5, lo * 0.4 + h * 0.35), x, up, w * 0.85, h * 0.7, 0),
+                         oct_ring(at(reach, h * 0.15 + 0.004), x, up, w * 0.55, h * 0.3, 0)], color)   # blunt tip
+
+
+def paw(l, g, z, r, main, toe, claw, claw_k=1.0):
+    """Paw on the ground (y = g) under a leg whose ankle is at depth z: a chamfered block the leg stands in, the main mass
+    of the foot, with three toe knuckles across its front (the outer two splayed a little) and a hooked claw growing out
+    of each toe, narrower and lower than the toe it grows from (`claw_k` sizes the claws). Returns the paw's height."""
+    pw, ph, pl = 0.22 * r, 0.11 * r, 0.24 * r
+    cz = z + 0.03 * r
+    box(l, (pw, ph, pl), (0, g + ph / 2, cz), main, bevel=0.024 * r)
+    front = cz + pl / 2
+    tw, th, tl = 0.3 * pw, 0.76 * ph, 0.42 * pl
+    for k in (-1, 0, 1):
+        a = k * 0.17
+        f = Vector((math.sin(a), 0, math.cos(a)))
+        c = Vector((k * pw * 0.33, g + th / 2, front + tl * (0.56 if k == 0 else 0.46) - tl / 2))
+        box(l, (tw, th, tl), tuple(c), toe, rot=(0, a, 0), bevel=0, taper=(0.8, 0.55))   # knuckle: top drawn in
+        foot = c + f * (0.3 * tl)   # the claw's root, back inside the toe's sloping front
+        talon(l, (foot.x, g + th * 0.1, foot.z), f, tw * 0.72 * claw_k, th * 0.5 * claw_k, th * 0.7 * claw_k + 0.2 * tl, g, claw)
+    return ph
+
+
+def level_band(l, a, b, y, w, d, taper, color, length):
+    """Gilt bracelet hugging the leg beam a->b (`w` x `d` across, its far end `taper` of that) at height y: a level
+    collar, long enough front to back to close round the beam where it slants."""
+    a, b = Vector(a), Vector(b)
+    t = (a.y - y) / (a.y - b.y)
+    slant = abs((b - a).normalized().y)
+    k = 1 - (1 - taper) * t
+    box(l, (w * k * 1.14, length, d * k * 1.14 / slant), tuple(a.lerp(b, t)), color, bevel=0.012)
 
 
 def band(parent, a, b, t, w, d, color, length=0.07):
@@ -299,16 +402,18 @@ def raised_wing(body, side, pos, span, bone, skin, cap, claw, root_at, thick=1.0
     return wing
 
 
-def limb(inner, name, pos, main, pad, claw, r=1.0, back=False, toes=3, foot=None, gilt=None, glow=None, rng=None):
-    """Blocky leg on a hip/shoulder pivot, the foot block's sole on the ground (y = -pos.y in pivot space): a dark pad on
-    the outside of the elbow or knee, big wedge claws, and optionally a gilt band round the ankle (`gilt`) and a glowing
-    crack down the outside of the upper leg (`glow`, a colour)."""
+def limb(inner, name, pos, main, pad, claw, r=1.0, back=False, toe=None, gilt=None, glow=None, rng=None, claw_k=1.0):
+    """Blocky leg on a hip/shoulder pivot, standing in a paw on the ground (y = -pos.y in pivot space): a dark pad on the
+    outside of the elbow or knee, the paw with its toes (`toe`, a colour, else the leg's) and claws (`claw_k` sizes them),
+    and optionally a gilt band round the leg just above the paw (`gilt`) and a glowing crack down the outside of the
+    upper leg (`glow`)."""
     l = pivot(inner, name, pos)
     g = -pos[1]
     s = 1 if pos[0] > 0 else -1
-    if back:   # a heavy thigh slab forward to the knee, shin back to the hock, then down
-        top, joint, low = Vector((0, 0.12, -0.02 * r)), Vector((0, -0.24, 0.13 * r)), Vector((0, g + 0.3, -0.08 * r))
-        ankle = Vector((0, g + 0.13, 0.0))
+    if back:   # a heavy thigh slab forward to the knee, shin back to the hock, then straight down to the paw
+        top, joint = Vector((0, 0.12, -0.02 * r)), Vector((0, -0.24, 0.13 * r))
+        low = Vector((0, g + 0.3 + 0.06 * (r - 1), -0.08 * r))
+        ankle = Vector((0, g + 0.13, low.z))
         beam(l, top, joint, 0.34 * r, 0.42 * r, main, taper=(0.62, 0.55), over=0.06, bevel=0.03)
         beam(l, joint, low, 0.18 * r, 0.17 * r, main, taper=(0.85, 0.85), over=0.08, bevel=0.02)
         beam(l, low, ankle, 0.15 * r, 0.14 * r, main, taper=(0.95, 0.95), over=0.06)
@@ -320,16 +425,12 @@ def limb(inner, name, pos, main, pad, claw, r=1.0, back=False, toes=3, foot=None
         beam(l, joint, ankle, 0.19 * r, 0.19 * r, main, taper=(0.9, 0.9), over=0.08, bevel=0.02)
         uw = 0.28 * r * 0.68
     box(l, (0.05 * r, 0.14 * r, 0.17 * r), (s * (uw / 2 + 0.02 * r), joint.y, joint.z), pad, bevel=0)  # pad
-    fz = ankle.z + 0.04 * r
-    box(l, (0.27 * r, 0.12, 0.3 * r), (0, g + 0.06, fz), foot or main, bevel=0.02)
-    front = fz + 0.15 * r
-    for k in range(toes):
-        x = (k - (toes - 1) / 2) * 0.085 * r
-        beam(l, (x, g + 0.07, front - 0.06 * r), (x * 1.12, g + 0.012, front + 0.14 * r), 0.075 * r, 0.09 * r, claw,
-             taper=(0.35, 0.15))
-    if gilt is not None:
-        a, b = (low, ankle) if back else (joint, ankle)
-        band(l, a, b, 0.72, (0.15 if back else 0.19) * r * 1.22, (0.14 if back else 0.19) * r * 1.22, gilt, length=0.07 * r)
+    ph = paw(l, g, ankle.z, r, main, toe or main, claw, claw_k)
+    if gilt is not None:   # a level bracelet round the leg a little above the paw, with the leg showing between them
+        if back:
+            level_band(l, low, ankle, g + ph + 0.065, 0.15 * r, 0.14 * r, 0.95, gilt, 0.045 * r)
+        else:
+            level_band(l, joint, ankle, g + ph + 0.12, 0.19 * r, 0.19 * r, 0.9, gilt, 0.055 * r)
     if glow is not None:   # a crack across the outer face of the upper leg, near its top
         w0 = 0.34 * r * 0.88 if back else 0.28 * r * 0.9
         p = top.lerp(joint, 0.25)
@@ -344,8 +445,8 @@ MOUTH = 0x3A0E0A
 # ─── Drakeling (docs/concepts/drakeling.jpg) ──────────────────────────────────
 
 def drakeling():
-    """A young red dragon in a harness: bright red chamfered blocks, a cream jaw, throat and belly, dark red brow, spikes,
-    pads and wing bones, cream horns and claws, a leather girth and breast collar with gilt buckles and hexagonal gilt
+    """A young red dragon in a harness: bright red chamfered blocks, a cream jaw, throat and belly, dark red brow lines,
+    spikes, pads and wing bones, cream horns and claws, a leather girth and breast collar with gilt buckles and hexagonal gilt
     shoulder plates, a pouch on the left flank, raised wings with gilt caps and an arrowhead tail with a gilt band."""
     main, dark, cream, horn_col = 0xCF3826, 0x861E1A, 0xE8C48E, 0xF2E2C4
     skin, gold, leather, pouch = 0xB42A20, 0xE6A83A, 0x5E3B26, 0x7A5036
@@ -353,7 +454,7 @@ def drakeling():
     inner = pivot(root, 'inner')
     inner.scale = (0.8, 0.8, 0.8)
     for name, x, z, back in (('legFL', 0.27, 0.36, False), ('legFR', -0.27, 0.36, False), ('legBL', 0.29, -0.42, True), ('legBR', -0.29, -0.42, True)):
-        limb(inner, name, (x, 0.68, z), main, dark, horn_col, r=1.0, back=back)
+        limb(inner, name, (x, 0.68, z), main, dark, horn_col, r=1.0, back=back, claw_k=1.25)   # big cream claws, as on its sheet
 
     body = pivot(inner, 'body', (0, 0.92, 0))
     box(body, (0.6, 0.54, 0.46), (0, 0.03, -0.46), main, bevel=0.06)                     # hips
@@ -390,22 +491,32 @@ def drakeling():
     last = segments(body, 'neck', 2, (0, 0.3, 0.66), (0.3, 0.3), (-0.7, -0.4), neck)
 
     head = pivot(last, 'head', (0, 0.02, 0.32), (0.75, 0, 0))
-    # The skull is built round the eye sockets: a core, a broader back of the head behind the eye, a cheek below it,
-    # a wall in front of it and a dark brow ridge above it; the eye sits on the core's side, inside those walls.
-    box(head, (0.4, 0.34, 0.5), (0, 0.13, 0.0), main, bevel=0.04)                     # core (eye floor at |x| 0.2)
-    box(head, (0.47, 0.3, 0.26), (0, 0.14, -0.11), main, bevel=0.04)                  # back of the head
-    box(head, (0.47, 0.13, 0.28), (0, 0.02, 0.16), main, bevel=0.03)                  # cheek, under the eye
-    box(head, (0.46, 0.13, 0.07), (0, 0.15, 0.275), main, bevel=0)                    # wall in front of the eye
-    beam(head, (0, 0.1, 0.2), (0, 0.085, 0.7), 0.36, 0.2, main, taper=(0.86, 0.86), bevel=0.035)   # snout
-    box(head, (0.26, 0.02, 0.38), (0, 0.014, 0.46), MOUTH, bevel=0)                    # roof of the mouth
+    # The head after its sheet, one solid with nothing stuck on: a deep cranium under a heavy brow that overhangs the
+    # eyes, and a long squared snout stepping down from it with two square nostrils cut into its front. An eye socket is
+    # sunk into each side under the brow, so the eye reads from the side only (the cranium's side stands in front of
+    # it); a dark brow line runs along the top of the socket. A deep cream jaw closes under the snout.
+    X, Y = Vector((1, 0, 0)), Vector((0, 1, 0))
+    skull = box(head, (0.44, 0.36, 0.5), (0, 0.12, -0.01), main, bevel=0.035)                       # cranium
+    brow = box(head, (0.5, 0.095, 0.37), (0, 0.2575, 0.115), main, bevel=0.03)                     # brow over the eyes
+    snout = loft(head, [oct_ring((0, 0.1, 0.2), X, Y, 0.36, 0.24, 0.14), oct_ring((0, 0.07, 0.74), X, Y, 0.31, 0.18, 0.14)], main)
+    union(skull, brow, snout)
+    carve(skull, *[box(head, (0.2, 0.127, 0.17), (s * 0.295, 0.1485, 0.12), main, bevel=0) for s in (-1, 1)],       # sockets
+          *[box(head, (0.05, 0.045, 0.08), (s * 0.07, 0.105, 0.74), main, bevel=0) for s in (-1, 1)])               # nostrils
+    box(head, (0.26, 0.009, 0.44), (0, -0.0255, 0.5), MOUTH, bevel=0)                    # roof of the mouth
     for s in (-1, 1):
-        beam(head, (s * 0.185, 0.27, -0.01), (s * 0.19, 0.255, 0.31), 0.1, 0.07, dark, taper=(0.7, 0.6), bevel=0.015)  # brow ridge
-        eye(head, s, 0.2, 0.15, 0.14, 0.085, 0.17, 0xF6BA38, 0x1A0A06, 0x3A0C08, glow=0xF0A020, strength=0.5)
-        box(head, (0.06, 0.016, 0.02), (s * 0.07, 0.045, 0.705), MOUTH, bevel=0)      # nostril: a low slit
+        box(head, (0.05, 0.045, 0.012), (s * 0.07, 0.105, 0.706), MOUTH, bevel=0)        # in the nostril
+        box(head, (0.012, 0.105, 0.17), (s * 0.201, 0.1375, 0.12), 0x3A0C08, bevel=0)     # socket floor, dark
+        box(head, (0.04, 0.034, 0.18), (s * 0.215, 0.195, 0.12), dark, bevel=0.006)     # brow line along its top
+        prism(head, [(-0.046, -0.026), (-0.046, 0.026), (-0.024, 0.05), (0.024, 0.05), (0.046, 0.026), (0.046, -0.026),
+                     (0.024, -0.05), (-0.024, -0.05)], 0.012, (s * 0.211, 0.133, 0.122), 0xF6BA38,
+              rot=(0, s * PI / 2, 0), emissive=0xF0A020, strength=0.5)                   # the eye
+        prism(head, [(0, 0.044), (0.01, 0), (0, -0.044), (-0.01, 0)], 0.008, (s * 0.219, 0.133, 0.13), 0x1A0A06,
+              rot=(0, s * PI / 2, 0))                                                  # its slit pupil
         horn(head, [(s * 0.12, 0.27, -0.06), (s * 0.17, 0.44, -0.28), (s * 0.21, 0.58, -0.5)], 0.12, horn_col, tip=0.12)
-    jaw = pivot(head, 'jaw', (0, -0.02, 0.18))
-    beam(jaw, (0, -0.02, -0.34), (0, -0.025, 0.5), 0.35, 0.11, cream, taper=(0.86, 0.8), bevel=0.03)
-    box(jaw, (0.24, 0.02, 0.44), (0, 0.028, 0.26), MOUTH, bevel=0)                    # floor of the mouth
+    jaw = pivot(head, 'jaw', (0, -0.035, 0.16))
+    loft(jaw, [oct_ring((0, -0.075, -0.38), X, Y, 0.42, 0.16, 0.16), oct_ring((0, -0.0675, 0.12), X, Y, 0.34, 0.145, 0.16),
+               oct_ring((0, -0.06, 0.56), X, Y, 0.28, 0.13, 0.16)], cream)
+    box(jaw, (0.24, 0.008, 0.42), (0, 0.01, 0.32), MOUTH, bevel=0)                      # floor of the mouth
 
     # Tail: three thinning segments with a spike each, then a dark cuff, a gilt band and a red arrowhead.
     def tail(t, i):
@@ -441,7 +552,7 @@ def cinderwing():
     inner.scale = (2.4, 2.4, 2.4)
     # Thick, short legs set wide under a barrel chest, big rounded shoulders and haunches.
     for name, x, z, back in (('legFL', 0.52, 0.5, False), ('legFR', -0.52, 0.5, False), ('legBL', 0.5, -0.56, True), ('legBR', -0.5, -0.56, True)):
-        limb(inner, name, (x, 0.7, z), main, dark, ivory, r=1.8 if back else 1.9, back=back, foot=dark, gilt=gold, glow=glow, rng=rng)
+        limb(inner, name, (x, 0.7, z), main, dark, ivory, r=1.8 if back else 1.9, back=back, toe=dark, gilt=gold, glow=glow, rng=rng)
 
     body = pivot(inner, 'body', (0, 0.96, 0))
     box(body, (1.0, 0.8, 0.6), (0, 0.06, -0.6), main, bevel=0.12)                      # hips
@@ -451,11 +562,35 @@ def cinderwing():
     for s in (-1, 1):
         box(body, (0.34, 0.56, 0.66), (s * 0.62, 0.22, 0.42), main, rot=(-0.18, 0, 0), bevel=0.13)  # rounded shoulder
         box(body, (0.3, 0.56, 0.62), (s * 0.55, 0.08, -0.62), main, bevel=0.12)                   # rounded haunch
-    yd, zd = (0, 0.984, -0.179), (0, 0.179, 0.984)   # the chest's local Y and Z (it is turned -0.18 about X)
-    C = lambda y, z: Vector((0, 0.16, 0.42)) + Vector(yd) * y + Vector(zd) * z   # a point in the chest's frame
-    # A big ivory bib across the chest, broad under the neck and narrowing toward the belly, and an ivory belly plate.
-    obox(body, (0.95, 0.9, 0.09), C(-0.05, 0.37), (1, 0, 0), -Vector(yd), ivory, taper=(0.62, 1.0), bevel=0.03)
-    box(body, (0.76, 0.08, 0.9), (0, -0.44, -0.06), ivory, bevel=0.025)
+    yd, zd = Vector((0, 0.984, -0.179)), Vector((0, 0.179, 0.984))   # the chest's local Y and Z (it is turned -0.18 about X)
+    C = lambda x, y, z: Vector((x, 0.16, 0.42)) + yd * y + zd * z     # a point in the chest's frame (its front face at z 0.36)
+
+    def wrap(top, bottom, front, side, color, lift=(0.015, 0.06), thick=0.07, shrink=0.94):
+        """Band wrapping round the chest's front between the heights `top` and `bottom` of the chest's frame: a flat front
+        `front` wide with its ends turned back at 45 degrees for `side` more each way. Its outer face stands `lift[0]` off
+        the chest at the top and `lift[1]` at the bottom, so a scute's lower edge stands proud over the next one; the lower
+        edge is the upper one scaled by `shrink`, so every face stays flat."""
+        def ring(y, n0, k):
+            b, a, t = front / 2, front / 2 + side, thick
+            pts = ((-a, -side), (-b, 0), (b, 0), (a, -side), (a - 0.7 * t, -side - 0.7 * t), (b - 0.4 * t, -t),
+                   (0.4 * t - b, -t), (0.7 * t - a, -side - 0.7 * t))
+            return [C(k * u, y, n0 + k * n) for u, n in pts]
+        return loft(body, [ring(top, 0.36 + lift[0], 1.0), ring(bottom, 0.36 + lift[1], shrink)], color)
+
+    # The chest after its sheet: the furnace glows through cracks down the throat, and below it ivory scutes wrap round
+    # the front of the chest from under the neck down between the forelegs, narrowing as they go, each plate's lower edge
+    # standing proud over the next (the lower ones stay clear of the swinging forelegs); the last turns under the chest
+    # along its lower edge and more carry on under the belly, so the ivory runs on unbroken. Cracks in the upper chest,
+    # under the neck's root, glow when the neck rears back to breathe.
+    wrap(0.06, -0.17, 0.64, 0.2, ivory)
+    wrap(-0.13, -0.34, 0.54, 0.08, ivory)
+    wrap(-0.3, -0.48, 0.42, 0.05, ivory)
+    wrap(-0.44, -0.6, 0.36, 0.03, ivory, lift=(0.03, -0.1))
+    for k, z in enumerate((0.56, 0.24, -0.08)):
+        box(body, (0.38 - 0.04 * k, 0.07, 0.36), (0, -0.445, z), ivory, rot=(-0.08, 0, 0), bevel=0.02)  # belly scutes
+    crng = random.Random(5)   # its own stream, so the cracks elsewhere keep their shapes
+    for x, ux, length, w, branches in ((-0.04, 0.12, 0.3, 0.05, 2), (-0.26, -0.5, 0.22, 0.038, 1), (0.22, 0.45, 0.24, 0.038, 1)):
+        crack(body, C(x, 0.42, 0.36), Vector((ux, 0, 0)) - yd, zd, length, w, crng, steps=4, branches=branches, color=glow)
     for z, y, h in ((0.5, 0.74, 0.28), (0.12, 0.6, 0.27), (-0.22, 0.55, 0.25), (-0.5, 0.46, 0.22), (-0.78, 0.42, 0.18)):
         dorsal(body, (0, y, z), h, 0.06, 0.15, 0.25, crystal)                          # red crystals down the spine
     # Furnace cracks across each shoulder, flank and haunch.
@@ -463,15 +598,18 @@ def cinderwing():
         crack(body, (s * 0.795, 0.3, 0.58), (0, -0.5, -1), (s, 0, 0), 0.36, 0.05, rng, steps=4, color=glow)
         crack(body, (s * 0.606, 0.0, 0.26), (0, 0.3, -1), (s, 0, 0), 0.3, 0.045, rng, steps=3, branches=0, color=glow)
         crack(body, (s * 0.706, 0.2, -0.44), (0, -0.5, -1), (s, 0, 0), 0.32, 0.04, rng, steps=3, branches=0, color=glow)
-    # Harness: a girth behind the forelegs, a strap across the bib with a gilt buckle whose ends turn back into the
-    # shoulders, and a saddle pack on each flank behind the girth, below the wing.
+    # Harness: a girth behind the forelegs; a breast strap wrapping the scutes, with a square gilt buckle (a raised boss in
+    # a gilt plate) at each front corner, its ends running back under the shoulders; and a saddle pack on each flank
+    # behind the girth, below the wing.
     box(body, (1.24, 1.1, 0.13), (0, 0.06, 0.04), leather, bevel=0.03)                                     # girth
-    obox(body, (1.0, 0.13, 0.06), C(0.1, 0.43), (1, 0, 0), yd, leather)                                   # chest strap
-    obox(body, (0.18, 0.18, 0.07), C(0.1, 0.445), (1, 0, 0), yd, gold, bevel=0.01)                        # buckle
-    obox(body, (0.09, 0.09, 0.07), C(0.1, 0.46), (1, 0, 0), yd, leather)
+    wrap(-0.115, -0.235, 0.6, 0.16, leather, lift=(0.08, 0.08), thick=0.06, shrink=1.0)                    # breast strap
     for s in (-1, 1):
-        a, b = C(0.1, 0.43) + Vector((s * 0.49, 0, 0)), C(0.1, 0.24) + Vector((s * 0.62, 0, 0))
-        beam(body, a, b, 0.06, 0.13, leather, over=0.06)                                                  # strap end
+        n = Vector((s * 0.38, 0, 0.92))                                    # halfway round the strap's corner (chest frame)
+        out = (n.x * Vector((1, 0, 0)) + n.z * zd).normalized()
+        across = (n.z * Vector((1, 0, 0)) - n.x * zd).normalized()
+        at = C(s * 0.3, -0.175, 0.44) + out * 0.005
+        obox(body, (0.17, 0.05, 0.17), at, across, out, gold, bevel=0.012)                               # buckle plate
+        obox(body, (0.085, 0.05, 0.085), at + out * 0.04, across, out, gold, taper=(0.35, 0.35))        # its boss
         box(body, (0.04, 0.17, 0.17), (s * 0.635, 0.24, 0.04), gold, bevel=0)                            # girth buckle
         box(body, (0.04, 0.08, 0.08), (s * 0.645, 0.24, 0.04), leather, bevel=0)
         box(body, (0.14, 0.32, 0.28), (s * 0.62, 0.08, -0.2), leather, bevel=0.02)                      # saddle pack
@@ -484,10 +622,19 @@ def cinderwing():
         w = 0.4 - i * 0.03
         beam(n, (0, 0, -0.14), (0, 0, 0.5), 2 * w, 2 * w, main, taper=((w - 0.03) / w,) * 2, bevel=0.04)
         dorsal(n, (0, w - 0.01, 0.12), 0.2, 0.05, 0.11, 0.2, crystal)
+        k = 0.03 / 0.64   # the neck's faces lean in as it tapers; the cracks lie along them
         if i < 3:   # a crack running up the throat, and one up a side
-            crack(n, (0.03, -w + 0.006, -0.1), (0, 0, 1), (0, -1, 0), 0.5, 0.042, rng, steps=4, branches=0, color=glow)
+            trunk = []
+            crack(n, (0.03, -w + 0.003 + k * 0.04, -0.1), (0, k, 1), (0, -1, k), 0.5, 0.042, rng, steps=4, branches=0,
+                  color=glow, path=trunk)
             s = 1 if i == 1 else -1
-            crack(n, (s * (w - 0.006), -w * 0.6, 0.02), (0, 0.45, 1), (s, 0, 0), 0.36, 0.035, rng, steps=3, branches=0, color=glow)
+            crack(n, (s * (w - 0.003 - k * 0.16), -w * 0.6, 0.02), (-s * k, 0.45, 1), (s, 0, k), 0.36, 0.035, rng, steps=3,
+                  branches=0, color=glow)
+        if i == 1:  # and forks off the throat crack over the top scute, so the furnace glows through a network, as on the sheet
+            for j, s in ((1, -1), (2, 1), (3, -1)):
+                p = trunk[j]
+                crack(n, (p.x, -w + 0.003 + k * (p.z + 0.14), p.z), (s * 0.85, k, 1), (0, -1, k), 0.4 - 0.05 * j, 0.034, crng,
+                      steps=3, branches=1 if j < 3 else 0, color=glow)
     # The neck rises high out of the top of the chest, so the head is carried up and the bib shows under it.
     last = segments(body, 'neck', 3, (0, 0.6, 0.62), (0.44, 0.44, 0.44), (-0.55, -0.35, -0.15), neck)
 
@@ -517,13 +664,31 @@ def cinderwing():
     beam(jaw, (0, -0.02, -0.4), (0, -0.012, 0.62), 0.5, 0.15, main, taper=(0.82, 0.8), bevel=0.03)
     box(jaw, (0.32, 0.02, 0.54), (0, 0.048, 0.27), 0xE8601C, bevel=0, emissive=0xC03A0A, strength=1.2)   # molten floor of the mouth
 
+    # Tail: six segments in one smooth taper from the hips to a fine tip, eight-sided with a flat top. Each segment
+    # starts the size the one before ends and the joints are mitred (both ends cut on the plane halfway between the two
+    # segments), so at rest it reads as one tapering piece; a sleeve at each segment's root, inside the one before, fills
+    # the joint when the tail swings. It droops from the hips and lifts toward the tip, red crystals stand along its top,
+    # shrinking toward the tip, and it ends in a gilt cuff and an ivory spike.
+    TW = (0.64, 0.54, 0.45, 0.37, 0.3, 0.235, 0.175)   # width at each joint, root to tip (height 0.86 of it)
+    TL = (0.42, 0.4, 0.38, 0.36, 0.34, 0.32)
+    TR = (-0.5, 0.15, 0.2, 0.2, 0.17, 0.13)            # each segment's turn from the one before (about X)
+    X, Y = Vector((1, 0, 0)), Vector((0, 1, 0))
+
+    def section(z, w, cut=0.0):   # the section w wide at depth z, on a plane tilted `cut` radians about X
+        return [p + Vector((0, 0, p.y * math.tan(cut))) for p in oct_ring((0, 0, z), X, Y, w, w * 0.86, 0.3)]
+
     def tail(t, i):
-        w = 0.38 - (i - 1) * 0.05
-        beam(t, (0, 0, 0.1), (0, 0, -0.42), 2 * (w + 0.02), 2 * (w + 0.02), main, taper=((w - 0.03) / (w + 0.02),) * 2, bevel=0.03)
-        dorsal(t, (0, w, -0.18), 0.2 - i * 0.02, 0.05, 0.11 - i * 0.008, 0.2 - i * 0.015, crystal)
-    last = segments(body, 'tail', 5, (0, 0.08, -0.84), (-0.38,) * 4, (0.16, 0.05, 0.02, -0.04, -0.06), tail)
-    box(last, (0.22, 0.21, 0.07), (0, 0, -0.4), gold, bevel=0)                                    # gilt band
-    beam(last, (0, 0, -0.42), (0, 0.02, -0.86), 0.21, 0.21, ivory, taper=(0.06, 0.06))           # ivory spike
+        w0, w1, L = TW[i - 1], TW[i], TL[i - 1]
+        sleeve = section(0.22 if i == 1 else 0.5 * w0, w0 * 0.9)
+        loft(t, [sleeve, section(0, w0, -TR[i - 1] / 2 if i > 1 else 0.0), section(-L, w1, TR[i] / 2 if i < 6 else 0.0)], main)
+        wm = (w0 + w1) / 2
+        dorsal(t, (0, 0.43 * wm - 0.005, -L * (0.62 if i == 6 else 0.5)), 0.08 + 0.45 * wm, 0.07, 0.03 + 0.36 * wm, 0.45 * L,
+               crystal)
+    last = segments(body, 'tail', 6, (0, 0.1, -0.84), [-v for v in TL[:-1]], TR, tail)
+    e, we = -TL[-1], TW[-1]
+    loft(last, [section(e + 0.035, we * 1.24), section(e - 0.065, we * 1.24)], gold)                     # gilt cuff
+    # A chunky faceted spike, as wide as the cuff where it leaves it and swelling a little before it narrows to a point.
+    loft(last, [section(e - 0.03, we * 1.2), section(e - 0.13, we * 1.22), [Vector((0, 0.012, e - 0.44))]], ivory)
 
     for side, s in (('L', 1), ('R', -1)):
         raised_wing(body, side, (s * 0.44, 0.6, 0.24), 2.3, dark, skin, gold, ivory, (s * 0.36, 0.43, -0.62), thick=0.75,
