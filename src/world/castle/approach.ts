@@ -48,7 +48,7 @@ export function climbFlights(): Flight[] {
 }
 
 /** How far up a flight a point lies (0 at its foot), and how far across it from its middle. */
-export const alongFlight = (f: Flight, x: number, z: number) => (x - f.foot.x) * f.up.x + (z - f.foot.z) * f.up.z;
+const alongFlight = (f: Flight, x: number, z: number) => (x - f.foot.x) * f.up.x + (z - f.foot.z) * f.up.z;
 const acrossFlight = (f: Flight, x: number, z: number) => (x - f.foot.x) * f.across.x + (z - f.foot.z) * f.across.z;
 /** How far up a flight its last riser stands (a tread for every riser but the last). */
 export const headOf = (f: Flight) => (f.risers - 1) * f.tread;
@@ -92,7 +92,7 @@ function stairLevel(x: number, z: number): number | null {
 export function levels(s: Site) {
   for (const box of [APPROACH.ledgeRoad, APPROACH.ledgeWalk, APPROACH.gateTerrace]) s.ground(box, CROWN_Y, Ground.Stone);
   for (const poly of [APPROACH.landing, APPROACH.lookout]) s.within(poly, (i) => s.open(i, CROWN_Y, Ground.Stone));
-  // The bridge's cells (the moat is laid under it once the moat is dug: see bridge()).
+  // The bridge's cells: the moat skips them, and bridge() lays its water under the arches afterwards.
   s.ground([BRIDGE.x0 - 0.5, CURTAIN.south + CURTAIN.T / 2 - 0.1, BRIDGE.x1 + 0.5, BRIDGE.z1], CROWN_Y, Ground.Cave);
   s.pave([BRIDGE.deck[0], CURTAIN.south, BRIDGE.deck[1], BRIDGE.z1]);
   // The crown runs on solid under every wall along the brink (the cliff starts a cell beyond its
@@ -291,17 +291,18 @@ function bridge(s: Site) {
   const { G } = s, a0 = BRIDGE.arches[0][0], a1 = BRIDGE.arches[BRIDGE.arches.length - 1][1];
   const x0 = Math.floor(BRIDGE.x0 - 0.5), x1 = Math.ceil(BRIDGE.x1 + 0.5), z0 = CURTAIN.south + CURTAIN.T / 2;
   for (let z = Math.floor(z0); z < BRIDGE.z1; z++) {
-    // The moat as it lies beside the bridge in this row.
-    const side = G.idx(x0 - 1, z);
-    if (!G.l.fluid[side]) continue;
+    // The moat as it lies beside the bridge in this row (at whatever level the moat is laid: the
+    // deck is walked at the crown's level over it).
+    const side = G.idx(x0 - 1, z), wet = !!G.l.fluid[side];
     for (let x = x0; x < x1; x++) {
       const i = G.idx(x, z);
+      // (The deck's cells stay walkable over the water; the parapets' stand blocked.)
+      if (x >= BRIDGE.deck[0] && x < BRIDGE.deck[1]) G.l.cells[i] = Cell.Ground;
+      if (!wet) continue;
       if (z >= a0 && z < a1) G.l.fluid[i] = G.l.fluid[side];
       s.level[i] = s.level[side];
       G.l.ground[i] = Ground.Cave;
       G.l.elev[i] = 0;
-      // (The deck's cells stay walkable over the water; the parapets' stand blocked.)
-      if (x >= BRIDGE.deck[0] && x < BRIDGE.deck[1]) G.l.cells[i] = Cell.Ground;
     }
   }
   (G.l.decks ??= []).push({ box: [BRIDGE.x0 - 0.5, z0, BRIDGE.x1 + 0.5, BRIDGE.z1], y: CROWN_Y });

@@ -255,8 +255,13 @@ describe('Dragonspire Keep', () => {
     for (let z = a0; z < a1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) {
       const i = z * L.w + x;
       expect(L.fluid[i], `${x},${z}`).toBeGreaterThan(0);
-      expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(true);
     }
+    // The deck is walkable from the gate's passage to the terrace, the parapets' cells either side blocked.
+    for (let z = 100; z < BRIDGE.z1 + 1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(true);
+    for (let z = a0; z < a1; z++) for (const x of [BRIDGE.deck[0] - 1, BRIDGE.deck[1]]) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(false);
+    // (Its box covers the bridge alone: not the gate's passage nor the terrace's banners.)
+    expect(deck!.box[1]).toBeGreaterThanOrEqual(100.5);
+    expect(deck!.box[3]).toBeLessThanOrEqual(BRIDGE.z1);
   });
   it('a save made anywhere, the old castle included, loads with the hero on the walkable arrival dais', () => {
     // (Saves keep no position: every load enters the keep at its arrival dais.)

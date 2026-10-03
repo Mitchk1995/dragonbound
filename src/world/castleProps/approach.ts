@@ -305,9 +305,12 @@ export const GATE_FRONT_PROPS: Record<string, Builder> = {
     const body = new THREE.ExtrudeGeometry(shape, { depth: 2 * hw, bevelEnabled: false, curveSegments: 1 });
     body.applyMatrix4(new THREE.Matrix4().makeRotationY(-Math.PI / 2)).translate(hw, 0, 0);
     body.computeVertexNormals();
-    // (For the geometry audit: the abutments, the pier, and the spandrels over each arch's crown.)
-    const [[a0, a1], [b0, b1]] = o.arches;
-    body.userData.boxes = [[-hw, 0, o.z0, hw, D, a0], [-hw, 0, a1, hw, D, b0], [-hw, 0, b1, hw, D, o.z1], [-hw, S + (a1 - a0) / 2, a0, hw, D, a1], [-hw, S + (b1 - b0) / 2, b0, hw, D, b1]];
+    // (For the geometry audit: the abutments and the piers between the arches, and the spandrels over each arch's crown.)
+    const ends = [o.z0, ...o.arches.flat(), o.z1];
+    body.userData.boxes = [
+      ...Array.from({ length: ends.length / 2 }, (_, i) => [-hw, 0, ends[2 * i], hw, D, ends[2 * i + 1]]),
+      ...o.arches.map(([a, b]) => [-hw, S + (b - a) / 2, a, hw, D, b]),
+    ];
     k.mesh(g, body, ASHLAR, [0, 0, 0]);
     for (const sx of [-1, 1]) {
       // The voussoirs round each arch, flush on both faces.
@@ -316,9 +319,12 @@ export const GATE_FRONT_PROPS: Record<string, Builder> = {
       face.rotation.y = (sx * Math.PI) / 2;
       g.add(face);
       for (const [a, b] of o.arches) archRing(k, face, -sx * ((a + b) / 2), S, 0, b - a, (b - a) / 2, { rise: (b - a) / 2, n: 4, t: 0.3, p: 0.1, dep: 0.1 });
-      // The cutwater at this end of the pier, pointing into the stream, its cap sloping up to the face.
-      const yt = S + 0.2, c = (a1 + b0) / 2, x0 = sx * hw, x1 = sx * (hw + 1.0);
-      k.mesh(g, hull([[x0, 0, a1], [x0, 0, b0], [x1, 0, c], [x0, yt, a1], [x0, yt, b0], [x1, yt, c], [x0, yt + 0.7, c]]), ASHLAR, [0, 0, 0]);
+      // A cutwater at this end of each pier, pointing into the stream, its cap sloping up to the face.
+      const yt = S + 0.2, x0 = sx * hw, x1 = sx * (hw + 1.0);
+      for (let i = 0; i + 1 < o.arches.length; i++) {
+        const p0 = o.arches[i][1], p1 = o.arches[i + 1][0], c = (p0 + p1) / 2;
+        k.mesh(g, hull([[x0, 0, p0], [x0, 0, p1], [x1, 0, c], [x0, yt, p0], [x0, yt, p1], [x1, yt, c], [x0, yt + 0.7, c]]), ASHLAR, [0, 0, 0]);
+      }
       // The string course along the face under the parapet.
       cb(k, g, [0.24, COURSE, o.z1 - o.z0], [sx * (hw + 0.02), D - COURSE / 2, (o.z0 + o.z1) / 2], DRESS, undefined, 0.03);
     }
