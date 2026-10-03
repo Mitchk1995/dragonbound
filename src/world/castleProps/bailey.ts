@@ -195,6 +195,8 @@ export const BAILEY_PROPS: Record<string, Builder> = {
    * `opt.x0` off the Z axis, where that kerb stops), turns onto the circle and follows it round to `opt.xc` off
    * the Z axis, turns square across to the straight kerb at `opt.d1` and runs out along it to `opt.x1`,
    * where that kerb takes over: each lawn's edge one kerb, its corners square, never a sharp wedge.
+   * Where the circle meets the second straight kerb on its own line (`opt.x1` equal to `opt.xc`), it
+   * runs on along that line from the circle to `opt.d1`, where that kerb takes over.
    */
   kerb_ring: (k, g, arg) => {
     const r = lenOf(arg) ?? 10, o = (arg?.opt ?? {}) as { d0?: number; d1?: number; x0?: number; xc?: number; x1?: number };
@@ -208,7 +210,7 @@ export const BAILEY_PROPS: Record<string, Builder> = {
           return new THREE.Vector2(sx * r * Math.cos(a), sz * r * Math.sin(a));
         }),
         new THREE.Vector2(sx * xc, sz * d1),
-        new THREE.Vector2(sx * x1, sz * d1),
+        ...(x1 === xc ? [] : [new THREE.Vector2(sx * x1, sz * d1)]),
       ];
       // (Laid in the walks' kerb stones, one continuous border round the curve; for the audit, each
       // quarter's stretches are one kerb.)
@@ -373,33 +375,6 @@ export const BAILEY_PROPS: Record<string, Builder> = {
         });
       },
     };
-  },
-  /**
-   * The paddock's field shelter `len` wide (open to +Z, its back to -Z): a stone lean-to under a flat stone roof
-   * behind a low crenellated parapet, like the stable range; three open bays between stone piers, a
-   * hay rack along the back wall, straw on the floor.
-   */
-  field_shelter: (k, g, arg) => {
-    const W = lenOf(arg) ?? 6.8, D = 2.6, H = 3.0;
-    // (The side walls stand against the back wall's ends, not through them.)
-    cb(k, g, [W, H, 0.5], [0, H / 2, -D / 2 + 0.25], ASHLAR, undefined, 0.04);
-    for (const sx of [-1, 1]) cb(k, g, [0.5, H, D - 0.5], [sx * (W / 2 - 0.25), H / 2, 0.25], ASHLAR, undefined, 0.04);
-    for (const sx of [-1, 1]) cb(k, g, [0.5, H, 0.5], [sx * 1.15, H / 2, D / 2 - 0.25], ASHLAR, undefined, 0.04);
-    // The flat stone roof one course of the dressed stone, the parapet a course over it, its merlons.
-    cb(k, g, [W + 0.3, COURSE, D + 0.3], [0, H + COURSE / 2, 0.05], DRESS, undefined, 0.03);
-    cb(k, g, [W + 0.4, COURSE, 0.36], [0, H + 1.5 * COURSE, D / 2 + 0.05], ASHLAR, undefined, 0.03);
-    for (const sx of [-1, 1]) cb(k, g, [0.36, COURSE, D - 0.03], [sx * (W / 2 + 0.02), H + 1.5 * COURSE, -0.115], ASHLAR, undefined, 0.03);
-    // Merlons at one even spacing round the whole parapet (along its front and back along both
-    // returns), so it reads as one crenellated top, never a stub with a lone merlon.
-    for (let i = 0; i < 6; i++) cb(k, g, [0.6, 0.5, 0.4], [-W / 2 + 0.3 + (i * (W - 0.6)) / 5, H + 2.5 * COURSE, D / 2 + 0.05], ASHLAR, undefined, 0.04);
-    for (const sx of [-1, 1]) for (const z of [-D / 2 + 0.3, 0.05]) cb(k, g, [0.4, 0.5, 0.6], [sx * (W / 2 + 0.02), H + 2.5 * COURSE, z], ASHLAR, undefined, 0.04);
-    for (const sx of [-1, 1]) cb(k, g, [W - 0.8, 0.22, 0.12], [0, sx > 0 ? 0.9 : 0.12, -D / 2 + 0.56], WOOD_D, undefined, 0.02);
-    // The hay rack: slats leaning out from the back wall over a manger, hay heaped in it.
-    for (let i = 0; i < 12; i++) cb(k, g, [0.06, 1.0, 0.06], [-W / 2 + 0.9 + (i * (W - 1.8)) / 11, 1.6, -D / 2 + 0.75], WOOD, [0.35, 0, 0], 0.01);
-    cb(k, g, [W - 1.6, 0.1, 0.1], [0, 2.1, -D / 2 + 0.95], WOOD_D, undefined, 0.02);
-    for (let i = 0; i < Math.floor((W - 1.6) / 1.05); i++) chunk(k, g, 950 + i, [1.1, 0.5, 0.5], [-W / 2 + 1.3 + i * 1.05, 1.35, -D / 2 + 0.68], 0xd8b45a, i);
-    cb(k, g, [W - 1.0, 0.5, 0.5], [0, 0.25, -D / 2 + 0.75], WOOD_D, undefined, 0.03);
-    for (let i = 0; i < 3; i++) chunk(k, g, 960 + i, [1.3, 0.12, 0.9], [-1.5 + i * 1.5, 0.06, 0.4], 0xc8a048, i * 0.7);
   },
   /**
    * A field gate between two square stone piers (2.5 apart, centred on x = 0) with ball finials; the

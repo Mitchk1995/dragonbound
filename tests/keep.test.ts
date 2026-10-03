@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { RESTORATION_BY_ID } from '../src/data/keep';
 import { CASTLE_PLAN, KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
-import { cellRole, fitBlocks, fitsOf, inRoom, partitionRuns, sideLen, stairDest, stairRect, wallCell, wallRuns, type BuildingSpec, type Floor, type Stair } from '../src/world/building';
+import { cellRole, fitBlocks, fitsOf, flightsOf, inRoom, partitionRuns, raisedAt, sideLen, stairDest, stairProblems, stairRect, stairSteps, wallCell, wallRuns, type BuildingSpec, type Floor, type Stair } from '../src/world/building';
+import { CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
+import { newSave } from '../src/save/save';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
 import { distToPoly } from '../src/world/gen';
 import { Cell, Ground } from '../src/world/layout';
@@ -77,6 +79,30 @@ describe('building specs (pure)', () => {
     expect(cellRole(t, 16, 23, 0)).toBe('floor');
     expect(cellRole(t, 16, 23, 1)).toBe('wall');
   });
+  it('a stair that turns: the first flight\'s foot goes up, the last flight\'s head comes down, the rest is solid', () => {
+    const t: BuildingSpec = { ...b, w: 12, d: 12, storeyH: 5, wallH: 10, upper: { voids: [[6, 1, 11, 11]] }, stairs: [{ x: 5, z: 8, w: 2, len: 4, dir: 'w', land0: [9, 8], land1: [1, 3], turns: [{ landing: [1, 8, 5, 10], flight: { x: 1, z: 4, w: 2, len: 4, dir: 'n' } }] }] };
+    // Climbing west along z 8..9 from its foot at x 8, round the landing, north up x 1..2 to its head at z 4.
+    expect(cellRole(t, 18, 28, 0)).toBe('stair');
+    expect(cellRole(t, 16, 28, 0)).toBe('wall');
+    expect(cellRole(t, 12, 29, 0)).toBe('wall');
+    expect(cellRole(t, 11, 25, 0)).toBe('wall');
+    expect(cellRole(t, 11, 24, 1)).toBe('stair');
+    expect(cellRole(t, 18, 28, 1)).toBe('wall');
+    expect(stairDest(t, 18.5, 28.5, 0)).toEqual({ x: 11.5, z: 23.5, floor: 1, y: 5 });
+    expect(stairDest(t, 11.5, 24.5, 1)).toEqual({ x: 19.5, z: 28.5, floor: 0, y: 0 });
+    // Thirty risers of 16.7 cm, fifteen to each flight, the landing half way up.
+    const steps = stairSteps(t.stairs![0], 5);
+    expect(steps.map((q) => q.risers)).toEqual([15, 15]);
+    expect(steps[1].y0).toBeCloseTo(2.5, 6);
+    expect(stairProblems(t)).toEqual([]);
+    // The same climb in one flight breaks the rule: 30 risers between landings.
+    expect(stairProblems({ ...t, stairs: [{ ...t.stairs![0], turns: undefined }] }).length).toBeGreaterThan(0);
+  });
+  it('a raised part of the floor (a dais) stands up from the floor round it', () => {
+    const t: BuildingSpec = { ...b, raised: [{ rect: [2, 1, 5, 3], h: 0.5 }] };
+    expect(raisedAt(t, 13, 21)).toBe(0.5);
+    expect(raisedAt(t, 11, 21)).toBe(0);
+  });
   it('a room counts the floor and the doorway, not the street outside', () => {
     expect(inRoom(b, 14, 22)).toBe(true);
     expect(inRoom(b, 14, 25.5)).toBe(true);
@@ -110,49 +136,95 @@ describe('Dragonspire Keep', () => {
       expect(d.at + d.w, b.id).toBeLessThanOrEqual(sideLen(b, d.side) - 2);
     }
   });
-  it('the residence range is two storeys round a hall open to its roof, with battlements and upper windows', () => {
+  it('the great keep is two storeys round a throne hall open to its battlements, its galleries at the wall walk', () => {
     const k = B.keep;
-    expect(k.storeyH).toBeLessThan(k.wallH - 3);
+    expect(k.storeyH).toBeLessThan(k.wallH - 10);
+    expect(k.wallH + TERRACE_Y).toBeGreaterThan(CROWN_Y + 26);
+    expect(Math.abs(TERRACE_Y + k.storeyH! - (CROWN_Y + 7.06))).toBeLessThan(0.1);
     expect(k.windows.some((w) => w.floor === 1)).toBe(true);
     expect(k.upper?.voids?.length).toBeGreaterThan(0);
     const p = buildBuilding(k), box = new THREE.Box3().setFromObject(p.obj);
-    expect(box.max.y).toBeGreaterThan(k.wallH + 4);
+    expect(box.max.y).toBeGreaterThan(k.wallH + 1);
   });
-  it('the castle stands level on the crown, its curtain closing the bailey; the gate and the avenue lead to the hall\'s great door', () => {
-    // The bailey is level with the crown (+11): across the cour d'honneur and the training yard.
+  it('the castle stands level on the crown, the north range and the keep on the terrace; the way in climbs the stair, crosses the bridge and runs up the avenue to the great door', () => {
     let inside = 0;
-    for (const [cx, cz] of [[70, 56], [98, 62]]) for (let z = cz - 6; z <= cz + 6; z++) for (let x = cx - 6; x <= cx + 6; x++) {
+    for (const [cx, cz] of [[60, 90], [92, 90]]) for (let z = cz - 5; z <= cz + 5; z++) for (let x = cx - 5; x <= cx + 5; x++) {
       const i = z * L.w + x;
       if (L.cells[i] !== Cell.Ground) continue;
-      expect(L.level![i], `${x},${z}`).toBe(11);
+      expect(L.level![i], `${x},${z}`).toBe(CROWN_Y);
       inside++;
     }
     expect(inside).toBeGreaterThan(100);
+    for (const [x, z] of [[50, 40], [100, 40], [76, 44]]) expect(L.level![z * L.w + x], `terrace ${x},${z}`).toBe(TERRACE_Y);
     const k = B.keep, great = k.doors.find((d) => d.side === 's' && d.w === 4)!;
     const door = { x: k.x + great.at + great.w / 2, z: k.z + k.d + 0.5 };
     const path = nav.findPath(L.entry.x, L.entry.z, door.x, door.z)!;
     expect(path).not.toBeNull();
-    // On the way in it passes through the gate (its passage is four cells wide) and up the avenue.
+    // On the way in it climbs the stair, crosses the bridge, passes through the gate and up the avenue.
     const near = (g: { x: number; z: number }) => Math.min(...path.slice(1).map((q, i) => distToPoly(g.x, g.z, [path[i], q]).d));
-    for (const g of [{ x: 66, z: 100 }, { x: 66, z: 62 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(2.1);
-    // The curtain is shut elsewhere: a step through its north wall is blocked.
-    expect(nav.isWalkable(80, 22)).toBe(false);
+    for (const g of [{ x: 131, z: 128 }, { x: 125, z: 118 }, { x: 76, z: 105 }, { x: 76, z: 100 }, { x: 76, z: 62 }, { x: 76, z: 50 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(2.6);
+    // The curtain is shut elsewhere: a step through its north and west runs is blocked.
+    expect(nav.isWalkable(50, 21)).toBe(false);
+    expect(nav.isWalkable(32, 60)).toBe(false);
   });
   it('the castle is laid out on one axis: the great door, the gate and the dragon fountain', () => {
     const k = B.keep, great = k.doors.find((d) => d.side === 's' && d.w === 4)!;
     const gate = L.props.find((p) => p.kind === 'outer_gatehouse')!, fountain = L.props.find((p) => p.kind === 'dragon_fountain')!;
     expect(k.x + great.at + great.w / 2).toBe(CASTLE_PLAN.gate.x);
     expect(gate.x).toBeCloseTo(CASTLE_PLAN.gate.x, 6);
-    expect(fountain).toBeDefined();
-    expect([fountain.x, fountain.z]).toEqual([66, 78]);
+    expect([fountain.x, fountain.z]).toEqual([76, 70]);
     expect(fountain.x).toBe(CASTLE_PLAN.gate.x);
   });
-  it('the west wing and the barracks mirror each other across the axis', () => {
-    const wing = B.west_wing, bar = B.barracks, axis = CASTLE_PLAN.gate.x;
-    expect(axis - wing.x).toBe(bar.x + bar.w - axis);
-    expect([wing.z, wing.d]).toEqual([bar.z, bar.d]);
-    const span = (b: BuildingSpec, side: 'e' | 'w') => b.doors.filter((d) => d.side === side).map((d) => [b.z + d.at, b.z + d.at + d.w]);
-    expect(span(bar, 'w')).toEqual(span(wing, 'e'));
+  it('the plan is a mirror image about the axis: the curtain, the towers, the buildings and the stairs', () => {
+    const key = (x: number, z: number) => `${x.toFixed(2)},${z.toFixed(2)}`;
+    const towers = new Set(TOWERS.map((t) => key(t.x, t.z)));
+    for (const t of TOWERS) expect(towers.has(key(mx(t.x), t.z)), t.id).toBe(true);
+    const ends = new Set(CURTAIN_RUNS.flatMap(([a, c]) => [key(a.x, a.z), key(c.x, c.z)]));
+    for (const [a] of CURTAIN_RUNS) expect(ends.has(key(mx(a.x), a.z))).toBe(true);
+    const rect = (q: BuildingSpec) => [q.x, q.z, q.x + q.w, q.z + q.d];
+    for (const [l, r] of [['kitchen', 'solar'], ['great_hall', 'chapel'], ['stables', 'barracks']]) {
+      const [x0, z0, x1, z1] = rect(B[l]);
+      expect(rect(B[r]), `${l} / ${r}`).toEqual([MIRROR_CELL + 1 - x1, z0, MIRROR_CELL + 1 - x0, z1]);
+    }
+    expect(B.keep.x + B.keep.w / 2).toBe(CASTLE_PLAN.gate.x);
+    expect(RANGE.stables[3] - RANGE.stables[1]).toBe(10);
+    const [, k, p] = TERRACE_STAIRS;
+    expect([p.x0, p.x1]).toEqual([mx(k.x1), mx(k.x0)]);
+    // The stables' and the barracks' gable doors face each other on the cross axis.
+    const span = (q: BuildingSpec, side: 'e' | 'w') => q.doors.filter((d) => d.side === side).map((d) => [q.z + d.at, q.z + d.at + d.w]);
+    expect(span(B.barracks, 'w')).toEqual(span(B.stables, 'e'));
+  });
+  it('every flight of the climb and of the terrace\'s stairs climbs evenly between level landings', () => {
+    const lv = (x: number, z: number) => L.level![z * L.w + x];
+    for (const f of CLIMB.flights) {
+      const [x0, z0, x1, z1] = f.rect, alongZ = f.up === 'n' || f.up === 's';
+      for (let a = alongZ ? x0 : z0; a < (alongZ ? x1 : z1); a++) {
+        const row: number[] = [];
+        for (let t = alongZ ? z0 : x0; t < (alongZ ? z1 : x1); t++) row.push(alongZ ? lv(a, t) : lv(t, a));
+        const up = f.up === 'n' || f.up === 'w' ? row.reverse() : row;
+        for (let i = 1; i < up.length; i++) {
+          expect(up[i] - up[i - 1], `flight ${f.rect}`).toBeGreaterThan(0);
+          expect(up[i] - up[i - 1], `flight ${f.rect}`).toBeLessThan(0.7);
+        }
+        expect(up[0]).toBeGreaterThan(f.y0 - 0.01);
+        expect(up[up.length - 1]).toBeLessThan(f.y1 + 0.01);
+      }
+    }
+    for (const l of CLIMB.landings) {
+      const [x0, z0, x1, z1] = l.rect;
+      for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) if (L.cells[z * L.w + x] === Cell.Ground) expect(lv(x, z), `landing ${x},${z}`).toBe(l.y);
+    }
+    for (const st of TERRACE_STAIRS) for (let z = Math.ceil(st.z0); z + 1.5 < st.z1; z++) {
+      const x = Math.floor((st.x0 + st.x1) / 2), a = lv(x, z), c = lv(x, z + 1);
+      expect(a - c, `${st.id} at ${z}`).toBeGreaterThan(0);
+      expect(a - c, `${st.id} at ${z}`).toBeLessThan(0.7);
+    }
+  });
+  it('a save made anywhere, the old castle included, loads with the hero on the walkable arrival dais', () => {
+    // (Saves keep no position: every load enters the keep at its arrival dais.)
+    const keys = Object.keys(newSave());
+    for (const k of ['pos', 'x', 'z', 'zone', 'position']) expect(keys).not.toContain(k);
+    expect(nav.isWalkable(L.entry.x, L.entry.z)).toBe(true);
   });
   it('every castle door opens onto paving and is reached from the gate', () => {
     const from = nav.nearestWalkable(CASTLE_PLAN.gate.x, CASTLE_PLAN.gate.z - 2)!;
@@ -175,76 +247,81 @@ describe('Dragonspire Keep', () => {
     // Every walkable cell inside the curtain is reached from the arrival dais.
     const reach = flood(Math.floor(L.entry.z) * L.w + Math.floor(L.entry.x), (i) => L.cells[i] === Cell.Ground);
     for (let i = 0; i < L.w * L.h; i++) if (inside(i) && L.cells[i] === Cell.Ground) expect(reach[i], `${i % L.w},${Math.floor(i / L.w)}`).toBe(1);
-    // The paving (walks, courts, yards, building floors) is one 4-connected region.
+    // The paving (walks, courts, yards, the terrace, building floors) is one 4-connected region.
     const paved = (i: number) => L.cells[i] === Cell.Ground && inside(i) && (L.ground[i] === Ground.Stone || L.ground[i] === Ground.Path);
     const seed = (CASTLE_PLAN.gate.z - 2) * L.w + CASTLE_PLAN.gate.x;
     expect(paved(seed)).toBe(true);
     const net = flood(seed, paved);
     for (let i = 0; i < L.w * L.h; i++) if (paved(i)) expect(net[i], `paving at ${i % L.w},${Math.floor(i / L.w)}`).toBe(1);
   });
-  it('the keep has several rooms with a purpose, and you can walk into every one of them', () => {
-    const k = B.keep;
-    // Flood the ground floor, never crossing an interior doorway: each region is a room.
-    const seen = new Set<string>(), rooms: [number, number][][] = [];
-    for (let z = k.z + 1; z < k.z + k.d - 1; z++) for (let x = k.x + 1; x < k.x + k.w - 1; x++) {
-      if (seen.has(`${x},${z}`) || cellRole(k, x, z) !== 'floor') continue;
-      const room: [number, number][] = [], stack = [[x, z]];
-      seen.add(`${x},${z}`);
-      while (stack.length) {
-        const [cx, cz] = stack.pop()!;
-        room.push([cx, cz]);
-        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = cx + dx, nz = cz + dz, key = `${nx},${nz}`;
-          if (!seen.has(key) && cellRole(k, nx, nz) === 'floor') {
-            seen.add(key);
-            stack.push([nx, nz]);
+  it('every castle building has its rooms, each one walked into from the gate, and its furnishings', () => {
+    for (const b of KEEP_BUILDINGS.filter((q) => q.style === 'keep')) {
+      // Flood the ground floor, never crossing an interior doorway: each region is a room.
+      const seen = new Set<string>(), rooms: [number, number][][] = [];
+      for (let z = b.z + 1; z < b.z + b.d - 1; z++) for (let x = b.x + 1; x < b.x + b.w - 1; x++) {
+        if (seen.has(`${x},${z}`) || cellRole(b, x, z) !== 'floor') continue;
+        const room: [number, number][] = [], stack = [[x, z]];
+        seen.add(`${x},${z}`);
+        while (stack.length) {
+          const [cx, cz] = stack.pop()!;
+          room.push([cx, cz]);
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cx + dx, nz = cz + dz, key = `${nx},${nz}`;
+            if (!seen.has(key) && cellRole(b, nx, nz) === 'floor') {
+              seen.add(key);
+              stack.push([nx, nz]);
+            }
           }
         }
+        rooms.push(room);
       }
-      rooms.push(room);
+      for (const room of rooms) {
+        const open = room.find(([x, z]) => !fitBlocks(b, x, z) && L.cells[z * L.w + x] === Cell.Ground)!;
+        expect(open, `${b.id}: a room with no open floor`).toBeDefined();
+        const path = nav.findPath(L.entry.x, L.entry.z, open[0] + 0.5, open[1] + 0.5);
+        expect(path, `${b.id} room at ${open}`).not.toBeNull();
+        const end = path![path!.length - 1];
+        expect(Math.hypot(end.x - open[0] - 0.5, end.z - open[1] - 0.5)).toBeLessThan(1);
+      }
+      if (b.id === 'kitchen') expect(rooms.length).toBeGreaterThanOrEqual(4);
     }
-    expect(rooms.length).toBeGreaterThanOrEqual(4);
-    for (const room of rooms) {
-      const open = room.find(([x, z]) => !fitBlocks(k, x, z) && L.cells[z * L.w + x] === Cell.Ground)!;
-      expect(open).toBeDefined();
-      const path = nav.findPath(L.entry.x, L.entry.z, open[0] + 0.5, open[1] + 0.5);
-      expect(path, `room at ${open}`).not.toBeNull();
-      const end = path![path!.length - 1];
-      expect(Math.hypot(end.x - open[0] - 0.5, end.z - open[1] - 0.5)).toBeLessThan(1);
-    }
-    // The great hall has the high table, the long tables and the open hearth; the service end its
-    // casks and stores; the other castle buildings their own furnishings.
     const kinds = (id: string, floor: Floor = 0) => new Set(fitsOf(B[id], floor).map((f) => f.kind));
-    for (const kind of ['high_table', 'feast_table', 'open_hearth', 'barrel', 'shelf']) expect(kinds('keep'), kind).toContain(kind);
-    for (const kind of ['ledger_desk', 'bench']) expect(kinds('keep', 1), kind).toContain(kind);
+    for (const kind of ['high_table', 'pillar', 'brazier']) expect(kinds('keep'), kind).toContain(kind);
+    for (const kind of ['high_table', 'feast_table', 'open_hearth']) expect(kinds('great_hall'), kind).toContain(kind);
     expect(kinds('kitchen')).toContain('hearth_oven');
-    for (const kind of ['weapon_rack', 'chapel_altar']) expect(kinds('west_wing'), kind).toContain(kind);
+    for (const kind of ['chapel_altar', 'bench']) expect(kinds('chapel'), kind).toContain(kind);
     expect(kinds('barracks')).toContain('bunk');
+    expect(kinds('stables')).toContain('hay');
+    // The lord's high table stands on the keep's dais, three steps up.
+    const t = B.keep.fits!.find((f) => f.kind === 'high_table')!;
+    expect(raisedAt(B.keep, B.keep.x + Math.floor(t.x), B.keep.z + Math.floor(t.z))).toBe(0.5);
   });
-  it('the screens stair connects the entry to every upper-floor room and back without retriggering', () => {
-    const k = B.keep, up = new NavGrid(L.w, L.h, L.upper!);
-    expect(k.stairs).toHaveLength(1);
+  it('every stair keeps the house rules: at most 17 risers of 16 to 17 cm between landings, inside its walls', () => {
+    for (const b of KEEP_BUILDINGS) expect(stairProblems(b), b.id).toEqual([]);
+  });
+  it('every stair connects the floor below to every upper-floor room and back without retriggering', () => {
+    const up = new NavGrid(L.w, L.h, L.upper!);
     expect(up.isWalkable(L.entry.x, L.entry.z), 'there is no upstairs street').toBe(false);
     const foot = (st: Stair) => {
-      const [x0, z0, x1, z1] = stairRect(st);
-      return st.dir === 'n' ? [x0, z1 - 1] : st.dir === 's' ? [x0, z0] : st.dir === 'w' ? [x1 - 1, z0] : [x0, z0];
+      const f = flightsOf(st)[0], [x0, z0, x1, z1] = stairRect(f);
+      return f.dir === 'n' ? [x0, z1 - 1] : f.dir === 's' ? [x0, z0] : f.dir === 'w' ? [x1 - 1, z0] : [x0, z0];
     };
-    for (const st of k.stairs!) {
+    for (const k of KEEP_BUILDINGS.filter((q) => q.stairs?.length)) for (const st of k.stairs!) {
       const [fx, fz] = foot(st), x = k.x + fx, z = k.z + fz;
       const path = nav.findPath(L.entry.x, L.entry.z, x + 0.5, z + 0.5)!;
-      expect(path).not.toBeNull();
+      expect(path, k.id).not.toBeNull();
       expect(path.at(-1)).toEqual({ x: x + 0.5, z: z + 0.5 });
       const upDest = stairDest(k, x + 0.5, z + 0.5, 0)!;
       expect(upDest.floor).toBe(1);
       expect(upDest.y).toBe(k.storeyH);
-      expect(up.isWalkable(upDest.x, upDest.z)).toBe(true);
+      expect(up.isWalkable(upDest.x, upDest.z), `${k.id} arrives upstairs`).toBe(true);
       expect(stairDest(k, upDest.x, upDest.z, 1)).toBeNull();
       for (let zz = k.z + 1; zz < k.z + k.d - 1; zz++) for (let xx = k.x + 1; xx < k.x + k.w - 1; xx++) {
         if (!up.isWalkable(xx + 0.5, zz + 0.5)) continue;
         const p = up.findPath(upDest.x, upDest.z, xx + 0.5, zz + 0.5)!;
-        expect(p, `upstairs cell ${xx},${zz}`).not.toBeNull();
+        expect(p, `${k.id} upstairs cell ${xx},${zz}`).not.toBeNull();
         expect(p.at(-1)).toEqual({ x: xx + 0.5, z: zz + 0.5 });
-        // The way down is the stair's head: stepping onto it brings you back to the ground floor.
+        // The way down is the stair's head: stepping onto it brings you back to the floor below.
         const down = stairDest(k, xx + 0.5, zz + 0.5, 1);
         if (down) {
           expect(nav.isWalkable(down.x, down.z)).toBe(true);

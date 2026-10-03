@@ -99,23 +99,42 @@ export interface BuildingSpec {
   stairs?: Stair[];
   /** The upper floor's rooms (a building with `storeyH`): its own interior walls and furnishings. */
   upper?: Storey;
+  /** Raised parts of the ground floor (a dais, a chancel): stepped up from the floor round them. */
+  raised?: Raised[];
 }
 
-/**
- * A straight stair between the floors: a flight `w` cells across and `len` cells long, its
- * rectangle starting at local cell (x, z), climbing toward `dir` from its foot row to its head row.
- * On the ground floor the foot row is the stair (stepping onto it takes you up) and the rest of the
- * flight is solid; upstairs the head row is the stair (stepping onto it takes you down) and the rest
- * is the open stairwell. You arrive beside it, on local cell `land0` (ground) or `land1` (upstairs).
- */
-export interface Stair {
+/** A straight flight: `w` cells across and `len` cells long from local cell (x, z), climbing toward `dir`. */
+export interface Flight {
   x: number;
   z: number;
   w: number;
   len: number;
   dir: Side;
+}
+
+/** A local cell rectangle [x0, z0, x1, z1). */
+export type Rect = [number, number, number, number];
+
+/**
+ * A stair between the floors. Its first flight is the stair's own rectangle (x, z, w, len, dir); a
+ * stair that turns (a dog-leg, a quarter turn or a long run broken by a landing) carries on in
+ * `turns`, each a landing and the flight that climbs on from it. On the ground floor the first
+ * flight's foot row is the stair (stepping onto it takes you up) and the rest of the stair (its
+ * flights and landings) is solid; upstairs the last flight's head row is the stair (stepping onto it
+ * takes you down) and the rest is the open stairwell. You arrive beside it, on local cell `land0`
+ * (ground) or `land1` (upstairs). Its risers are shared out over the flights by their lengths (see
+ * stairSteps), every riser the same.
+ */
+export interface Stair extends Flight {
   land0: [number, number];
   land1: [number, number];
+  turns?: { landing: Rect; flight: Flight }[];
+}
+
+/** A raised part of a building's ground floor: the local cell rectangle `rect`, `h` over the floor. */
+export interface Raised {
+  rect: Rect;
+  h: number;
 }
 
 export interface Storey {
@@ -132,28 +151,93 @@ export type Floor = 0 | 1;
 export const partitionsOf = (b: BuildingSpec, floor: Floor = 0) => (floor ? b.upper?.partitions : b.partitions) ?? [];
 export const fitsOf = (b: BuildingSpec, floor: Floor = 0) => (floor ? b.upper?.fits : b.fits) ?? [];
 
-/** A stair's flight rectangle [x0, z0, x1, z1) in local cells. */
-export function stairRect(st: Stair): [number, number, number, number] {
+/** A flight's rectangle [x0, z0, x1, z1) in local cells. */
+export function stairRect(st: Flight): Rect {
   const alongZ = st.dir === 'n' || st.dir === 's';
   return alongZ ? [st.x, st.z, st.x + st.w, st.z + st.len] : [st.x, st.z, st.x + st.len, st.z + st.w];
 }
 
-/** Is local cell (lx, lz) on the stair's foot row (floor 0) or head row (floor 1)? */
-function onStairEnd(st: Stair, lx: number, lz: number, floor: Floor) {
-  const [x0, z0, x1, z1] = stairRect(st);
-  if (lx < x0 || lx >= x1 || lz < z0 || lz >= z1) return false;
+/** A stair's flights, foot first. */
+export const flightsOf = (st: Stair): Flight[] => [st, ...(st.turns ?? []).map((t) => t.flight)];
+
+/** Every rectangle a stair stands on: its flights and its landings. */
+export const stairParts = (st: Stair): Rect[] => [stairRect(st), ...(st.turns ?? []).flatMap((t) => [t.landing, stairRect(t.flight)])];
+
+const inLocal = ([x0, z0, x1, z1]: Rect, lx: number, lz: number) => lx >= x0 && lx < x1 && lz >= z0 && lz < z1;
+
+/** Is local cell (lx, lz) on a flight's foot row (`foot`) or its head row? */
+function onFlightEnd(f: Flight, lx: number, lz: number, foot: boolean) {
+  const [x0, z0, x1, z1] = stairRect(f);
+  if (!inLocal([x0, z0, x1, z1], lx, lz)) return false;
   // The low end of the rectangle is the foot when the flight climbs toward +x / +z.
-  const low = st.dir === 's' || st.dir === 'e', atLow = st.dir === 'n' || st.dir === 's' ? lz === z0 : lx === x0;
-  const atHigh = st.dir === 'n' || st.dir === 's' ? lz === z1 - 1 : lx === x1 - 1;
-  return floor === 0 ? (low ? atLow : atHigh) : low ? atHigh : atLow;
+  const low = f.dir === 's' || f.dir === 'e', atLow = f.dir === 'n' || f.dir === 's' ? lz === z0 : lx === x0;
+  const atHigh = f.dir === 'n' || f.dir === 's' ? lz === z1 - 1 : lx === x1 - 1;
+  return foot ? (low ? atLow : atHigh) : low ? atHigh : atLow;
 }
 
-/** The stair whose flight covers local cell (lx, lz), if any. */
-const stairOn = (b: BuildingSpec, lx: number, lz: number) =>
-  (b.stairs ?? []).find((st) => {
-    const [x0, z0, x1, z1] = stairRect(st);
-    return lx >= x0 && lx < x1 && lz >= z0 && lz < z1;
+/** Is local cell (lx, lz) on the stair's foot row (floor 0: its first flight's) or head row (floor 1: its last flight's)? */
+function onStairEnd(st: Stair, lx: number, lz: number, floor: Floor) {
+  const fl = flightsOf(st);
+  return floor === 0 ? onFlightEnd(fl[0], lx, lz, true) : onFlightEnd(fl[fl.length - 1], lx, lz, false);
+}
+
+/** The stair whose flights or landings cover local cell (lx, lz), if any. */
+const stairOn = (b: BuildingSpec, lx: number, lz: number) => (b.stairs ?? []).find((st) => stairParts(st).some((r) => inLocal(r, lx, lz)));
+
+/** The house rules for a stair (as for every stair the castle builds, inside or out). */
+export const STAIR_RULE = { riserMin: 0.16, riserMax: 0.17, perFlight: 17, width: 1 };
+
+/** Each flight of a stair as built: its risers, their height and the height it climbs from. */
+export interface FlightSteps {
+  flight: Flight;
+  risers: number;
+  riser: number;
+  y0: number;
+}
+
+/**
+ * How a stair climbs `rise`: the fewest risers no taller than the rule allows, every riser the same,
+ * shared out over its flights in proportion to their lengths (each landing at the height its flight
+ * reaches).
+ */
+export function stairSteps(st: Stair, rise: number): FlightSteps[] {
+  const fl = flightsOf(st), total = Math.max(fl.length, Math.ceil(rise / STAIR_RULE.riserMax - 1e-6)), riser = rise / total;
+  const L = fl.reduce((a, f) => a + f.len, 0);
+  let given = 0, y0 = 0;
+  return fl.map((f, i) => {
+    const risers = i === fl.length - 1 ? total - given : Math.max(1, Math.round((total * f.len) / L));
+    given += risers;
+    const out = { flight: f, risers, riser, y0 };
+    y0 += risers * riser;
+    return out;
   });
+}
+
+/** What breaks the stair rules in a building's stairs (none: every stair can be built and climbed). */
+export function stairProblems(b: BuildingSpec): string[] {
+  const out: string[] = [];
+  for (const [k, st] of (b.stairs ?? []).entries()) {
+    const name = `${b.id} stair ${k}`;
+    for (const s of stairSteps(st, b.storeyH ?? 0)) {
+      if (s.risers > STAIR_RULE.perFlight) out.push(`${name}: a flight of ${s.risers} risers (at most ${STAIR_RULE.perFlight} between landings)`);
+      if (s.riser < STAIR_RULE.riserMin - 1e-3 || s.riser > STAIR_RULE.riserMax + 1e-3) out.push(`${name}: risers of ${(s.riser * 100).toFixed(1)} cm (16 to 17)`);
+      if (s.flight.w < STAIR_RULE.width) out.push(`${name}: a flight ${s.flight.w} wide (at least ${STAIR_RULE.width})`);
+    }
+    // Inside the building's walls, clear of its interior walls, and every flight running on from
+    // the landing before it.
+    for (const [x0, z0, x1, z1] of stairParts(st)) for (let lz = z0; lz < z1; lz++) for (let lx = x0; lx < x1; lx++) {
+      if (lx < 1 || lz < 1 || lx > b.w - 2 || lz > b.d - 2) out.push(`${name}: cell ${lx},${lz} is in the outer wall`);
+      else if (partitionAt(b, lx, lz) || partitionAt(b, lx, lz, 1)) out.push(`${name}: cell ${lx},${lz} is in an interior wall`);
+    }
+    const touch = (a: Rect, c: Rect) => Math.max(a[0], c[0]) <= Math.min(a[2], c[2]) && Math.max(a[1], c[1]) <= Math.min(a[3], c[3]);
+    let prev = stairRect(st);
+    for (const t of st.turns ?? []) {
+      if (!touch(prev, t.landing) || !touch(t.landing, stairRect(t.flight))) out.push(`${name}: a landing does not join its flights`);
+      prev = stairRect(t.flight);
+    }
+  }
+  return out;
+}
 
 /** Is local cell (lx, lz) open to the floor below on the upper floor? */
 export const isVoid = (b: BuildingSpec, lx: number, lz: number) => (b.upper?.voids ?? []).some(([x0, z0, x1, z1]) => lx >= x0 && lx < x1 && lz >= z0 && lz < z1);
@@ -170,6 +254,12 @@ export function stairDest(b: BuildingSpec, x: number, z: number, floor: Floor): 
     return { x: b.x + ax + 0.5, z: b.z + az + 0.5, floor: to, y: to ? b.storeyH ?? 0 : 0 };
   }
   return null;
+}
+
+/** How far the ground floor stands raised at a grid cell (a dais, a chancel), 0 elsewhere. */
+export function raisedAt(b: BuildingSpec, cx: number, cz: number) {
+  const lx = cx - b.x, lz = cz - b.z;
+  return Math.max(0, ...(b.raised ?? []).filter((r) => inLocal(r.rect, lx, lz)).map((r) => r.h));
 }
 
 /** Cell bounds [x0, z0, x1, z1) of the footprint. */

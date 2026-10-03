@@ -130,39 +130,11 @@ export const APPROACH_PROPS: Record<string, Builder> = {
     }
     cb(k, g, [L + 0.12, 0.1, 0.18], [0, 0.87, 0], DRESS, undefined, 0.02);
   },
-  /**
-   * A low dressed wall kerbing one side of a sloping road, one continuous piece from its foot to its
-   * head: along `opt.pts` ([x, z] corners relative to the prop, which stands at height 0) with its
-   * top `opt.ys` (each corner's road level) and mitred at every bend, so it follows the road's grade
-   * in one even slope with no step or seam: cream ashlar on a slate base under a blue-grey coping,
-   * and on its open side (`opt.out`: +1 left of its run, -1 right) a battered retaining face of the
-   * castle's honey ashlar running down into the ground beside the road.
-   */
-  /**
-   * The paving of a sloping road laid as one surface along `opt.pts` ([x, z] relative to the prop,
-   * which stands at height 0), `opt.w` wide, its top at `opt.ys` at each point: flagstones running
-   * edge to edge between the walls that kerb it, no step or jag anywhere along it, laid in the castle
-   * paving's own stones (paved). With `opt.sill` its head is finished with a threshold: a course of
-   * dressed stones laid square across the road over the joint with the paving beyond, a hair proud of
-   * both.
-   */
-  ramp_paving: (k, g, arg) => {
-    const o = (arg?.opt ?? {}) as { pts?: number[][]; ys?: number[]; w?: number; sill?: number };
-    const pts = (o.pts ?? [[-2, 0], [2, 0]]).map(([x, z]) => new THREE.Vector2(x, z)), ys = o.ys ?? pts.map(() => 0), w = o.w ?? 4;
-    const band = slopedBand(pts, ys.map((y) => y - 0.4), ys, w);
-    Object.assign(band.userData.lay, { stone: 2 / 3, row: 1 / 3 });
-    k.mesh(g, band, PAVE, [0, 0, 0]);
-    if (o.sill) {
-      const end = pts[pts.length - 1], d = end.clone().sub(pts[pts.length - 2]).normalize(), across = new THREE.Vector2(-d.y, d.x), top = ys[ys.length - 1] + 0.03;
-      const n = Math.max(2, Math.round(w / 0.9)), sw = w / n;
-      for (let i = 0; i < n; i++) {
-        const c = end.clone().addScaledVector(across, -w / 2 + sw * (i + 0.5));
-        cb(k, g, [sw, 0.3, 0.6], [c.x, top - 0.15, c.y], DRESS, [0, Math.atan2(-across.y, across.x), 0], 0.03);
-      }
-    }
-  },
   ramp_wall: (k, g, arg) => {
-    const o = (arg?.opt ?? {}) as { pts?: number[][]; ys?: number[]; tops?: number[] };
+    // (`opt.w`: how thick its foot is, 0.62 by default; a wall standing over a whole cell's width is
+    // a cell thick, so no ground under it shows either side.)
+    const o = (arg?.opt ?? {}) as { pts?: number[][]; ys?: number[]; tops?: number[]; w?: number };
+    const wf = o.w ?? 0.62;
     const pts = (o.pts ?? [[-2, 0], [2, 0]]).map(([x, z]) => new THREE.Vector2(x, z)), ys = o.ys ?? pts.map(() => 0);
     // (Its coping stands 0.76 over the road, or level with higher ground behind it (`opt.tops`), so
     // the bank it holds back meets its top.)
@@ -170,9 +142,9 @@ export const APPROACH_PROPS: Record<string, Builder> = {
     const at = (dy: number) => ys.map((y) => y + dy), top = (dy: number) => tops.map((y) => y + dy);
     // (Its weathered foot runs straight down into the ground under it, never out to one side, so
     // nothing of it shows through the rock beside the road.)
-    k.mesh(g, slopedBand(pts, at(-5.0), at(0.4), 0.62), BASE, [0, 0, 0]);
-    k.mesh(g, slopedBand(pts, at(0.38), top(-0.1), 0.48), ASHLAR, [0, 0, 0]);
-    k.mesh(g, slopedBand(pts, top(-0.12), tops, 0.6), DRESS, [0, 0, 0]);
+    k.mesh(g, slopedBand(pts, at(-5.0), at(0.4), wf), BASE, [0, 0, 0]);
+    k.mesh(g, slopedBand(pts, at(0.38), top(-0.1), wf - 0.14), ASHLAR, [0, 0, 0]);
+    k.mesh(g, slopedBand(pts, top(-0.12), tops, wf - 0.02), DRESS, [0, 0, 0]);
   },
   /**
    * A pier closing the end of a parapet run: a square shaft of the castle's cream on a weathered

@@ -4,8 +4,8 @@ import { ModelKit, PAL } from '../render/kit';
 import { addPatch } from '../render/surface';
 import { hash01, octagon, prism, taper, wedge } from '../render/blocks';
 import {
-  fitsOf, inRoom, isVoid, partitionRuns, partitionsOf, sideLen, stairRect, wallRuns,
-  type BuildingSpec, type Fit, type Floor, type Side, type Stair, type Window,
+  fitsOf, flightsOf, inRoom, raisedAt, isVoid, partitionRuns, partitionsOf, sideLen, stairParts, stairRect, stairSteps, wallRuns,
+  type BuildingSpec, type Fit, type FlightSteps, type Floor, type Side, type Window,
 } from './building';
 import { COURSE } from '../render/masonry';
 import {
@@ -230,6 +230,17 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         if (e - a > 0.2) cb(ik, ground, [e - a - 0.03, 0.05, 0.47], [(a + e) / 2, 0.06, z + 0.25], PLANKS[(row + n) % 3], undefined, 0.015);
         u += l;
       }
+    }
+  }
+  // Raised parts of the floor (a dais, a chancel): a platform of the floor's stone stepped up from
+  // the floor round it in steps of no more than a riser, each a tread in from the one under it on
+  // the sides that face the open floor.
+  for (const { rect: [x0, z0, x1, z1], h } of b.raised ?? []) {
+    const n = Math.max(1, Math.ceil(h / 0.17 - 1e-6));
+    for (let i = 0; i < n; i++) {
+      const out = 0.32 * (n - 1 - i), y0 = i ? (i * h) / n : 0.04, y1 = ((i + 1) * h) / n;
+      const ax = x0 > 1 ? x0 - out : x0, ex = x1 < w - 1 ? x1 + out : x1, az = z0 > 1 ? z0 - out : z0, ez = z1 < d - 1 ? z1 + out : z1;
+      cb(ik, ground, [ex - ax, y1 - y0, ez - az], [(ax + ex) / 2, (y0 + y1) / 2, (az + ez) / 2], i === n - 1 ? FLOOR_STONE : S.course, undefined, 0.02);
     }
   }
   // Thresholds: a pale stone sill through every doorway, a step beyond it.
@@ -552,7 +563,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     // Oak boards on the joists, wall to wall, row by row, leaving the voids (a hall open to its
     // roof) and the stairwells open; a balustrade runs round every opening.
     const y = storeyH - 0.15;
-    const open = (lx: number, lz: number) => isVoid(b, lx, lz) || (b.stairs ?? []).some((st) => inRect(stairRect(st), lx, lz));
+    const open = (lx: number, lz: number) => isVoid(b, lx, lz) || (b.stairs ?? []).some((st) => stairParts(st).some((r) => inRect(r, lx, lz)));
     for (let lz = 1; lz < d - 1; lz++) {
       let a = -1;
       for (let lx = 1; lx <= w - 1; lx++) {
@@ -572,7 +583,11 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         const nx = lx + dx, nz = lz + dz;
         if (nx < 1 || nz < 1 || nx > w - 2 || nz > d - 2 || !open(nx, nz) || headOf(nx, nz)) continue;
         const ex = lx + 0.5 + dx * 0.45, ez = lz + 0.5 + dz * 0.45, along = dz !== 0;
-        cb(uk, mid, along ? [1.0, 0.1, 0.12] : [0.12, 0.1, 1.0], [ex, storeyH + 0.95, ez], WOOD_D, undefined, 0.02);
+        // (At an outer corner of the boards, where a rail along x turns the corner, the rail along z
+        // stops at its inner face, so the two never lie in each other.)
+        const turn = (sz: number) => (!along && lz + sz >= 1 && lz + sz <= d - 2 && open(lx, lz + sz) && !headOf(lx, lz + sz) ? 0.12 : 0);
+        const z0 = -0.5 + turn(-1), z1 = 0.5 - turn(1);
+        cb(uk, mid, along ? [1.0, 0.1, 0.12] : [0.12, 0.1, z1 - z0], [ex, storeyH + 0.95, ez + (along ? 0 : (z0 + z1) / 2)], WOOD_D, undefined, 0.02);
         cb(uk, mid, [0.12, 0.95, 0.12], [ex - (along ? 0.45 : 0), storeyH + 0.47, ez - (along ? 0 : 0.45)], WOOD_D, undefined, 0.02);
       }
     }
@@ -580,14 +595,22 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   /** Is a cell on a stair's head row (where the stair comes up: no rail across it)? */
   function headOf(lx: number, lz: number) {
     return (b.stairs ?? []).some((st) => {
-      const [x0, z0, x1, z1] = stairRect(st);
+      const top = flightsOf(st).at(-1)!, [x0, z0, x1, z1] = stairRect(top);
       if (!inRect([x0, z0, x1, z1], lx, lz)) return false;
-      return st.dir === 'n' ? lz === z0 : st.dir === 's' ? lz === z1 - 1 : st.dir === 'w' ? lx === x0 : lx === x1 - 1;
+      return top.dir === 'n' ? lz === z0 : top.dir === 's' ? lz === z1 - 1 : top.dir === 'w' ? lx === x0 : lx === x1 - 1;
     });
   }
 
   // ─── Stairs ───────────────────────────────────────────────────────────────
-  for (const st of b.stairs ?? []) flight(ik, ground, st, storeyH);
+  for (const st of b.stairs ?? []) {
+    const steps = stairSteps(st, storeyH);
+    for (const s of steps) flight(ik, ground, s);
+    // Each landing a solid block of the steps' stone, its top where its flight arrives.
+    (st.turns ?? []).forEach((t, i) => {
+      const [x0, z0, x1, z1] = t.landing, top = steps[i + 1].y0;
+      cb(ik, ground, [x1 - x0 - 0.1, top, z1 - z0 - 0.1], [(x0 + x1) / 2, top / 2, (z0 + z1) / 2], STONE_L, undefined, 0.02);
+    });
+  }
 
   // ─── The keep: entrance bay ────────────────────────────────────────────────
   if (keep) keepMasonry(band, b, face, [fk, lifted]);
@@ -673,7 +696,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     for (const f of fitsOf(b, floor)) {
       const fg = new THREE.Group();
       fg.userData.furnishing = true;
-      fg.position.set(f.x, floor ? storeyH : 0, f.z);
+      // (On a raised part of the floor, a dais, it stands on the platform.)
+      fg.position.set(f.x, floor ? storeyH : raisedAt(b, b.x + Math.floor(f.x), b.z + Math.floor(f.z)), f.z);
       fg.rotation.y = f.rot ?? 0;
       (floor ? mid : ground).add(fg);
       const res = FITS[f.kind]?.(floor ? uk : ik, fg, f, b, floor);
@@ -1101,16 +1125,16 @@ function stall(W: WallFrame, band: Band, at: (lift: boolean, y: number) => KitAt
 }
 
 /**
- * A straight stair: solid stone steps from the floor up to the boards above, climbing toward its
- * `dir` along its flight, with a pale nosing on each tread.
+ * One flight of a stair: solid stone steps from the height it climbs from (`y0`: the floor, or the
+ * landing before it), climbing toward its `dir`, with a pale nosing on each tread.
  */
-function flight(k: ModelKit, g: Obj, st: Stair, storeyH: number) {
+function flight(k: ModelKit, g: Obj, { flight: st, risers: n, riser, y0 }: FlightSteps) {
   const [x0, z0, x1, z1] = stairRect(st), alongZ = st.dir === 'n' || st.dir === 's';
-  const n = Math.max(4, Math.round(storeyH / 0.3)), L = alongZ ? z1 - z0 : x1 - x0, W = alongZ ? x1 - x0 : z1 - z0;
+  const L = alongZ ? z1 - z0 : x1 - x0, W = alongZ ? x1 - x0 : z1 - z0;
   const up = st.dir === 's' || st.dir === 'e' ? 1 : -1, start = up > 0 ? (alongZ ? z0 : x0) : alongZ ? z1 : x1;
   const t = L / n, cw = alongZ ? (x0 + x1) / 2 : (z0 + z1) / 2;
   for (let i = 0; i < n; i++) {
-    const top = ((i + 1) * storeyH) / n, u = start + up * (i + 0.5) * t;
+    const top = y0 + (i + 1) * riser, u = start + up * (i + 0.5) * t;
     const [px, pz] = alongZ ? [cw, u] : [u, cw];
     cb(k, g, alongZ ? [W - 0.1, top, t + 0.01] : [t + 0.01, top, W - 0.1], [px, top / 2, pz], i % 2 ? STONE : STONE_L, undefined, 0.02);
     const nose = start + up * i * t + up * 0.04;

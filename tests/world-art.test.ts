@@ -6,6 +6,7 @@ import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/pa
 import { patchKeys } from '../src/render/surface';
 import { ZONES } from '../src/data/zones';
 import { Cell, Ground } from '../src/world/layout';
+import { raisedAt } from '../src/world/building';
 import { ASHLAR, buildProp, propKinds, spread } from '../src/world/props';
 
 const finite = (geo: THREE.BufferGeometry) => {
@@ -463,13 +464,15 @@ describe('zones', () => {
     const L = build('keep');
     for (const b of L.buildings ?? []) {
       const levels = new Set<number>();
-      for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) levels.add(L.level![z * L.w + x]);
+      // (A raised part of a floor, a dais, stands up from it.)
+      for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) levels.add(L.level![z * L.w + x] - raisedAt(b, x, z));
       expect([...levels], b.id).toHaveLength(1);
     }
     const byId = Object.fromEntries((L.buildings ?? []).map((b) => [b.id, b]));
-    // The hatchery is up on the north-east upland; the castle on the crown.
+    // The hatchery is up on the north-east upland; the keep on the castle's terrace, the stables on the crown.
     expect(L.level![byId.hatch_plot.z * L.w + byId.hatch_plot.x]).toBe(7);
-    expect(L.level![byId.keep.z * L.w + byId.keep.x]).toBe(11);
+    expect(L.level![byId.keep.z * L.w + byId.keep.x]).toBe(13);
+    expect(L.level![byId.stables.z * L.w + byId.stables.x]).toBe(11);
   });
   it('no walkable pocket is cut off from the entry (clicks never target one)', () => {
     for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {

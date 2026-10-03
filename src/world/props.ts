@@ -974,17 +974,6 @@ export function frieze(k: ModelKit, g: THREE.Object3D, len: number, x: number, y
 }
 
 /** A flat point of cloth: a triangle `w` across its top edge (on y = 0) to a point `h` below it, `d` thick. */
-const pointCache = new Map<string, THREE.BufferGeometry>();
-function clothPoint(w: number, h: number, d: number) {
-  const key = `${w},${h},${d}`;
-  let geo = pointCache.get(key);
-  if (!geo) {
-    const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(0, -h), new THREE.Vector2(w / 2, 0)]);
-    geo = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false }).translate(0, 0, -d / 2);
-    pointCache.set(key, geo);
-  }
-  return geo;
-}
 
 /**
  * The castle's window glass: clear panes with a cool tint, plainly see-through to the dim room (or
@@ -3330,7 +3319,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'corner_tower', 'door_turret', 'outer_gatehouse', 'postern', 'ward_gate', 'donjon', 'pavilion', 'forge_canopy', 'dragon_fountain', 'great_doors', 'pergola', 'garden_tree', 'wall_climber', 'tower_flag']);
+export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'corner_tower', 'outer_gatehouse', 'forge_canopy', 'dragon_fountain', 'great_doors', 'pergola', 'garden_tree', 'wall_climber', 'tower_flag']);
 
 /**
  * Every code-built builder: this file's own and the castle's (castleProps/), merged on first use.
