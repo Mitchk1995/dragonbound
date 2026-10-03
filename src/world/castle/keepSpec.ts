@@ -45,7 +45,7 @@ export const TURRETS = [
 ] as const;
 
 /** The frontispiece on the axis: x0..x1 along the front, standing `out` proud of it, its body to `top`; a pinnacle on each front corner. */
-export const FRONTISPIECE = { x0: 8, x1: 16, out: 1.5, top: 27.5, corbels: 26, pinnacle: { r: 0.9, top: 30.5, tip: 33.5 } } as const;
+export const FRONTISPIECE = { x0: 8, x1: 16, out: 1.5, top: 27.5, pinnacle: { r: 0.9, top: 30.5, tip: 33.5 } } as const;
 
 /** The great door: its arch through the frontispiece (5 wide, apex at 8) and the doorway in the wall behind (4 wide, square head at 4). */
 export const GREAT_DOOR = { arch: 5, apex: 8, w: KEEP.door.w, head: 4 } as const;
@@ -142,7 +142,7 @@ export function keepGround(s: Site) {
     if (x >= x0 && x < x1 && z >= z0 && z < z1) return;
     s.block(s.G.idx(x, z));
   };
-  for (const t of TURRETS) {
+  for (const t of TURRETS.filter((q) => q.front)) {
     const R = TURRET.r + 0.3, cx = x0 + t.x, cz = z0 + t.z;
     for (let z = Math.floor(cz - R); z <= cz + R; z++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
       if (Math.hypot(x + 0.5 - cx, z + 0.5 - cz) < R) block(x, z);

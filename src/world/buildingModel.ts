@@ -37,9 +37,9 @@ export const CUT_H = BASE_COURSE;
 /** A cut threshold above everything (nothing cut). */
 const OFF = 1e5;
 const WALL_T = 0.9;
-/** A castle door's dressed surround: how wide its ring of voussoirs is (the keep's great door's broader). */
-const DRESS_T = 0.48, BAY_T = 0.62;
-/** The keep's great door's square head, on a course line (its lintel is the course over it). */
+/** A castle door's dressed surround: how wide its ring of voussoirs is. */
+const DRESS_T = 0.48;
+/** A shared keep door's square head, on a course line (its lintel is the course over it). */
 const GREAT_DOOR_H = 8 * COURSE;
 const FLOOR_STONE = 0x7e776c;
 const PLANKS = [0x8a6440, 0x7a5636, 0x94704a];
@@ -324,9 +324,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     // and the lord's blue leaves standing open inside.
     for (const dr of b.doors.filter((x) => x.side === side)) {
       const u0 = dr.at, u1 = dr.at + dr.w, uc = (u0 + u1) / 2;
-      const castle = keep && dr.w < 4 && !shared.has(side), stable = b.windows.some((wi) => wi.stall);
-      // (The keep's great door stands in its bay's own arch: its square head on a course line, its
-      // lintel the course over it, under the bay's tympanum.)
+      const castle = keep && !shared.has(side), stable = b.windows.some((wi) => wi.stall);
+      // (A door in a wall shared with the great keep has a square head on a course line, its lintel the
+      // course over it.)
       const dH = castle || !keep ? doorH : GREAT_DOOR_H, lintel = keep ? COURSE : 0.36;
       const rise = Math.min(dr.w * 0.62, 1.7), sp = castle ? doorH - rise : dH;
       // (A castle door's jambs stand just outside the opening, right under the voussoir ring's feet, so
@@ -612,8 +612,6 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     });
   }
 
-  // ─── The keep: entrance bay ────────────────────────────────────────────────
-  if (keep) keepMasonry(band, b, face, [fk, lifted]);
   // A stable range: the hay loft's door over its door (its lanterns are the castle door's).
   if (keep && b.windows.some((wi) => wi.stall)) {
     const dr = b.doors.find((x) => x.side === 's');
@@ -931,106 +929,7 @@ function buildRuin(k: ModelKit, p: Obj, b: BuildingSpec) {
   }
 }
 
-// ─── The keep ────────────────────────────────────────────────────────────────
-
 type KitAt = [ModelKit, Obj];
-
-/**
- * The keep's projecting entrance bay round the great door, with the gate tower over it and the
- * lord's banner. It splits at the cuts like the south wall.
- */
-function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: KitAt) {
-  const { d, wallH } = b, storeyH = b.storeyH ?? wallH;
-  /** A box from y0 to y1 at (x, z), split at the cuts when `lift`. */
-  const block = (lift: boolean, sx: number, sz: number, x: number, z: number, y0: number, y1: number, color: number, ch = 0.04) =>
-    band(lift, y0, y1, (kk, pp, a, e) => cb(kk, pp, [sx, e - a, sz], [x, (a + e) / 2, z], color, undefined, ch));
-
-  // ── Entrance bay round the great door ──
-  const dr = b.doors.find((x) => x.side === 's' && x.w >= 4);
-  if (dr) {
-    const u0 = dr.at - 1.4, u1 = dr.at + dr.w + 1.4, P = 0.8, zf = d - 0.5 + face, zc = zf + P / 2 - 0.05;
-    const BH = wallH;
-    // (The deep base course stops against the outside of the door's dressed surround, which runs to
-    // the ground.)
-    const dress = BAY_T;
-    for (const [ua, ub, pa, pb, sa, sb] of [[u0, dr.at, u0, dr.at - dress, dr.at - dress, dr.at], [dr.at + dr.w, u1, dr.at + dr.w + dress, u1, dr.at + dr.w, dr.at + dr.w + dress]]) {
-      // (In front of the hall's own base course, which runs on along the wall behind the bay.)
-      band(true, 0, BASE_COURSE, (kk, pp, a, e) => deep(cb(kk, pp, [pb - pa, e - a, 0.75], [(pa + pb) / 2, (a + e) / 2, zf + 0.675], BASE, undefined, 0.05)));
-      // (Square-edged where they meet the walling round the arch, so the face reads as one wall.)
-      block(true, ub - ua, P, (ua + ub) / 2, zc, BASE_COURSE, BH, ASHLAR_B, 0);
-      block(true, sb - sa, P, (sa + sb) / 2, zc, 0, BASE_COURSE, ASHLAR_B, 0);
-    }
-    const uc = dr.at + dr.w / 2;
-    /** A whole piece (not split at the cuts), in the band its height `y` falls in. */
-    const whole = (y: number, put: (kk: ModelKit, pp: Obj) => void) => band(true, y - 0.003, y + 0.003, (kk, pp) => put(kk, pp));
-    // A pointed (two-centred) arch over the door: the bay's front closes in along the two arcs to the
-    // apex, a dressed surround round it; inside the arch, over the door's head, a carved tympanum with
-    // the lord's gold diamond.
-    const spring = 2.8, rise = 2.9, apex = spring + rise;
-    // The bay's front over the door, down to the arch, in one piece.
-    whole((spring + apex) / 2, (kk, pp) => kk.mesh(pp, spandrels(dr.w, apex, P, rise), ASHLAR_B, [uc, 0, zc]));
-    block(true, dr.w, P, uc, zc, apex, BH, ASHLAR_B, 0);
-    // The ceremonial arch: one broad ring of the castle's dressed stone round the arch and down both
-    // jambs to the ground, wedge-shaped voussoirs closing on the keystone on the axis, all flush in one
-    // plane.
-    for (const st of archDressing(dr.w, apex, rise, { foot: 0, t: BAY_T, p: 0.14 })) whole(Math.max(st.y, 0.01), (kk, pp) => kk.mesh(pp, st.geo, DRESS, [uc, 0, zc + P / 2]));
-    // The tympanum in the bay's own stone, the lord's gilt diamond carved on it.
-    const tf = GREAT_DOOR_H + COURSE;
-    block(true, dr.w - 0.1, 0.1, uc, zf + 0.06, tf, apex - 0.05, ASHLAR_B, 0.01);
-    whole((tf + apex) / 2, (kk, pp) => kk.box(pp, [0.7, 0.7, 0.05], [uc, (tf + apex) / 2, zf + 0.13], PAL.gold, [0, 0, Math.PI / 4]));
-    const [ak, ap] = [fk, lifted];
-    // The great tower over the door: the bay rises on above the roofline as a square tower reaching
-    // back over the hall's leads, two stages high, so the castle's crown stands on its axis: a string
-    // course at each stage, its corners turned on the walling's own quoins, a lancet on each face of
-    // the upper stage (two on the front over the door), a gilt frieze and a crenellated crown on a
-    // course stepped out from its walls, and inside it the tallest spire on the building, the lord's
-    // flag over it. All of it the castle's stone on the course lines.
-    const cf = crownFoot(wallH + 10.6), zb0 = d - 6.4, zb1 = zf + P, tz = (zb0 + zb1) / 2, td = zb1 - zb0, tw = u1 - u0;
-    cb(ak, ap, [tw, cf - COURSE - wallH, td], [uc, (wallH + cf - COURSE) / 2, tz], ASHLAR_B, undefined, 0.04);
-    for (const y of [wallH, wallH + 9 * COURSE]) cb(ak, ap, [tw + 0.12, COURSE, td + 0.12], [uc, y + COURSE / 2, tz], DRESS, undefined, 0.03);
-    // Its front corners turned on quoins standing proud, between its string courses and the frieze.
-    quoins(ak, ap, { x0: u0, x1: u1, z0: zb0, z1: zb1 }, [[-1, 1], [1, 1]], wallH + COURSE, cf - 2 * COURSE, ASHLAR_B, [[wallH + 9 * COURSE, wallH + 10 * COURSE]]);
-    // Its windows: on the front a lancet over the great door and a taller one above; one on each side.
-    lancet(ak, ap, uc, wallH + 0.9, zb1, 0.9, 2.4, false);
-    lancet(ak, ap, uc, wallH + 5.4, zb1, 1.0, 2.9);
-    for (const sx of [-1, 1]) {
-      const f = new THREE.Group();
-      f.position.set(uc + sx * (tw / 2), 0, tz);
-      f.rotation.y = sx * Math.PI / 2;
-      ap.add(f);
-      lancet(ak, f, 0, wallH + 5.4, 0, 1.0, 2.9);
-    }
-    // The gilt frieze under the crown on the three faces the bailey sees.
-    frieze(ak, ap, tw + 0.12, uc, cf - 1.5 * COURSE, zb1 + 0.02);
-    for (const sx of [-1, 1]) {
-      const f = new THREE.Group();
-      f.position.set(uc + sx * (tw / 2 + 0.02), 0, tz);
-      f.rotation.y = sx * Math.PI / 2;
-      ap.add(f);
-      frieze(ak, f, td + 0.08, 0, cf - 1.5 * COURSE, 0);
-    }
-    // The course that carries the crown, stepped out from the walls; the crown on it, one course of the
-    // walling's stone under its coping; merlons round its rim about a flat deck.
-    cb(ak, ap, [tw + 0.6, COURSE, td + 0.6], [uc, cf - COURSE / 2, tz], DRESS, undefined, 0.03);
-    cb(ak, ap, [tw + 0.6, COURSE, td + 0.6], [uc, cf + COURSE / 2, tz], ASHLAR_B, undefined, 0.05);
-    cb(ak, ap, [tw + 0.7, 0.14, td + 0.7], [uc, cf + COURSE + 0.07, tz], DRESS, undefined, 0.03);
-    const mt = cf + COURSE + 0.14;
-    for (let i = 0; i < 5; i++) for (const e of [zb1 + 0.15, zb0 - 0.15]) cb(ak, ap, [0.72, 0.7, 0.5], [u0 + 0.2 + (i * (tw - 0.4)) / 4, mt + 0.35, e], ASHLAR_B, undefined, 0.04);
-    for (const s2 of [-1, 1]) for (let i = 0; i < 5; i++) cb(ak, ap, [0.5, 0.7, 0.72], [uc + s2 * (tw / 2 + 0.15), mt + 0.35, zb0 + 0.5 + (i * (td - 1)) / 4], ASHLAR_B, undefined, 0.04);
-    // On the castle's axis, over the great door: a spire inside the merlons, the flag on a pole
-    // over its finial.
-    const sr = Math.min(tw, td) / 2 - 0.3, shh = sr * 2.9;
-    spire(ak, ap, uc, mt, tz, sr, shh, 12);
-    cb(ak, ap, [0.12, 2.6, 0.12], [uc, mt + 0.26 + shh + 1.8, tz], LAMP_NAVY, undefined, 0.02);
-    flag(ak, ap, uc, mt + 0.26 + shh + 3.0, tz, 2.6, 1.6);
-    // The lord's banner on the bay, over the door: blue and gold (all of it above the upper cut, so
-    // it goes whole).
-    // (Long, from just under the tower's lowest string course down to well clear over the arch's
-    // hood, so nothing crosses the cloth.)
-    const zb = zf + P + 0.06, by = Math.max(storeyH + CUT_H + 0.1, apex + 0.95), bw = 1.6, btop = wallH - 0.16;
-    livery(ak, ap, uc, btop, zb, bw, btop - 0.07 - by - bw * 0.6);
-  }
-}
 
 /**
  * A course round a building's foot as one continuous band between heights y0 and y1: from `inset`
@@ -1055,7 +954,7 @@ function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, 
      */
     const stop = (end: number, n: number) => (inner.has(ends[end]) ? 0 : backs.has(ends[end]) ? -WALL_T / 2 : -n);
     // (A castle door's base courses stop against the outside of its dressed surround.)
-    const cuts = b.doors.filter((dr) => dr.side === side).map((dr) => (dr.w < 4 ? [dr.at - DRESS_T, dr.at + dr.w + DRESS_T] : [dr.at, dr.at + dr.w]) as [number, number]).sort((p1, p2) => p1[0] - p2[0]);
+    const cuts = b.doors.filter((dr) => dr.side === side).map((dr) => [dr.at - DRESS_T, dr.at + dr.w + DRESS_T] as [number, number]).sort((p1, p2) => p1[0] - p2[0]);
     // Stretches between the ends and the doors: [u at the inner edge, u at the outer edge] at each end.
     let from: [number, number] = [0.5 + stop(0, lo), 0.5 + stop(0, hi)];
     const runs: [[number, number], [number, number]][] = [];
@@ -1227,7 +1126,7 @@ function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
   }
   for (const [bx, bz, bw, bd] of [[w / 2, 1.13, iw, 0.46], [w / 2, d - 1.13, iw, 0.46], [1.13, d / 2, 0.46, id - 0.92], [w - 1.13, d / 2, 0.46, id - 0.92]]) fk.box(p, [bw, 0.05, bd], [bx, y + 0.05, bz], ASHLAR_L);
   for (const [bx, bz, bw, bd] of [[w / 2, 1.42, iw - 0.92, 0.08], [w / 2, d - 1.42, iw - 0.92, 0.08], [1.42, d / 2, 0.08, id - 1.16], [w - 1.42, d / 2, 0.08, id - 1.16]]) fk.box(p, [bw, 0.06, bd], [bx, y + 0.05, bz], GILT);
-  if (w * d >= 150 && !b.doors.some((x) => x.side === 's' && x.w >= 4)) {
+  if (w * d >= 150) {
     // The stair house on the middle of the back (north) wall, up from below onto the leads: tall
     // enough for the castle's single door onto the leads, under a course of the dressed stone on the
     // course lines and a crenellated top.

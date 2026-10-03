@@ -90,13 +90,16 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   // k: what stands (dissolving round the hero like any occluder); mk: what goes with the ground floor's
   // cut (the camera side up to the upper cut, the galleries); fk: what goes on either floor (the
   // camera side over the upper cut, the ceiling, the roof and all over it); ik: the floor and the
-  // ground floor's dressing (never dissolved); uk: the galleries' floors and their dressing.
-  const k = new ModelKit(), mk = new ModelKit(), fk = new ModelKit(), ik = new ModelKit(), uk = new ModelKit();
+  // ground floor's dressing (never dissolved); uk: the galleries' floors and their dressing; ek: the
+  // few whole pieces on the front that stand across the upper cut (the crest, the porch's spandrels),
+  // which are always shown, cut clean by the shader at the cut the hero stands under (the ground
+  // floor's, or upstairs the upper cut).
+  const k = new ModelKit(), mk = new ModelKit(), fk = new ModelKit(), ik = new ModelKit(), uk = new ModelKit(), ek = new ModelKit();
   const g = new THREE.Group();
   g.position.set(b.x, baseY, b.z);
-  const floorG = new THREE.Group(), built = new THREE.Group(), lifted = new THREE.Group(), ruin = new THREE.Group(), mid = new THREE.Group();
+  const floorG = new THREE.Group(), built = new THREE.Group(), lifted = new THREE.Group(), mid = new THREE.Group(), edge = new THREE.Group();
   const ground = new THREE.Group();
-  g.add(floorG, built, lifted, ruin, mid);
+  g.add(floorG, built, lifted, mid, edge);
   built.add(ground);
   const storeyH = b.storeyH ?? KEEP_H.gallery;
 
@@ -132,7 +135,6 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
       f = new THREE.Group();
       f.position.set(...FRAME[side].pos);
       f.rotation.y = FRAME[side].rot;
-      f.userData.keepFrame = true;
       p.add(f);
       frames.set(key, f);
     }
@@ -216,8 +218,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     holes.get('s')!.push({ x0: x - hw, x1: x + hw, y0: 0, y1: GREAT_DOOR.head, z0: -T - 0.01, z1: 0.01 });
     band(true, GREAT_DOOR.head, GREAT_DOOR.head + 0.5, (kk, pp, y0, y1) => cb(kk, frame('s', pp), [GREAT_DOOR.arch, y1 - y0, 0.1], [x, (y0 + y1) / 2, 0.05], DRESS, undefined, 0.02));
     fbox('s', [ik, floorG], [GREAT_DOOR.w + 0.2, 0.08, T + FRONTISPIECE.out], [x, 0.04, (FRONTISPIECE.out - T) / 2], DRESS, 0.02);
-    const [ck, cp] = at(true, 5.4);
-    crest(ck, frame('s', cp), x, 5.15, 0.0, 0.85);
+    crest(ek, frame('s', edge), x, 5.15, 0.0, 0.85);
   }
 
   // ─── The frontispiece ───────────────────────────────────────────────────────
@@ -231,8 +232,8 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     { x0: fc - show.w / 2, x1: fc + show.w / 2, y0: show.sill, y1: show.sill + show.h, z0: fz - SINK, z1: fz + 0.01 },
   ];
   {
-    const [pk, pp] = at(true, 2), [sk, sp] = at(true, show.sill);
-    pk.mesh(frame('s', pp), spandrels(GREAT_DOOR.arch, GREAT_DOOR.apex, fz, porchRise), ASHLAR_B, [fc, 0, fz / 2]);
+    const [sk, sp] = at(true, show.sill);
+    ek.mesh(frame('s', edge), spandrels(GREAT_DOOR.arch, GREAT_DOOR.apex, fz, porchRise), ASHLAR_B, [fc, 0, fz / 2]);
     // (The porch arch's dressing, stone by stone in the band its foot stands in.)
     for (const st of archDressing(GREAT_DOOR.arch, GREAT_DOOR.apex, porchRise, { foot: 0, t: 0.62, p: 0.14, dep: 0.3 })) {
       const [dk, dp] = at(true, Math.max(st.y, 0.01));
@@ -241,7 +242,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     sk.mesh(frame('s', sp), spandrels(show.w, show.h, SINK, showRise), ASHLAR_B, [fc, show.sill, fz - SINK / 2]);
     archRing(sk, frame('s', sp), fc, show.sill, fz, show.w, show.h, { n: 6, t: 0.42, p: 0.12, dep: SINK + 0.02, jamb: true });
     cb(sk, frame('s', sp), [show.w + 0.9, 0.5, 0.12], [fc, show.sill - 0.25, fz + 0.06], DRESS, undefined, 0.02);
-    const T2 = SINK > 0 ? fz - SINK + T : T;
+    const T2 = fz - SINK + T;
     for (const [lx, lw, ly, lh] of [[fc - 1.0, 1.4, show.sill + 0.1, 6.0], [fc + 1.0, 1.4, show.sill + 0.1, 6.0], [fc, 0.8, show.sill + 6.62, 0.95]]) {
       const { hole } = glazedWindow(sk, frame('s', sp), lx, ly, fz - SINK, { w: lw, h: lh, T: T2, stone: ASHLAR_B });
       fHoles.push(hole);
@@ -369,9 +370,6 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
 
   function turret(t: (typeof TURRETS)[number]) {
     const lift = t.front, r = TURRET.r, n = drumStones(r), N = 24, top = TURRET.shaft;
-    const tg = new THREE.Group();
-    tg.position.set(t.x, 0, t.z);
-    tg.userData.turret = true;
     // Toward the keep's inside along x and z.
     const sx = t.x > S / 2 ? -1 : 1, sz = t.z > S / 2 ? -1 : 1;
     // The quarter of the drum inside the keep is cut away up to the deck (the hall's corner is the
@@ -403,7 +401,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
       let grp = groups.get(pp.uuid);
       if (!grp) {
         grp = new THREE.Group();
-        grp.position.copy(tg.position);
+        grp.position.set(t.x, 0, t.z);
         pp.add(grp);
         groups.set(pp.uuid, grp);
       }
@@ -612,7 +610,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
       c.userData.face = { x0: Math.min(pts[0].x, pts[1].x), x1: Math.max(pts[0].x, pts[1].x), z0: Math.min(pts[0].z, pts[1].z), z1: Math.max(pts[0].z, pts[1].z) };
     }
   }
-  finishProp(g, [k, mk, fk, ik, uk]);
+  finishProp(g, [k, mk, fk, ik, uk, ek]);
   const uMid = { value: OFF }, uTop = { value: OFF };
   const patched = new Set<THREE.Material>();
   const patch = (grp: Obj, u: { value: number }) => grp.traverse((o) => {
@@ -621,6 +619,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   });
   patch(mid, uMid);
   patch(lifted, uTop);
+  patch(edge, uTop);
   for (const m of [...ik.mats, ...uk.mats]) m.userData.noOcclude = true;
   // The furnishings (the high table, the braziers) stand on the floor and the dais.
   const ticks: ((t: number) => void)[] = [];
@@ -654,6 +653,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     lifted.visible = cutV < 0.999;
     shadows(mid, c0 < 0.001);
     shadows(lifted, cutV < 0.001);
+    shadows(edge, cutV < 0.001);
   };
   apply();
   // (Standing at the great hall's dais or the chapel's west end, the camera would stand in a front turret.)

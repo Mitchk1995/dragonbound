@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { ZONES } from '../src/data/zones';
 import { cellRole, isVoid, stairSteps } from '../src/world/building';
 import { buildKeep } from '../src/world/castle/keepModel';
-import { FRONTISPIECE, GREAT_DOOR, KEEP_H, KEEP_SPEC, KEEP_WINDOWS, TURRET, TURRETS, WALK_DOOR_U } from '../src/world/castle/keepSpec';
+import { FRONTISPIECE, GREAT_DOOR, KEEP_H, keepGround, KEEP_SPEC, KEEP_WINDOWS, TURRET, TURRETS, WALK_DOOR_U } from '../src/world/castle/keepSpec';
 import { CROWN_Y, CURTAIN, KEEP, MOAT, RANGE, TERRACE_Y } from '../src/world/castle/plan';
 import { Cell } from '../src/world/layout';
+import type { Site } from '../src/world/castle/site';
 
 /**
  * The great keep's own model (castle v4, stage 2): its heights as the plan gives them, a window
@@ -15,7 +16,7 @@ import { Cell } from '../src/world/layout';
  */
 const K = buildKeep(KEEP_SPEC, TERRACE_Y);
 K.obj.updateMatrixWorld(true);
-const [floorG, built, lifted, , mid] = K.obj.children;
+const [floorG, built, lifted, mid, edge] = K.obj.children;
 const box = new THREE.Box3().setFromObject(K.obj);
 
 describe('the great keep', () => {
@@ -83,8 +84,10 @@ describe('the great keep', () => {
     expect([mid.visible, lifted.visible]).toEqual([true, true]);
     K.setCut(1, 0);
     expect([built.visible, floorG.visible, mid.visible, lifted.visible]).toEqual([true, true, false, false]);
+    expect(edge.visible, 'the front whole pieces stay, clipped by the shader').toBe(true);
     K.setCut(1, 1);
     expect([mid.visible, lifted.visible]).toEqual([true, false]);
+    expect(edge.visible, 'the crest and the porch spandrels stay, clipped at the upper cut').toBe(true);
     K.setCut(0, 0);
     expect([mid.visible, lifted.visible]).toEqual([true, true]);
     // What lifts on the ground floor stands over its base course.
@@ -126,5 +129,12 @@ describe('the keep on the grid', () => {
     // The side bays' fronts between the turrets and the frontispiece stay terrace.
     expect(at(69, 41)).toBe(Cell.Ground);
     expect(cellRole(KEEP_SPEC, 76, 38)).toBe('door');
+  });
+  it('only the front turrets and the frontispiece block the grid: the back turrets stand over the moat', () => {
+    const blocked: [number, number][] = [];
+    const site = { G: { inside: () => true, idx: (x: number, z: number) => `${x},${z}` }, block: (i: string) => blocked.push(i.split(',').map(Number) as [number, number]) } as unknown as Site;
+    keepGround(site);
+    expect(blocked.length).toBeGreaterThan(0);
+    for (const [x, z] of blocked) expect(z, `${x},${z}`).toBeGreaterThan(KEEP.rect[1] + 12);
   });
 });

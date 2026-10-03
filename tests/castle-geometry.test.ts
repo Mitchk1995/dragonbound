@@ -215,8 +215,9 @@ describe('castle geometry', () => {
     for (const p of P) for (const g of p.solids.filter((s) => s.part.tag === 'glass')) {
       // The pane's face: its thinnest axis.
       const n = [0, 1, 2].reduce((a, k) => (g.e[k] < g.e[a] ? k : a), 0), N = g.u[n];
-      // (A drum notched for its windows, the keep's turrets' slit lights, is cut away round them.)
-      const solid = p.solids.filter((s) => s !== g && !s.part.thin && !s.part.hollow && !s.part.notched);
+      // (A drum notched for its windows, the keep's turrets' slit lights, is cut away round them: it is
+      // set aside only for a pane standing inside its own radius.)
+      const solid = p.solids.filter((s) => s !== g && !s.part.thin && !s.part.hollow && !(s.part.notched && s.r && Math.hypot(g.c.x - s.c.x, g.c.z - s.c.z) < s.r + 0.1));
       const set = [-1, 1].some((sg) => solid.some((s) => contains(s, g.c.clone().addScaledVector(N, sg * (g.e[n] + 0.12)), 0.02)));
       if (!set && !solid.some((s) => overlap(s, g) > -0.03)) bad.push(`${p.name}: a window pane at ${fmt(g.c)} hangs in the air, in no wall`);
       // From at least one side the whole pane shows: no block in front of its middle or across it.
