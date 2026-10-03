@@ -516,7 +516,13 @@ export class Game {
       low: { ratio: 1, msaa: 0, shadow: 1024, bloom: false, ao: false },
     }[level];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
-    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) rt.samples = p.msaa;
+    // (A target allocates its buffers once: on a new sample count it is released and rebuilt on next use,
+    // its depth texture with it, even when its size stays the same.)
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) {
+      if (rt.samples === p.msaa) continue;
+      rt.samples = p.msaa;
+      rt.dispose();
+    }
     this.bloom.enabled = p.bloom;
     // (Without occlusion the low preset skips the whole pass and its grade.)
     this.shade.enabled = p.ao;

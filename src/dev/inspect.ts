@@ -119,9 +119,9 @@ export async function runInspect(g: Game, suites: string) {
       report.bailey = await (await import('./castleInspect')).baileySuite(g, shot, rockOnly, baileyOnly ?? baileyAngles, !!baileyAngles);
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     // The light: the engine test's castle views and the play camera round the island and in every zone (explicit only:
-    // `lighting`, `lighting:keep` for the island alone, `lighting:cost` for what each part of the light costs).
+    // `lighting`, `lighting:keep` for the island alone, `lighting:cost` for what each part of the light costs, `lighting:quality` for switching quality mid-session).
     const lightArg = suites.split(',').find((s) => s === 'lighting' || s.startsWith('lighting:'));
-    if (lightArg) report.lighting = await (await import('./lightingInspect')).lightingSuite(g, shot, lightArg === 'lighting:keep', lightArg === 'lighting:cost');
+    if (lightArg) report.lighting = await (await import('./lightingInspect')).lightingSuite(g, shot, lightArg === 'lighting:keep', lightArg === 'lighting:cost', lightArg === 'lighting:quality');
     if (suites.split(',').includes('memory')) report.memory = await (await import('./memoryCheck')).memoryCheck(g);
     if (want('effects')) await effectsSuite(g, shot);
     if (want('boss')) await bossSuite(g, shot);

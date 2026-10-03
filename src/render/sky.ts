@@ -79,5 +79,10 @@ export function skyDome(): THREE.Mesh {
   sky.renderOrder = -10;
   sky.name = 'sky';
   sky.frustumCulled = false;
+  // Always centred on the camera, wherever its group follows (the title's wide orbit would otherwise
+  // carry the camera out to the dome's edge).
+  sky.onBeforeRender = (_r, _s, camera) => {
+    sky.matrixWorld.makeTranslation(camera.matrixWorld.elements[12], camera.matrixWorld.elements[13], camera.matrixWorld.elements[14]);
+  };
   return sky;
 }

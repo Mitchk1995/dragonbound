@@ -12,7 +12,7 @@ import { perf } from './inspect';
  * zone, each with its frame cost. `lighting:cost` measures instead what each part of the light costs
  * at the heaviest views (the frame with each part switched off in turn).
  */
-export async function lightingSuite(g: Game, shot: (name: string) => Promise<void>, keepOnly = false, cost = false) {
+export async function lightingSuite(g: Game, shot: (name: string) => Promise<void>, keepOnly = false, cost = false, quality = false) {
   const out: Record<string, unknown> = {};
   const settle = () => new Promise((r) => setTimeout(r, 400));
   g.travel('keep', true);
@@ -76,6 +76,84 @@ export async function lightingSuite(g: Game, shot: (name: string) => Promise<voi
     }
   };
 
+  if (quality) {
+    // Switching the quality setting mid-session (high → low → high → low) and the shadows at low.
+    const centre = () => play('centre', P.fountain.x, P.fountain.z + 6.2, 1.2);
+    const steps: [string, 'high' | 'low'][] = [['high-1', 'high'], ['low-1', 'low'], ['high-2', 'high'], ['low-2', 'low']];
+    for (const [tag, q] of steps) {
+      g.applyGraphics(q);
+      await centre();
+      await shot(`light-q-${tag}-centre`);
+      if (q === 'low') await view(`q-${tag}-overview`, [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70);
+    }
+    // The title orbit at low (the widest shadow box, the biggest shadow texels).
+    {
+      const fog = g.scene.fog as THREE.Fog, keep = [fog.near, fog.far];
+      g.mode = 'title';
+      g.player.obj.visible = false;
+      g.debug.hold = () => {
+        g.update(0, 0);
+        g.draw();
+        return true;
+      };
+      await shot('light-q-low-title');
+      g.debug.hold = null;
+      g.mode = 'play';
+      [fog.near, fog.far] = keep;
+      g.player.obj.visible = true;
+    }
+    // The same switches where the size does not change (a display at 100% scale): is the scene's
+    // target multisampled exactly when the setting asks for it?
+    {
+      const game = g as any, setRatio = g.renderer.setPixelRatio;
+      g.renderer.setPixelRatio = () => {};
+      const msaa: string[] = [];
+      for (const q of ['high', 'low', 'high', 'low'] as const) {
+        g.applyGraphics(q);
+        g.draw();
+        const rt = game.composer.renderTarget1;
+        msaa.push(`${q}:${rt.samples}:${!!(g.renderer.properties.get(rt) as any).__webglMultisampledFramebuffer}`);
+      }
+      g.renderer.setPixelRatio = setRatio;
+      out['msaa-same-size'] = msaa;
+    }
+    // How often the shadow box changes size while the hero walks with the camera shaking, and while zooming.
+    const sizes = (): string => {
+      const sc = g.sun.shadow.camera;
+      return `${sc.right - sc.left}x${sc.top - sc.bottom}`;
+    };
+    g.applyGraphics('high');
+    g.debug.timeScale = 1;
+    g.player.obj.visible = true;
+    let last = '', changes = 0;
+    g.debug.hold = () => true;
+    const start = { x: P.fountain.x - 20, z: P.fountain.z + 8 };
+    for (let i = 0; i <= 160; i++) {
+      g.player.pos.set(start.x + i * 0.25, g.zone.groundY(start.x + i * 0.25, start.z), start.z);
+      g.shake(0.4, 0.2);
+      g.update(1 / 60);
+      g.draw();
+      const s = sizes();
+      if (last && s !== last) changes++;
+      last = s;
+    }
+    out['walk-size-changes'] = changes;
+    changes = 0;
+    last = '';
+    for (let i = 0; i <= 70; i++) {
+      g.camZoom = 1 + (i % 36 < 18 ? i % 36 : 36 - (i % 36)) * 0.02;
+      g.update(1 / 60);
+      g.draw();
+      const s = sizes();
+      if (last && s !== last) changes++;
+      last = s;
+    }
+    out['zoom-size-changes'] = changes;
+    g.debug.hold = null;
+    g.camZoom = 1;
+    document.body.classList.remove('inspect-clean');
+    return out;
+  }
   if (cost) {
     // What each part of the light costs, at the two heaviest views: the frame with each switched off in turn.
     const game = g as any;

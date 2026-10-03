@@ -8,7 +8,8 @@ import * as THREE from 'three';
  * height where the ground and the walls stand and to the shadows' reach, seen from the sun. So the
  * play camera's whole screen has shadows at every zoom, and a camera over the whole castle has them
  * too, with no edge where they stop. While the camera moves, the box keeps its size (rounded up to
- * whole steps) and slides in whole shadow texels, so shadow edges never crawl or shimmer.
+ * whole steps, and held while the view still fits) and slides in whole shadow texels, so shadow edges
+ * never crawl or shimmer.
  */
 
 /**
@@ -41,6 +42,23 @@ const _view = new THREE.Matrix4(), _inv = new THREE.Matrix4();
 const _up = new THREE.Vector3(0, 1, 0), _zero = new THREE.Vector3();
 const pool = Array.from({ length: 18 }, () => new THREE.Vector3());
 const rays = Array.from({ length: 9 }, () => new THREE.Vector3());
+
+/** The box's width and height as last fitted (and the map size they were fitted for). */
+const box = { w: 0, h: 0, size: 0 };
+
+/**
+ * The box's width (axis 0) or height (1) for a view `span` metres across: rounded up to whole steps,
+ * and kept as it was while the view still fits and has not shrunk by two whole steps, so the camera's
+ * shake, a step up a stair or a little zoom never flick it between two sizes (each change of size
+ * moves every shadow edge by a fraction of a texel).
+ */
+function held(axis: 0 | 1, span: number, size: number) {
+  const key = axis ? 'h' : 'w';
+  const need = Math.ceil((span + PAD * 2) / STEP) * STEP;
+  if (box.size !== size || need > box[key] || need < box[key] - STEP * 2) box[key] = need;
+  box.size = size;
+  return box[key];
+}
 
 /**
  * Fit the sun's shadow camera to `camera`'s view. `toSun` is the unit direction towards the sun,
@@ -86,7 +104,7 @@ export function fitSunShadow(sun: THREE.DirectionalLight, camera: THREE.Perspect
     z0 = Math.min(z0, q.z); z1 = Math.max(z1, q.z);
   }
   const size = sun.shadow.mapSize.x;
-  const w = Math.ceil((x1 - x0 + PAD * 2) / STEP) * STEP, h = Math.ceil((y1 - y0 + PAD * 2) / STEP) * STEP;
+  const w = held(0, x1 - x0, size), h = held(1, y1 - y0, size);
   const tx = w / size, ty = h / size;
   // The centre slides in whole texels.
   const cx = Math.round((x0 + x1) / 2 / tx) * tx, cy = Math.round((y0 + y1) / 2 / ty) * ty;
