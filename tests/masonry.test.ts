@@ -1,20 +1,29 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { chamferBox } from '../src/render/blocks';
-import { cleanBreaks, courseBand, courseSpans, fitCourses, masonGeometry } from '../src/render/masonry';
-import { KERB_W, kerbStones, type KerbRun } from '../src/world/kerbStones';
-import { archStones, buildProp } from '../src/world/props';
+import { bondPhases, cleanBreaks, COURSE, courseBand, laidRun, masonGeometry, STONE } from '../src/render/masonry';
+import { KERB_W, kerbStones, type LaidKerb } from '../src/world/kerbStones';
+import { archStones, ASHLAR, ASHLAR_B, buildProp, dressedArch } from '../src/world/props';
 
-/** The stone layout of every vertex: [stone coordinate, course coordinate, mode]. */
+/** The stone layout of every vertex: [stone coordinate, course coordinate, mode, the face's ends]. */
 const layout = (geo: THREE.BufferGeometry) => {
-  const a = geo.getAttribute('aMason'), k = geo.getAttribute('aMasonK'), p = geo.getAttribute('position'), n = geo.getAttribute('normal');
-  return Array.from({ length: a.count }, (_, i) => ({ X: a.getX(i), C: a.getY(i), mode: k.getX(i), p: new THREE.Vector3().fromBufferAttribute(p, i), n: new THREE.Vector3().fromBufferAttribute(n, i) }));
+  const a = geo.getAttribute('aMason'), k = geo.getAttribute('aMasonK'), f = geo.getAttribute('aMasonF'), p = geo.getAttribute('position'), n = geo.getAttribute('normal');
+  return Array.from({ length: a.count }, (_, i) => ({
+    X: a.getX(i), C: a.getY(i), l: a.getZ(i), h: a.getW(i), mode: k.getX(i), xs: f.getX(i), xe: f.getY(i),
+    p: new THREE.Vector3().fromBufferAttribute(p, i), n: new THREE.Vector3().fromBufferAttribute(n, i),
+  }));
 };
 const frac = (v: number) => v - Math.floor(v);
 
+/** Stones from a face's end to the first joint into it, for a course of parity `par`, from its start or its end. */
+const toJoint = (X: number, par: number, fromStart: boolean) => {
+  const xo = X + par;
+  if (fromStart) return Math.abs(frac(xo)) < 1e-6 || Math.abs(frac(xo) - 1) < 1e-6 ? 1 : Math.ceil(xo) - xo;
+  return Math.abs(frac(xo)) < 1e-6 || Math.abs(frac(xo) - 1) < 1e-6 ? 1 : xo - Math.floor(xo);
+};
+
 describe('masonry laid as a mason lays it', () => {
   it('fits whole courses between breaks, and every part of a schedule agrees on them', () => {
-    fitCourses(0, 2.1).forEach((y, i) => expect(y).toBeCloseTo(i * 0.525));
     const breaks = cleanBreaks([0, 0.62, 0.96, 0.97, 4.88, 5.12, 9]);
     expect(breaks).toEqual([0, 0.62, 0.96, 4.88, 5.12, 9]);
     // Each band of the schedule holds whole courses: its foot and head fall on joints.
@@ -23,25 +32,35 @@ describe('masonry laid as a mason lays it', () => {
       expect(frac(b.c0)).toBeCloseTo(0);
       expect(frac(b.c0 + (breaks[i + 1] - b.a) * b.k + 1e-9)).toBeCloseTo(0);
     }
-    // Quoins laid by courseSpans sit course for course on the walling's joints.
-    for (const [y0, y1] of courseSpans(breaks, 0.96, 4.88)) {
-      const b = courseBand(breaks, (y0 + y1) / 2);
-      expect(frac(b.c0 + (y0 - b.a) * b.k + 1e-9)).toBeCloseTo(0);
-      expect(y1 - y0).toBeGreaterThan(0.4);
+    // Breaks on the course lines give courses of exactly one height, on those lines.
+    for (const y of [0.2, 1.3, 3.7, 6.9]) {
+      const b = courseBand([0, 1, 3.5, 4, 6.5, 7], y);
+      expect(1 / b.k).toBeCloseTo(COURSE);
+      expect(frac(b.a / COURSE - b.c0 + 1e-9)).toBeCloseTo(0);
     }
   });
 
-  it('lays each face of a wall in whole or half stones, the bond running on round its corners', () => {
-    const geo = masonGeometry(new THREE.BoxGeometry(5.3, 2, 1.7), { m: new THREE.Matrix4(), wrap: false, breaks: [], seed: 1 });
-    const v = layout(geo).filter((q) => q.mode === 1);
-    // At every corner of the plan the stone coordinate is a quarter stone off a joint, on both faces.
-    for (const q of v) {
-      const atCorner = Math.abs(Math.abs(q.p.x) - 2.65) < 1e-3 && Math.abs(Math.abs(q.p.z) - 0.85) < 1e-3;
-      if (atCorner) expect(Math.abs(frac(q.X * 2) - 0.5)).toBeCloseTo(0, 3);
+  it('lays every face from its ends in whole and half stones, each corner turned on a quoin long and short by turns', () => {
+    for (const [w, d] of [[5.3, 1.7], [4, 4], [6.6, 2.2], [3.1, 1.2]]) {
+      const geo = masonGeometry(new THREE.BoxGeometry(w, 2, d), { m: new THREE.Matrix4(), wrap: false, breaks: [], seed: 1 });
+      const v = layout(geo).filter((q) => q.mode === 1);
+      // Every face is a whole number of half stones long (it ends on a whole or half stone, never a sliver).
+      for (const q of v) expect(frac(2 * (q.xe - q.xs) + 1e-9)).toBeCloseTo(0);
+      // At each corner, in each course, the stone ending one face and the stone starting the next are one
+      // long (a whole stone to its first joint) and one short (half a stone).
+      const { pz, px, mz, mx } = bondPhases(Math.round(2 * w / STONE) / 2, Math.round(2 * d / STONE) / 2);
+      const face = (sel: (q: (typeof v)[number]) => boolean) => v.find(sel)!;
+      const faces = [face((q) => q.n.z > 0.9), face((q) => q.n.x > 0.9), face((q) => q.n.z < -0.9), face((q) => q.n.x < -0.9)];
+      expect(faces.map((q) => q.xs)).toEqual([pz, px, mz, mx].map((x) => expect.closeTo(x, 6)));
+      for (let i = 0; i < 4; i++) {
+        const end = faces[i], start = faces[(i + 1) % 4];
+        for (const par of [0, 0.5]) {
+          const pair = [toJoint(end.xe, par, false), toJoint(start.xs, par, true)].sort();
+          expect(pair[0]).toBeCloseTo(0.5);
+          expect(pair[1]).toBeCloseTo(1);
+        }
+      }
     }
-    // The bond closes round the part: the coordinate at the start of +Z equals the end of -X, a whole number of stones on.
-    const start = v.filter((q) => q.n.z > 0.9 && Math.abs(q.p.x + 2.65) < 1e-3).map((q) => q.X), end = v.filter((q) => q.n.x < -0.9 && Math.abs(q.p.z - 0.85) < 1e-3).map((q) => q.X);
-    expect(frac(Math.max(...end) - Math.min(...start) + 1e-9)).toBeCloseTo(0);
   });
 
   it('lays a stone no bigger than one stone whole, with no joint across it', () => {
@@ -67,6 +86,38 @@ describe('masonry laid as a mason lays it', () => {
     expect(drums).toBeGreaterThan(0);
   });
 
+  it('lays the walling of the curtain, its towers, gates and the buildings\' pavilions on one set of course lines', () => {
+    // Every course in the walling one course high, and every course line on the castle's grid counted
+    // up from the foot each piece stands on, so where two pieces meet their courses run on level.
+    const pieces = [
+      buildProp('castle_wall', { len: 12, v: 3 }), buildProp('round_tower', { len: 3.2, v: 11.2, opt: { walks: [[Math.PI / 2, 0]] } }),
+      buildProp('corner_tower', { len: 3.4, v: 12 }), buildProp('ward_gate', 4), buildProp('outer_gatehouse', { len: 4, opt: { cx: 6, R: 2.6 } }),
+      buildProp('pavilion', 4), buildProp('door_turret', { len: 2, v: 11 }),
+    ];
+    let checked = 0;
+    for (const pc of pieces) {
+      pc.obj.updateMatrixWorld(true);
+      pc.obj.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !o.geometry.getAttribute('aMasonK')) return;
+        const hex = (o.material as THREE.MeshStandardMaterial).color.getHex();
+        if (hex !== ASHLAR && hex !== ASHLAR_B) return;
+        const v = layout(o.geometry);
+        // (The walling's own faces: side faces whose triangles span more than one course.)
+        for (let t = 0; t < v.length; t += 3) {
+          const tri = v.slice(t, t + 3);
+          if (!tri.every((q) => q.mode === 1 || q.mode === 3) || Math.max(...tri.map((q) => q.C)) - Math.min(...tri.map((q) => q.C)) < 1.01) continue;
+          for (const q of tri) {
+            const y = q.p.clone().applyMatrix4(o.matrixWorld).y;
+            expect(q.h).toBeCloseTo(COURSE, 4);
+            expect(Math.abs(frac((y - q.C * q.h) / COURSE + 1e-6) - 1e-6)).toBeLessThan(1e-3);
+            checked++;
+          }
+        }
+      });
+    }
+    expect(checked).toBeGreaterThan(300);
+  });
+
   it('cuts arch stones on radial joints that close on each other with no gap', () => {
     const stones = archStones(1.0, 4.0, 1.24, 0, 0.34, 4, 0.4);
     expect(stones.length).toBe(9);
@@ -79,11 +130,33 @@ describe('masonry laid as a mason lays it', () => {
       for (let j = 0; j < 2; j++) for (let c = 0; c < 2; c++) expect(aTop[j][c]).toBeCloseTo(bFoot[j][c], 6);
     }
   });
+
+  it('dresses an arch as one ring of stones laid in order round it, its jambs bedded on the walling\'s courses', () => {
+    // A doorway 2 wide with its apex at 4.05, the sill 0.3 over the course lines' origin.
+    const stones = dressedArch({ w: 2, h: 4.05, rise: 1.24, t: 0.48, p: 0.08, dep: 0.3, n: 4, foot: 0, grid: 0.3 });
+    // The stone coordinate runs on unbroken from the left foot round to the right foot, one whole stone each.
+    const spans = stones.map((st) => {
+      const X = layout(st.geo).map((q) => q.X);
+      return [Math.min(...X), Math.max(...X)];
+    });
+    spans.forEach(([a, b], i) => {
+      expect(a).toBeCloseTo(i);
+      expect(b).toBeCloseTo(i + 1);
+    });
+    // Each jamb stone's beds lie on the course lines (or at the foot or the springing), none under a quarter course.
+    const ys = 4.05 - 1.24;
+    for (const st of stones) {
+      const p = layout(st.geo).map((q) => q.p.y), lo = Math.min(...p), hi = Math.max(...p);
+      if (hi > ys + 1e-6) continue;
+      for (const y of [lo, hi]) if (y > 1e-6 && Math.abs(y - ys) > 1e-6) expect(Math.abs(frac((y + 0.3) / COURSE + 1e-6) - 1e-6)).toBeLessThan(1e-3);
+      expect(hi - lo).toBeGreaterThan(COURSE / 2 - 1e-6);
+    }
+  });
 });
 
-describe('kerbs laid in single stones', () => {
+describe('kerbs laid as one border of stones', () => {
   /** The kerbs as rectangles in plan. */
-  const rects = (stones: KerbRun[]) => stones.map((s) => {
+  const rects = (runs: LaidKerb[]) => runs.map((s) => {
     const ax = Math.abs(Math.cos(s.rot)) > 0.5;
     return { x0: s.x - (ax ? s.len : KERB_W) / 2, x1: s.x + (ax ? s.len : KERB_W) / 2, z0: s.z - (ax ? KERB_W : s.len) / 2, z1: s.z + (ax ? KERB_W : s.len) / 2 };
   });
@@ -92,20 +165,28 @@ describe('kerbs laid in single stones', () => {
 
   it('turns an outside corner on one square corner stone, no gap and no overlap', () => {
     // A paved square (0..3, 0..3) with lawn to its north and east: runs set 0.08 onto the paving.
-    const stones = kerbStones([{ x: 1.5, z: 0.08, rot: 0, len: 3 }, { x: 2.92, z: 1.5, rot: Math.PI / 2, len: 3 }]);
-    const r = rects(stones);
+    const runs = kerbStones([{ x: 1.5, z: 0.08, rot: 0, len: 3 }, { x: 2.92, z: 1.5, rot: Math.PI / 2, len: 3 }]);
+    const r = rects(runs);
     expect(overlapping(r)).toBe(false);
     // The angle is filled right into the corner.
     for (const [x, z] of [[2.9, 0.1], [2.75, 0.25], [2.95, 0.05]]) expect(covered(r, x, z)).toBe(true);
-    // Every stone near square.
-    for (const s of stones) expect(Math.abs(s.len - KERB_W)).toBeLessThan(0.11);
+    // Each run is whole stones of the paving's own length (two thirds), its corner stone square.
+    for (const s of runs) expect(Math.abs(s.len / s.n - (s.n === 1 && s.len < 0.4 ? KERB_W : 2 * KERB_W))).toBeLessThan(0.17);
   });
 
   it('fills the inside corner where a lawn\'s corner pokes into the paving', () => {
     // Lawn cell (1..2, -1..0) with paving west, south and south-west of it.
-    const stones = kerbStones([{ x: 1.5, z: 0.08, rot: 0, len: 1 }, { x: 0.92, z: -0.5, rot: Math.PI / 2, len: 1 }]);
-    const r = rects(stones);
+    const r = rects(kerbStones([{ x: 1.5, z: 0.08, rot: 0, len: 1 }, { x: 0.92, z: -0.5, rot: Math.PI / 2, len: 1 }]));
     expect(overlapping(r)).toBe(false);
     expect(covered(r, 0.95, 0.05)).toBe(true);
+  });
+
+  it('lays a run as one box whose joints are drawn in it, its top edges arrises', () => {
+    const v = layout(laidRun(2, KERB_W, 0.12, 3, 1));
+    // Along the run the stone coordinate runs 0 to 3: three stones, the joints at its whole numbers.
+    const top = v.filter((q) => q.n.y > 0.9);
+    expect(Math.min(...top.map((q) => q.X))).toBeCloseTo(0);
+    expect(Math.max(...top.map((q) => q.X))).toBeCloseTo(3);
+    for (const q of top) expect(q.l).toBeCloseTo(2 / 3);
   });
 });

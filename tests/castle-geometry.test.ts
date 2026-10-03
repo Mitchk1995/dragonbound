@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Cell, Ground, Lawn } from '../src/world/layout';
 import { KERB_W } from '../src/world/kerbStones';
-import { DOORS, HERO_HEIGHT, TRIM, TRIM_L } from '../src/world/props';
+import { ASHLAR, ASHLAR_B, BASE, DOORS, DRESS, HERO_HEIGHT, type CourseRecord } from '../src/world/props';
+import { COURSE, onCourse } from '../src/render/masonry';
 import { castleScene, CASTLE_AREA, type Piece } from './castleScene';
 import { contains, corners, overlap, type Solid } from './geometry';
 import { CURTAIN_WALL } from '../src/data/castle';
@@ -347,7 +348,7 @@ describe('castle geometry', () => {
     expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
   });
 
-  it('flat stones on a drum lie on its facets, never across the crease between two', () => {
+  it('flat stones on a drum lie on its face: on a facet of a faceted drum, hugging the curve of a round one', () => {
     const bad: string[] = [];
     for (const p of P) {
       const drums = p.solids.filter((s) => s.r >= 1.5 && s.e[1] >= 1.5 && s.part.sides);
@@ -364,6 +365,20 @@ describe('castle geometry', () => {
         if (!d) continue;
         rad.sub(new THREE.Vector3(d.c.x, 0, d.c.z)).normalize();
         if (Math.abs(rad.dot(N)) < 0.8) continue;
+        if (d.part.round) {
+          // A round drum: the stone's back stands inside the curve it lies on (the drum, or a course
+          // round it at the stone's height) right out to its edges, so no gap opens behind it, and its
+          // face stands out of that curve (it is not sunk into it).
+          const h = new THREE.Vector3(N.x, 0, N.z).normalize(), off = new THREE.Vector3(s.c.x - d.c.x, 0, s.c.z - d.c.z);
+          const across = [0, 1, 2].filter((k) => k !== n).reduce((a, k) => (Math.abs(s.u[k].y) < Math.abs(s.u[a].y) ? k : a));
+          const along = off.dot(h), side = Math.abs(off.clone().addScaledVector(h, -along).length()) + s.e[across];
+          const back = along - s.e[n], front = along + s.e[n];
+          const under = p.solids.filter((q) => q.r > 0 && q.r <= back + 0.06 && Math.hypot(q.c.x - d.c.x, q.c.z - d.c.z) < 0.1 && s.c.y > q.c.y - q.e[1] && s.c.y < q.c.y + q.e[1]);
+          const R = Math.max(d.r, ...under.map((q) => q.r)), curve = Math.sqrt(Math.max(0, R * R - side * side));
+          if (back > curve + 0.05) bad.push(`${p.name}: a flat ${s.part.color.toString(16)} stone at ${fmt(s.c)} stands ${(back - curve).toFixed(2)} off the drum's curve at its edge`);
+          else if (front < R - 0.02) bad.push(`${p.name}: a flat ${s.part.color.toString(16)} stone at ${fmt(s.c)} is sunk ${(R - front).toFixed(2)} into the drum`);
+          continue;
+        }
         // The facet under it, in the drum's own turn: its middle's bearing, and the stone's facing.
         const dx = s.c.x - d.c.x, dz = s.c.z - d.c.z, th = Math.atan2(dx * d.u[0].x + dz * d.u[0].z, dx * d.u[2].x + dz * d.u[2].z);
         const step = (Math.PI * 2) / d.part.sides!, mid = (Math.floor(th / step) + 0.5) * step;
@@ -596,23 +611,43 @@ describe('castle geometry', () => {
     expect(bad, bad.slice(0, 3000).join('\n')).toEqual([]);
   });
 
-  it('string courses run clear of the quoins and of the window heads under them', () => {
+  it('string courses lie on the course lines, every course of the castle one height, and clear of the window heads under them', () => {
     const bad: string[] = [];
     for (const p of P) {
-      const ss = p.solids.filter((s) => !s.r && !s.part.thin && !s.part.fx);
-      // A string course: a long, low blue-grey band.
-      const bands = ss.filter((s) => s.part.color === TRIM && s.hi.y - s.lo.y <= 0.32 && Math.max(s.hi.x - s.lo.x, s.hi.z - s.lo.z) >= 2);
-      // A quoin: a blue-grey dressed stone about a course high, one of a stack up a corner.
-      const dressed = ss.filter((s) => (s.part.color === TRIM || s.part.color === TRIM_L) && s.part.box && s.e.every((e) => e >= 0.17 && e <= 0.35));
-      const quoins = dressed.filter((q) => dressed.some((o) => o !== q && Math.abs(o.c.x - q.c.x) < 0.12 && Math.abs(o.c.z - q.c.z) < 0.12 && Math.abs(Math.abs(o.c.y - q.c.y) - 0.5) < 0.15));
-      for (const b of bands) for (const q of quoins) {
-        const dy = Math.min(b.hi.y, q.hi.y) - Math.max(b.lo.y, q.lo.y);
-        if (dy > 0.02 && overlap(b, q) > 0.01) bad.push(`${p.name}: a string course at ${fmt(b.c)} runs across a quoin at ${fmt(q.c)}`);
-      }
-      // A window's head (the top of its glass) and the hood over it stand well under the next course.
-      for (const g of p.solids.filter((s) => s.part.tag === 'glass')) for (const b of bands) {
+      const ss = p.solids.filter((s) => !s.part.thin && !s.part.fx);
+      // A string course: a long band of the dressed stone one course high (round a drum, a ring of it).
+      const bands = ss.filter((s) => s.part.color === DRESS && Math.abs(s.hi.y - s.lo.y - COURSE) < 0.02 && (s.r >= 1.5 || Math.max(s.hi.x - s.lo.x, s.hi.z - s.lo.z) >= 2));
+      // Its foot and head on the course lines counted up from the foot the piece stands on.
+      const foot = p.obj.getWorldPosition(new THREE.Vector3()).y;
+      for (const b of bands) if (!onCourse(b.lo.y - foot) || !onCourse(b.hi.y - foot)) bad.push(`${p.name}: a string course at ${fmt(b.c)} lies off the course lines (${(b.lo.y - foot).toFixed(2)} to ${(b.hi.y - foot).toFixed(2)} over its foot)`);
+      // A window's head (the top of its glass) and the ring over it stand well under the next course.
+      for (const g of p.solids.filter((s) => s.part.tag === 'glass')) for (const b of bands.filter((q) => !q.r)) {
         const over = Math.min(b.hi.x, g.hi.x) - Math.max(b.lo.x, g.lo.x) > 0 && Math.min(b.hi.z, g.hi.z) - Math.max(b.lo.z, g.lo.z) > -0.6;
         if (over && b.lo.y > g.hi.y - 0.05 && b.lo.y - g.hi.y < 0.5) bad.push(`${p.name}: a string course at ${fmt(b.c)} runs ${(b.lo.y - g.hi.y).toFixed(2)} over a window's head at ${fmt(g.c)}`);
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
+  });
+
+  it('every wall is laid in whole courses on the course lines: none squeezed or stretched to a band of its own', () => {
+    const bad: string[] = [];
+    const WALLING = new Set([ASHLAR, ASHLAR_B, BASE]);
+    for (const p of P) {
+      for (const r of (p.obj.userData.courses ?? []) as CourseRecord[]) {
+        // The walling of every wall, tower and building, a storey or a stretch of it (the dressings, a
+        // lintel or a tympanum over its own lintel, are laid to the walling's lines by the bands on them,
+        // tested above; a statue's pedestal is no wall).
+        const lo = r.box.min.y, hi = r.box.max.y, long = Math.max(r.box.max.x - r.box.min.x, r.box.max.z - r.box.min.z);
+        if (r.single || r.laid || !WALLING.has(r.color) || hi - lo <= 0.8 || long < 2) continue;
+        // Each stretch of courses showing on it (between two breaks, or over the last) starts on a course
+        // line and holds a whole number of courses.
+        const br = r.breaks;
+        for (let i = 0; i < br.length; i++) {
+          const a = br[i], e = br[i + 1] ?? Infinity;
+          if (Math.min(e, hi) - Math.max(a, lo) < 0.25) continue;
+          const n = (e - a) / r.course;
+          if (!onCourse(a) || (e < Infinity && Math.abs(n - Math.round(n)) > 0.01)) bad.push(`${p.name}: walling at (${r.box.min.x.toFixed(1)}, ${lo.toFixed(1)}, ${r.box.min.z.toFixed(1)}) is laid in courses ${((e - a) / Math.max(1, Math.round(n))).toFixed(3)} high from ${a.toFixed(2)} (to a band at ${e.toFixed(2)})`);
+        }
       }
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);

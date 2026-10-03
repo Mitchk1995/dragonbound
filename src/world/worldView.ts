@@ -5,15 +5,15 @@ import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { Cell, Fluid, Ground, Lawn, type ZoneLayout } from './layout';
 import { buildLawn } from './lawn';
-import { buildProp, OCCLUDING_PROPS, TRIM_D, type Prop } from './props';
+import { buildProp, KERB, OCCLUDING_PROPS, type Prop } from './props';
 import { setWaterSky } from './water';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
-import { masonGeometry } from '../render/masonry';
+import { laidRun } from '../render/masonry';
 import { KERB_W, kerbStones } from './kerbStones';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
-import { chamferBox, hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock, taper } from '../render/blocks';
+import { hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock, taper } from '../render/blocks';
 import { useStrataRock } from '../render/rock';
 
 import type { SurfaceKind } from '../render/textures';
@@ -1233,17 +1233,17 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     debrisTick = (t) => bobbers.forEach((b) => (b.o.position.y = b.y + Math.sin(t * 0.35 + b.ph) * 0.45));
   }
 
-  // The kerbs edging paving against lawns and gravel (layout.kerbs): single square header stones of
-  // dressed blue-grey standing a hair proud of the ground, a corner stone where two runs turn (see
-  // kerbStones), one merged mesh, each stone painted whole.
+  // The kerbs edging paving against lawns and gravel (layout.kerbs): each run one continuous border of
+  // the paving's stone a shade darker, its joints laid in it (laidRun), standing a hair proud of the
+  // ground, a corner stone where two runs turn (see kerbStones), all one merged mesh.
   if (layout.kerbs?.length) {
-    const km = new THREE.Matrix4(), id = new THREE.Matrix4();
+    const km = new THREE.Matrix4();
     const parts = kerbStones(layout.kerbs).map((kb) => {
-      const g = masonGeometry(chamferBox(kb.len - 0.012, 0.12, KERB_W, 0.03), { m: id, wrap: false, breaks: [], seed: Math.floor(hash01(kb.x, kb.z) * 97), single: true });
-      g.applyMatrix4(km.makeRotationY(kb.rot).setPosition(kb.x, Math.max(floorAt(kb.x, kb.z), heightAt(kb.x, kb.z)) + 0.0, kb.z));
+      const g = laidRun(kb.len, KERB_W, 0.12, kb.n, Math.floor(hash01(kb.x, kb.z) * 97));
+      g.applyMatrix4(km.makeRotationY(kb.rot).setPosition(kb.x, Math.max(floorAt(kb.x, kb.z), heightAt(kb.x, kb.z)), kb.z));
       return g;
     });
-    const kerbMat = new THREE.MeshStandardMaterial({ color: TRIM_D, roughness: 0.9, flatShading: true });
+    const kerbMat = new THREE.MeshStandardMaterial({ color: KERB, roughness: 0.9, flatShading: true });
     applyPaint(kerbMat, 'masonry', 'object');
     const kerbMesh = new THREE.Mesh(mergeGeometries(parts)!, kerbMat);
     kerbMesh.receiveShadow = true;
