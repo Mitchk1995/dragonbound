@@ -1,6 +1,8 @@
 """Town NPCs (Warden, Quartermaster) and Pebble the rock golem pet.
 
-Humanoid rig names body/head/armL/armR/legL/legR/weapon (golem: no weapon). Faces +Z; right side at -X.
+Humanoid rig names body/head/armL/armR/legL/legR/weapon (golem: no weapon), and on the NPCs' arms elbowL/R and
+handL/R (anim.ts): each arm bends at the elbow and ends in a LEGO hand (_common.clip_hand) that whatever it holds runs
+through. Arms are authored straight; the game bends them. Faces +Z; right side at -X.
 NPCs use their own authored colours (no ROLE_ materials).
 """
 import math
@@ -22,6 +24,9 @@ SKIN = 0xE8B48A
 GOLD = 0xD9A640
 EYE = 0x1E1614
 WHITE = 0xF4EEE4
+# The NPCs' LEGO hands, as the hero's (hero.py HAND).
+NPC_HAND = dict(outer=0.13, inner=(0.068, 0.082), depth=0.22, gap=0.065, gap_tilt=0.6, stub=(0.12, 0.08, 0.13))
+QM_HAND = dict(outer=0.145, inner=(0.068, 0.082), depth=0.24, gap=0.07, gap_tilt=0.6, stub=(0.13, 0.08, 0.14))
 
 
 def face(head, skin, brow, y=0.24, brow_h=0.05):
@@ -83,25 +88,29 @@ def warden():
         box(head, (0.085, 0.52, 0.035), (s * 0.268, 0.21, 0.26), GOLD, rot=(0, 0, s * 0.05), bevel=0.01)
     box(head, (0.62, 0.05, 0.04), (0, 0.475, 0.285), GOLD, bevel=0.012)
 
-    for name, x in (('armL', 0.47), ('armR', -0.47)):
+    elb, wr = 0.3, 0.56
+    for name, x in (('armL', 0.5), ('armR', -0.5)):   # just outside the robe and its belt, so the sleeves never cut in
+        s = 1 if name == 'armL' else -1
         a = pivot(body, name, (x, 0.62, 0))
-        box(a, (0.25, 0.44, 0.27), (0, -0.2, 0), robe, bevel=0.04)
-        box(a, (0.33, 0.18, 0.35), (0, -0.46, 0), robe_dk, taper=(0.85, 0.85), bevel=0.04)    # bell sleeve
-        box(a, (0.34, 0.04, 0.36), (0, -0.54, 0), GOLD, bevel=0.01)
-        # One-piece fists (_common.fist); the staff hand reaches a little forward so the shaft runs up through it.
-        fist(a, (0, -0.66, 0.07 if name == 'armR' else 0), SKIN_OLD, 1 if name == 'armL' else -1, size=(0.24, 0.22, 0.25),
-             bevel=0.055)
+        joint_limb(a, 0.25, 0.27, 0.02, -elb, robe, round_bottom=True, bevel=0.04)
+        e = pivot(a, 'elbow' + name[-1], (0, -elb, 0))
+        joint_limb(e, 0.25, 0.27, 0.0, -0.1, robe, round_top=True, bevel=0.04)
+        box(e, (0.33, 0.18, 0.35), (0, elb - 0.46, 0), robe_dk, taper=(0.85, 0.85), bevel=0.04)  # bell sleeve
+        box(e, (0.34, 0.04, 0.36), (0, elb - 0.54, 0), GOLD, bevel=0.01)
+        h = pivot(e, 'hand' + name[-1], (0, elb - wr, 0))
+        clip_hand(h, (0, -NPC_HAND['outer'], 0), SKIN_OLD, s, **NPC_HAND)
         if name == 'armR':
-            w = pivot(a, 'weapon', (0, -0.66, 0.04))
-            box(w, (0.11, 2.2, 0.11), (0, 0.35, 0.1), wood, taper=(0.85, 0.85), bevel=0.02)  # tall staff
+            # The tall staff runs up through the hand; the game carries it upright, the forearm forward ('staffbody').
+            w = pivot(pivot(h, 'sock_handR', (0, -NPC_HAND['outer'], 0), (PI / 2, 0, 0)), 'staffbody', (0, -0.31, 0))
+            box(w, (0.11, 2.2, 0.11), (0, 0.35, 0), wood, taper=(0.85, 0.85), bevel=0.02)  # tall staff
             for y in (-0.2, 1.2):
-                box(w, (0.13, 0.05, 0.13), (0, y, 0.1), GOLD, bevel=0.012)
-            box(w, (0.12, 0.1, 0.12), (0, 1.48, 0.1), GOLD, taper=(1.35, 1.35), bevel=0.015)
+                box(w, (0.13, 0.05, 0.13), (0, y, 0), GOLD, bevel=0.012)
+            box(w, (0.12, 0.1, 0.12), (0, 1.48, 0), GOLD, taper=(1.35, 1.35), bevel=0.015)
             for i in range(3):
                 ang = i * 2 * PI / 3
                 cx, cz = math.cos(ang), math.sin(ang)
-                box(w, (0.045, 0.28, 0.045), (cx * 0.1, 1.64, 0.1 + cz * 0.1), wood, rot=(cz * 0.3, 0, -cx * 0.3), bevel=0.012)
-            facet_gem(w, 0.13, (0, 1.68, 0.1), gem_c, emissive=gem_c, strength=4, rot=corner_up(), depth=0.19)
+                box(w, (0.045, 0.28, 0.045), (cx * 0.1, 1.64, cz * 0.1), wood, rot=(cz * 0.3, 0, -cx * 0.3), bevel=0.012)
+            facet_gem(w, 0.13, (0, 1.68, 0), gem_c, emissive=gem_c, strength=4, rot=corner_up(), depth=0.19)
     return scene
 
 
@@ -138,16 +147,23 @@ def quartermaster():
         box(head, (0.14, 0.07, 0.08), (s * 0.08, 0.12, 0.28), beard, rot=(0, 0, s * -0.2), bevel=0.025)  # moustache
     box(head, (0.1, 0.03, 0.02), (0, 0.06, 0.285), 0x5A2E24, bevel=0)
 
-    for name, x in (('armL', 0.53), ('armR', -0.53)):
+    elb, wr = 0.26, 0.55
+    for name, x in (('armL', 0.57), ('armR', -0.57)):   # just outside the stout torso and its belt
+        s = 1 if name == 'armL' else -1
         a = pivot(body, name, (x, 0.62, 0))
         box(a, (0.28, 0.26, 0.3), (0, -0.1, 0), tunic, bevel=0.04)
-        box(a, (0.3, 0.1, 0.32), (0, -0.25, 0), 0x9A7248, bevel=0.03)                        # rolled sleeve
-        box(a, (0.22, 0.26, 0.24), (0, -0.42, 0), skin, bevel=0.04)                           # forearm
-        fist(a, (0, -0.64, 0), skin, 1 if name == 'armL' else -1, size=(0.28, 0.24, 0.28), bevel=0.06)
+        box(a, (0.3, 0.1, 0.32), (0, -0.25, 0), 0x9A7248, bevel=0.03)                        # rolled sleeve, over the elbow
+        e = pivot(a, 'elbow' + name[-1], (0, -elb, 0))
+        joint_limb(e, 0.22, 0.24, 0.0, elb - wr, skin, round_top=True, bevel=0.04)          # forearm
+        # The hammer hand: the wrist tipped a little past the game's hold at the side (anim.ts SIDE_WRIST), so the
+        # hammer, gripped near its butt, hangs its head forward and down.
+        h = pivot(e, 'hand' + name[-1], (0, elb - wr, 0), (0.2 if s < 0 else 0, 0, 0))
+        clip_hand(h, (0, -QM_HAND['outer'], 0), skin, s, **QM_HAND)
         if name == 'armR':
-            # Smith's hammer gripped near the butt, head hanging forward and down.
-            w = pivot(a, 'weapon', (0, -0.66, 0.02), (PI / 2 + 0.7, 0, 0))
-            box(w, (0.08, 0.74, 0.08), (0, 0.13, 0), 0x6B4426, taper=(0.85, 0.85), bevel=0.015)  # handle
+            # Smith's hammer gripped near the butt, through the hand.
+            w = pivot(h, 'weapon', (0, -QM_HAND['outer'], 0), (PI / 2, 0, 0))
+            box(w, (0.115, 0.74, 0.115), (0, 0.13, 0), 0x6B4426, taper=(0.85, 0.85), bevel=0.02)  # handle
+            box(w, (0.125, 0.26, 0.125), (0, 0.0, 0), 0x3A2618, bevel=0.02)                     # grip wrap, in the hand
             box(w, (0.1, 0.05, 0.1), (0, -0.22, 0), 0x3A2618, bevel=0.012)                      # butt knob
             box(w, (0.075, 0.07, 0.075), (0, 0.44, 0), 0x3E4248, bevel=0.012)                   # iron collar
             box(w, (0.15, 0.15, 0.22), (0, 0.55, 0.01), 0x5E636B, bevel=0.02)                   # head

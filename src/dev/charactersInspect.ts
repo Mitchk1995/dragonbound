@@ -33,7 +33,11 @@ const MID_ATTACK: Record<AttackKind, number> = { swing: 0.36, bow: 0.4, cast: 0.
 /** Mid-strike, the sword arm swinging forward past the body. */
 const IMPACT_FRAME = COMBAT_TUNING.impact;
 
-function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attack: number) {
+/** Running speed for the walking captures (the stride at full swing). */
+const WALK_SPEED = 5.6;
+
+/** The hero in `set`, at `attack` of `kind`; with `walk`, mid-stride at that phase of it (PI / 2: right leg forward). */
+function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attack: number, walk = 0) {
   const m = makeModel('hero');
   const holder = new THREE.Group();
   holder.add(m.root);
@@ -41,8 +45,9 @@ function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attack: numb
   dresser.dress({ ...LOOK, hair: 1 }, Object.fromEntries(Object.entries(set).map(([s, id]) => [s, makeItem(id!)])));
   const bow = new BowDraw(m.root);
   bow.attach();
-  const s: AnimState = { ...newAnimState(), attackKind: kind, attack };
-  new Rig(m.root).update(0, s);
+  const s: AnimState = { ...newAnimState(), attackKind: kind, attack, speed: walk ? WALK_SPEED : 0 };
+  const rig = new Rig(m.root);
+  rig.update(walk / (WALK_SPEED * rig.stride), s);
   bow.update(s, dresser.socket('sock_handL'));
   return holder;
 }
@@ -94,7 +99,91 @@ export async function charactersSuite(g: Game, shot: Shot) {
     }, kind);
   }
   await closeUps(st, shot);
+  await handsAndElbows(st, shot);
   await playCamera(g, shot);
+}
+
+/** A town NPC as the game stands it (idle). */
+function npc(model: string) {
+  return creature(model, 'swing', -1);
+}
+
+/**
+ * The LEGO hands and the elbows: the hands close up (empty, round a sword, a staff, in a gauntlet and a glove), the
+ * bow drawn from four sides with the draw hand close up, the bow carried, the town NPCs and the raised poses.
+ */
+async function handsAndElbows(st: Studio, shot: Shot) {
+  const cells: Parameters<Studio['sheet']>[0] = [];
+  const add = (label: string, obj: THREE.Object3D, cam: { eye: THREE.Vector3; at: THREE.Vector3 }) => cells.push({ label, obj, ...cam });
+  const flush = async (name: string, cols: number, rows: number) => {
+    st.sheet(cells, cols, rows);
+    await shot(name);
+    st.clear(cells.map((c) => c.obj));
+    cells.length = 0;
+  };
+  const front = new THREE.Vector3(0.15, 0.25, 1), three = new THREE.Vector3(0.8, 0.35, 0.7), threeR = new THREE.Vector3(-0.8, 0.35, 0.7);
+  let h = hero({}, 'swing', -1);
+  add('empty hand · front', h, near(h, 'handL', front, 0.95, -0.14));
+  h = hero({}, 'swing', -1);
+  add('empty hand · 3/4', h, near(h, 'handL', three, 0.95, -0.14));
+  h = hero({ weapon: 'bronze_sword' }, 'swing', -1);
+  add('sword hand', h, near(h, 'handR', threeR, 1.0, -0.12));
+  h = hero({ weapon: 'apprentice_staff' }, 'cast', -1);
+  add('staff hand', h, near(h, 'handR', threeR, 1.1, -0.05));
+  h = hero({ weapon: 'steel_longsword', gloves: 'steel_gauntlets', body: 'steel_platebody' }, 'swing', -1);
+  add('steel gauntlet', h, near(h, 'handR', threeR, 1.1, -0.12));
+  h = hero({ weapon: 'bronze_sword', gloves: 'leather_gloves' }, 'swing', -1);
+  add('leather glove', h, near(h, 'handR', threeR, 1.1, -0.12));
+  await flush('char-hands', 3, 2);
+
+  const draw = IMPACT_FRAME - 0.03;
+  for (const [label, set] of [['bow', HERO_SETS[2][1]], ['leather bow', HERO_SETS[4][1]]] as const) {
+    // Turned side-on for the shot, the hero faces world +X: the camera side is +X, the target +Z.
+    for (const [view, dir] of [['side', new THREE.Vector3(1, 0.22, 0.12)], ['from the target', new THREE.Vector3(0.25, 0.2, 1)],
+      ['from behind', new THREE.Vector3(0.3, 0.3, -1)], ['above', new THREE.Vector3(0.5, 1.2, 0.35)]] as const) {
+      h = hero(set, 'bow', draw);
+      add(`${label} drawn · ${view}`, h, fit(h, dir));
+    }
+    h = hero(set, 'bow', draw);
+    add(`${label} · string through the draw hand`, h, near(h, 'sock_handL', new THREE.Vector3(0.75, 1, 0.45), 1.0));
+    h = hero(set, 'bow', draw);
+    add(`${label} · draw arm from above`, h, near(h, 'elbowL', new THREE.Vector3(0.45, 1, 0.2), 1.7));
+    await flush(`char-bow-${label.replace(/\s+/g, '_')}`, 3, 2);
+  }
+
+  // The bow carried plumb and out from the body, standing and mid-stride, its limbs clear of the legs.
+  const sideOn = new THREE.Vector3(-1, 0.15, 0.05), behind = new THREE.Vector3(0.35, 0.8, -1);
+  for (const [label, set] of [['bow', HERO_SETS[2][1]], ['leather bow', HERO_SETS[4][1]]] as const) {
+    h = hero(set, 'bow', -1);
+    add(`${label} carried · front`, h, fit(h, FRONT));
+    h = hero(set, 'bow', -1, Math.PI / 2);
+    add(`${label} walking · side`, h, fit(h, sideOn));
+    h = hero(set, 'bow', -1, Math.PI / 2);
+    add(`${label} walking · from behind`, h, fit(h, behind));
+  }
+  await flush('char-bow-carry', 3, 2);
+
+  for (const id of ['warden', 'quartermaster']) {
+    for (const [view, dir] of [['front', FRONT], ['3/4', THREE_Q], ['back 3/4', BACK_Q]] as const) {
+      const o = npc(id);
+      add(`${id} · ${view}`, o, fit(o, dir));
+    }
+  }
+  await flush('char-npcs', 3, 2);
+
+  // The raised poses framed whole (the sheets above frame every cell on the idle pose).
+  const side = new THREE.Vector3(-1, 0.15, 0.05);
+  for (const [view, dir] of [['front', FRONT], ['3/4', THREE_Q], ['side', side]] as const) {
+    h = hero(HERO_SETS[0][1], 'swing', MID_ATTACK.swing);
+    add(`sword raised · ${view}`, h, fit(h, dir));
+  }
+  for (const [view, dir] of [['front', FRONT], ['3/4', THREE_Q]] as const) {
+    const o = creature('cultist', 'cast', IMPACT_FRAME);
+    add(`cultist casting · ${view}`, o, fit(o, dir));
+  }
+  const gob = creature('goblin', 'swing', MID_ATTACK.swing);
+  add('goblin club raised · 3/4', gob, fit(gob, THREE_Q));
+  await flush('char-raised', 3, 2);
 }
 
 /** A camera `dist` from the named part (world centre), looking at it from `dir`. */

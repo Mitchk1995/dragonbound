@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BASES } from '../data/items';
 import type { Item } from '../types';
-import { buildGear, gearLook, makeModel } from './registry';
+import { buildGear, gearLook, joinCuffs, makeModel } from './registry';
 import { buildMaterialModel } from './materialModels';
 import { setPaintGain } from './surface';
 
@@ -121,7 +121,8 @@ export function iconSubject(item: Item): { holder: THREE.Object3D; half: number;
   } else if (!gl) {
     holder = turn(buildMaterialModel('gem', 0x888888), PITCH, YAW, 0);
   } else {
-    const parts = buildGear(gl.model, gl.palette);
+    // A glove's cuff joins its hand (registry.ts joinCuffs), so gloves lay out as a pair of whole gloves.
+    const parts = joinCuffs(buildGear(gl.model, gl.palette));
     const names = [...parts.keys()];
     if (parts.has('sock_handR')) holder = diagonal(parts.get('sock_handR')!);
     else if (parts.size === 1) holder = turn(parts.values().next().value!, PITCH, YAW, 0);

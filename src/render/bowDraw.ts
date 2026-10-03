@@ -8,6 +8,10 @@ const REST = new THREE.Vector3();
 const RELEASE = COMBAT_TUNING.impact;
 /** Draw amount by which the hand has taken the string (the arrow shows from here on). */
 const GRAB = 0.1;
+/** The arrow runs from the nock through the bow and this far past it, so its head sits just beyond the bow. */
+const ARROW_PAST = 0.14;
+/** The arrowhead's length. */
+const HEAD = 0.12;
 
 /** Draw amount for the bow attack; must match the 'bow' case in anim.ts (full draw at release, then snap). */
 export function bowDrawAmount(a: number) {
@@ -33,7 +37,7 @@ export class BowDraw {
   /** Unit direction from the grip back through the string's middle: the arrow line, toward the archer. */
   private back = new THREE.Vector3();
   private strings: THREE.Mesh[] = [];
-  private arrow: THREE.Group | null = null;
+  private arrow: ReturnType<typeof buildArrow> | null = null;
   private tmp = new THREE.Vector3();
   private m = new THREE.Matrix4();
 
@@ -98,15 +102,15 @@ export class BowDraw {
       this.strings.push(s);
     }
     this.arrow = buildArrow();
-    this.arrow.name = 'bow_arrow';
-    this.arrow.visible = false;
-    group.add(this.arrow);
+    this.arrow.group.name = 'bow_arrow';
+    this.arrow.group.visible = false;
+    group.add(this.arrow.group);
   }
 
   detach() {
     for (const s of this.strings) s.removeFromParent();
     this.strings = [];
-    this.arrow?.removeFromParent();
+    this.arrow?.group.removeFromParent();
     this.arrow = null;
     this.bow = null;
   }
@@ -132,13 +136,16 @@ export class BowDraw {
     this.span(this.strings[1], this.bottom, nock);
     if (this.arrow) {
       // Visible from the moment the draw hand holds the nock until release.
-      this.arrow.visible = drawing && anim.attack < RELEASE && pull > GRAB;
-      if (this.arrow.visible) {
-        // Arrow lies from the nock through the grip and a little beyond.
+      const { group, shaft, head } = this.arrow;
+      group.visible = drawing && anim.attack < RELEASE && pull > GRAB;
+      if (group.visible) {
+        // The arrow lies from the nock through the bow, as long as the draw, its head just beyond the bow.
         const dir = REST.copy(this.grip).sub(nock);
         const len = dir.length() || 1;
-        this.arrow.position.copy(nock);
-        this.arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.divideScalar(len));
+        group.position.copy(nock);
+        group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.divideScalar(len));
+        shaft.scale.y = len + ARROW_PAST - HEAD;
+        head.position.y = len + ARROW_PAST - HEAD;
       }
     }
   }
@@ -152,13 +159,14 @@ export class BowDraw {
   }
 }
 
+/** An arrow along +Y from its nock: a shaft one unit long (scaled to the draw) and its head (placed at the shaft's end). */
 function buildArrow() {
   const g = new THREE.Group();
   const wood = new THREE.MeshStandardMaterial({ color: 0x8a6a42, flatShading: true, roughness: 0.8 });
   const steel = new THREE.MeshStandardMaterial({ color: 0xc8ccd4, flatShading: true, roughness: 0.4, metalness: 0.3 });
   const feather = new THREE.MeshStandardMaterial({ color: 0xd84a2a, flatShading: true, side: THREE.DoubleSide });
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.82, 5).translate(0, 0.41, 0), wood);
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.12, 4).translate(0, 0.88, 0), steel);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1, 5).translate(0, 0.5, 0), wood);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.035, HEAD, 4).translate(0, HEAD / 2, 0), steel);
   g.add(shaft, head);
   for (let k = 0; k < 3; k++) {
     const f = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.14).translate(0.03, 0.1, 0), feather);
@@ -166,5 +174,5 @@ function buildArrow() {
     g.add(f);
   }
   g.traverse((o) => (o.castShadow = o instanceof THREE.Mesh));
-  return g;
+  return { group: g, shaft, head };
 }

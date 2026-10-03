@@ -3,7 +3,7 @@ import { shareResource } from '../render/resources';
 import { BASES } from '../data/items';
 import { itemName } from '../loot/itemGen';
 import { buildMaterialModel } from '../render/models';
-import { buildGear, gearLook } from '../render/registry';
+import { buildGear, gearLook, joinCuffs } from '../render/registry';
 import type { Item, Rarity } from '../types';
 
 export const RARITY_COLOR: Record<Rarity, number> = {
@@ -25,7 +25,7 @@ function groundModel(item: Item): THREE.Group {
   const g = new THREE.Group();
   const gl = base.kind === 'gear' || base.kind === 'tool' ? gearLook(item) : null;
   if (gl && base.slot !== 'amulet' && base.slot !== 'ring') {
-    const parts = buildGear(gl.model, gl.palette);
+    const parts = joinCuffs(buildGear(gl.model, gl.palette));
     const main = parts.get('sock_handR') ?? parts.get('sock_chest') ?? parts.get('sock_head') ?? parts.get('sock_handL') ?? parts.get('sock_footL');
     if (main) {
       const box = new THREE.Box3().setFromObject(main);

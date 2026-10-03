@@ -78,10 +78,11 @@ describe('pose audit: models loaded', () => {
     };
     // Merged, every rig part drops to a few meshes (Cinderwing measured 29), with rig parts intact.
     // Cinderwing's glowing cracks (on the body, neck and every leg), eyes and molten mouth each keep their own material,
-    // hence its extra meshes.
+    // hence its extra meshes. A goblin is one mesh per rig part: body, head, legs, and each arm's upper arm, forearm
+    // (below the elbow) and hand (below the wrist), and the club.
     expect(count('drakeling')).toBeLessThanOrEqual(20);
     expect(count('cinderwing')).toBeLessThanOrEqual(31);
-    expect(count('goblin')).toBeLessThanOrEqual(9);
+    expect(count('goblin')).toBeLessThanOrEqual(11);
     for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
   });
 });
@@ -127,6 +128,40 @@ describe('pose audit: one-handed melee weapons', () => {
       });
     });
   }
+});
+
+describe('pose audit: arms bend at the elbow', () => {
+  // The owner: hands are one-piece LEGO hands (whatever is held runs through the hole) and arms bend at the elbow.
+  const world = (root: THREE.Object3D, name: string) => root.getObjectByName(name)!.getWorldPosition(new THREE.Vector3());
+  it('raised sword: the blade comes up out of the hand in line with the forearm', () => {
+    const h = hero({ weapon: 'bronze_sword' });
+    h.pose('swing', IMPACT - 0.11);
+    const fore = world(h.root, 'handR').sub(world(h.root, 'elbowR')).normalize();
+    const blade = weaponFacts(h.root)!.dir;
+    expect((Math.acos(fore.dot(blade)) * 180) / Math.PI, 'blade off the forearm (deg)').toBeLessThan(25);
+    expect(-h.root.getObjectByName('elbowR')!.rotation.x, 'the elbow bends in the wind-up').toBeGreaterThan(0.5);
+  });
+  it('bow at full draw: the draw arm bends at the elbow, the hand at the jaw in front of the chest', () => {
+    const h = hero({ weapon: 'hunter_bow' });
+    h.pose('bow', IMPACT - 0.03);
+    const body = h.root.getObjectByName('body')!;
+    const hand = body.worldToLocal(world(h.root, 'sock_handL'));
+    const elbow = body.worldToLocal(world(h.root, 'elbowL'));
+    expect(-h.root.getObjectByName('elbowL')!.rotation.x, 'elbow bend (rad)').toBeGreaterThan(1.2);
+    expect(hand.y, 'hand at jaw height').toBeGreaterThan(0.7);
+    expect(hand.y, 'hand at jaw height').toBeLessThan(0.95);
+    // The tunic's front is at z 0.21, plate's at 0.29: the hand (and the string through it) stays in front of both.
+    expect(hand.z, 'hand in front of the chest').toBeGreaterThan(0.38);
+    // The elbow swings out and forward, clear of the chest's top corner.
+    expect(elbow.x > 0.5 || elbow.z > 0.32, `elbow clear of the chest at ${elbow.toArray().map((v) => v.toFixed(2))}`).toBe(true);
+  });
+  it('a staff stands upright through the hand, the forearm forward', () => {
+    const h = hero({ weapon: 'apprentice_staff' });
+    h.pose('cast', -1);
+    const fore = world(h.root, 'handR').sub(world(h.root, 'elbowR')).normalize();
+    expect(fore.z, 'forearm points forward').toBeGreaterThan(0.85);
+    expect(weaponFacts(h.root)!.dir.y, 'staff upright').toBeGreaterThan(0.9);
+  });
 });
 
 describe('pose audit: mining (pickaxe tool override, as Player.dress uses it)', () => {
@@ -205,6 +240,48 @@ describe('pose audit: cult staffs', () => {
 });
 
 describe('pose audit: bow', () => {
+  /** Whether a world point lies inside a closed mesh: a ray from it crosses the surface an odd number of times. */
+  const inside = (mesh: THREE.Mesh, point: THREE.Vector3) => {
+    const ray = new THREE.Ray(point.clone().applyMatrix4(mesh.matrixWorld.clone().invert()), new THREE.Vector3(1, 0.0013, 0.0007).normalize());
+    const pos = mesh.geometry.attributes.position, index = mesh.geometry.index;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), hit = new THREE.Vector3();
+    let crossings = 0;
+    for (let i = 0; i < (index ? index.count : pos.count); i += 3) {
+      const [i0, i1, i2] = index ? [index.getX(i), index.getX(i + 1), index.getX(i + 2)] : [i, i + 1, i + 2];
+      if (ray.intersectTriangle(a.fromBufferAttribute(pos, i0), b.fromBufferAttribute(pos, i1), c.fromBufferAttribute(pos, i2), false, hit)) crossings++;
+    }
+    return crossings % 2 === 1;
+  };
+  // A bow's limbs sweep in toward its string, which lies on the body's side of the hand: carried, the bow is held out
+  // from the body so its lower limb never cuts into the striding leg, and it stays plumb.
+  for (const weapon of ['worn_bow', 'hunter_bow']) {
+    it(`${weapon}: carried while walking, plumb and clear of the right leg`, () => {
+      const h = hero({ weapon });
+      const legMeshes: THREE.Mesh[] = [];
+      h.root.getObjectByName('legR')!.traverse((o) => {
+        if (o instanceof THREE.Mesh) legMeshes.push(o);
+      });
+      const bow = h.root.getObjectByName('gear:sock_handR')!;
+      const v = new THREE.Vector3();
+      for (let k = 0; k < 30; k++) {
+        h.pose('bow', -1, { speed: 5.6 }, 0.05);
+        // The bow runs along the hand socket's +Y (gear.py bow_frame).
+        const axis = new THREE.Vector3(0, 1, 0).transformDirection(h.root.getObjectByName('sock_handR')!.matrixWorld);
+        expect(axis.y, `walk frame ${k}: plumb`).toBeGreaterThan(0.97);
+        const boxes = legMeshes.map((m) => new THREE.Box3().setFromObject(m));
+        let cut = 0;
+        bow.traverse((o) => {
+          if (!(o instanceof THREE.Mesh) || !o.visible) return;
+          const pos = o.geometry.attributes.position;
+          for (let i = 0; i < pos.count; i++) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+            if (legMeshes.some((m, j) => boxes[j].containsPoint(v) && inside(m, v))) cut++;
+          }
+        });
+        expect(cut, `walk frame ${k}: points of the bow inside the right leg`).toBe(0);
+      }
+    });
+  }
   for (const weapon of ['worn_bow', 'drakebone_bow']) {
     it(`${weapon}: upright, string toward the archer, arrow at the target, nock on the draw hand`, () => {
       const h = hero({ weapon });

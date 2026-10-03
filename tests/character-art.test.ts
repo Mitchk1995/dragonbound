@@ -229,6 +229,53 @@ describe('the starting outfit and the gear on the redesigned hero', () => {
   }
 });
 
+describe('LEGO hands and elbows', () => {
+  // The owner: "no thumbs look bad on this type of hand, don't ever add them… it has to be all one shape like a lego
+  // hand", and every arm bends at the elbow. Every humanoid hand is one C in one piece with a hole through it.
+  const HUMANOIDS = ['hero', 'goblin', 'cultist', 'priest', 'warden', 'quartermaster'];
+  for (const name of HUMANOIDS) {
+    it(`${name}: both arms bend at an elbow and end in a one-piece hand with a hole through it`, () => {
+      const root = makeModel(name).root;
+      root.updateMatrixWorld(true);
+      for (const side of ['L', 'R']) {
+        expect(root.getObjectByName(`elbow${side}`), `${name} elbow${side}`).toBeTruthy();
+        const hand = root.getObjectByName(`hand${side}`)!;
+        // The hand's own meshes (not what it holds): one piece.
+        const own = hand.children.filter((c): c is THREE.Mesh => c instanceof THREE.Mesh);
+        expect(own.length, `${name} hand${side} pieces`).toBe(1);
+        const piece = own[0];
+        // In the hand's frame the C hangs below the wrist, as wide as it is tall; its hole runs along local Z.
+        const box = new THREE.Box3();
+        const v = new THREE.Vector3();
+        const pos = piece.geometry.getAttribute('position');
+        for (let i = 0; i < pos.count; i++) box.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(piece.matrix));
+        const r = (box.max.x - box.min.x) / 2;
+        const centre = new THREE.Vector3((box.max.x + box.min.x) / 2, box.min.y + r, 0);
+        const hits = (x: number) => {
+          const o = centre.clone().add(new THREE.Vector3(x, 0, box.min.z - 0.1)).applyMatrix4(hand.matrixWorld);
+          const d = new THREE.Vector3(0, 0, 1).transformDirection(hand.matrixWorld);
+          return new THREE.Raycaster(o, d, 0, box.max.z - box.min.z + 0.2).intersectObject(piece, false).length;
+        };
+        expect(hits(0), `${name} hand${side}: open through its hole`).toBe(0);
+        expect(hits(r * 0.8), `${name} hand${side}: solid round it`).toBeGreaterThan(0);
+        expect(hits(-r * 0.8), `${name} hand${side}: solid round it`).toBeGreaterThan(0);
+      }
+    });
+  }
+  it('gloves and gauntlets are the same C round the same hole, their cuffs on the forearm', () => {
+    for (const file of ['gear_gloves', 'gear_gloves_p', 'gear_gloves_e']) {
+      const root = makeModel(file).root;
+      for (const sock of ['sock_handL', 'sock_gloveR', 'sock_cuffL', 'sock_cuffR']) expect(root.getObjectByName(sock), `${file} ${sock}`).toBeTruthy();
+      root.updateMatrixWorld(true);
+      // Straight through the centre of the glove's hand there is nothing: the hole.
+      const hand = root.getObjectByName('sock_handL')!;
+      const o = new THREE.Vector3(0, 0, -0.5).applyMatrix4(hand.matrixWorld);
+      const d = new THREE.Vector3(0, 0, 1).transformDirection(hand.matrixWorld);
+      expect(new THREE.Raycaster(o, d, 0, 1).intersectObject(hand, true).length, file).toBe(0);
+    }
+  });
+});
+
 describe('creatures', () => {
   it('the Cinder Priest has his own model, a head taller than his cultists', () => {
     expect(makeModel('priest').height).toBeGreaterThan(makeModel('cultist').height * 1.15);

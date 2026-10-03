@@ -32,6 +32,11 @@ UNDER = 0xC9CFD6     # the undershirt showing in the collar's V
 FANG = 0xEDE3CB
 STEEL = 0x808C9C     # the pauldron: painted steel
 SOLE = 0x2E1E14
+# Arm joints below the shoulder pivot, the arm hanging straight: the elbow, the wrist and the centre of the hand's hole,
+# where every arm socket sits (gear.py PALM).
+ELBOW, WRIST, HOLE = 0.28, 0.52, 0.655
+# The hero's LEGO hand (_common.clip_hand); gloves and gauntlets are the same C, a size up, round the same hole.
+HAND = dict(outer=0.135, inner=0.07, depth=0.22, gap=0.07, gap_tilt=0.6, stub=(0.12, 0.08, 0.13))
 
 
 def build_hero(scene_name='DB_hero'):
@@ -111,28 +116,39 @@ def build_hero(scene_name='DB_hero'):
         box(head, (0.05, 0.13, 0.1), (s * 0.245, 0.22, -0.01), R.skin, bevel=0.015)            # ear
     pivot(head, 'sock_head', (0, 0.24, 0))
 
-    # Arms: short sleeve with a dark band, bare forearm under a leather bracer, a big fist in one piece with the thumb
-    # across its front (_common.fist). The sleeve is part of the outfit: body armour brings its own sleeves, set
+    # Arms: an upper arm in the short sleeve with its dark band, an elbow, a bare forearm under a leather bracer and a
+    # LEGO hand: one chunky C in one piece, never a thumb, its hole running front to back (_common.clip_hand). Whatever
+    # the hand holds passes through the hole. The sleeve is part of the outfit: body armour brings its own sleeves, set
     # against its own sides. armL on +X, armR on -X.
+    # Rig: armX (shoulder) -> elbowX (elbow) -> handX (wrist), authored straight (the game bends them, anim.ts). Gear
+    # sockets all sit at the centre of the hand's hole while the arm hangs straight, each riding its own part:
+    # sock_upperX the upper arm (sleeves, rerebraces), sock_cuffX the forearm (glove cuffs, vambraces) and the hand's
+    # own sock_handL / sock_gloveR (gloves) and sock_handR (held things, turned so its +Y runs forward through the hole).
     for name, x in (('armL', 0.47), ('armR', -0.47)):
         s = 1 if x > 0 else -1
+        S = 'L' if s > 0 else 'R'
         a = pivot(body, name, (x, 0.62, 0))
-        sl = pivot(a, 'outfit_body_sleeve' + ('L' if s > 0 else 'R'))
+        sl = pivot(a, 'outfit_body_sleeve' + S)
         box(sl, (0.25, 0.32, 0.27), (0, -0.13, 0), R.cloth, bevel=0.04)            # sleeve
-        box(sl, (0.255, 0.05, 0.28), (0, -0.28, 0), R.clothDark, bevel=0.015)     # sleeve band
-        box(a, (0.18, 0.26, 0.21), (0, -0.41, 0), R.skin, bevel=0.03)               # forearm
-        br = pivot(a, 'outfit_gloves_' + ('L' if s > 0 else 'R'))
-        box(br, (0.235, 0.15, 0.25), (0, -0.43, 0), R.leather, bevel=0.025)        # bracer
-        box(br, (0.245, 0.045, 0.26), (0, -0.435, 0), 0x3E2818, bevel=0.01)         # its dark strap
-        box(br, (0.012, 0.045, 0.045), (s * 0.125, -0.435, 0.0), GOLD, bevel=0.005)   # stud
+        box(sl, (0.255, 0.05, 0.28), (0, -0.28, 0), R.clothDark, bevel=0.015)     # sleeve band, over the elbow
         if s > 0:   # the pauldron's side plate down the outside of the upper arm
             box(pivot(a, 'outfit_body_pauldronSide'), (0.07, 0.17, 0.35), (0.155, -0.06, 0), STEEL, rot=(0, 0, -0.1), bevel=0.025)
-        fist(a, (0, -0.64, 0), R.skin, s)            # a sword's grip runs front to back through it, under the thumb
+        pivot(a, 'sock_upper' + S, (0, -HOLE, 0))
+        e = pivot(a, 'elbow' + S, (0, -ELBOW, 0))
+        # Forearm, its top rounded about the elbow so it turns inside the sleeve without a gap.
+        joint_limb(e, 0.18, 0.21, 0.0, ELBOW - WRIST, R.skin, round_top=True)
+        br = pivot(e, 'outfit_gloves_' + S)
+        box(br, (0.235, 0.16, 0.25), (0, ELBOW - 0.44, 0), R.leather, bevel=0.025)         # bracer
+        box(br, (0.245, 0.045, 0.26), (0, ELBOW - 0.445, 0), 0x3E2818, bevel=0.01)          # its dark strap
+        box(br, (0.012, 0.045, 0.045), (s * 0.125, ELBOW - 0.445, 0.0), GOLD, bevel=0.005)  # stud
+        pivot(e, 'sock_cuff' + S, (0, ELBOW - HOLE, 0))
+        h = pivot(e, 'hand' + S, (0, ELBOW - WRIST, 0))
+        clip_hand(h, (0, WRIST - HOLE, 0), R.skin, s, **HAND)
         if s > 0:
-            pivot(a, 'sock_handL', (0, -0.63, 0))
+            pivot(h, 'sock_handL', (0, WRIST - HOLE, 0))
         else:
-            pivot(a, 'sock_gloveR', (0, -0.63, 0))
-            pivot(a, 'sock_handR', (0, -0.66, 0.04), (PI / 2, 0, 0))
+            pivot(h, 'sock_gloveR', (0, WRIST - HOLE, 0))
+            pivot(h, 'sock_handR', (0, WRIST - HOLE, 0), (PI / 2, 0, 0))
     return scene, root
 
 
