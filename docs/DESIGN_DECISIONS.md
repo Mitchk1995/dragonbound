@@ -87,6 +87,13 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   agents) are used for implementation where they help, partitioned so they never edit the same code. He wants regular progress in pictures and an honest answer
   when a style is or is not achievable. Visual work comes to him straight from the builder: no separate reviewer or
   critic stage, he judges right away (to save usage).
+- **Title logo: option C** (October 3, on the decision page): blue enamel letters with a gold rim and a dragon head over the O, on the title screen and the loading screen (PR #70).
+- **Title screen: option C, the castle at night** (October 3): lit windows, torches, moonlit mist and the dragon perched on the keep, the logo upper right and the menu on an iron-and-parchment panel lower right. Built in the game after the new keep and the lighting work.
+- **Damage numbers are painted digit sprites** (October 3), generated with Codex: white hits, gold crits, red damage taken, green heals. In the game (PRs #71, #72).
+- **All game text uses painted alphabets** (October 3). Claude had pushed back that image generation could not do full alphabets; Mitchell overruled it, and it could. Gold for place and NPC names, blue glow for portals, brown for parchment panels; a readability fix followed (PR #75). All menu text too, from one neutral silver alphabet tinted by meaning, palette A (bright, classic): Common off-white, Magic blue, Rare yellow, Epic purple, Legendary orange, Set green; fire orange-red, frost cyan, lightning pale yellow, poison green, good bonuses soft blue (not green, which is poison), penalties red.
+- **Surface maps: option B** (October 3): normal and roughness maps on stone, bark, wood and ground, made from the sourced colour textures. The sky-light-only version (C) was rejected because it washed out the shadows; real bounce light is the fix.
+- **Open decision: stay on three.js or port the engine.** A look test put today's castle in Godot 4.7 and Unreal 5.8 next to our game (test projects kept in `D:/dragonbound-archive/godot-test` and `unreal-test`). Mitchell is choosing between staying, adding full-view soft shadows and bounce light, and porting. Claude's read: most of the gain is lighting setup three.js can do; a port means rewriting all the game code (the models carry over).
+- **Concept sheets redone** (October 3). The first Codex enemy and character sheets were rejected (no references, weak prompts); the redo attached each in-game model and kept the blocky box construction. Per-character verdicts are pending on the decision page. Area paintings are for mood only, not layout. The interface art sheet is approved as a direction.
 
 ## Foundation work (October 2)
 
@@ -155,7 +162,7 @@ Where things stand (October 3):
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
   - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided (the castle-v4 plan may move it anyway).
 - **Characters** come after the castle and stay blocky and modular. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
-- **Trees:** the grown oak and the common tree are built and approved with their bark (Mitchell, "looks good", October 3; see "Trees" below); the other four species follow, and the game's forests still use the block trees until they replace them.
+- **Trees:** the grown oak and the common tree are built, approved with their bark (Mitchell, "looks good", October 3) and on main (PR #74; see "Trees" below); the other four species follow, and the game's forests still use the block trees until they replace them.
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 
