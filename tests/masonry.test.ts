@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { chamferBox } from '../src/render/blocks';
 import { bondPhases, cleanBreaks, COURSE, courseBand, drumStones, laidDrum, laidRun, masonGeometry, STONE, WHOLE_STONE, type MasonGrid } from '../src/render/masonry';
 import { KERB_W, kerbStones, type LaidKerb } from '../src/world/kerbStones';
-import { archStones, ASHLAR, ASHLAR_B, buildProp, dressedArch, DRESS } from '../src/world/props';
+import { archStones, ASHLAR, ASHLAR_B, BASE_COURSE, buildProp, dressedArch, DRESS } from '../src/world/props';
+import type { BuildingSpec } from '../src/world/building';
 import { buildBuilding, FLOOR_STONE } from '../src/world/buildingModel';
 import { RANGE_SPECS } from '../src/world/castle/rangeSpecs';
 
@@ -235,6 +236,15 @@ describe('the castle buildings laid on one block grid', () => {
   /** A stone laid whole (a merlon, a quoin, a lintel), not in courses. */
   const whole = (tri: ReturnType<typeof layout>) => tri[0].cs === WHOLE_STONE[0] && tri[0].ce === WHOLE_STONE[1];
   const isWhole = (v: number) => Math.abs(v - Math.round(v)) < 1e-3;
+  /**
+   * The base course round the foot (standing out beyond the walls and a hair into the rooms): laid from its
+   * own corners (footBand). Its faces lie off the walls' planes, a tenth in from each cell edge.
+   */
+  const band = (b: BuildingSpec, v: ReturnType<typeof layout>) => {
+    if (!v.every((q) => q.p.y < BASE_COURSE + 1e-3)) return false;
+    const n = v[0].n, c = Math.abs(n.x) > 0.99 ? v[0].p.x : Math.abs(n.z) > 0.99 ? v[0].p.z : NaN, L = Math.abs(n.x) > 0.99 ? b.w : b.d;
+    return (n.y > 0.99 && (Math.abs(v[0].h - 0.6) > 1e-4 || Math.abs(v[0].p.y - BASE_COURSE) < 1e-3)) || (!Number.isNaN(c) && ![0.05, 0.95, L - 0.95, L - 0.05].some((w) => Math.abs(c - w) < 0.01));
+  };
 
   it('lays every course of every face, proud blocks and bands among them, on the one set of course lines', () => {
     let checked = 0;
@@ -255,7 +265,7 @@ describe('the castle buildings laid on one block grid', () => {
       const n = v[0].n, alongX = Math.abs(n.z) > 0.99, alongZ = Math.abs(n.x) > 0.99;
       if (!alongX && !alongZ) continue;
       const span = Math.max(...v.map((q) => (alongX ? q.p.x : q.p.z))) - Math.min(...v.map((q) => (alongX ? q.p.x : q.p.z)));
-      if (span < 1.6) continue;
+      if (span < 1.6 || band(b, v)) continue;
       // The stone coordinate is the place along the face on the building's grid, the same whichever way
       // the face looks, so a joint falls at one place on every face and band of that run.
       for (const q of v) {
@@ -271,7 +281,7 @@ describe('the castle buildings laid on one block grid', () => {
   it('lays a wall\'s top in through-stones on its top course\'s joints, and every floor, dais and step on one grid', () => {
     let tops = 0, flags = 0;
     for (const { b, grid, tris } of built) for (const { v } of tris) {
-      if (v[0].mode !== 2 || v[0].n.y < 0.99 || whole(v)) continue;
+      if (v[0].mode !== 2 || v[0].n.y < 0.99 || whole(v) || band(b, v)) continue;
       const y = v[0].p.y, flagged = Math.abs(v[0].h - 0.6) < 1e-4;
       for (const q of v) {
         if (flagged) {
@@ -291,23 +301,64 @@ describe('the castle buildings laid on one block grid', () => {
   });
 
   it('turns every outer corner on a quoin: long and short by turns, never a sliver of a stone', () => {
-    // (A building whole stones long and deep, less a tenth, as the plan sets them out: a building of any
-    // other size would end its faces on slivers here.)
-    for (const { b, grid } of built) {
-      const x0 = 0.5 - 0.45, x1 = b.w - 0.5 + 0.45, z0 = 0.5 - 0.45, z1 = b.d - 0.5 + 0.45;
-      for (const par of [0, 0.5]) {
-        // The piece from each end of each face to the first joint into it (in metres).
-        const piece = (a: number) => {
-          const f = a + par - Math.floor(a + par + 1e-9);
-          return f < 1e-6 ? grid.l : f * grid.l;
-        };
-        const pieces = [
-          piece((x0 - grid.ox) / grid.l) === grid.l ? grid.l : grid.l - piece((x0 - grid.ox) / grid.l), piece((x1 - grid.ox) / grid.l),
-          piece((z0 - grid.oz) / grid.l + 0.5) === grid.l ? grid.l : grid.l - piece((z0 - grid.oz) / grid.l + 0.5), piece((z1 - grid.oz) / grid.l + 0.5),
-        ];
-        for (const s of pieces) expect(s, `${b.id}: a corner stone ${s.toFixed(2)} long`).toBeGreaterThan(0.3);
+    // Read off the built faces: at every vertical arris where a face toward ±X and a face toward ±Z meet
+    // round the outside of the stone, in every course, the stone from the arris to its first joint on each.
+    type End = { piece: number; n: number; run: number; y: number; reach: number };
+    const bad: string[] = [];
+    let corners = 0;
+    for (const { b, tris } of built) {
+      const ends = new Map<string, { x?: End; z?: End; key: [number, number, number] }>();
+      for (const { v } of tris) {
+        // (The long faces, laid on the grid: a short return, a pier's or a buttress's side, is laid from its
+        // own ends.)
+        if (v[0].mode !== 1 || whole(v) || Math.abs(v[0].h - COURSE) > 1e-4 || (v[0].xe - v[0].xs) * v[0].l < 1.5 - 1e-3) continue;
+        const n = v[0].n, onX = Math.abs(n.x) > 0.99, onZ = Math.abs(n.z) > 0.99;
+        if (!onX && !onZ) continue;
+        for (const side of ['xs', 'xe'] as const) {
+          // The triangle's edge up the face's arris, if it has one there.
+          const on = v.filter((q) => Math.abs(q.X - q[side]) < 1e-4);
+          if (on.length !== 2) continue;
+          const off = v.find((q) => !on.includes(q))!, q = on[0];
+          const run = Math.sign((onX ? off.p.z : off.p.x) - (onX ? q.p.z : q.p.x));
+          const c0 = Math.min(on[0].C, on[1].C), c1 = Math.max(on[0].C, on[1].C);
+          // Every course the edge stands in for at least half its height (a thin strip, a lead's border or
+          // a coping's lip, shows no stone).
+          for (let row = Math.floor(c0 + 1e-6); row < c1 - 1e-6; row++) {
+            if (Math.min(c1, row + 1) - Math.max(c0, row) < 0.5) continue;
+            const par = row % 2 ? 0.5 : 0, f = q.X + par - Math.floor(q.X + par + 1e-6);
+            // The stone from the arris in to the first joint (a whole stone where a joint stands on it).
+            const piece = (f < 1e-4 || f > 1 - 1e-4 ? 1 : side === 'xs' ? 1 - f : f) * q.l;
+            const k = `${q.p.x.toFixed(2)},${q.p.z.toFixed(2)},${row}`, e = ends.get(k) ?? { key: [q.p.x, q.p.z, row] as [number, number, number] };
+            e[onX ? 'x' : 'z'] = { piece, n: Math.sign(onX ? n.x : n.z), run, y: (row + 0.5) * COURSE, reach: (q.xe - q.xs) * q.l };
+            ends.set(k, e);
+          }
+        }
+      }
+      // (Where a wall stands against the curtain or its neighbour in the range, its faces there are hidden.)
+      const hidden = (cx: number, cz: number) => [...(b.backs ?? []), ...(b.shared ?? []), ...(b.joined ?? [])].some((sd) =>
+        sd === 'w' ? cx < 1.01 && (b.backs?.includes('w') ? Math.abs(cx - 0.05) < 0.01 : true) :
+        sd === 'e' ? cx > b.w - 1.01 && (b.backs?.includes('e') ? Math.abs(cx - b.w + 0.05) < 0.01 : true) :
+        sd === 'n' ? cz < 1.01 && (b.backs?.includes('n') ? Math.abs(cz - 0.05) < 0.01 : true) :
+        cz > b.d - 1.01 && (b.backs?.includes('s') ? Math.abs(cz - b.d + 0.05) < 0.01 : true));
+      const longOn = new Map<string, string>();
+      for (const { x, z, key } of [...ends.values()].sort((p, q) => p.key[2] - q.key[2])) {
+        // (An outside corner: each face runs from the arris away from where the other faces.)
+        if (!x || !z || x.run !== -z.n || z.run !== -x.n || hidden(key[0], key[1])) continue;
+        corners++;
+        const at = `${b.id} corner (${key[0].toFixed(2)}, ${key[1].toFixed(2)}) course ${key[2]} [faces ${x.reach.toFixed(2)} n${x.n} / ${z.reach.toFixed(2)} n${z.n}]`;
+        const [lo, hi] = [Math.min(x.piece, z.piece), Math.max(x.piece, z.piece)];
+        if (lo < 0.3) bad.push(`${at}: a sliver ${lo.toFixed(2)} long`);
+        else if (hi - lo < 0.2) bad.push(`${at}: both stones ${lo.toFixed(2)} and ${hi.toFixed(2)} (no quoin)`);
+        // Long on one face and short on the other by turns, course over course.
+        const c = `${key[0].toFixed(2)},${key[1].toFixed(2)}`, long = x.piece > z.piece ? 'x' : 'z', prev = longOn.get(`${c},${key[2] - 1}`);
+        if (prev === long) bad.push(`${at}: the long stone on the same face as the course under it`);
+        longOn.set(`${c},${key[2]}`, long);
       }
     }
+    expect(bad, bad.slice(0, 30).join('\n')).toEqual([]);
+    // (The stables' and the barracks' free corners, every course: the rest stand against the curtain or
+    // their neighbours in the range.)
+    expect(corners).toBeGreaterThanOrEqual(32);
   });
 });
 

@@ -886,7 +886,7 @@ export function buildKeep(seed: number): ZoneLayout {
     const i = G.idx(x, z);
     lawn[i] = lawnCell(G.l.cells[i], G.l.ground[i], G.l.fluid[i], castleBailey.inCastle(x + 0.5, z + 0.5) || (level[i] >= CROWN_Y && onCrown(x + 0.5, z + 0.5) && !castleGround.onRim(x + 0.5, z + 0.5)));
   }
-  // The private gardens and the paddock grow a longer garden lawn with daisies and clover; the
+  // The private gardens and the paddock grow a longer garden lawn with clover under it; the
   // formal lawns stay clipped and striped.
   for (const box of castleBailey.GARDEN_LAWNS) site.cells(box, (i) => {
     if (lawn[i] === Lawn.Clipped) lawn[i] = Lawn.Garden;

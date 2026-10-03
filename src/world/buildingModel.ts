@@ -380,10 +380,16 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     const L = sideLen(b, side);
     // The north and south walls take the corners (over a lower neighbour's wall, only above its top).
     const ow = ns ? over('w') : undefined, oe = ns ? over('e') : undefined;
-    // (Square with the side walls' outer faces at a free corner; into the neighbour's wall at a shared one.)
-    const end0 = shared.has('w') || joinedTo.has('w') ? 0 : 0.5 - WALL_T / 2, end1 = shared.has('e') || joinedTo.has('e') ? L : L - 0.5 + WALL_T / 2;
+    // (A castle building's: square with the side walls' outer faces at a free corner; into the neighbour's
+    // wall at a shared one.)
+    const end0 = !keep || shared.has('w') || joinedTo.has('w') ? 0 : 0.5 - WALL_T / 2, end1 = !keep || shared.has('e') || joinedTo.has('e') ? L : L - 0.5 + WALL_T / 2;
     const lo = ns ? (ow !== undefined ? 1 : end0) : 1, hi = ns ? (oe !== undefined ? L - 1 : end1) : L - 1;
-    const runs = wallRuns(b, side).map(([a, e]) => [Math.max(lo, a), Math.min(hi, e)] as [number, number]).filter(([a, e]) => e > a);
+    // (The east and west walls run from the north wall's inner face to the south wall's, so no slot opens
+    // between them at a corner; their stubs only from the inner edge of the base course where one runs
+    // along that end, which fills the corner there.)
+    const wlo = ns || !keep ? lo : 0.5 + WALL_T / 2, whi = ns || !keep ? hi : L - 0.5 - WALL_T / 2;
+    const slo = ns || inBand.has('n') ? wlo : 1, shi = ns || inBand.has('s') ? whi : L - 1;
+    const runs = wallRuns(b, side).map(([a, e]) => [Math.max(wlo, a), Math.min(whi, e)] as [number, number]).filter(([a, e]) => e > a);
     for (const [h0, c] of [[ow, 0.5], [oe, L - 0.5]] as [number | undefined, number][]) if (h0 !== undefined) piece(1, h0, wallH, WALL_T, c, 0, UPPER, 0);
     const wins = b.windows.filter((wi) => wi.side === side).map((wi) => ({ wi, ...winDims(wi) }));
     const cw = castleWins(side), cHoles = cw.flatMap(holesOf);
@@ -399,7 +405,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       if (!keep) W.box(k, built, len, 0.34, WALL_T + 0.16, u, 0.17, 0, STONE_D, 0, 0.04);
       const s0 = keep ? 0 : 0.34, s1 = keep && !inBand.has(side) ? CUT_H - 0.01 : CUT_H;
       // (A stall's half-door opens right down to the floor.)
-      holed(W, k, built, a, e, s0, s1, WALL_T, S.foot, cHoles.filter((h) => h.y0 < s1 && h.u1 > a && h.u0 < e), 0.02);
+      holed(W, k, built, Math.max(a, slo), Math.min(e, shi), s0, s1, WALL_T, S.foot, cHoles.filter((h) => h.y0 < s1 && h.u1 > a && h.u0 < e), 0.02);
       if (!keep) W.box(k, built, len, 0.16, WALL_T + 0.1, u, CUT_H - 0.05, 0, S.course, 0, 0.03);
       // Upper wall with its window openings, and the wall plate / cornice on top. On a two-storey
       // camera side the upper storey's own course caps the cut there too.
@@ -1377,8 +1383,14 @@ function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, 
       // (Each stretch its own stone part, so its faces and its top are laid along its own run.)
       const geo = new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false, curveSegments: 1 }).rotateX(-Math.PI / 2).translate(0, y0, 0);
       geo.computeVertexNormals();
-      // (For the geometry audit: its stretches, mitred edge to edge, are one band.)
-      k.mesh(p, geo, color, [0, 0, 0]).userData.audit = { band: 'foot' };
+      // (For the geometry audit: its stretches, mitred edge to edge, are one band.) Standing `out` beyond the
+      // walls, its faces are laid from its own outer corner (x0, z0), whole metres less a tenth and `out`
+      // twice apart: the north side's joints from that corner, the south's half a stone on, the west's
+      // and the east's likewise along Z, so every corner of it turns on a quoin, long and short by turns.
+      const m = k.mesh(p, geo, color, [0, 0, 0]);
+      m.userData.audit = { band: 'foot' };
+      const c0 = 0.5 - hi;
+      m.userData.gridFrom = ns ? { ox: c0 + (side === 's' ? 0.5 : 0) } : { oz: c0 + (side === 'e' ? 0.5 : 0) };
     }
   }
 }

@@ -94,7 +94,9 @@ paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438, 0x3e6a6a, 0x7
 paintAs('masonry', [...SAND, ...SOOT]);
 paintAs('ashlar', [ASHLAR, ASHLAR_L, ASHLAR_W, ASHLAR_B]);
 paintAs('masonry', [KERB, INLAY, DECK, PAVE]);
-paintAs('shingle', [SLATE_BLUE]);
+// (The spires and the slate roofs keep the blocky slate courses they have always been painted in: the
+// shingle pattern is too fine to read from the overview.)
+paintAs('masonry', [SLATE_BLUE]);
 // (Lead is sheet metal, never laid as stones.)
 paintAs('soft', [ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL]);
 paintAs('soft', [GILT]);
@@ -3202,28 +3204,40 @@ function masonLayout(g: THREE.Object3D) {
   // into the walling).
   const bands = stone.filter((p) => p.box.max.y - p.box.min.y <= 0.8 && Math.max(p.box.max.x - p.box.min.x, p.box.max.z - p.box.min.z) >= 2);
   const of = new Map<THREE.Mesh, (typeof parts)[number]>(parts.map((p) => [p.mesh, p]));
-  // A prop with its own block grid (a castle building): every face of its stone in one plane is laid as
-  // one face, from end to end of the stretch the coplanar faces make together (each plane's stretches
-  // found once). A stretch shorter than a stone and a half (a pier's front, a reveal) is laid from its
-  // own ends instead.
+  // A prop with its own block grid (a castle building): every face of one stone in one plane is laid as
+  // one face, from end to end of the stretch the coplanar faces make together where they touch (side by
+  // side, or one standing on the other: a wall's courses over its stub; never a parapet and a base course
+  // that only share a plane far apart in height). A stretch shorter than a stone and a half (a pier's
+  // front, a reveal) is laid from its own ends instead.
   const grid = g.userData.masonGrid as MasonGrid | undefined;
-  const planes = new Map<string, [number, number][]>();
-  const gridReach = (dir: GridDir, plane: number, lo: number, hi: number): [number, number] | null => {
-    const key = `${dir}:${Math.round(plane * 50)}`;
-    let runs = planes.get(key);
-    if (!runs) {
-      const along = dir === 'pz' || dir === 'mz', ax = along ? 'z' : 'x', run = along ? 'x' : 'z', far = dir === 'pz' || dir === 'px';
-      const spans = stone.filter((q) => q.square && Math.abs((far ? q.box.max[ax] : q.box.min[ax]) - plane) < 0.012).map((q) => [q.box.min[run], q.box.max[run]] as [number, number]).sort((s, t) => s[0] - t[0]);
-      runs = [];
-      for (const s of spans) {
-        const last = runs[runs.length - 1];
-        if (last && s[0] <= last[1] + 0.05) last[1] = Math.max(last[1], s[1]);
-        else runs.push([s[0], s[1]]);
+  type Piece = (typeof parts)[number];
+  // (Each plane found once: a face within PLANE_TOL of a plane already found is laid in it, so faces a
+  // hair apart never split into two planes with their own joints. Its parts are grouped into the
+  // stretches they make, each stretch's reach along the plane.)
+  const PLANE_TOL = 0.012, GAP = 0.05;
+  type Stretch = { parts: Piece[]; lo: number; hi: number };
+  const planes: { dir: GridDir; plane: number; color: number; groups: Stretch[] }[] = [];
+  const level = (a: Piece, b: Piece) => a.box.min.y <= b.box.max.y + 0.02 && b.box.min.y <= a.box.max.y + 0.02;
+  const gridReach = (dir: GridDir, plane: number, lo: number, hi: number, p: Piece): [number, number] | null => {
+    const along = dir === 'pz' || dir === 'mz', run = along ? 'x' : 'z';
+    let entry = planes.find((q) => q.dir === dir && q.color === p.color && Math.abs(q.plane - plane) < PLANE_TOL);
+    if (!entry) {
+      const ax = along ? 'z' : 'x', far = dir === 'pz' || dir === 'px';
+      // (A piece that lays its own stones, an arch's ring or a jamb, sets out no plane of walling.)
+      const inPlane = stone.filter((q) => q.square && q.color === p.color && !q.mesh.geometry.getAttribute('aMason') && Math.abs((far ? q.box.max[ax] : q.box.min[ax]) - plane) < PLANE_TOL);
+      const touch = (a: Piece, b: Piece) => a.box.min[run] <= b.box.max[run] + GAP && b.box.min[run] <= a.box.max[run] + GAP && level(a, b);
+      const groups: Stretch[] = [];
+      for (const q of inPlane) {
+        const hit = groups.filter((gr) => gr.parts.some((o) => touch(o, q)));
+        for (const gr of hit) groups.splice(groups.indexOf(gr), 1);
+        groups.push({ parts: [q, ...hit.flatMap((gr) => gr.parts)], lo: Math.min(q.box.min[run], ...hit.map((gr) => gr.lo)), hi: Math.max(q.box.max[run], ...hit.map((gr) => gr.hi)) });
       }
-      planes.set(key, runs);
+      entry = { dir, plane, color: p.color, groups };
+      planes.push(entry);
     }
-    const r = runs.find(([a, e]) => a <= hi + 0.05 && e >= lo - 0.05) ?? [lo, hi];
-    const reach: [number, number] = [Math.min(r[0], lo), Math.max(r[1], hi)];
+    // The stretch the part itself stands in (or, for a face of it inside its bounds, the one at its height there).
+    const gr = entry.groups.find((q) => q.parts.includes(p)) ?? entry.groups.find((q) => q.lo <= hi + GAP && q.hi >= lo - GAP && q.parts.some((o) => level(o, p)));
+    const reach: [number, number] = [Math.min(gr?.lo ?? lo, lo), Math.max(gr?.hi ?? hi, hi)];
     return reach[1] - reach[0] >= 1.5 * STONE_LEN - 0.01 ? reach : null;
   };
   return (mesh: THREE.Mesh): MasonOpts | null => {
@@ -3283,7 +3297,9 @@ function masonLayout(g: THREE.Object3D) {
     // lie on the course lines, so none is fitted to them.)
     const breaks = grid ? [foot] : cleanBreaks(ys.filter((y) => y >= foot - 1e-6));
     const opts: MasonOpts = { single, face, course, stone: stoneLen, m: inv.clone().multiply(mesh.matrixWorld), breaks, seed: Math.floor((face ? hash01(x0, x1, z0 + z1, p.color) : hash01(c.x, c.y, c.z)) * 97) };
-    if (grid && p.square) opts.grid = { g: grid, at: gridReach, foot };
+    // (A band standing out round the foot names where its joints start along it: see footBand.)
+    const from = mesh.userData.gridFrom as Partial<MasonGrid> | undefined;
+    if (grid && p.square) opts.grid = { g: { ...grid, ...from }, at: (dir, plane, lo, hi) => gridReach(dir, plane, lo, hi, p), foot };
     if (PART_AUDIT.on) (g.userData.courses ??= []).push({ color: p.color, box: b.clone(), breaks: opts.breaks, course: course ?? COURSE, single, laid: !!mesh.geometry.getAttribute('aMason') || !!mesh.geometry.getAttribute('aLay') } satisfies CourseRecord);
     return opts;
   };
