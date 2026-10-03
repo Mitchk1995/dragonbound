@@ -30,8 +30,8 @@ export interface CastleScene {
   ground: (x: number, z: number) => number;
 }
 
-/** The castle on its crown, the gate terrace, the ledge road and the landing at the head of the climb. */
-export const CASTLE_AREA = { x0: 14, x1: 135, z0: 15, z1: 120 };
+/** The castle on its crown and the moat round it, the gate terrace, the ledge, the landing and the climb's stair. */
+export const CASTLE_AREA = { x0: 14, x1: 136, z0: 0, z1: 132 };
 const inArea = (x: number, z: number) => x > CASTLE_AREA.x0 && x < CASTLE_AREA.x1 && z > CASTLE_AREA.z0 && z < CASTLE_AREA.z1;
 
 let scene: CastleScene | null = null;

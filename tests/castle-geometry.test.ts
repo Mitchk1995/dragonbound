@@ -29,12 +29,14 @@ const TIGHT = 0.05;
  */
 const JOINTS: { a: string[]; b: string[]; why: string; rule?: (a: Piece, b: Piece) => string[] }[] = [
   { a: ['castle_wall'], b: ['round_tower', 'corner_tower'], why: 'a curtain run ends inside its tower\'s drum, its wall walk at a doorway', rule: (w, t) => wallIntoTower(w, t) },
-  { a: ['castle_wall'], b: ['outer_gatehouse', 'ward_gate', 'postern'], why: 'a gate is built across the curtain\'s run; the wall stops at its sides', rule: (w, g) => wallAtGate(w, g) },
-  { a: ['castle_wall', 'round_tower', 'corner_tower', 'donjon', 'building'], b: ['wall_climber'], why: 'ivy and roses lie flat on the masonry, rooted in its foot' },
-  { a: ['building'], b: ['pavilion', 'door_turret', 'donjon', 'castle_wall', 'building'], why: 'built against a building\'s wall (never through it into its rooms)', rule: (b, o) => intoRooms(b, o) },
+  { a: ['castle_wall'], b: ['outer_gatehouse'], why: 'a gate is built across the curtain\'s run; the wall stops at its sides', rule: (w, g) => wallAtGate(w, g) },
+  { a: ['castle_wall'], b: ['castle_wall'], why: 'at an inner corner of the curtain the north or south run is built against the inner face of the west or east run' },
+  { a: ['ramp_wall'], b: ['castle_wall'], why: 'the terrace\'s retaining wall runs into the curtain that holds the terrace\'s fill at its ends' },
+  { a: ['ramp_wall'], b: ['ramp_wall'], why: 'the dressed rock face over the stair\'s upper flights runs into the stair\'s east wall at the turning landing' },
+  { a: ['castle_wall', 'round_tower', 'corner_tower', 'building'], b: ['wall_climber'], why: 'ivy and roses lie flat on the masonry, rooted in its foot' },
+  { a: ['building'], b: ['castle_wall', 'building'], why: 'built against a building\'s wall (never through it into its rooms)', rule: (b, o) => intoRooms(b, o) },
   { a: ['building'], b: ['great_doors'], why: 'the great door\'s leaves hang in the hall\'s doorway, standing open into the hall' },
   { a: ['parapet', 'balustrade', 'ramp_wall', 'kerb'], b: ['parapet', 'balustrade', 'parapet_pier'], why: 'runs of one low wall meet end to end or on their pier' },
-  { a: ['ramp_paving'], b: ['ramp_wall', 'parapet_pier'], why: 'the climb\'s paving runs in under the feet of its kerb walls and their piers' },
   { a: ['round_tower', 'corner_tower'], b: ['tower_flag'], why: 'the flagpole is stepped into the tower\'s platform' },
   { a: ['fence'], b: ['gate_piers'], why: 'a fence runs into its gate pier' },
   { a: ['stream_stone'], b: ['stream_stone'], why: 'stones heaped together in the stream' },
@@ -116,10 +118,10 @@ function clashes() {
 
 describe('castle geometry', () => {
   it('builds the whole castle into blocks: its doors, windows and the rock round it among them', () => {
-    expect(P.length).toBeGreaterThan(300);
-    expect(S.solids.length).toBeGreaterThan(20000);
+    expect(P.length).toBeGreaterThan(150);
+    expect(S.solids.length).toBeGreaterThan(10000);
     expect(S.solids.filter((s) => s.part.tag === 'door-leaf').length).toBeGreaterThan(40);
-    expect(S.solids.filter((s) => s.part.tag === 'glass').length).toBeGreaterThan(35);
+    expect(S.solids.filter((s) => s.part.tag === 'glass').length).toBeGreaterThan(25);
     let rock = 0;
     S.view.group.traverse((o) => {
       if (o instanceof THREE.InstancedMesh && o.userData.rock) rock += o.count;
@@ -307,7 +309,7 @@ describe('castle geometry', () => {
       const { c, n } = way(s);
       for (const sg of [-1, 1]) ways.push({ who: `${P[s.piece].name}'s door`, c, n: n.clone().multiplyScalar(sg), w: DOORS.single.w });
     }
-    for (const g of P.filter((p) => ['ward_gate', 'postern', 'outer_gatehouse'].includes(p.kind))) {
+    for (const g of P.filter((p) => p.kind === 'outer_gatehouse')) {
       const c = g.obj.getWorldPosition(new THREE.Vector3()), n = g.obj.localToWorld(new THREE.Vector3(0, 0, 1)).sub(c).setY(0).normalize();
       for (const sg of [-1, 1]) ways.push({ who: `${g.name}`, c: c.clone().addScaledVector(n, sg * (CURTAIN_WALL.T / 2)), n: n.clone().multiplyScalar(sg), w: g.spawn!.len ?? 4 });
     }
@@ -332,7 +334,7 @@ describe('castle geometry', () => {
   it('the wall walks are clear: nothing of another piece crosses a curtain\'s walk', () => {
     const bad: string[] = [];
     const { T, H } = CURTAIN_WALL, z0 = -T / 2 + 0.66, z1 = T / 2 + 0.85 - 0.6;
-    const own = new Set(['round_tower', 'corner_tower', 'outer_gatehouse', 'ward_gate', 'postern']);
+    const own = new Set(['round_tower', 'corner_tower', 'outer_gatehouse']);
     for (const w of P.filter((p) => p.kind === 'castle_wall')) {
       const L = w.spawn!.len!, m = w.obj.matrixWorld;
       const c = new THREE.Vector3(0, H + 1.06, (z0 + z1) / 2).applyMatrix4(m);
@@ -342,6 +344,9 @@ describe('castle geometry', () => {
       for (const j of S.grid.near(walk.lo, walk.hi)) {
         const t = S.solids[j], tp = P[t.piece];
         if (tp === w || own.has(tp.kind) || t.part.fx || t.part.hollow) continue;
+        // (A run that ends in a building's flank, the keep's, runs on into it at its end; the runs
+        // meet at the corners.)
+        if (tp.kind === 'castle_wall' || (tp.building && Math.abs(w.obj.worldToLocal(t.c.clone()).x) > L / 2 - 1)) continue;
         if (overlap(walk, t) > 0.12) bad.push(`${tp.name} crosses ${w.name}'s wall walk at ${fmt(t.c)}`);
       }
     }
@@ -405,7 +410,7 @@ describe('castle geometry', () => {
     const bad: string[] = [];
     // (Not the climb's kerb walls: each sloping stretch is bounded as a level box from its low end, so
     // its corners stand nowhere near the wall's own foot.)
-    const KINDS = /^(parapet|parapet_pier|castle_wall|round_tower|corner_tower|outer_gatehouse|postern|ward_gate|building:.*)$/;
+    const KINDS = /^(parapet|parapet_pier|castle_wall|round_tower|corner_tower|outer_gatehouse|building:.*)$/;
     for (const p of P.filter((q) => KINDS.test(q.kind))) for (const s of p.solids) {
       if (s.part.thin || s.part.fx || s.part.hollow) continue;
       if (s.lo.y > S.ground(s.c.x, s.c.z) + 0.3) continue;
@@ -477,7 +482,7 @@ describe('castle geometry', () => {
   it('no two faces of different stones lie in one plane over each other (they would flicker)', () => {
     const bad: string[] = [];
     // (The architecture, where the eye rests on long faces; not the furnishings inside.)
-    const ARCH = /^(castle_wall|round_tower|corner_tower|donjon|outer_gatehouse|ward_gate|postern|door_turret|pavilion|parapet|parapet_pier|balustrade|ramp_wall|kerb|great_doors|building:.*)$/;
+    const ARCH = /^(castle_wall|round_tower|corner_tower|outer_gatehouse|parapet|parapet_pier|balustrade|ramp_wall|kerb|great_doors|building:.*)$/;
     const boxes = S.solids.map((s, i) => [s, i] as const).filter(([s]) => s.part.box && !s.r && !s.part.thin && !s.part.fx && !s.part.hollow && !s.part.fit && ARCH.test(P[s.piece].kind));
     const isBox = new Set(boxes.map(([, i]) => i));
     for (const [A, i] of boxes) for (const j of S.grid.near(A.lo, A.hi, 0.01)) {
@@ -497,8 +502,13 @@ describe('castle geometry', () => {
           return ra + rb - Math.abs(d.dot(L));
         }));
         if (over < 0.05) continue;
-        // Only where it shows: between the two faces' middles, just out from the plane, in the open.
-        const mid = A.c.clone().add(B.c).multiplyScalar(0.5);
+        // Only where it shows: in the middle of where the two faces overlap (along each of A's axes in
+        // the plane, the middle of the span both cover), just out from the plane, in the open.
+        const mid = A.c.clone();
+        for (const j of ia) {
+          const bc = d.dot(A.u[j]), br = ib.reduce((acc, k) => acc + B.e[k] * Math.abs(B.u[k].dot(A.u[j])), 0);
+          mid.addScaledVector(A.u[j], (Math.max(-A.e[j], bc - br) + Math.min(A.e[j], bc + br)) / 2);
+        }
         mid.addScaledVector(n, da + 0.01 - mid.dot(n));
         if (mid.y < S.ground(mid.x, mid.z) + 0.02) continue;
         if (S.grid.near(mid, mid).some((m) => !S.solids[m].part.thin && !S.solids[m].part.fx && contains(S.solids[m], mid, -0.002))) continue;
@@ -570,7 +580,7 @@ describe('castle geometry', () => {
       else if (!range && ox > -1.5 && oz > -1.5) bad.push(`${a.name} and ${b.name} stand jammed together (less than 1.5 apart)`);
     }
     // Every gate keeps a clear space round its arch on both faces: no building within 1.5 of its ends.
-    for (const g of P.filter((p) => ['ward_gate', 'postern', 'outer_gatehouse'].includes(p.kind))) {
+    for (const g of P.filter((p) => p.kind === 'outer_gatehouse')) {
       const L = (g.spawn!.len ?? 4) + 2.4;
       for (const b of bs) {
         const [x0, z0, x1, z1] = rect(b);
@@ -591,7 +601,7 @@ describe('castle geometry', () => {
     // hedge round a bed) laid as separate blocks of one stone overlap with their tops at one height:
     // a seam or a flicker where they cross. Such a thing is built as one shape instead. (Sculpture and
     // planting are left alone: a statue's or a plant's parts may overlap.)
-    const ARCH = /^(castle_wall|round_tower|corner_tower|donjon|outer_gatehouse|ward_gate|postern|door_turret|pavilion|parapet|parapet_pier|balustrade|ramp_wall|kerb|kerb_ring|box_border|round_terrace|field_shelter|gate_piers|fence|building:.*)$/;
+    const ARCH = /^(castle_wall|round_tower|corner_tower|outer_gatehouse|parapet|parapet_pier|balustrade|ramp_wall|kerb|kerb_ring|box_border|round_terrace|gate_piers|fence|building:.*)$/;
     const bad: string[] = [];
     for (const p of P.filter((q) => ARCH.test(q.kind))) {
       const ss = p.solids.filter((s) => !s.part.thin && !s.part.hollow && !s.part.fit && s.e[0] * s.e[1] * s.e[2] * 8 > 0.004);
@@ -656,7 +666,7 @@ describe('castle geometry', () => {
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
   });
 
-  it('paving stops at the inside face of every rail: no road shows outside a parapet, a balustrade or a wall of the climb', () => {
+  it('paving stops at the inside face of every rail: no road shows outside a parapet or a balustrade', () => {
     const { layout: L } = S, bad: string[] = [];
     /** Is the ground at a point laid as a road or a walk (paving, gravel, the climb's earth)? */
     const road = (x: number, z: number) => {
@@ -675,24 +685,6 @@ describe('castle geometry', () => {
       for (let u = -L2 + 0.3; u <= L2 - 0.3; u += 0.25) {
         const v = new THREE.Vector3(u, 0, out).applyAxisAngle(Y, sp.rot ?? 0);
         check(name, sp.x + v.x, sp.z + v.z);
-      }
-    }
-    // The climb's walls: each stretch looked at beyond its outer face (0.31 out from its line), on the
-    // side away from the road it kerbs.
-    const pave = L.props.find((q) => q.kind === 'ramp_paving')!;
-    const line = (pave.opt as { pts: number[][] }).pts.map(([x, z]) => [x + pave.x, z + pave.z]);
-    const fromRoad = (x: number, z: number) => Math.min(...line.slice(0, -1).map(([ax, az], k) => {
-      const [bx, bz] = line[k + 1], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
-      return Math.hypot(x - ax - dx * t, z - az - dz * t);
-    }));
-    for (const sp of L.props.filter((q) => q.kind === 'ramp_wall')) {
-      const pts = (sp.opt as { pts: number[][] }).pts.map(([x, z]) => [x + sp.x, z + sp.z]), name = `ramp_wall@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`;
-      for (let k = 0; k < pts.length - 1; k++) {
-        const [ax, az] = pts[k], [bx, bz] = pts[k + 1], l = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / l, nz = (bx - ax) / l;
-        for (let t = 0.1; t <= 0.9; t += 0.8 / Math.ceil(l / 0.25)) {
-          const x = ax + (bx - ax) * t, z = az + (bz - az) * t, sg = fromRoad(x + nx, z + nz) > fromRoad(x - nx, z - nz) ? 1 : -1;
-          check(name, x + sg * nx * 0.46, z + sg * nz * 0.46);
-        }
       }
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
@@ -714,7 +706,7 @@ describe('castle geometry', () => {
       const pts = (sp.opt as { pts: number[][] }).pts.map(([x, z]) => [x + sp.x, z + sp.z]);
       for (const [e, f] of [[pts[0], pts[1]], [pts[pts.length - 1], pts[pts.length - 2]]]) {
         const l = Math.hypot(e[0] - f[0], e[1] - f[1]);
-        ends.push({ name: `ramp_wall@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`, at: e, dir: [(e[0] - f[0]) / l, (e[1] - f[1]) / l], hw: 0.3 });
+        ends.push({ name: `ramp_wall@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`, at: e, dir: [(e[0] - f[0]) / l, (e[1] - f[1]) / l], hw: (((sp.opt as { w?: number }).w ?? 0.62) - 0.02) / 2 });
       }
     }
     for (const pier of P.filter((p) => p.kind === 'parapet_pier')) {
@@ -733,36 +725,6 @@ describe('castle geometry', () => {
       }
     }
     expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
-  });
-
-  it('the climb\'s paving lies over its ground and under its walls: their plinth and coping stand clear above it all the way up', () => {
-    const bad: string[] = [];
-    const pv = S.layout.props.find((q) => q.kind === 'ramp_paving')!, po = pv.opt as { pts: number[][]; ys: number[] };
-    for (const sp of S.layout.props.filter((q) => q.kind === 'ramp_wall')) {
-      const o = sp.opt as { pts: number[][]; ys: number[]; tops: number[] }, pts = o.pts.map(([x, z]) => [x + sp.x, z + sp.z]);
-      po.pts.forEach(([px, pz], i) => {
-        const x = px + pv.x, z = pz + pv.z;
-        // The wall beside this point of the paving: where it passes nearest, and its heights there.
-        let best = Infinity, foot = 0, top = 0;
-        for (let k = 0; k < pts.length - 1; k++) {
-          const [ax, az] = pts[k], [bx, bz] = pts[k + 1], dx = bx - ax, dz = bz - az;
-          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))), d = Math.hypot(x - ax - dx * t, z - az - dz * t);
-          if (d < best) (best = d), (foot = o.ys[k] + (o.ys[k + 1] - o.ys[k]) * t + 0.4), (top = o.tops[k] + (o.tops[k + 1] - o.tops[k]) * t);
-        }
-        if (foot - po.ys[i] < 0.15 || top - po.ys[i] < 0.5) bad.push(`the climb's paving at (${x.toFixed(1)}, ${z.toFixed(1)}) stands ${(foot - po.ys[i]).toFixed(2)} under ${sp.kind}@${sp.x.toFixed(1)},${sp.z.toFixed(1)}'s plinth top and ${(top - po.ys[i]).toFixed(2)} under its coping`);
-      });
-    }
-    // And no ground rises through it anywhere across its width, out to the walls' feet.
-    const pts = po.pts.map(([x, z]) => [x + pv.x, z + pv.z]);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [ax, az] = pts[i], [bx, bz] = pts[i + 1], l = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / l, nz = (bx - ax) / l;
-      for (const t of [0, 0.25, 0.5, 0.75]) for (const off of [-2.15, -1.8, -1, 0, 1, 1.8, 2.15]) {
-        const x = ax + (bx - ax) * t + nx * off, z = az + (bz - az) * t + nz * off, y = po.ys[i] + (po.ys[i + 1] - po.ys[i]) * t;
-        const g = Math.max(S.view.heightAt(x, z), S.view.floorAt(x, z));
-        if (g > y - 0.01) bad.push(`ground rises ${(g - y).toFixed(2)} through the climb's paving at (${x.toFixed(1)}, ${z.toFixed(1)})`);
-      }
-    }
-    expect(bad, bad.slice(0, 20).join('\n')).toEqual([]);
   });
 
   it('no tree stands out over a drop: ground or rock lies under the whole foot of every trunk', () => {

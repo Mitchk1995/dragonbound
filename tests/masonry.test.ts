@@ -147,13 +147,12 @@ describe('masonry laid as a mason lays it', () => {
     });
   });
 
-  it('lays the walling of the curtain, its towers, gates and the buildings\' pavilions on one set of course lines', () => {
+  it('lays the walling of the curtain, its towers and the gatehouse on one set of course lines', () => {
     // Every course in the walling one course high, and every course line on the castle's grid counted
     // up from the foot each piece stands on, so where two pieces meet their courses run on level.
     const pieces = [
       buildProp('castle_wall', { len: 12, v: 3 }), buildProp('round_tower', { len: 3.2, v: 11.2, opt: { walks: [[Math.PI / 2, 0]] } }),
-      buildProp('corner_tower', { len: 3.4, v: 12 }), buildProp('ward_gate', 4), buildProp('outer_gatehouse', { len: 4, opt: { cx: 6, R: 2.6 } }),
-      buildProp('pavilion', 4), buildProp('door_turret', { len: 2, v: 11 }),
+      buildProp('corner_tower', { len: 3.4, v: 12 }), buildProp('outer_gatehouse', { len: 4, opt: { cx: 6, R: 2.6 } }),
     ];
     let checked = 0;
     for (const pc of pieces) {

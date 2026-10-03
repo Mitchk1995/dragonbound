@@ -6,15 +6,13 @@ import { cellRole, fitBlocks, fitsOf, footprint, type BuildingSpec, type Floor }
 import { OCCLUDE } from '../world/worldView';
 import { perf } from './inspect';
 
-/** The residence range's rooms on each floor: [id, label, x, z] in cells from its corner. */
+/** The keep's rooms on each floor: [id, label, x, z] in cells from its corner. */
 const ROOMS = [
   [
-    ['great-hall', 'Great hall / dais', 10, 7.5], ['screens', 'Screens passage', 20.5, 10],
-    ['buttery', 'Buttery', 24, 3], ['service', 'Service passage', 24, 7.5], ['pantry', 'Pantry', 24, 12],
+    ['throne-hall', 'Throne hall', 12, 12], ['dais', "The lord's dais", 12, 6.5], ['west-stair', 'West stair', 9.5, 21.5], ['east-stair', 'East stair', 14.5, 21.5],
   ],
   [
-    ['north-gallery', 'North gallery', 10, 1.5], ['west-gallery', 'West gallery', 1.5, 8],
-    ['minstrel-gallery', 'Minstrel gallery', 20.5, 9], ['steward', "Steward's chamber", 24, 8],
+    ['council-gallery', 'Council gallery', 12, 3], ['west-gallery', 'West gallery', 3, 11], ['east-gallery', 'East gallery', 20, 11],
   ],
 ] as const;
 
@@ -34,17 +32,17 @@ function plan(b: BuildingSpec, floor: Floor) {
     const px = (b.x + x - x0) * tile, pz = (b.z + z - z0) * tile;
     shapes.push(`<rect x="${px - 82}" y="${pz - 13}" width="164" height="26" rx="4" fill="#171a20e8"/><text x="${px}" y="${pz + 5}" font-size="15" text-anchor="middle" fill="#f5edda">${label}</text>`);
   }
-  const header = floor ? 'Upper floor · 5 m above the hall, open over it' : 'Ground floor · north at the top';
+  const header = floor ? 'Galleries · at the wall walk, open over the throne hall' : 'Ground floor · north at the top';
   return `<div style="position:fixed;inset:0;z-index:2100;background:#161b22;color:#eadcc1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Arial,sans-serif;gap:14px">
     <div style="font-size:30px">Dragonspire Keep — ${header}</div>
     <div style="font-size:16px;color:#b8b5ac">${b.w} × ${b.d} tiles · one grid square = one metre</div>
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="width:min(85vw,${width}px);max-height:70vh">${shapes.join('')}</svg>
     <div style="font-size:16px">Dark: masonry, open void, stair flight · Sand: walkable floor / doors · Brown: furniture · Gold: the stair ${floor ? 'down' : 'up'}</div>
-    <div style="font-size:14px;color:#a29d92">Doorways and stairs match the playable navigation grid. Enter by the great door or the screens door.</div>
+    <div style="font-size:14px;color:#a29d92">Doorways and stairs match the playable navigation grid. Enter by the great door, or from the great hall or the chapel.</div>
   </div>`;
 }
 
-/** Dev-only audit: the residence range's real floor plans and each room at gameplay height. */
+/** Dev-only audit: the keep's real floor plans and each room at gameplay height. */
 export async function castleSuite(g: Game, shot: (name: string) => Promise<void>) {
   g.travel('keep', true);
   g.debug.timeScale = 0;
@@ -62,7 +60,7 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
       const stand = g.zone.nav.nearestWalkable(keep.x + x, keep.z + z)!;
       g.player.pos.set(stand.x, g.zone.groundY(stand.x, stand.z), stand.z);
       g.camPos.copy(g.player.pos);
-      g.camZoom = id === 'great-hall' || id === 'north-gallery' ? 1.2 : 0.8;
+      g.camZoom = id === 'throne-hall' || id === 'council-gallery' ? 1.2 : 0.8;
       g.update(0);
       const name = `castle-${floor ? 'upper' : 'ground'}-${id}`;
       const measured = await perf(g, 30);
@@ -77,11 +75,11 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
 }
 
 /**
- * Dev-only audit of the bailey (`npm run inspect -- bailey`): the whole castle from above and as a
- * plan, the approach, every yard through the gameplay camera with the hero standing in it, the
- * centrepiece and a lawn up close, the island beyond and the camera-side wall dissolving round the
- * hero. Every position comes from CASTLE_PLAN, so the shots follow the layout. With `angles`
- * (`bailey-angles:hall-door+landing`) each named view is also shot from three orbits round the same
+ * Dev-only audit of the bailey (`npm run inspect -- bailey`): the whole castle from above, as a
+ * plan and from the north, the approach up the stair and over the bridge, every yard through the
+ * gameplay camera with the hero standing in it, the centrepiece up close, the island beyond and the
+ * camera-side wall dissolving round the hero. Every position comes from CASTLE_PLAN, so the shots
+ * follow the layout. With `angles` (`bailey-angles:door+bridge`) each named view is also shot from three orbits round the same
  * focus: the far side (`-opp`), low at the hero's eye height (`-low`) and close up (`-close`).
  */
 export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false, only?: string[], angles = false) {
@@ -195,88 +193,64 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     return out;
   };
 
-  // The castle rock from below (\`bailey:rock\` captures only these): its south face from the farm,
-  // the east face and the approach's cutting from the court, the cutting close up, and the west
-  // tear face from out over the Veil.
-  await view('rock-south', [P.gate.x + 4, 3, P.gate.z + 50], [P.gate.x + 4, 7, P.gate.z + 9], 45);
-  await view('rock-east', [P.gate.x + 100, 7, P.gate.z + 14], [P.gate.x + 62, 7, P.gate.z - 12], 45);
-  await view('rock-cutting', [P.gate.x + 74, 5, P.gate.z + 28], [P.gate.x + 58, 6, P.gate.z + 8], 22);
+  const K = P.keep, kx = (K[0] + K[2]) / 2;
+  // The castle rock from below (`bailey:rock` captures only these): its south face over the farm
+  // and the pool under the fall, the stair up its south-east corner from the court, the west face
+  // from out over the Veil, and the fall into the pool.
+  await view('rock-south', [P.gate.x + 4, 3, P.gate.z + 52], [P.gate.x + 4, 7, P.gate.z + 14], 45);
+  await view('rock-east', [P.gate.x + 100, 7, P.gate.z + 24], [P.gate.x + 52, 6, P.gate.z + 14], 45);
+  await view('stair', [P.gate.x + 72, 9, P.gate.z + 38], [P.gate.x + 51, 5, P.gate.z + 20], 22);
   await view('rock-west', [-14, 16, 86], [28, 8, 64], 40);
-  // The head of the climb: the landing, the ledge road turning off it and the castle's south-east
-  // corner over them, from out over the court.
-  await view('landing', [P.gate.x + 72, y0 + 12, P.gate.z + 22], [P.gate.x + 50, y0 + 2, P.gate.z + 6], 24);
-  // The crown's north-east rim and the fracture notch beyond the castle.
-  await view('ne-rim', [165, y0 + 26, 92], [138, y0 - 2, 42], 40);
-  // The approach from below the rock: the ledge road climbing west under the south wall to the gate.
-  await view('approach', [P.gate.x + 72, y0 + 16, P.gate.z + 38], [P.gate.x + 18, y0 - 2, P.gate.z + 4], 50);
-  // The spring's fall out of the castle rock into its pool and the stream leaving it, from below.
-  await view('falls', [P.gate.x + 31, y0 - 5, P.gate.z + 30], [P.gate.x + 26.5, y0 - 6.5, P.gate.z + 12], 18);
-  // The spring breaking out at the brink of the crown's west buttress and falling into the Veil.
-  await view('falls-west', [4, y0 + 6, 92], [19.6, y0 - 4, 80.5], 24);
-  // The rock's foot through the gameplay camera, from the spring's landing.
-  await play('rock-foot', P.gate.x + 21, P.gate.z + 17, 1.0);
-  // The fields at the rock's foot, low across the plots and the meadow rolling between them.
-  await view('farm', [P.gate.x + 14, 2.6, P.gate.z + 44], [P.gate.x + 4, 0.2, P.gate.z + 26], 20);
+  await view('falls', [P.gate.x + 8, y0 - 6, P.gate.z + 36], [P.gate.x, y0 - 6, P.gate.z + 21], 18);
+  await view('falls-west', [4, y0 + 6, 92], [20.8, y0 - 4, 81], 24);
+  // The fields at the rock's foot, low across the plots.
+  await view('farm', [P.gate.x - 4, 2.6, P.gate.z + 56], [P.gate.x - 12, 0.2, P.gate.z + 38], 20);
   if (rockOnly) return finish();
 
-  // The whole castle: from high in the south-east, and as a plan from almost straight above.
+  // The whole castle: from high in the south-east (the plan's overview), as a plan from almost
+  // straight above, from above the Veil to the north-west (the moat round the keep's back) and from
+  // far out over the island in the south.
   await view('overview', [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70);
-  await view('plan', [c.x, y0 + 160, c.z + 22], [c.x, y0, c.z + 1], 70);
-  // The architecture's colour and detail up close: the hall's front between its pavilions, the
-  // gatehouse's outer face, the gate front from the terrace, a wall tower, the donjon and its spire,
-  // the north skyline from far out in the south-east, the roses on the curtain behind the bower and
-  // the west wing's door onto the cour.
-  await view('keep-front', [P.door.x, y0 + 9, 62], [P.door.x, y0 + 7, 40], 18);
-  // The west pavilion's lower window (the glazing kit) from a little to its side, the glass and the lit
-  // chamber behind it.
-  const pane = { x: P.door.x - 6.2, z: P.door.z + 2.1 };
-  await view('keep-window', [pane.x + 2.6, y0 + 7.6, pane.z + 5.4], [pane.x, y0 + 6.8, pane.z - 0.4], 8);
+  await view('plan', [c.x, y0 + 170, c.z + 22], [c.x, y0, c.z + 1], 75);
+  await view('north', [c.x - 70, y0 + 46, K[1] - 58], [kx, y0 + 6, c.z - 8], 70);
+  await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 80], [P.gate.x, y0 + 12, 50], 70);
+  // The keep's front over the grand stair, and the gate front from the gate terrace.
+  await view('keep-front', [P.door.x, y0 + 12, 70], [P.door.x, y0 + 10, 40], 24);
   await view('gatehouse-outer', [P.gate.x + 10, y0 + 6, P.gate.z + 22], [P.gate.x, y0 + 7, P.gate.z], 18);
-  await view('gate-close', [P.gate.x + 14, y0 + 9, P.gate.z + 22], [P.gate.x, y0 + 6, P.gate.z - 1], 20);
-  await view('tower-close', [43, y0 + 8, 76], [31, y0 + 7, 66], 14);
-  await view('donjon', [33, y0 + 13, 60], [50.8, y0 + 10, 33.5], 24);
-  await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 70], [P.gate.x, y0 + 6, 60], 60);
-  await view('ivy-curtain', [38, y0 + 4, 48], [38, y0 + 4, 39], 12);
-  await view('hall-door', [62, y0 + 5, 66], [54, y0 + 2.5, 60.5], 12);
-  // The ward gates in the inner curtain, from the bailey and from the service ward.
-  for (const [i, gz] of [[1, P.fountain.z], [2, 45]]) {
-    await view(`ward-gate-${i}`, [P.screen[0].x - 9, y0 + 6, gz + 9], [P.screen[0].x, y0 + 3, gz], 14);
-    await view(`ward-gate-${i}-ward`, [P.screen[0].x + 9, y0 + 6, gz + 9], [P.screen[0].x, y0 + 3, gz], 14);
-  }
-  // Through the gameplay camera: inside the gate looking up the yard, the centrepiece, the great door.
+  // Through the gameplay camera, on the way in: the stair's foot, its turn and its head, the
+  // ledge, the bridge, the forecourt, the fountain, the avenue, the great door, and the yards and
+  // the lookout.
+  await play('stair-foot', 131, 132, 1.0);
+  await play('stair-turn', 131, 118, 1.0);
+  await play('stair-head', 116, 117.5, 1.0);
+  await play('ledge', 100, 112.5, 1.0);
+  await play('bridge', P.gate.x, P.gate.z + 6, 1.0);
   await play('entry', P.gate.x, P.gate.z - 4, 1.3);
   await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.2);
-  await play('door', P.door.x, P.door.z + 3.5, 1.0);
-  // The fountain and its water up close, low down.
-  await view('fountain-close', [P.fountain.x + 7.5, y0 + 4.2, P.fountain.z + 14.5], [P.fountain.x, y0 + 4.4, P.fountain.z + 0.5], 14);
-  // Every other yard and garden, and the way in.
-  await play('ledge-road', P.gate.x + 34, P.gate.z + 6, 1.3);
-  await play('terrace', P.gate.x, P.gate.z + 8, 1.2);
-  await play('parterre', Z.parterre.x, Z.parterre.z + 2.5, 1.0);
-  await play('cour', Z.cour.x, Z.cour.z, 1.2);
-  await play('privy-garden', Z.privy.x, Z.privy.z, 1.0);
-  await play('bower', Z.bower.x, Z.bower.z, 1.0);
-  await play('belvedere', Z.belvedere.x, Z.belvedere.z, 1.0);
-  await play('kitchen-garden', Z.kitchen.x, Z.kitchen.z, 1.1);
-  await play('orchard', Z.orchard.x, Z.orchard.z, 1.0);
-  await play('training', Z.training.x, Z.training.z, 1.2);
-  await play('stables', Z.service.x, Z.service.z, 1.1);
+  await play('avenue', P.gate.x, 60, 1.35);
+  await play('door', P.door.x, P.door.z + 6, 1.0);
+  await play('terrace', Z.terrace.x - 22, Z.terrace.z, 1.1);
+  await play('stable-yard', Z.stableYard.x, Z.stableYard.z, 1.1);
+  await play('muster-yard', Z.musterYard.x, Z.musterYard.z, 1.1);
+  await play('kitchen-garden', Z.kitchenGarden.x, Z.kitchenGarden.z, 1.1);
+  await play('privy-garden', Z.privyGarden.x, Z.privyGarden.z, 1.1);
   await play('paddock', Z.paddock.x, Z.paddock.z, 1.1);
-  // A lawn up close (the parterre's north-west panel), low across the grass.
-  await view('lawn-close', [Z.parterre.x - 8.5, y0 + 1.2, Z.parterre.z + 3.4], [Z.parterre.x + 1, y0 + 0.3, Z.parterre.z - 3.5], 12);
+  await play('training', Z.training.x, Z.training.z, 1.1);
+  await play('lookout', 30, 115, 1.2);
+  // The fountain up close, low down.
+  await view('fountain-close', [P.fountain.x + 7.5, y0 + 4.2, P.fountain.z + 14.5], [P.fountain.x, y0 + 4.4, P.fountain.z + 0.5], 14);
   // The island beyond the castle: meadows, the approach, the portal court.
   await view('island', [c.x + 150, y0 + 70, c.z + 165], [c.x + 60, -4, c.z + 70], 100);
   // The hero by the camera-side (south) curtain: the wall stands full height and dissolves round them.
   await play('walls-southside', P.gate.x + 14, P.gate.z - 3.5, 1.0);
   // Along the wall walks at the hero's eye, down the walk's middle to the tower doors it leads to:
-  // the south walk east to its tower and west to the gatehouse's drum, the east walk north to the
-  // kitchen garden's corner tower and to the stable court's tower.
+  // the south walk east to its tower and west to the gatehouse's drum, the east walk north to its
+  // first tower.
   const walkY = y0 + CURTAIN_WALL.walkY + 1.6, mid = CURTAIN_WALL.walkOff;
   await view('walk-south-east', [P.gate.x + 11, walkY, P.gate.z - mid], [P.gate.x + 20, walkY - 0.6, P.gate.z - mid], 10);
   await view('walk-south-west', [P.gate.x + 15, walkY, P.gate.z - mid], [P.gate.x + 6, walkY - 0.6, P.gate.z - mid], 10);
-  await view('walk-kitchen', [120 - mid, walkY, 45], [120 - mid, walkY - 0.6, 36], 10);
-  await view('walk-stables', [120 - mid, walkY, 95], [120 - mid, walkY - 0.6, 86], 10);
+  await view('walk-east', [120 - mid, walkY, 72], [120 - mid, walkY - 0.6, 63], 10);
   // Frame cost in a meadow outside the castle, for comparison with the fountain's.
-  await play('meadow', 56, 132, 1.0);
+  await play('meadow', 56, 150, 1.0);
   return finish();
 }

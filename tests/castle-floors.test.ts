@@ -4,7 +4,7 @@ import { KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { Player } from '../src/entities/player';
 import { Pet } from '../src/entities/pet';
 import { Game } from '../src/game';
-import { stairRect } from '../src/world/building';
+import { flightsOf, stairRect, type Flight } from '../src/world/building';
 import { ZoneRuntime } from '../src/world/zone';
 
 // Exercise the real zone/navigation and Game stair transition without a GPU or desktop window.
@@ -14,9 +14,16 @@ vi.mock('../src/world/worldView', () => ({
 }));
 
 const keep = KEEP_BUILDINGS.find((b) => b.id === 'keep')!;
-/** The screens stair's foot (ground) and head (upstairs) cells. It climbs north. */
-const stair = keep.stairs![0], [sx0, sz0, , sz1] = stairRect(stair);
-const footCell = [keep.x + sx0, keep.z + sz1 - 1], headCell = [keep.x + sx0, keep.z + sz0];
+/** A flight's low (foot) or high (head) end row: its first cell there, in local cells. */
+function end(f: Flight, head: boolean) {
+  const [x0, z0, x1, z1] = stairRect(f), up = f.dir === 's' || f.dir === 'e';
+  const hi = head === up;
+  return f.dir === 'n' || f.dir === 's' ? [x0, hi ? z1 - 1 : z0] : [hi ? x1 - 1 : x0, z0];
+}
+/** The keep's west stair: its first flight's foot (ground) and its last flight's head (upstairs). */
+const stair = keep.stairs![0], fl = flightsOf(stair);
+const foot = end(fl[0], false), head = end(fl[fl.length - 1], true);
+const footCell = [keep.x + foot[0], keep.z + foot[1]], headCell = [keep.x + head[0], keep.z + head[1]];
 function fixture() {
   let finishFade: () => void = () => {};
   const game = Object.assign(Object.create(Game.prototype) as Game, {
@@ -88,7 +95,7 @@ describe('castle floor travel', () => {
   it('pets follow at their owner\'s floor height, including distance catch-up', () => {
     const f = fixture();
     f.zone.setFloor(1, keep);
-    f.game.player.pos.set(keep.x + 21.5, keep.storeyH!, keep.z + 8.5);
+    f.game.player.pos.set(keep.x + 2.5, keep.storeyH!, keep.z + 10.5);
     f.game.pet!.pos.set(0, 0, 0);
     f.game.pet!.follow(1 / 60, f.game.player, f.zone.nav);
     expect(f.game.pet!.pos.y).toBe(keep.storeyH);

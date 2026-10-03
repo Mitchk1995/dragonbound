@@ -157,10 +157,17 @@ Where things stand (October 3):
   woodcutting trees (the natural oak and common tree are done; the other four follow in their style). The review page,
   https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins notes and picks options; a fixed note is
   marked `status: done` and drops off the page. Now the blueprint is approved the castle is rebuilt to it; the new
-  trees then replace the forests and garden trees.
+  trees then replace the forests and garden trees. Stage 1 (the ground plan) is in: the castle's layout lives in
+  `src/world/castle/` and its props in `src/world/castleProps/`; the keep and the other buildings stand as plain shells
+  in today's style, and the moat's water stands level with the crown until its banks and the towers' plinths are built
+  (stage B).
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
-  - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided (the castle-v4 plan may move it anyway).
+  - Stage 1 departures from the plan, for the later stages: the wall towers stand 1.7 m out from the curtain's line
+    (plan 2.2) so today's walls die into their drums and the walk's doorways fit in them; the north range stands a cell clear of the north curtain (today's
+    wall walk overhangs its inner face), so building it hard against the curtain (stage E) needs the walk changed there;
+    the keep's galleries are at the walk's level less 6 cm (on a course line); the farm's plots moved 2 m west as well as
+    8 m south, clear of the new pool.
 - **Characters** come after the castle and stay blocky and modular. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
 - **Trees:** the grown oak and the common tree are built, approved with their bark (Mitchell, "looks good", October 3) and on main (PR #74; see "Trees" below); the other four species follow, and the game's forests still use the block trees until they replace them.
 

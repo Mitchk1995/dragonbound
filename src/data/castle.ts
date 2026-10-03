@@ -1,5 +1,5 @@
 /**
- * Measures shared by the castle's plan (zoneMaps.ts) and its models (props.ts): the curtain's wall
+ * Measures shared by the castle's layout (src/world/castle/) and its models (castleProps/): the curtain's wall
  * walk and the gatehouse's drums, so the doorways the plan asks for open where the models put the
  * walk.
  */
