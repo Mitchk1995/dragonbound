@@ -19,7 +19,7 @@ import type { Slot } from '../types';
  * the dev server with DRAGONBOUND_INSPECT=<suites>; this drives the real game through every zone,
  * point of interest, model, pose and panel and writes full-window PNGs plus report.json to
  * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
- * perf, memory, trees (tree style comparison, see treeLineup.ts), approved (approved artwork, see approvedInspect.ts).
+ * perf, memory, trees (tree style comparison, see treeLineup.ts), approved (approved artwork, see approvedInspect.ts), digits (painted damage numbers, see digitsInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
  * orbits round each: bailey-angles:hall-door+landing).
@@ -129,6 +129,8 @@ export async function runInspect(g: Game, suites: string) {
     // `approved:fit` runs one half).
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
+    // The painted damage numbers floating in the real game (explicit only: `digits`).
+    if (suites.split(',').includes('digits')) await (await import('./digitsInspect')).digitsSuite(g, shot);
   } catch (e) {
     errors.push(`inspect aborted: ${(e as Error).stack ?? e}`);
   }

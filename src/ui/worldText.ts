@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { Enemy } from '../entities/enemy';
 import type { GroundItem } from '../entities/groundItem';
 import type { Game } from '../game';
+import type { DigitKind } from './digitGlyphs';
+import { isDigitText, paintDigits } from './digitText';
 
 interface Floater {
   el: HTMLElement;
@@ -12,6 +14,9 @@ interface Floater {
   life: number;
   dx: number;
 }
+
+/** The painted digit set for each floater class; the rest (gold pickups) stay text. */
+const DIGIT_KINDS: Record<string, DigitKind | undefined> = { dmg: 'white', crit: 'crit', hurt: 'hurt', heal: 'heal' };
 
 /** Screen-space overlays anchored to world positions: damage numbers, loot labels, enemy health bars. */
 export class WorldText {
@@ -53,8 +58,11 @@ export class WorldText {
 
   float(text: string, x: number, y: number, z: number, cls: string) {
     const el = document.createElement('div');
-    el.className = `floater ${cls}`;
-    el.textContent = text;
+    const kind = DIGIT_KINDS[cls];
+    const painted = kind !== undefined && isDigitText(text);
+    el.className = `floater ${cls}${painted ? ' digits' : ''}`;
+    if (painted) paintDigits(el, text, kind);
+    else el.textContent = text;
     this.layerNums.appendChild(el);
     this.floaters.push({ el, x, y, z, t: 0, life: cls === 'crit' ? 1.0 : 0.8, dx: (Math.random() - 0.5) * 40 });
     if (this.floaters.length > 80) this.floaters.shift()!.el.remove();
