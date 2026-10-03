@@ -8,13 +8,15 @@ import { SPRAY_CELLS, sprayCell, type LeafKind } from '../render/foliage';
  *
  * - Growth (pure and seeded): a crown envelope (an irregular dome), a trunk rising through it as
  *   its leader, a few crooked main limbs leaving the trunk low, many side branches reaching out to
- *   the envelope (with a pass that grows a branch into any part of the dome left bare), roots
- *   spreading over the ground at the foot, and radii by the pipe model: a limb is as thick as the
- *   leaf sprays it carries, so the wood tapers naturally from the trunk to every tip.
+ *   the envelope (with a pass that grows a branch into any part of the dome left bare, and none
+ *   left reaching out bare to a lone tuft), roots swelling out of the trunk's foot and running down
+ *   into the ground, and radii by the pipe model: a limb is as thick as the leaf sprays it carries,
+ *   so the wood tapers naturally from the trunk to every tip.
  * - Wood: every limb is a ring-section tube along its smoothed centreline. Where a branch leaves
  *   its parent, the parent's quads under the branch are cut out and the branch's first ring is
- *   stitched to the rim of that hole, so each fork is a real collar flowing out of the parent and
- *   the trunk, roots, limbs and branches are one connected surface.
+ *   stitched to the rim of that hole, so each fork is a real collar flowing out of the parent; the
+ *   trunk's foot is rings of its own with the roots' ridges standing out of them. The trunk, roots,
+ *   limbs and branches are one connected surface.
  * - Leaves: two crossed cards per spray (now and then a third), set facing the sky and the outside
  *   of the crown, each carrying a spray of the species' leaves (foliage.ts) whose twig springs from
  *   the branch; none hang low enough to brush the hero's head. A weeping tree (the willow) also
@@ -51,7 +53,7 @@ export interface Species {
   sprayEvery: number;
   /** How deep in the crown sprays still grow above and below its middle (crown depth: 0 its centre, 1 its envelope). */
   fill: [number, number];
-  /** Roots spreading over the ground at the foot. */
+  /** Roots: ridges swelling out of the trunk's foot and running down and out into the ground. */
   roots: number;
   /** Girth (m) one bark tile wraps round: a limb takes as many whole tiles as fit its girth at its foot, so its ridges converge as it tapers. */
   bark: number;
@@ -309,7 +311,7 @@ export interface Joint {
 }
 
 export interface Limb {
-  /** -1 a root, 0 the trunk (rising through the crown as its leader), 1 a main limb, 2 a branch. */
+  /** 0 the trunk (rising through the crown as its leader), 1 a main limb, 2 a branch. */
   order: number;
   /** The limb it grows from (-1 for the trunk), and the arc length along it where its axis leaves the parent's. */
   parent: number;
@@ -345,12 +347,26 @@ export interface Spray {
   hang?: { drop: number; of: number; hem: number; top: THREE.Vector3 };
 }
 
+/**
+ * A root: a ridge of the trunk's foot swelling out of the bark from `top` m above the ground and
+ * running down and out, `reach` m beyond the bark where it meets the ground, then on down into it.
+ * It leaves the trunk at angle `a` round it (in the trunk's bark frame), its flanks easing into the
+ * bark `width` m either side of its crest.
+ */
+export interface Root {
+  a: number;
+  reach: number;
+  width: number;
+  top: number;
+}
+
 export interface Skeleton {
   /** The species it was grown from. */
   species: Species;
   limbs: Limb[];
   sprays: Spray[];
   crown: Crown;
+  roots: Root[];
   /** The tree's height (m). */
   height: number;
   /** Branches that found no room on their parent and were left off. */
@@ -507,7 +523,25 @@ function sphere(n: number) {
 const buttressSwell = (y: number, flute = 1) => 1 + 0.32 * (1 - THREE.MathUtils.smoothstep(y, -0.1, 1.1 * flute));
 
 /** The trunk's flare toward its foot: its radius there as a multiple of the pipe model's. */
-const footFlare = (y: number) => 1 + 0.5 * (1 - THREE.MathUtils.smoothstep(y, -0.2, 1.6));
+const footFlare = (y: number) => 1 + 0.3 * (1 - THREE.MathUtils.smoothstep(y, -0.2, 1.6));
+
+/** Where the trunk's foot begins (m): under the ground, deep enough that on a slope its downhill side stays in it. */
+const TRUNK_FOOT = -0.6;
+
+/**
+ * How far a root's ridge stands out beyond the bark at height y: nothing above its top, then
+ * swelling ever faster down to its reach at the ground (a concave flare, steep against the trunk),
+ * and under the ground drawing in again as it goes down, so the trunk's foot ends compact (on a
+ * slope, the ground on its downhill side still covers it).
+ */
+function rootReach(r: Root, y: number) {
+  if (y >= r.top) return 0;
+  if (y >= 0) {
+    const t = 1 - y / r.top;
+    return r.reach * t * t;
+  }
+  return r.reach * (1 - (0.5 * y) / TRUNK_FOOT);
+}
 
 /** Grow one tree of a species from a seed. */
 export function growTree(sp: Species, seed: number): Skeleton {
@@ -530,7 +564,7 @@ export function growTree(sp: Species, seed: number): Skeleton {
   // (A leaning tree's crown leans over with it.)
   const leans = (sp.lean ?? 0.24) / 0.24;
   if (sp.lean !== undefined) crown.centre.addScaledVector(lean, (sp.lean - 0.24) * 1.6);
-  const bole = [new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 0.6, 0), new THREE.Vector3(lean.x * 0.1 * leans, fork * 0.6, lean.z * 0.1 * leans), new THREE.Vector3(lean.x * 0.24 * leans, fork, lean.z * 0.24 * leans)];
+  const bole = [new THREE.Vector3(0, TRUNK_FOOT, 0), new THREE.Vector3(0, 0.6, 0), new THREE.Vector3(lean.x * 0.1 * leans, fork * 0.6, lean.z * 0.1 * leans), new THREE.Vector3(lean.x * 0.24 * leans, fork, lean.z * 0.24 * leans)];
   const leaderDir = lean.clone().multiplyScalar(0.28 * leans).add(UP).normalize();
   const leader = crooked(rng, bole[3], leaderDir, H - 1.8 - rng() * 0.8 - fork, 1.0, 0.2, 0.08, crown);
   limbs.push(limb(0, -1, 0, smoothPath([...bole, ...leader.slice(1)])));
@@ -600,22 +634,17 @@ export function growTree(sp: Species, seed: number): Skeleton {
     ends = outer();
   }
 
-  // Roots: leaving the foot a little above the ground, running out over it half buried, then
-  // diving under it.
-  const rootAt = arcAtHeight(trunk, 0.55), ra0 = rng() * Math.PI * 2;
-  for (let k = 0; k < sp.roots; k++) {
-    const az = ra0 + (k / sp.roots) * Math.PI * 2 + (rng() - 0.5) * 0.25;
-    const out = new THREE.Vector3(Math.cos(az), 0, Math.sin(az)), side = new THREE.Vector3(-out.z, 0, out.x);
-    // (Sized by the trunk's girth: an oak's run 1.4 to 2.2 m out from 0.95 m off its axis.)
-    const g = sp.trunk / 0.55, base = pointOn(trunk, rootAt), len = range(rng, [1.4, 2.2]) * g, bend = (rng() - 0.5) * 0.5 * g, foot = 0.95 * g;
-    limbs.push(limb(-1, 0, rootAt, smoothPath([
-      base,
-      base.clone().addScaledVector(out, foot).setY(0.16 * g),
-      base.clone().addScaledVector(out, foot + len * 0.5).addScaledVector(side, bend * 0.5).setY(-0.02),
-      base.clone().addScaledVector(out, foot + len).addScaledVector(side, bend).setY(-0.42),
-    ])));
-    frames(limbs[limbs.length - 1], tangentOn(trunk, rootAt));
-  }
+  // Roots: ridges of the trunk's own foot (woodGeometry), each swelling out of the bark and running
+  // down and out into the ground, round the trunk at about even angles. (They draw from a sequence
+  // of their own; the leaves go on with the draws they have always been grown with.)
+  const rr = mulberry32(seed * 3571 + 29), g = sp.trunk / 0.55, ra0 = rr() * Math.PI * 2;
+  for (let k = 0; k < 1 + 3 * sp.roots; k++) rng();
+  const roots: Root[] = Array.from({ length: sp.roots }, (_, k) => ({
+    a: ra0 + ((k + (rr() - 0.5) * 0.5) / sp.roots) * Math.PI * 2,
+    reach: range(rr, [0.45, 0.75]) * g,
+    width: range(rr, [0.45, 0.6]) * sp.trunk,
+    top: range(rr, [0.7, 1.0]) * Math.min(1, 0.4 + 0.6 * g),
+  }));
 
   // Leaf clusters along the outer part of every branch and at the limbs' ends: at each station a
   // pair of sprays leaving the branch either way, and a pair closing over its tip, so the leaves
@@ -665,16 +694,41 @@ export function growTree(sp: Species, seed: number): Skeleton {
   pipeModel(limbs, sprays, sp);
   sway(limbs, sprays, fork);
   for (const L of limbs) {
-    L.sides = L.order === 0 ? clamp(Math.round(8 + sp.trunk * 13), 10, 15) : L.order === -1 ? 5 : sidesFor(L.radius[0]);
+    L.sides = L.order === 0 ? clamp(Math.round(8 + sp.trunk * 13), 10, 15) : sidesFor(L.radius[0]);
     // The trunk above its fork and each main limb's outer half go on with fewer sides.
     const clear = L.order === 0 ? Math.max(...limbs.filter((c) => c.order === 1).map((c) => c.at)) + 1.2 : 0;
     const i = L.order === 0 ? L.radius.findIndex((r, k) => L.arc[k] > clear && r < sp.trunk * 0.5) : L.order === 1 ? L.radius.findIndex((r) => r < L.radius[0] * 0.6) : -1;
     if (i > 0 && sidesFor(L.radius[i]) < L.sides) L.step = { s: L.arc[i], sides: sidesFor(L.radius[i]) };
   }
-  const sk = compact(planJoints(limbs, sprays, sp.flute ?? 1), sprays, crown, H, sp);
-  // Strands hang plumb from wherever their branch was set (planJoints may have turned it), and one
-  // whose branch was turned down near the hem is left off.
-  sk.sprays = sk.sprays.filter((s) => !s.hang || s.hang.top.y > s.hang.hem + 0.6);
+  const placed = planJoints(limbs, sprays);
+  // (A strand whose branch was turned down near its hem is left off.)
+  const hung = sprays.filter((q) => !q.hang || q.hang.top.y > q.hang.hem + 0.6);
+  // A branch that carries no leaves but the pair at its tip (it runs under the leaves' lowest reach,
+  // or deep in the crown) is a bare stick with a lone tuft, poking out of the crown's side: it is
+  // left off (once every branch is placed, so the rest stand as they grew).
+  const bare = limbs.flatMap((L, i) => (L.order === 2 && !hung.some((q) => q.limb === i && q.s < lengthOf(L) - 1e-6) ? [i] : []));
+  // One whose outer stretch carries none (it ran on under them) is cut back to just past its last
+  // leaves, its tip's pair carried in with it, so no bare twig reaches out to a lone tuft.
+  const gone = new Set([...placed.dead, ...bare]), live = hung.filter((q) => !gone.has(q.limb));
+  limbs.forEach((L, i) => {
+    if (L.order < 1 || gone.has(i)) return;
+    const len = lengthOf(L), tip = L.path[L.path.length - 1], mine = live.filter((q) => q.limb === i);
+    const ends = mine.filter((q) => q.s >= len - 1e-6), last = Math.max(...mine.filter((q) => q.s < len - 1e-6).map((q) => q.s));
+    // (A strand's cards are counted at its top: they are hung plumb from there later.)
+    if (!ends.length || live.some((q) => !ends.includes(q) && (q.hang?.drop ?? 0) === 0 && q.at.distanceTo(tip) < 1.2)) return;
+    const keep = Math.max(last + 0.35, ...limbs.filter((c) => c.parent === i).map((c) => c.at + 0.5));
+    if (keep < len - 0.3) trim(L, keep, ends);
+  });
+  // And a branch whose few leaves stand off on their own, clear of the rest of the crown, is a stray
+  // twig with a tuft at its end: it is left off too.
+  limbs.forEach((L, i) => {
+    if (L.order !== 2 || gone.has(i)) return;
+    const mine = live.filter((q) => q.limb === i);
+    if (mine.length <= 8 && mine.every((q) => live.every((o) => o.limb === i || (o.hang?.drop ?? 0) > 0 || o.at.distanceTo(q.at) > 1))) gone.add(i);
+  });
+  const sk = compact({ limbs, dead: gone }, hung, crown, roots, H, sp);
+  sk.dropped = placed.dead.size;
+  // Strands hang plumb from wherever their branch was set (planJoints may have turned it).
   for (const s of sk.sprays) {
     if (!s.hang) continue;
     const { drop, of, hem, top } = s.hang, d = s.dir, out = Math.hypot(d.x, d.z);
@@ -689,8 +743,8 @@ export function growTree(sp: Species, seed: number): Skeleton {
 /**
  * Radii by the pipe model: at any point a limb carries the leaf sprays beyond it (and its own
  * tip), and its radius grows as a power of that load, the power set so the trunk is the species'
- * girth at breast height. Steps where branches leave are smoothed into a continuous taper; the
- * trunk flares toward its foot, and roots taper by hand.
+ * girth at breast height. Steps where branches leave are smoothed into a continuous taper, and the
+ * trunk flares toward its foot.
  */
 function pipeModel(limbs: Limb[], sprays: Spray[], sp: Species) {
   const total = new Array(limbs.length).fill(0);
@@ -699,20 +753,14 @@ function pipeModel(limbs: Limb[], sprays: Spray[], sp: Species) {
   const load: number[][] = limbs.map(() => []);
   for (let li = limbs.length - 1; li >= 0; li--) {
     const L = limbs[li];
-    if (L.order < 0) continue;
     const own = sprays.filter((s) => s.limb === li).map((s) => s.s);
-    load[li] = L.arc.map((a) => 1 + own.filter((x) => x >= a).length + kids[li].filter((k) => limbs[k].order >= 0 && limbs[k].at >= a).reduce((t, k) => t + total[k], 0));
+    load[li] = L.arc.map((a) => 1 + own.filter((x) => x >= a).length + kids[li].filter((k) => limbs[k].at >= a).reduce((t, k) => t + total[k], 0));
     total[li] = load[li][0];
   }
   const trunk = limbs[0];
   const breast = load[0][seg(trunk.arc, arcAtHeight(trunk, 1.3))[0]];
   const q = Math.log(sp.trunk / sp.tip) / Math.log(Math.max(2, breast));
   limbs.forEach((L, li) => {
-    if (L.order < 0) {
-      const len = lengthOf(L);
-      L.radius = L.arc.map((a) => sp.trunk * 0.44 * (1 - 0.74 * (a / len)));
-      return;
-    }
     const raw = load[li].map((x) => sp.tip * Math.pow(x, q));
     // Smoothed over about two radii either way, so forks thin the limb gradually.
     L.radius = raw.map((r, i) => {
@@ -733,8 +781,7 @@ function pipeModel(limbs: Limb[], sprays: Spray[], sp: Species) {
 function sway(limbs: Limb[], sprays: Spray[], fork: number) {
   limbs.forEach((L) => {
     const len = lengthOf(L);
-    if (L.order < 0) L.sway = L.arc.map(() => 0);
-    else if (L.order === 0) L.sway = L.path.map((p) => clamp((p.y - fork) / 12, 0, 1) * 0.3);
+    if (L.order === 0) L.sway = L.path.map((p) => clamp((p.y - fork) / 12, 0, 1) * 0.3);
     else {
       const base = along(limbs[L.parent].sway, limbs[L.parent], L.at);
       L.sway = L.arc.map((a) => base + (L.order === 1 ? 0.45 : 0.6) * (a / len) + (L.order === 2 ? 0.1 : 0.03));
@@ -756,7 +803,7 @@ interface Hole extends Joint {
  * every other hole; a branch whose hole would crowd another's is slid along its parent or turned
  * round it a side or two (carrying its whole subtree and leaves), and dropped only if nothing fits.
  */
-function planJoints(limbs: Limb[], sprays: Spray[], flute: number) {
+function planJoints(limbs: Limb[], sprays: Spray[]) {
   const kids: number[][] = limbs.map(() => []);
   limbs.forEach((L, i) => L.parent >= 0 && kids[L.parent].push(i));
   const dead = new Set<number>();
@@ -775,7 +822,7 @@ function planJoints(limbs: Limb[], sprays: Spray[], flute: number) {
             if (!narrow && (ds !== 0 || Math.abs(dj) > (C.order > 1 ? 0 : 1))) continue;
             // (Turned at most about 50 degrees: a branch is never swung round to grow down.)
             if (Math.abs(dj) * ((Math.PI * 2) / sidesAt(P, C.at + ds)) > 0.9) continue;
-            const h = footprint(P, C, ds, dj, narrow, flute);
+            const h = footprint(P, C, ds, dj, narrow);
             if (h && placed.every((o) => apart(o, h, sidesAt(P, h.s)))) {
               hole = h;
               break search;
@@ -804,13 +851,12 @@ function planJoints(limbs: Limb[], sprays: Spray[], flute: number) {
  * narrower hole pinches the branch's foot into a ring), or `narrow`, as wide as the branch against
  * the parent's girth at its axis (lower down, where the parent is thicker).
  */
-function footprint(P: Limb, C: Limb, ds: number, dj: number, narrow: boolean, flute: number): Hole | null {
+function footprint(P: Limb, C: Limb, ds: number, dj: number, narrow: boolean): Hole | null {
   const len = lengthOf(P), at = C.at + ds;
   const d0 = tangentOn(C, Math.min(0.25, lengthOf(C) * 0.3));
   const T0 = tangentOn(P, C.at), N0 = normalOn(P, C.at, T0), B0 = new THREE.Vector3().crossVectors(T0, N0);
   const ct = d0.dot(T0), sinA = Math.max(0.35, Math.sqrt(Math.max(0, 1 - ct * ct)));
-  // (A root leaves the trunk through the buttress swelling toward it.)
-  const girth = (x: number) => along(P.radius, P, x) * (C.order < 0 ? buttressSwell(pointOn(P, x).y, flute) : 1);
+  const girth = (x: number) => along(P.radius, P, x);
   const rp = girth(at), rc = C.radius[0];
   const exit = rp / sinA, s = at + exit * ct, h = clamp((rc * 1.12) / sinA, rc, rc * 4);
   const start = P.joint ? P.joint.ring + 0.05 : 0.05, end = len - Math.max(0.12, along(P.radius, P, len) * 3);
@@ -856,8 +902,25 @@ function moveSubtree(limbs: Limb[], sprays: Spray[], ids: number[], P: Limb, C: 
   }
 }
 
+/** Cut a limb back to arc length `s`, carrying its tip's sprays in to its new tip. */
+function trim(L: Limb, s: number, tipSprays: Spray[]) {
+  const [i, f] = seg(L.arc, s), end = pointOn(L, s), shift = end.clone().sub(L.path[L.path.length - 1]);
+  const cut = <T>(a: T[], last: T) => [...a.slice(0, i + 1), last];
+  const at = (a: number[]) => a[i] + (a[i + 1] - a[i]) * f;
+  L.radius = cut(L.radius, at(L.radius));
+  L.sway = cut(L.sway, at(L.sway));
+  L.tangent = cut(L.tangent, tangentOn(L, s));
+  L.frame = cut(L.frame, L.frame[i + 1].clone());
+  L.path = cut(L.path, end);
+  L.arc = cut(L.arc, s);
+  for (const q of tipSprays) {
+    q.at.add(shift);
+    q.s = s;
+  }
+}
+
 /** Drop the limbs that found no place (and their leaves), renumbering the rest. */
-function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, height: number, species: Species): Skeleton {
+function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, roots: Root[], height: number, species: Species): Skeleton {
   const map = new Map<number, number>();
   const kept = limbs.filter((_, i) => !dead.has(i));
   limbs.forEach((L, i) => !dead.has(i) && map.set(i, map.size));
@@ -867,6 +930,7 @@ function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: 
     limbs: kept,
     sprays: sprays.filter((s) => !dead.has(s.limb)).map((s) => ({ ...s, limb: map.get(s.limb)! })),
     crown,
+    roots,
     height,
     dropped: dead.size,
   };
@@ -881,6 +945,70 @@ function buttress(roots: number[], a: number, y: number, flute: number) {
   let s = 0;
   for (const r of roots) s += Math.pow(Math.max(0, Math.cos(a - r)), 6);
   return 1 + k * Math.min(1, s);
+}
+
+/** Heights of the trunk's foot rings (m): sparse under the ground, close where the roots swell out of the bark. */
+const FOOT_YS = [TRUNK_FOOT, -0.04, 0.15, 0.36, 0.6, 0.86];
+/** The highest the trunk's foot reaches (m; lower where a limb leaves the trunk close over it). */
+const FOOT_TOP = 1.05;
+
+/** Arc length along the trunk where its tube starts, over its foot: under every hole a limb cuts in it. */
+function footTop(L: Limb, holes: Joint[]) {
+  return Math.min(arcAtHeight(L, FOOT_TOP), ...holes.map((j) => j.s - j.h - 0.12));
+}
+
+/** A root ridge's half-width at height y (m): broader where it leaves the bark, so it swells out of the trunk rather than standing on it. */
+const ridgeWidth = (root: Root, y: number) => root.width * (1 + 0.8 * clamp(y / root.top, 0, 1));
+
+/**
+ * Where the trunk foot's vertices stand round it at height y (its girth there `r`): five across
+ * each root's crest, from one flank's foot over the crest to the other's (so every ridge stays round
+ * however far it reaches), and a few in each gap between roots. Every ring has the same vertices in
+ * the same order, so they join ring to ring along the ridges; `bark` is each one's fixed angle round
+ * the trunk (the bark's furrows run down the ridges with them).
+ */
+function footLayout(roots: Root[], n: number, y: number, r: number) {
+  const order = [...roots].sort((p, q) => mod2pi(p.a) - mod2pi(q.a)), k = order.length, TAU = Math.PI * 2;
+  const at = order.map((q) => mod2pi(q.a));
+  const gapTo = (i: number) => (i + 1 < k ? at[i + 1] - at[i] : at[0] + TAU - at[i]);
+  // (Each crest's place round the trunk: as wide as it can be without crowding its neighbours.)
+  const half = at.map((_, i) => Math.min(0.4, 0.45 * Math.min(gapTo(i), gapTo((i + k - 1) % k))));
+  const gaps = at.map((_, i) => gapTo(i) - half[i] - half[(i + 1) % k]), spare = Math.max(k, n - 5 * k), total = gaps.reduce((a, b) => a + b, 0);
+  const angles: number[] = [], bark: number[] = [];
+  order.forEach((root, i) => {
+    const w = Math.min(half[i], Math.asin(Math.min(0.95, ridgeWidth(root, y) / (r + rootReach(root, y)))));
+    for (const x of [-1, -0.5, 0, 0.5, 1]) {
+      angles.push(at[i] + x * w);
+      bark.push(at[i] + x * half[i]);
+    }
+    const j = (i + 1) % k, next = at[i] + gapTo(i);
+    const wn = Math.min(half[j], Math.asin(Math.min(0.95, ridgeWidth(order[j], y) / (r + rootReach(order[j], y)))));
+    const m = Math.max(1, Math.round((spare * gaps[i]) / total));
+    for (let g = 1; g <= m; g++) {
+      angles.push(at[i] + w + ((next - wn - at[i] - w) * g) / (m + 1));
+      bark.push(at[i] + half[i] + (gaps[i] * g) / (m + 1));
+    }
+  });
+  return { angles, bark };
+}
+
+const mod2pi = (a: number) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+
+/**
+ * The trunk foot's radius at angle a round it and height y: its girth `r` buttressed toward the
+ * roots, and every root's ridge standing out of it (rootReach), as wide as the root at its crest
+ * and easing into the bark either side.
+ */
+function footRadius(roots: Root[], angles: number[], a: number, y: number, r: number, flute: number) {
+  const base = r * buttress(angles, a, y, flute);
+  let R = base;
+  for (const root of roots) {
+    const ext = rootReach(root, y), d = Math.abs(Math.atan2(Math.sin(a - root.a), Math.cos(a - root.a)));
+    if (ext <= 0 || d >= Math.PI / 2) continue;
+    const x = ((base + ext) * Math.sin(d)) / ridgeWidth(root, y);
+    if (x < 1) R += ext * (1 - x * x);
+  }
+  return R;
 }
 
 /** A limb's bark: whole tiles round it, the offset round it (tiles), and its coordinate along it (bark metres: `v` at arc `s`, `k` per metre). */
@@ -930,12 +1058,43 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   };
   /** A vertex's place round its limb's bark (tiles). */
   const uOf = (vi: number) => (Math.atan2(ba[vi * 4 + 1], ba[vi * 4]) / (Math.PI * 2)) * ba[vi * 4 + 2] + ba[vi * 4 + 3];
-  const rootSides = kids[0].filter((k) => limbs[k].order < 0).map((k) => (limbs[k].joint!.side / limbs[0].sides) * Math.PI * 2);
+  const flute = sk.species.flute ?? 1, rootAngles = sk.roots.map((r) => r.a);
+  /**
+   * The trunk's foot, from deep under the ground up to its tube's first ring: rings of more sides
+   * than the tube's (footLayout), each the trunk's flared, buttressed girth with every root's ridge
+   * standing out of it, the last stitched to the tube.
+   */
+  const trunkFoot = (L: Limb, bark: Bark, start: number) => {
+    const first = rings[0][0], top = pointOn(L, start, P).y;
+    const foot = FOOT_YS.filter((y) => y < top - 0.1).map((y) => {
+      const s = arcAtHeight(L, y), r = along(L.radius, L, s), w = along(L.sway, L, s);
+      pointOn(L, s, P);
+      tangentOn(L, s, T);
+      normalOn(L, s, T, N);
+      B.crossVectors(T, N);
+      const lay = footLayout(sk.roots, Math.round(first.length * 2.6), P.y, r);
+      return lay.angles.map((a, j) => {
+        const rr = footRadius(sk.roots, rootAngles, a, P.y, r, flute);
+        D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
+        return vertex(V.copy(P).addScaledVector(D, rr), lay.bark[j], bark, rr, s, 1, w);
+      });
+    });
+    const n = foot[0].length;
+    for (let k = 0; k < foot.length - 1; k++) {
+      for (let j = 0; j < n; j++) {
+        const a = foot[k][j], b = foot[k][(j + 1) % n], c = foot[k + 1][(j + 1) % n], d = foot[k + 1][j];
+        idx.push(a, b, c, a, c, d);
+      }
+    }
+    tangentOn(L, start, T);
+    stitch(foot[foot.length - 1], first, pos, idx, T, normalOn(L, start, T, N), pointOn(L, start, P));
+  };
 
   limbs.forEach((L, li) => {
     const len = lengthOf(L);
     const holes = kids[li].map((k) => limbs[k].joint!);
-    const start = L.joint ? L.joint.ring : 0, tipLen = Math.min(len * 0.2, Math.max(0.06, L.radius[L.radius.length - 1] * 2.5));
+    // (The trunk's tube starts over its foot, built on to it below: trunkFoot.)
+    const start = L.joint ? L.joint.ring : L.order === 0 ? footTop(L, holes) : 0, tipLen = Math.min(len * 0.2, Math.max(0.06, L.radius[L.radius.length - 1] * 2.5));
     const st = stations(L, holes, start, len - tipLen);
     const sides = st.map((s) => sidesAt(L, s));
     // Bark tiles round the limb: as many as fit its girth at its foot (the trunk's at breast height),
@@ -987,7 +1146,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       const r = along(L.radius, L, s), w = along(L.sway, L, s);
       return Array.from({ length: S }, (_, j) => {
         const a = (j / S) * Math.PI * 2;
-        const rr = r * (L.order === 0 ? buttress(rootSides, a, P.y, sk.species.flute ?? 1) : 1);
+        const rr = r * (L.order === 0 ? buttress(rootAngles, a, P.y, flute) : 1);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
         return vertex(V.copy(P).addScaledVector(D, rr), a, bark, rr, s, 1, w);
       });
@@ -1034,6 +1193,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len));
     const last = ring[ring.length - 1];
     for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
+    if (L.order === 0) trunkFoot(L, bark, start);
     // The collar: this branch's first ring stitched to its hole's rim in the parent.
     if (L.parent >= 0) {
       stitch(rims[li], ring[0], pos, idx, tangentOn(L, start, T), normalOn(L, start, T, N), pointOn(L, start, P));
