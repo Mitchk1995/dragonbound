@@ -54,7 +54,7 @@ def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty'):
     move = 1.0 if sw else 0.0
     fore, bow = hold in ('upright', 'bow'), hold == 'bow'     # the forearm level and forward; a bow out from the body
     swl, swr = -sw * 0.5 * move, sw * (0.15 if fore else 0.3) * move
-    p = {'body': (0.08 * move, 0, 0), 'lift': abs(sw) * 0.06 * move,
+    p = {'body': (0.08 * move, 0, 0), 'lift': abs(sw) * 0.06 * move, 'head': (-0.05 * move, 0, 0),
          'armL': (swl, 0, SPLAY), 'armR': (swr, 0, -SPLAY - (BOW_OUT if bow else 0)),
          'legL': (sw * 0.7 * move, 0, 0), 'legR': (-sw * 0.7 * move, 0, 0),
          'elbowL': (ELBOW_REST + min(0, swl) * 0.5, 0, 0),
@@ -63,40 +63,42 @@ def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty'):
          'handR': (SIDE_WRIST - swr if hold == 'side' else HOLD_WRIST if hold == 'upright' else 0, BOW_PLUMB if bow else 0, 0)}
     if a < 0 or kind is None:
         return p
-    e0 = HOLD_BEND if fore else ELBOW_REST
-    w0 = SIDE_WRIST if hold == 'side' else HOLD_WRIST if hold == 'upright' else 0
+    # Every attack starts and ends at the carry (anim.ts Rig.carry).
+    x0, e0, w0, xl, el = p['armR'][0], p['elbowR'][0], p['handR'][0], p['armL'][0], p['elbowL'][0]
     if kind == 'swing':
         up, down = IMPACT - 0.1, IMPACT + 0.1
         if a < up:
             k = _ease(a / up)
-            x, e = -WIND_ARM * k, _lerp(e0, WIND_ELBOW, k)
+            x, e = _lerp(x0, -WIND_ARM, k), _lerp(e0, WIND_ELBOW, k)
         elif a < down:
             k = _ease((a - up) / (down - up))
             x, e = -WIND_ARM + (WIND_ARM - 0.35) * k, _lerp(WIND_ELBOW, STRIKE_ELBOW, k)
         else:
             k = _ease((a - down) / (1 - down))
-            x, e = -0.35 * (1 - k), _lerp(STRIKE_ELBOW, e0, k)
+            x, e = _lerp(-0.35, x0, k), _lerp(STRIKE_ELBOW, e0, k)
         w = _lerp(w0, SWING_WRIST, _ease(min(1, a / up))) if a < IMPACT else _lerp(SWING_WRIST, w0, _ease((a - IMPACT) / (1 - IMPACT)))
         p['armR'], p['elbowR'], p['handR'] = (x, 0, -SPLAY), (e, 0, 0), (w, 0, 0)
         p['body'] = (-0.1, 0.3 * _ease(a / up), 0) if a < up else (0.15, -0.3 * (1 - a), 0)
     elif kind == 'slam':
         lift = _ease(a / IMPACT) if a < IMPACT else 1 - _ease((a - IMPACT) / (1 - IMPACT))
-        x = -3.0 * _ease(a / IMPACT) if a < IMPACT else -3.0 + 2.8 * _ease((a - IMPACT) / (1 - IMPACT))
-        p['armR'], p['armL'] = (x, 0, -SPLAY), (x, 0, SPLAY)
-        p['elbowR'], p['elbowL'] = (_lerp(e0, -0.5, lift), 0, 0), (_lerp(ELBOW_REST, -0.5, lift), 0, 0)
+        k = _ease(a / IMPACT) if a < IMPACT else _ease((a - IMPACT) / (1 - IMPACT))
+        xr, xL = (_lerp(x0, -3.0, k), _lerp(xl, -3.0, k)) if a < IMPACT else (_lerp(-3.0, x0, k), _lerp(-3.0, xl, k))
+        p['armR'], p['armL'] = (xr, 0, -SPLAY), (xL, 0, SPLAY)
+        p['elbowR'], p['elbowL'] = (_lerp(e0, -0.5, lift), 0, 0), (_lerp(el, -0.5, lift), 0, 0)
         p['body'] = (-0.2 if a < IMPACT else 0.25, 0, 0)
     elif kind == 'bow':
         p['bow'] = a
         p['head'] = (0, -BOW_TURN * BOW_HEAD * _ease(min(1, a / 0.2)), 0)
     elif kind == 'cast':
         lift = _ease(a / IMPACT) if a < IMPACT else 1 - _ease((a - IMPACT) / (1 - IMPACT))
-        p['armR'], p['elbowR'], p['handR'] = (-CAST_ARM * lift, 0, -SPLAY), (_lerp(e0, CAST_ELBOW, lift), 0, 0), (_lerp(w0, CAST_WRIST, lift), 0, 0)
-        p['armL'], p['elbowL'] = (-CAST_REACH * lift, 0, SPLAY), (_lerp(ELBOW_REST, -0.35, lift), 0, 0)
+        p['armR'], p['elbowR'] = (_lerp(x0, -CAST_ARM, lift), 0, -SPLAY), (_lerp(e0, CAST_ELBOW, lift), 0, 0)
+        p['handR'] = (_lerp(w0, CAST_WRIST, lift), 0, 0)
+        p['armL'], p['elbowL'] = (_lerp(xl, -CAST_REACH, lift), 0, SPLAY), (_lerp(el, -0.35, lift), 0, 0)
         p['body'] = (-0.1 * lift, 0, 0)
     elif kind == 'throw':
-        x = -2.6 * _ease(a / IMPACT) if a < IMPACT else -2.6 + 2.0 * _ease((a - IMPACT) / (1 - IMPACT))
-        e = _lerp(e0, -1.1, _ease(a / IMPACT)) if a < IMPACT else _lerp(-1.1, e0, _ease((a - IMPACT) / (1 - IMPACT)))
-        p['armR'], p['elbowR'] = (x, 0, 0), (e, 0, 0)
+        k = _ease(a / IMPACT) if a < IMPACT else _ease((a - IMPACT) / (1 - IMPACT))
+        x, e = (_lerp(x0, -2.6, k), _lerp(e0, -1.1, k)) if a < IMPACT else (_lerp(-2.6, x0, k), _lerp(-1.1, e0, k))
+        p['armR'], p['elbowR'] = (x, 0, -SPLAY), (e, 0, 0)
     return p
 
 
@@ -181,7 +183,8 @@ def bow_pose(parts, a):
         return
     _point_arm(parts['armR'], Vector(BOW_AIM), Vector(BOW_ROLL), raise_)
     er = parts['elbowR']
-    er.rotation_euler = (er['rest_rot'][0] + _lerp(HOLD_BEND, 0, raise_), er['rest_rot'][1] + _lerp(BOW_CARRY, 0, raise_),
+    carry = er.rotation_euler[0] - er['rest_rot'][0]                   # the carry's bend (anim.ts Rig.carry)
+    er.rotation_euler = (er['rest_rot'][0] + _lerp(carry, 0, raise_), er['rest_rot'][1] + _lerp(BOW_CARRY, 0, raise_),
                          er.rotation_euler[2])
     _orient_hand(parts, 'R', Vector((0, 1, 0)), Vector((0, 0, -1)), raise_)
     s = _body_space(parts, parts['sock_handR'])

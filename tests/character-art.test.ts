@@ -201,7 +201,7 @@ describe('the starting outfit and the gear on the redesigned hero', () => {
       new HeroDresser(m).dress(null, { [slot]: item() });
       const root = m.root;
       if (slot === 'gloves') {
-        // The fists (below the bracer) stay inside the gauntlets.
+        // The hands (below the bracer) stay inside the gauntlets.
         for (const [arm, sock] of [['armL', 'sock_handL'], ['armR', 'sock_gloveR']]) {
           const box = gearBox(root, [sock]);
           const hand = heroPoints(root, (_, part, l) => part.name === arm && l.y < -0.52);
@@ -265,13 +265,24 @@ describe('LEGO hands and elbows', () => {
   it('gloves and gauntlets are the same C round the same hole, their cuffs on the forearm', () => {
     for (const file of ['gear_gloves', 'gear_gloves_p', 'gear_gloves_e']) {
       const root = makeModel(file).root;
-      for (const sock of ['sock_handL', 'sock_gloveR', 'sock_cuffL', 'sock_cuffR']) expect(root.getObjectByName(sock), `${file} ${sock}`).toBeTruthy();
       root.updateMatrixWorld(true);
-      // Straight through the centre of the glove's hand there is nothing: the hole.
-      const hand = root.getObjectByName('sock_handL')!;
-      const o = new THREE.Vector3(0, 0, -0.5).applyMatrix4(hand.matrixWorld);
-      const d = new THREE.Vector3(0, 0, 1).transformDirection(hand.matrixWorld);
-      expect(new THREE.Raycaster(o, d, 0, 1).intersectObject(hand, true).length, file).toBe(0);
+      for (const [handName, cuffName] of [['sock_handL', 'sock_cuffL'], ['sock_gloveR', 'sock_cuffR']]) {
+        const hand = root.getObjectByName(handName), cuff = root.getObjectByName(cuffName);
+        expect(hand && cuff, `${file} ${handName} and ${cuffName}`).toBeTruthy();
+        // Straight through the centre of the glove's hand there is nothing (the hole); either side of it, the ring.
+        const hits = (x: number) => {
+          const o = new THREE.Vector3(x, 0, -0.5).applyMatrix4(hand!.matrixWorld);
+          const d = new THREE.Vector3(0, 0, 1).transformDirection(hand!.matrixWorld);
+          return new THREE.Raycaster(o, d, 0, 1).intersectObject(hand!, true).length;
+        };
+        expect(hits(0), `${file} ${handName}: open through the hole`).toBe(0);
+        expect(hits(0.11), `${file} ${handName}: solid round it`).toBeGreaterThan(0);
+        expect(hits(-0.11), `${file} ${handName}: solid round it`).toBeGreaterThan(0);
+        // The cuff stands above the hand, round the forearm.
+        const box = new THREE.Box3().setFromObject(cuff!);
+        expect(box.isEmpty(), `${file} ${cuffName} has a cuff`).toBe(false);
+        expect(box.min.y - hand!.getWorldPosition(new THREE.Vector3()).y, `${file} ${cuffName} above the hand`).toBeGreaterThan(0.08);
+      }
     }
   });
 });

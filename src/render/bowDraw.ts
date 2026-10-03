@@ -13,7 +13,7 @@ const ARROW_PAST = 0.14;
 /** The arrowhead's length. */
 const HEAD = 0.12;
 
-/** Draw amount for the bow attack; must match the 'bow' case in anim.ts (full draw at release, then snap). */
+/** Draw amount for the bow attack (anim.ts bowPose draws to it): full draw at release, then snap. */
 export function bowDrawAmount(a: number) {
   if (a < 0) return 0;
   if (a < RELEASE) {

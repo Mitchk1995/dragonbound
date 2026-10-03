@@ -4,8 +4,8 @@ Built from the approved concept sheet (October 3): a blue tunic with a dark stan
 trim down the split front of its skirt, a belt with a square gold buckle and a pouch, a strap over the right shoulder
 with a gold clasp and a fang, one steel pauldron on the left shoulder, leather bracers and tall turned-down boots.
 
-The skeleton, joints and sockets are unchanged from the earlier hero, so every gear piece keeps its fit. The starting
-outfit's extra pieces live under `outfit_<slot>_*` empties that the game hides when gear fills that slot (registry.ts
+The body, legs and head keep the earlier hero's sizes, so gear still fits; each arm is an upper arm, an elbow, a forearm
+and a LEGO hand, with its gear sockets on the part they ride (see the arms below). The starting outfit's extra pieces live under `outfit_<slot>_*` empties that the game hides when gear fills that slot (registry.ts
 HeroDresser): the collar, the skirt's split, the strap, clasp, buckle, pouch and pauldron under body armour, the bracers under gloves, the boots under
 boots. No armour slot, weapon, hair or helmet here: those are separate gear_*.glb / hair_*.glb / beard_*.glb files
 attached to the sock_* empties at runtime. Faces +Z; right side (armR/legR) is at -X.

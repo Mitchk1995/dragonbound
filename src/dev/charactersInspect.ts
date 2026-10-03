@@ -195,8 +195,8 @@ function near(root: THREE.Object3D, part: string, dir: THREE.Vector3, dist: numb
 }
 
 /**
- * Close-ups the owner judges hands and hoods from: the hero's fist round the sword at rest and raised, the cultist's
- * hood and its fist round the staff (at rest and in the cast), and all five from the side mid-attack, where an arm
+ * Close-ups the owner judges hands and hoods from: the hero's hand round the sword at rest and raised, the cultist's
+ * hood and its hand round the staff (at rest and in the cast), and all five from the side mid-attack, where an arm
  * cutting into the body would show.
  */
 async function closeUps(st: Studio, shot: Shot) {

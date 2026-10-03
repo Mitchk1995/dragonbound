@@ -127,6 +127,8 @@ export class Rig {
   readonly quadruped: boolean;
   /** A creature's own hold, from what its model carries (see Hold). */
   private readonly modelHold: Hold;
+  /** The arms' carry this frame (update): each arm's swing (x), each elbow's bend (e) and the right wrist (w). */
+  private readonly carry = { xL: 0, xR: 0, eL: 0, eR: 0, wR: 0 };
 
   constructor(public root: THREE.Object3D, public stride = 2.2) {
     root.traverse((o) => {
@@ -245,19 +247,23 @@ export class Rig {
     // The arms hang a little out from the sides (armL is at +X, armR at -X), so the hands clear the hips and skirts,
     // and swing with the stride, the elbows bending a little more as each arm swings forward. A staff or bow swings
     // less and keeps its forearm level through the stride, so it stays upright; a bow is carried out from the body.
-    const hold = this.hold(), fore = forearmForward(hold), bow = hold === 'bow';
-    const swingL = -sw * 0.5 * moveAmt, swingR = sw * (fore ? 0.15 : 0.3) * moveAmt;
-    this.rot('armL', swingL, 0, ARM_SPLAY);
-    this.rot('armR', swingR, 0, -ARM_SPLAY - (bow ? BOW_OUT : 0));
-    this.rot('elbowL', ELBOW_REST + Math.min(0, swingL) * 0.5);
-    this.rot('elbowR', fore ? HOLD_BEND - swingR : ELBOW_REST + Math.min(0, swingR) * 0.5, bow ? BOW_CARRY : 0);
+    const hold = this.hold(), fore = forearmForward(hold), bow = hold === 'bow', c = this.carry;
+    c.xL = -sw * 0.5 * moveAmt;
+    c.xR = sw * (fore ? 0.15 : 0.3) * moveAmt;
+    c.eL = ELBOW_REST + Math.min(0, c.xL) * 0.5;
+    c.eR = fore ? HOLD_BEND - c.xR : ELBOW_REST + Math.min(0, c.xR) * 0.5;
     // A blade or tool at the side is carried steady: the wrist counters the arm's swing.
+    c.wR = hold === 'side' ? SIDE_WRIST - c.xR : hold === 'upright' ? HOLD_WRIST : 0;
+    this.rot('armL', c.xL, 0, ARM_SPLAY);
+    this.rot('armR', c.xR, 0, -ARM_SPLAY - (bow ? BOW_OUT : 0));
+    this.rot('elbowL', c.eL);
+    this.rot('elbowR', c.eR, bow ? BOW_CARRY : 0);
     this.rot('handL');
-    this.rot('handR', hold === 'side' ? SIDE_WRIST - swingR : hold === 'upright' ? HOLD_WRIST : 0, bow ? BOW_PLUMB : 0);
+    this.rot('handR', c.wR, bow ? BOW_PLUMB : 0);
     this.rot('tail1', 0, Math.sin(t * 3) * 0.3);
     this.rot('tail2', 0, Math.sin(t * 3 - 0.8) * 0.4);
 
-    if (s.attack >= 0) this.attackPose(s, hold);
+    if (s.attack >= 0) this.attackPose(s);
     this.followShoulders();
   }
 
@@ -286,11 +292,11 @@ export class Rig {
    * Attack poses over progress 0..1. Every kind is built around IMPACT (the frame the game
    * resolves the hit): a long wind-up before it, a fast strike through it, a follow-through after.
    */
-  private attackPose(s: AnimState, hold: Hold) {
+  private attackPose(s: AnimState) {
     const a = s.attack;
-    // Where the right arm rests in this hold, so every attack starts and ends there.
-    const e0 = forearmForward(hold) ? HOLD_BEND : ELBOW_REST;
-    const w0 = hold === 'side' ? SIDE_WRIST : hold === 'upright' ? HOLD_WRIST : 0;
+    // The arms' carry this frame, stride and all: every attack starts and ends there, so none jumps when it begins or
+    // ends on the move.
+    const { xR: x0, eR: e0, wR: w0, xL, eL } = this.carry;
     switch (s.attackKind) {
       case 'swing': {
         // Wind up overhead, whip down through the target (mid-strike at the impact), recover.
@@ -298,7 +304,7 @@ export class Rig {
         let x: number, e: number;
         if (a < up) {
           const k = ease(a / up);
-          x = -WIND_ARM * k;
+          x = lerp(x0, -WIND_ARM, k);
           e = lerp(e0, WIND_ELBOW, k);
         } else if (a < down) {
           const k = ease((a - up) / (down - up));
@@ -307,7 +313,7 @@ export class Rig {
         } else {
           // The strike ends with the arm still a little forward so long tools (pickaxe) clear the ground.
           const k = ease((a - down) / (1 - down));
-          x = -0.35 * (1 - k);
+          x = lerp(-0.35, x0, k);
           e = lerp(STRIKE_ELBOW, e0, k);
         }
         this.rot('armR', x, 0, -ARM_SPLAY);
@@ -321,11 +327,11 @@ export class Rig {
       case 'slam': {
         // Both arms up, the forearms folding back over the head, then down hard, the arms straightening.
         const up = a < IMPACT ? ease(a / IMPACT) : 1 - ease((a - IMPACT) / (1 - IMPACT));
-        const x = a < IMPACT ? -3.0 * ease(a / IMPACT) : -3.0 + 2.8 * ease((a - IMPACT) / (1 - IMPACT));
-        this.rot('armR', x, 0, -ARM_SPLAY);
-        this.rot('armL', x, 0, ARM_SPLAY);
+        const k = a < IMPACT ? ease(a / IMPACT) : ease((a - IMPACT) / (1 - IMPACT));
+        this.rot('armR', a < IMPACT ? lerp(x0, -3.0, k) : lerp(-3.0, x0, k), 0, -ARM_SPLAY);
+        this.rot('armL', a < IMPACT ? lerp(xL, -3.0, k) : lerp(-3.0, xL, k), 0, ARM_SPLAY);
         this.rot('elbowR', lerp(e0, -0.5, up));
-        this.rot('elbowL', lerp(ELBOW_REST, -0.5, up));
+        this.rot('elbowL', lerp(eL, -0.5, up));
         this.rot('body', a < IMPACT ? -0.2 : 0.25);
         break;
       }
@@ -336,20 +342,19 @@ export class Rig {
         const lift = a < IMPACT ? ease(a / IMPACT) : 1 - ease((a - IMPACT) / (1 - IMPACT));
         // The staff rises high and forward out of the hold, still upright and leaning at the target; the free hand
         // reaches toward the target.
-        this.rot('armR', -CAST_ARM * lift, 0, -ARM_SPLAY);
+        this.rot('armR', lerp(x0, -CAST_ARM, lift), 0, -ARM_SPLAY);
         this.rot('elbowR', lerp(e0, CAST_ELBOW, lift));
         this.rot('handR', lerp(w0, CAST_WRIST, lift));
-        this.rot('armL', -CAST_REACH * lift, 0, ARM_SPLAY);
-        this.rot('elbowL', lerp(ELBOW_REST, -0.35, lift));
+        this.rot('armL', lerp(xL, -CAST_REACH, lift), 0, ARM_SPLAY);
+        this.rot('elbowL', lerp(eL, -0.35, lift));
         this.rot('body', -0.1 * lift);
         break;
       }
       case 'throw': {
         // Wind the arm back over the shoulder, the elbow folded, then whip it forward and straighten it at the release.
-        const x = a < IMPACT ? -2.6 * ease(a / IMPACT) : -2.6 + 2.0 * ease((a - IMPACT) / (1 - IMPACT));
-        const e = a < IMPACT ? lerp(e0, -1.1, ease(a / IMPACT)) : lerp(-1.1, e0, ease((a - IMPACT) / (1 - IMPACT)));
-        this.rot('armR', x);
-        this.rot('elbowR', e);
+        const k = a < IMPACT ? ease(a / IMPACT) : ease((a - IMPACT) / (1 - IMPACT));
+        this.rot('armR', a < IMPACT ? lerp(x0, -2.6, k) : lerp(-2.6, x0, k), 0, -ARM_SPLAY);
+        this.rot('elbowR', a < IMPACT ? lerp(e0, -1.1, k) : lerp(-1.1, e0, k));
         break;
       }
       case 'bite':
@@ -367,7 +372,7 @@ export class Rig {
     if (!this.parts.get('body') || !armR || !sock) return;
     // Bow arm: straight, pointing the bow at the target; its hold turns into the aim as the bow comes up.
     this.pointArm(armR, B.aim.fromArray(BOW_AIM).normalize(), B.front.fromArray(BOW_ROLL), raise);
-    this.rot('elbowR', lerp(HOLD_BEND, 0, raise), lerp(BOW_CARRY, 0, raise));
+    this.rot('elbowR', lerp(this.carry.eR, 0, raise), lerp(BOW_CARRY, 0, raise));
     // Bow hand: the bow upright through it (the hand's +Z up) and its string, on the hand's +X side (BOW_STRING), toward
     // the archer (body +X): the hand's +Y turns to body -Z.
     this.orientHand('R', B.up.set(0, 1, 0), B.back.set(0, 0, -1), raise);

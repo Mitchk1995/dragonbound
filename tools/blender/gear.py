@@ -1002,7 +1002,6 @@ EMBER_LIMB = [(RISER, 0.0), (0.4, 0.05), (0.52, 0.12), (0.62, 0.18), (0.7, 0.19)
 def u_emberstring(S):
     """Emberstring, as in the approved icon: a bone recurve with an ember inlay down the inside of each limb, obsidian
     horn tips, an ember gem in the grip and a burning string."""
-    h = S('sock_handR')
     obs = obsidian()
     b = bow_frame(S)
     z0 = BOW_Z

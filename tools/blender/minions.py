@@ -1,6 +1,6 @@
 """Goblin Grunt, Kobold Slinger, Ember Cultist and Cinder Priest, from their approved concept sheets (October 3).
-Faces +Z; right-side parts (armR/legR) at -X. Rig names per src/render/anim.ts (body, head, armL/R, legL/R, weapon,
-tail1..)."""
+Faces +Z; right-side parts (armR/legR) at -X. Rig names per src/render/anim.ts (body, head, armL/R, elbowL/R, handL/R,
+legL/R, tail1..; a staff on sock_handR framed by staffbody, a club on weapon, the kobold's sling on sling)."""
 import math
 import os
 import sys

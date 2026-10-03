@@ -8,7 +8,7 @@ import type { Game } from '../game';
 import { generateUnique, makeItem, makeMasterwork } from '../loot/itemGen';
 import { Rig, newAnimState, type AttackKind } from '../render/anim';
 import { itemIconUrl } from '../render/icons3d';
-import { HeroDresser, makeModel, roleOf } from '../render/registry';
+import { HeroDresser, makeModel } from '../render/registry';
 import type { Item, Rarity, Slot } from '../types';
 import { APPROVED_DIR, APPROVED_FILES, itemArtUrl } from '../ui/approvedArt';
 import { itemSlot } from '../ui/dom';
@@ -33,8 +33,8 @@ import { Studio, equip, fit } from './inspect';
  * count of rendered icons, and `problems` (an image without a source, not loaded, decoded at other than its supplied
  * size, drawn other than whole at its own aspect, or a slot whose picture differs from what approvedArt routes its
  * item to). `checks.problems` gathers them all: it should be empty. Also open/close `cycles`, `tooltips`,
- * `dragGhosts`, `inventoryPanel` (selection through Sort, stale cards, folding mid-drag, bank and shop footers),
- * `checks.hands` and `checks.drop`.
+ * `dragGhosts`, `inventoryPanel` (selection through Sort, stale cards, folding mid-drag, bank and shop footers) and
+ * `checks.drop`.
  */
 
 const tier = (t: TierId) => PIECES.map((p) => pieceId(t, p.key));
@@ -704,8 +704,8 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
     await sheetOf('fit-arms-front', POSES.map(([label, pose]): Cell => ({ label: `arms · ${label} · front`, obj: hero(pose, true), eye: v(0.25, 1.55, 4.2), at: v(0, 1.3, 0) })), 4, 2);
     await sheetOf('fit-arms-game', POSES.map(([label, pose]): Cell => ({ label: `arms · ${label} · game pitch`, obj: hero(pose, true), eye: v(0, 1.2, 0).addScaledVector(gameDir, 4.6), at: v(0, 1.2, 0) })), 4, 2);
 
-    // Hands (the owner asked for thumbless gauntlets, taking the hero's hands to have no thumbs): the bare hero hand
-    // beside the existing glove models, idle, close on the left hand; nothing else worn so the sleeves match.
+    // Hands: the bare hero hand (a LEGO C, never a thumb) beside the glove models, idle, close on the left hand; nothing
+    // else worn so the sleeves match.
     // Steel stands for the plate model bronze and iron share (gloves_p); Emberforged has its own (gloves_e).
     const HANDS: [string, Item | null][] = [['bare hand', null], ['Steel Gauntlets', makeItem('steel_gauntlets')], ['Emberforged Gauntlets', makeItem('ember_gauntlets')], ['Leather Gloves', makeItem('leather_gloves')]];
     const handed = (gloves: Item | null) => {
@@ -718,68 +718,11 @@ export async function approvedSuite(g: Game, shot: Shot, scope: 'ui' | 'fit' | '
       return { m, holder };
     };
     const hL = handed(null).m.root.getObjectByName('sock_handL')?.getWorldPosition(v(0, 0, 0)) ?? v(0.5, 0.75, 0);
-    // Front, outer side (anything forward of the fist shows in silhouette), 3/4 from the body side where a thumb would
-    // sit, from below, and close at the gameplay pitch.
-    const HAND_VIEWS: [string, THREE.Vector3][] = [['front', v(0, 0.05, 0.95)], ['outer side', v(0.95, 0.05, 0)], ['thumb side 3/4', v(-0.45, 0.1, 0.8)], ['below', v(0.05, -0.55, 0.4)], ['game pitch', gameDir.clone().multiplyScalar(1.5)]];
+    // Front (through the hole), outer side, 3/4 from the body side, from below, and close at the gameplay pitch.
+    const HAND_VIEWS: [string, THREE.Vector3][] = [['front', v(0, 0.05, 0.95)], ['outer side', v(0.95, 0.05, 0)], ['body side 3/4', v(-0.45, 0.1, 0.8)], ['below', v(0.05, -0.55, 0.4)], ['game pitch', gameDir.clone().multiplyScalar(1.5)]];
     await sheetOf('fit-hands', HANDS.flatMap(([label, gloves]) => HAND_VIEWS.map(([view, off]): Cell => ({ label: `${label} · ${view}`, obj: handed(gloves).holder, eye: hL.clone().add(off), at: hL }))), 5, HANDS.length);
 
-    // The same, measured on the loaded meshes in each arm's own frame: the bare hand (skin below its glove socket's
-    // top) and each glove (everything on its sockets). A plain block has equal halves; an authored thumb makes the
-    // half toward the body reach further forward (or back), and `thumbReach` is by how much.
     const r3 = (x: number) => Math.round(x * 1000) / 1000;
-    const measure = (gloves: Item | null) => {
-      const { m } = handed(gloves);
-      const out: Record<string, unknown> = { model: gloves ? BASES[gloves.base]?.model : 'hero' };
-      for (const [arm, sock] of [['armL', 'sock_handL'], ['armR', 'sock_gloveR']] as const) {
-        const node = m.root.getObjectByName(arm);
-        const socket = m.root.getObjectByName(sock);
-        if (!node || !socket) {
-          out[arm] = `missing ${node ? sock : arm}`;
-          continue;
-        }
-        const inv = node.matrixWorld.clone().invert();
-        const top = socket.getWorldPosition(v(0, 0, 0)).applyMatrix4(inv).y + 0.08;
-        const pts: THREE.Vector3[] = [];
-        let aRest = false;
-        const underSocket = (o: THREE.Object3D) => {
-          for (let a: THREE.Object3D | null = o; a && a !== node; a = a.parent) if (a.name.startsWith('sock_')) return true;
-          return false;
-        };
-        (gloves ? socket : node).traverse((o) => {
-          if (!(o instanceof THREE.Mesh)) return;
-          if (!gloves && (underSocket(o) || roleOf(o.material as THREE.Material) !== 'skin')) return;
-          aRest ||= !!o.geometry.getAttribute('aRest');
-          const pos = o.geometry.getAttribute('position');
-          const mat = inv.clone().multiply(o.matrixWorld);
-          for (let i = 0; i < pos.count; i++) {
-            const pt = v(0, 0, 0).fromBufferAttribute(pos, i).applyMatrix4(mat);
-            if (gloves || pt.y < top) pts.push(pt);
-          }
-        });
-        if (!pts.length) {
-          out[arm] = 'no vertices';
-          continue;
-        }
-        const box = new THREE.Box3().setFromPoints(pts);
-        const cx = (box.min.x + box.max.x) / 2, side = Math.sign(node.position.x) || 1;
-        const half = (inner: boolean) => {
-          const zs = pts.filter((pt) => ((pt.x - cx) * side < 0) === inner).map((pt) => pt.z);
-          return { zMin: r3(Math.min(...zs)), zMax: r3(Math.max(...zs)) };
-        };
-        const inner = half(true), outer = half(false);
-        out[arm] = {
-          verts: pts.length,
-          fromGlb: aRest, // GLB geometry carries aRest; the code-built placeholder hand does not
-          min: box.min.toArray().map(r3),
-          max: box.max.toArray().map(r3),
-          inner,
-          outer,
-          thumbReach: r3(Math.max(Math.abs(inner.zMax - outer.zMax), Math.abs(inner.zMin - outer.zMin))),
-        };
-      }
-      return out;
-    };
-    checks.hands = Object.fromEntries(HANDS.map(([label, gloves]) => [label, measure(gloves)]));
 
     // Dropped: the real GroundItem (groundModel: the cuirass on sock_chest only), landed and turned square. Each view
     // is placed by `fit` on the dropped group's own bounds, in a 2×2 sheet: cells of a 4×1 sheet are too narrow

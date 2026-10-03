@@ -202,7 +202,7 @@ describe('pose audit: staff', () => {
     const w = weaponFacts(h.root)!;
     expect(w.dir.y).toBeGreaterThan(0.85);
   });
-  it('idle: shaft held in front of the fist and leaning forward, not running down the forearm', () => {
+  it('idle: shaft held in front of the hand and leaning forward, not running down the forearm', () => {
     h.pose('cast', -1);
     const w = weaponFacts(h.root)!;
     const hand = h.dresser.socket('sock_handR')!.getWorldPosition(new THREE.Vector3());
@@ -218,7 +218,7 @@ describe('pose audit: staff', () => {
 
 describe('pose audit: cult staffs', () => {
   // The owner: the cultist's staff hold looked wrong, and in the cast the staff swung down behind the head. The staff
-  // hangs on sock_handR in the fist, so it stands upright at rest and stays upright, leaning at the target, in the cast.
+  // hangs on sock_handR in the hand, so it stands upright at rest and stays upright, leaning at the target, in the cast.
   for (const name of ['cultist', 'priest']) {
     it(`${name}: staff upright at rest and in the cast`, () => {
       const m = makeModel(name);
