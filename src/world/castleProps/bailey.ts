@@ -4,7 +4,8 @@ import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL, type V3 } from '../../render/kit';
 import { KERB_W } from '../kerbStones';
-import { drumStones, laidRun } from '../../render/masonry';
+import { COURSE, drumStones, laidRun } from '../../render/masonry';
+import { GROW } from '../castle/plan';
 import { hash01, octagon, prism, taper, wedge } from '../../render/blocks';
 import { GROWN, grownTrees, type GrownKind } from '../trees';
 import { shareResource } from '../../render/resources';
@@ -249,6 +250,77 @@ function gardenPier(k: ModelKit, g: THREE.Object3D, x: number, z: number, h: num
   ball(k, g, 0.25, [x, h + 0.78, z], ASHLAR_L);
 }
 
+/**
+ * The champion's knight standing on his plinth's cap (y = 0, facing +Z): plate armour and an open-faced
+ * plumed helm, a cloak down the back, hands folded on the pommel of a sword planted point down before
+ * him, a kite shield leaning at his side, in warm marble (S, its shade SD and light SL).
+ */
+function statue(k: ModelKit, g: THREE.Object3D, S: number, SD: number, SL: number) {
+  const y = 0;
+    // Legs, knee cops and sabatons.
+    for (const s of [-1, 1]) {
+      cb(k, g, [0.26, 0.98, 0.3], [s * 0.17, y + 0.5, 0], S, undefined, 0.06);
+      cb(k, g, [0.22, 0.16, 0.12], [s * 0.17, y + 0.62, 0.16], SL, undefined, 0.04);
+      cb(k, g, [0.28, 0.14, 0.44], [s * 0.17, y + 0.07, 0.07], SD, undefined, 0.04);
+    }
+    // The tasset skirt, belt and breastplate with its ridge.
+    k.mesh(g, taper(0.8, 0.52, 0.62, 0.44, 0.46), S, [0, y + 1.1, 0]);
+    cb(k, g, [0.68, 0.1, 0.48], [0, y + 1.34, 0], SD, undefined, 0.03);
+    k.mesh(g, taper(0.62, 0.44, 0.84, 0.5, 0.78), S, [0, y + 1.78, 0]);
+    k.mesh(g, wedge(0.08, 0.06, 0.7), SL, [0, y + 1.78, 0.25], [Math.PI / 2, 0, 0]);
+    // The tabard over the breastplate: the lord's blue falling in two folds (the gold diamond is
+    // kept for the banners and flags).
+    for (const sx of [-1, 1]) cb(k, g, [0.27, 0.95, 0.05], [sx * 0.14, y + 1.5, 0.29], sx < 0 ? HERALD_BLUE : HERALD_BLUE_D, [0.05, 0, 0], 0.01);
+    // The cloak hanging down the back from a rolled collar at the shoulders, falling in deep folds
+    // (pleats standing out of it at different depths), its hem flaring a little.
+    // (Modelled all round: seen from behind on the parterre's walks he shows a full draped cloak in
+    // four deep folds over the belt, a clasped collar, the helm's crest and his sword's pommel.)
+    k.mesh(g, taper(1.04, 0.24, 0.84, 0.16, 1.9), SD, [0, y + 1.12, -0.32], [-0.06, 0, 0]);
+    cb(k, g, [0.92, 0.18, 0.4], [0, y + 2.04, -0.18], S, undefined, 0.08);
+    for (const [i, dz, w] of [[-1.5, 0.07, 0.24], [-0.5, 0.16, 0.28], [0.5, 0.1, 0.26], [1.5, 0.18, 0.22]] as const) {
+      k.mesh(g, taper(w, 0.2, w * 0.6, 0.12, 1.84), i === -0.5 || i === 1.5 ? SL : S, [i * 0.23, y + 1.08, -0.4 - dz], [-0.08, 0, i * 0.04]);
+    }
+    k.mesh(g, taper(1.0, 0.16, 1.0, 0.16, 0.12), SD, [0, y + 0.22, -0.5], [-0.06, 0, 0]);
+    // (Clasped at the shoulders with round gilt bosses.)
+    for (const sx of [-1, 1]) k.cyl(g, 0.07, 0.07, 0.06, [sx * 0.34, y + 2.06, 0.02], PAL.gold, [Math.PI / 2, 0, 0], 10);
+    // The sword belt round him, over the cloak at the back, its buckle on the hip.
+    cb(k, g, [0.72, 0.1, 0.5], [0, y + 1.3, 0], SL, undefined, 0.03);
+    cb(k, g, [0.86, 0.1, 0.16], [0, y + 1.3, -0.52], SD, [-0.06, 0, 0], 0.03);
+    // A second sword slung across his back, its pommel and grip over the right shoulder.
+    cb(k, g, [0.08, 1.2, 0.06], [0.14, y + 1.5, -0.58], SL, [-0.06, 0, -0.5], 0.02);
+    cb(k, g, [0.34, 0.06, 0.08], [0.34, y + 1.96, -0.58], SL, [-0.06, 0, -0.5], 0.02);
+    cb(k, g, [0.06, 0.26, 0.06], [0.45, y + 2.09, -0.58], SD, [-0.06, 0, -0.5], 0.01);
+    cb(k, g, [0.11, 0.11, 0.11], [0.5, y + 2.24, -0.58], SL, [0, Math.PI / 4, 0], 0.03);
+    // Pauldrons, arms bent to the hands on the pommel.
+    for (const s of [-1, 1]) {
+      cb(k, g, [0.38, 0.26, 0.52], [s * 0.5, y + 2.1, 0], SL, [0, 0, s * -0.3], 0.1);
+      limb(k, g, [s * 0.48, y + 2.02, 0.02], [s * 0.4, y + 1.56, 0.24], [0.2, 0.22, 0.18, 0.2], S);
+      limb(k, g, [s * 0.4, y + 1.56, 0.24], [s * 0.1, y + 1.42, 0.44], [0.18, 0.2, 0.17, 0.19], S);
+    }
+    cb(k, g, [0.34, 0.2, 0.22], [0, y + 1.44, 0.46], SD, undefined, 0.05);
+    // The sword planted before him: pommel, grip, crossguard, the blade to the plinth.
+    cb(k, g, [0.13, 0.13, 0.13], [0, y + 1.62, 0.46], SL, [0, Math.PI / 4, 0], 0.03);
+    cb(k, g, [0.66, 0.08, 0.1], [0, y + 1.26, 0.46], SL, undefined, 0.02);
+    k.mesh(g, taper(0.05, 0.04, 0.16, 0.05, 1.18), SL, [0, y + 0.64, 0.46]);
+    // The helm: an open-faced knight's helm, round as a head is, on a mail collar: a rounded skull
+    // with a band round the brow, cheek guards either side of the face and a nasal down its middle,
+    // the face under it carved plain, and a stone plume springing from a socket at the crown and
+    // falling back over the nape.
+    k.cyl(g, 0.15, 0.2, 0.18, [0, y + 2.25, 0.0], SD, undefined, 10);
+    cb(k, g, [0.24, 0.26, 0.2], [0, y + 2.42, 0.06], S, undefined, 0.05);
+    for (const sx of [-1, 1]) k.box(g, [0.05, 0.025, 0.03], [sx * 0.06, y + 2.47, 0.16], SD);
+    ball(k, g, 0.21, [0, y + 2.56, 0.0], SL, [1, 0.92, 1.08]);
+    k.cyl(g, 0.215, 0.215, 0.06, [0, y + 2.53, 0.0], S, undefined, 10);
+    for (const sx of [-1, 1]) cb(k, g, [0.06, 0.26, 0.22], [sx * 0.16, y + 2.39, 0.05], SL, [0, sx * -0.25, 0], 0.015);
+    cb(k, g, [0.05, 0.2, 0.05], [0, y + 2.45, 0.175], SL, undefined, 0.01);
+    cb(k, g, [0.08, 0.08, 0.08], [0, y + 2.76, -0.01], SL, [0, Math.PI / 4, 0], 0.02);
+    limb(k, g, [0, y + 2.79, 0.0], [0, y + 2.72, -0.3], [0.1, 0.12, 0.08, 0.1], SL);
+    limb(k, g, [0, y + 2.72, -0.28], [0, y + 2.44, -0.42], [0.08, 0.1, 0.05, 0.06], SL);
+    // A kite shield leaning against his side.
+    k.mesh(g, taper(0.1, 0.07, 0.56, 0.07, 0.86), SD, [-0.56, y + 0.46, 0.12], [-0.08, 0.35, 0.1]);
+    k.cyl(g, 0.1, 0.1, 0.04, [-0.57, y + 0.62, 0.17], SL, [Math.PI / 2, 0, -0.35], 10);
+}
+
 /** The layer a pool's mirror draws (the fountain's own dragon, rock and jets). */
 const MIRROR_LAYER = 3;
 
@@ -386,18 +458,19 @@ export const BAILEY_PROPS: Record<string, Builder> = {
   },
   /**
    * The bailey's centrepiece (facing +Z, toward the gate): a round basin, its wall and moulded coping
-   * each one continuous ring of stone (outer radius 5.6) on a low plinth step round a clear pool, a
+   * each one continuous ring of stone (outer radius 7.3) on a low plinth step round a clear pool, a
    * pedestal at its heart and the bronze dragon sitting guard on it, its open jaws pouring the one
    * stream of water into the pool; foam, spray and rings spread where the water lands.
    */
   dragon_fountain: (k, g) => {
-    const RO = 5.6, RI = 4.9, H = 0.75, WY = 0.8, S = 2.35, time = { value: 0 };
+    // (Grown with the castle round it: the basin wider and the dragon taller, its stones their own size.)
+    const F = GROW, RO = 5.6 * F, RI = 4.9 * F, H = 0.75, WY = 0.8, S = 2.35 * F, DROP = 4.4 * F, time = { value: 0 };
     // The plinth step, the basin's wall and its coping, each one course laid round the pool in flat
     // stones (a basin's wall is no more bent than a tower's), the coping's joints over the wall's.
     const basin = new THREE.Group(), n = drumStones(RO);
     basin.position.y = 0.2;
     g.add(basin);
-    drum(k, g, { r: 6.1, y0: 0, y1: 0.2, n: drumStones(6.1), course: 0.2 }, STONE_D);
+    drum(k, g, { r: RO + 0.5, y0: 0, y1: 0.2, n: drumStones(RO + 0.5), course: 0.2 }, STONE_D);
     drum(k, basin, { r: RO, rIn: RI, y0: 0, y1: H, n, course: H }, STONE);
     drum(k, basin, { r: RO + 0.1, rIn: RI - 0.1, y0: H, y1: H + 0.14, n, course: H, turn: Math.PI / n, bond: false }, STONE_L);
     // The basin floor, dark under the water so the pool has depth.
@@ -405,10 +478,10 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     // The dragon's pedestal, carved in the castle's own stone: an octagonal drum of cream ashlar
     // rising out of the water from a blue-grey plinth, a plain gilt band round it and a moulded
     // blue-grey coping under the dragon's feet.
-    k.cyl(g, 2.75, 2.95, 1.0, [0, 0.5, 0], BASE, [0, Math.PI / 8, 0], 8);
-    k.cyl(g, 2.45, 2.45, 0.5, [0, 1.25, 0], ASHLAR, [0, Math.PI / 8, 0], 8);
-    k.cyl(g, 2.47, 2.47, 0.14, [0, 1.12, 0], GILT, [0, Math.PI / 8, 0], 8);
-    k.cyl(g, 2.7, 2.62, 0.16, [0, 1.56, 0], DRESS, [0, Math.PI / 8, 0], 8);
+    k.cyl(g, 2.75 * F, 2.95 * F, 1.0, [0, 0.5, 0], BASE, [0, Math.PI / 8, 0], 8);
+    k.cyl(g, 2.45 * F, 2.45 * F, 0.5, [0, 1.25, 0], ASHLAR, [0, Math.PI / 8, 0], 8);
+    k.cyl(g, 2.45 * F + 0.02, 2.45 * F + 0.02, 0.14, [0, 1.12, 0], GILT, [0, Math.PI / 8, 0], 8);
+    k.cyl(g, 2.7 * F, 2.62 * F, 0.16, [0, 1.56, 0], DRESS, [0, Math.PI / 8, 0], 8);
     // The dragon sitting guard on the pedestal, its jaws open over the front of the pool.
     const beast = new THREE.Group();
     beast.position.y = 1.64;
@@ -416,8 +489,8 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     const jaw = sentinelDragon(k, beast).multiplyScalar(S).add(beast.position);
     g.add(beast);
     // The one stream, from the jaws into the pool.
-    const impacts: Impact[] = [[0, 4.4, 1]];
-    const sheets: [THREE.Vector3[], number, number, number][] = [[pour(jaw, new THREE.Vector3(0, WY, 4.4), 0.7, 28), 0.16, 0.42, 51]];
+    const impacts: Impact[] = [[0, DROP, 1]];
+    const sheets: [THREE.Vector3[], number, number, number][] = [[pour(jaw, new THREE.Vector3(0, WY, DROP), 0.7, 28), 0.16 * F, 0.42 * F, 51]];
     for (const [pts, w0, w1, seed] of sheets) {
       const { geo, len } = crossedRibbons(pts, w0, w1);
       const m = new THREE.Mesh(geo, fallingWaterMaterial(time, seed, len, w1));
@@ -443,7 +516,7 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     };
     // Where the jaw stream lands: a churn of foam on the water, heaving foam, drifting spray.
     const foamDisc = new THREE.Mesh(brokenFoam(91, 1.0, 11, 0.75), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
-    foamDisc.position.set(0, WY + 0.03, 4.4);
+    foamDisc.position.set(0, WY + 0.03, DROP);
     foamDisc.name = 'foam-spread';
     foamDisc.material.userData.decal = foamDisc.material.userData.noOcclude = true;
     foamDisc.renderOrder = 3;
@@ -466,7 +539,7 @@ export const BAILEY_PROPS: Record<string, Builder> = {
         // Spray puffs rise from the landing, swell and fade, one after another.
         spray.forEach((sp, i) => {
           const p = (t * 0.55 + i / spray.length) % 1;
-          sp.position.set(Math.sin(i * 2.1) * 0.25, WY + 0.25 + p * 0.9, 4.4 + Math.cos(i * 2.1) * 0.2);
+          sp.position.set(Math.sin(i * 2.1) * 0.25, WY + 0.25 + p * 0.9, DROP + Math.cos(i * 2.1) * 0.2);
           sp.scale.setScalar(0.7 + p * 1.1);
           sp.material.opacity = 0.32 * Math.sin(p * Math.PI);
         });
@@ -692,75 +765,18 @@ export const BAILEY_PROPS: Record<string, Builder> = {
    * before him, a kite shield leaning at his side.
    */
   champion: (k, g) => {
-    // Warm marble on a carved plinth in the castle's stone, the lord's blue on his tabard.
+    // Warm marble on a carved plinth in the castle's stone, the lord's blue on his tabard; grown with the
+    // grand stair (the plinth laid on the course lines, the knight half as tall again as the hero).
     const S = MARBLE, SD = MARBLE_D, SL = MARBLE_L;
-    cb(k, g, [2.0, 0.45, 2.0], [0, 0.225, 0], BASE, undefined, 0.06);
-    cb(k, g, [1.6, 0.9, 1.6], [0, 0.9, 0], ASHLAR, undefined, 0.06);
-    cb(k, g, [0.9, 0.4, 0.05], [0, 0.9, 0.81], ASHLAR_L, undefined, 0.02);
-    cb(k, g, [1.75, 0.14, 1.75], [0, 1.42, 0], DRESS, undefined, 0.03);
-    const y = 1.49;
-    // Legs, knee cops and sabatons.
-    for (const s of [-1, 1]) {
-      cb(k, g, [0.26, 0.98, 0.3], [s * 0.17, y + 0.5, 0], S, undefined, 0.06);
-      cb(k, g, [0.22, 0.16, 0.12], [s * 0.17, y + 0.62, 0.16], SL, undefined, 0.04);
-      cb(k, g, [0.28, 0.14, 0.44], [s * 0.17, y + 0.07, 0.07], SD, undefined, 0.04);
-    }
-    // The tasset skirt, belt and breastplate with its ridge.
-    k.mesh(g, taper(0.8, 0.52, 0.62, 0.44, 0.46), S, [0, y + 1.1, 0]);
-    cb(k, g, [0.68, 0.1, 0.48], [0, y + 1.34, 0], SD, undefined, 0.03);
-    k.mesh(g, taper(0.62, 0.44, 0.84, 0.5, 0.78), S, [0, y + 1.78, 0]);
-    k.mesh(g, wedge(0.08, 0.06, 0.7), SL, [0, y + 1.78, 0.25], [Math.PI / 2, 0, 0]);
-    // The tabard over the breastplate: the lord's blue falling in two folds (the gold diamond is
-    // kept for the banners and flags).
-    for (const sx of [-1, 1]) cb(k, g, [0.27, 0.95, 0.05], [sx * 0.14, y + 1.5, 0.29], sx < 0 ? HERALD_BLUE : HERALD_BLUE_D, [0.05, 0, 0], 0.01);
-    // The cloak hanging down the back from a rolled collar at the shoulders, falling in deep folds
-    // (pleats standing out of it at different depths), its hem flaring a little.
-    // (Modelled all round: seen from behind on the parterre's walks he shows a full draped cloak in
-    // four deep folds over the belt, a clasped collar, the helm's crest and his sword's pommel.)
-    k.mesh(g, taper(1.04, 0.24, 0.84, 0.16, 1.9), SD, [0, y + 1.12, -0.32], [-0.06, 0, 0]);
-    cb(k, g, [0.92, 0.18, 0.4], [0, y + 2.04, -0.18], S, undefined, 0.08);
-    for (const [i, dz, w] of [[-1.5, 0.07, 0.24], [-0.5, 0.16, 0.28], [0.5, 0.1, 0.26], [1.5, 0.18, 0.22]] as const) {
-      k.mesh(g, taper(w, 0.2, w * 0.6, 0.12, 1.84), i === -0.5 || i === 1.5 ? SL : S, [i * 0.23, y + 1.08, -0.4 - dz], [-0.08, 0, i * 0.04]);
-    }
-    k.mesh(g, taper(1.0, 0.16, 1.0, 0.16, 0.12), SD, [0, y + 0.22, -0.5], [-0.06, 0, 0]);
-    // (Clasped at the shoulders with round gilt bosses.)
-    for (const sx of [-1, 1]) k.cyl(g, 0.07, 0.07, 0.06, [sx * 0.34, y + 2.06, 0.02], PAL.gold, [Math.PI / 2, 0, 0], 10);
-    // The sword belt round him, over the cloak at the back, its buckle on the hip.
-    cb(k, g, [0.72, 0.1, 0.5], [0, y + 1.3, 0], SL, undefined, 0.03);
-    cb(k, g, [0.86, 0.1, 0.16], [0, y + 1.3, -0.52], SD, [-0.06, 0, 0], 0.03);
-    // A second sword slung across his back, its pommel and grip over the right shoulder.
-    cb(k, g, [0.08, 1.2, 0.06], [0.14, y + 1.5, -0.58], SL, [-0.06, 0, -0.5], 0.02);
-    cb(k, g, [0.34, 0.06, 0.08], [0.34, y + 1.96, -0.58], SL, [-0.06, 0, -0.5], 0.02);
-    cb(k, g, [0.06, 0.26, 0.06], [0.45, y + 2.09, -0.58], SD, [-0.06, 0, -0.5], 0.01);
-    cb(k, g, [0.11, 0.11, 0.11], [0.5, y + 2.24, -0.58], SL, [0, Math.PI / 4, 0], 0.03);
-    // Pauldrons, arms bent to the hands on the pommel.
-    for (const s of [-1, 1]) {
-      cb(k, g, [0.38, 0.26, 0.52], [s * 0.5, y + 2.1, 0], SL, [0, 0, s * -0.3], 0.1);
-      limb(k, g, [s * 0.48, y + 2.02, 0.02], [s * 0.4, y + 1.56, 0.24], [0.2, 0.22, 0.18, 0.2], S);
-      limb(k, g, [s * 0.4, y + 1.56, 0.24], [s * 0.1, y + 1.42, 0.44], [0.18, 0.2, 0.17, 0.19], S);
-    }
-    cb(k, g, [0.34, 0.2, 0.22], [0, y + 1.44, 0.46], SD, undefined, 0.05);
-    // The sword planted before him: pommel, grip, crossguard, the blade to the plinth.
-    cb(k, g, [0.13, 0.13, 0.13], [0, y + 1.62, 0.46], SL, [0, Math.PI / 4, 0], 0.03);
-    cb(k, g, [0.66, 0.08, 0.1], [0, y + 1.26, 0.46], SL, undefined, 0.02);
-    k.mesh(g, taper(0.05, 0.04, 0.16, 0.05, 1.18), SL, [0, y + 0.64, 0.46]);
-    // The helm: an open-faced knight's helm, round as a head is, on a mail collar: a rounded skull
-    // with a band round the brow, cheek guards either side of the face and a nasal down its middle,
-    // the face under it carved plain, and a stone plume springing from a socket at the crown and
-    // falling back over the nape.
-    k.cyl(g, 0.15, 0.2, 0.18, [0, y + 2.25, 0.0], SD, undefined, 10);
-    cb(k, g, [0.24, 0.26, 0.2], [0, y + 2.42, 0.06], S, undefined, 0.05);
-    for (const sx of [-1, 1]) k.box(g, [0.05, 0.025, 0.03], [sx * 0.06, y + 2.47, 0.16], SD);
-    ball(k, g, 0.21, [0, y + 2.56, 0.0], SL, [1, 0.92, 1.08]);
-    k.cyl(g, 0.215, 0.215, 0.06, [0, y + 2.53, 0.0], S, undefined, 10);
-    for (const sx of [-1, 1]) cb(k, g, [0.06, 0.26, 0.22], [sx * 0.16, y + 2.39, 0.05], SL, [0, sx * -0.25, 0], 0.015);
-    cb(k, g, [0.05, 0.2, 0.05], [0, y + 2.45, 0.175], SL, undefined, 0.01);
-    cb(k, g, [0.08, 0.08, 0.08], [0, y + 2.76, -0.01], SL, [0, Math.PI / 4, 0], 0.02);
-    limb(k, g, [0, y + 2.79, 0.0], [0, y + 2.72, -0.3], [0.1, 0.12, 0.08, 0.1], SL);
-    limb(k, g, [0, y + 2.72, -0.28], [0, y + 2.44, -0.42], [0.08, 0.1, 0.05, 0.06], SL);
-    // A kite shield leaning against his side.
-    k.mesh(g, taper(0.1, 0.07, 0.56, 0.07, 0.86), SD, [-0.56, y + 0.46, 0.12], [-0.08, 0.35, 0.1]);
-    k.cyl(g, 0.1, 0.1, 0.04, [-0.57, y + 0.62, 0.17], SL, [Math.PI / 2, 0, -0.35], 10);
+    cb(k, g, [2.6, COURSE, 2.6], [0, COURSE / 2, 0], BASE, undefined, 0.06);
+    cb(k, g, [2.1, 2 * COURSE + 0.02, 2.1], [0, 2 * COURSE - 0.01, 0], ASHLAR, undefined, 0.06);
+    cb(k, g, [1.2, 0.5, 0.05], [0, 1.0, 1.065], ASHLAR_L, undefined, 0.02);
+    cb(k, g, [2.3, 0.16, 2.3], [0, 3 * COURSE + 0.08, 0], DRESS, undefined, 0.03);
+    const knight = new THREE.Group();
+    knight.position.y = 3 * COURSE + 0.16;
+    knight.scale.setScalar(GROW);
+    g.add(knight);
+    statue(k, knight, S, SD, SL);
   },
   // ─── The walled gardens ────────────────────────────────────────────────────────
   /**
@@ -780,15 +796,16 @@ export const BAILEY_PROPS: Record<string, Builder> = {
       leaf.position.set(sx * (W / 2 - 0.04), 0, 0);
       leaf.rotation.y = -sx * (Math.PI / 2);
       g.add(leaf);
-      const u = -sx;
-      cb(k, leaf, [0.07, 1.95, 0.07], [0, 0.98, 0], LAMP_NAVY, undefined, 0.01);
-      cb(k, leaf, [0.07, 1.8, 0.07], [u * L, 0.9, 0], LAMP_NAVY, undefined, 0.01);
-      for (const y of [0.18, 0.95, 1.72]) k.box(leaf, [L, 0.06, 0.05], [(u * L) / 2, y, 0], LAMP_NAVY);
+      // (Its height in proportion to the wall's, so a gate in a taller wall stands taller than the hero.)
+      const u = -sx, f = H / 2.6;
+      cb(k, leaf, [0.07, 1.95 * f, 0.07], [0, 0.98 * f, 0], LAMP_NAVY, undefined, 0.01);
+      cb(k, leaf, [0.07, 1.8 * f, 0.07], [u * L, 0.9 * f, 0], LAMP_NAVY, undefined, 0.01);
+      for (const y of [0.18, 0.95, 1.72]) k.box(leaf, [L, 0.06, 0.05], [(u * L) / 2, y * f, 0], LAMP_NAVY);
       const n = Math.max(3, Math.round(L / 0.14));
       for (let i = 1; i < n; i++) {
         const xb = (u * L * i) / n;
-        k.box(leaf, [0.035, 1.6, 0.035], [xb, 0.95, 0], LAMP_NAVY);
-        k.mesh(leaf, taper(0.07, 0.07, 0.01, 0.01, 0.14), PAL.gold, [xb, 1.82, 0]);
+        k.box(leaf, [0.035, 1.6 * f, 0.035], [xb, 0.95 * f, 0], LAMP_NAVY);
+        k.mesh(leaf, taper(0.07, 0.07, 0.01, 0.01, 0.14), PAL.gold, [xb, 1.82 * f, 0]);
       }
     }
   },

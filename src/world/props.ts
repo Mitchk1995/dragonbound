@@ -1452,7 +1452,7 @@ export const HERO_HEIGHT = 2.1;
 /**
  * The castle's doors by purpose, one size for each purpose (`w` × `h` is one leaf: its width, and its
  * height to the point of its pointed head, or to the lintel under a gate's tympanum):
- * - `building`: every building's doorway, a pair of leaves meeting under a pointed arch 2 wide;
+ * - `building`: every building's doorway, a pair of leaves meeting under a pointed arch 3 wide;
  * - `single`: one leaf under a pointed arch, the door of a tower onto its wall walk, of a stair tower
  *   and of the roof houses onto the leads;
  * - `wide_gate` / `narrow_gate`: the pair of leaves of a gate (4 or 2 wide), each nearly half the
@@ -1463,11 +1463,11 @@ export const HERO_HEIGHT = 2.1;
  * the wall's centre line toward the bailey.
  */
 export const DOORS = {
-  building: { w: 0.91, h: 3.91, rise: 1.24 },
+  building: { w: 1.41, h: 4.91, rise: 1.77 },
   single: { w: 1.3, h: 3.0 },
   wide_gate: { w: 1.88, h: 3.3 },
   narrow_gate: { w: 1.0, h: 2.9 },
-  great: { w: 1.88, h: 3.7 },
+  great: { w: 2.88, h: 5.2 },
   handle: 1.05,
   walk: { y: CURTAIN_WALL.walkY, off: CURTAIN_WALL.walkOff },
 } as const;

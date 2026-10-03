@@ -471,7 +471,7 @@ describe('zones', () => {
     const byId = Object.fromEntries((L.buildings ?? []).map((b) => [b.id, b]));
     // The hatchery is up on the north-east upland; the keep on the castle's terrace, the stables on the crown.
     expect(L.level![byId.hatch_plot.z * L.w + byId.hatch_plot.x]).toBe(7);
-    expect(L.level![byId.keep.z * L.w + byId.keep.x]).toBe(13);
+    expect(L.level![byId.keep.z * L.w + byId.keep.x]).toBe(13.5);
     expect(L.level![byId.stables.z * L.w + byId.stables.x]).toBe(11);
   });
   it('no walkable pocket is cut off from the entry (clicks never target one)', () => {

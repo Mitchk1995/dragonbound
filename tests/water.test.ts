@@ -30,11 +30,11 @@ describe('falling water paths', () => {
 describe('the dragon fountain', () => {
   const p = buildProp('dragon_fountain');
   const box = new THREE.Box3().setFromObject(p.obj);
-  it('stands about nine high, its dragon within reach of the basin', () => {
-    expect(box.max.y).toBeGreaterThan(8.5);
-    expect(box.max.y).toBeLessThan(10.5);
-    expect(box.max.x).toBeLessThan(6.5);
-    expect(box.min.x).toBeGreaterThan(-6.5);
+  it('stands about twelve high (grown with the castle), its dragon within reach of the basin', () => {
+    expect(box.max.y).toBeGreaterThan(11);
+    expect(box.max.y).toBeLessThan(13.5);
+    expect(box.max.x).toBeLessThan(8.4);
+    expect(box.min.x).toBeGreaterThan(-8.4);
   });
   it('pours from the jaws into the pool and animates', () => {
     const names = new Set<string>();

@@ -26,9 +26,9 @@ export const SUN_DIR = new THREE.Vector3(13, 16, 12).normalize();
  * view is all but the farthest corner; the box is not grown for them, since every metre of height
  * widens it across the whole view.
  */
-const BAND_BELOW = 6, BAND_ABOVE = 20;
-/** How tall a caster can stand towards the sun (the keep's spires stand 44 m). */
-const CASTER_HEIGHT = 50;
+const BAND_BELOW = 6, BAND_ABOVE = 26;
+/** How tall a caster can stand towards the sun (the keep's spires stand 57 m). */
+const CASTER_HEIGHT = 62;
 /** Room past the view on every side, so a caster just off screen still throws its shadow in. */
 const PAD = 3;
 /** The box grows and shrinks in steps of this many metres (a steady size never shimmers). */

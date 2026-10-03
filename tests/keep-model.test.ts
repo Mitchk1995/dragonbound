@@ -20,21 +20,21 @@ const [floorG, built, lifted, mid, edge] = K.obj.children;
 const box = new THREE.Box3().setFromObject(K.obj);
 
 describe('the great keep', () => {
-  it('rises to its battlements at +28, its turrets to +34.5 and their spires to +44, its plinth founded on the moat\'s bed', () => {
+  it('rises to its battlements at +36, its turrets to +44.5 and their spires to +57, its plinth founded on the moat\'s bed', () => {
     // (Heights over the crown, as the plan states them.)
-    expect(TERRACE_Y + KEEP_H.coping + 0.9 - CROWN_Y).toBeCloseTo(28, 0);
-    expect(TERRACE_Y + TURRET.deck + 1.5 - CROWN_Y).toBeCloseTo(34.5, 0);
-    expect(TERRACE_Y + TURRET.spireTip - CROWN_Y).toBe(44);
+    expect(TERRACE_Y + KEEP_H.coping + 0.9 - CROWN_Y).toBeCloseTo(36, 0);
+    expect(TERRACE_Y + TURRET.deck + 1.5 - CROWN_Y).toBeCloseTo(44.5, 0);
+    expect(TERRACE_Y + TURRET.spireTip - CROWN_Y).toBe(57);
     // The great flag's finial and the spires' finials over them; the plinth's foot under the bed.
     expect(box.max.y).toBeGreaterThan(TERRACE_Y + TURRET.spireTip);
     expect(box.min.y).toBeLessThanOrEqual(MOAT.bed);
-    expect(TERRACE_Y + KEEP_H.walk - CROWN_Y).toBeCloseTo(7.06, 2);
+    expect(TERRACE_Y + KEEP_H.walk - CROWN_Y).toBeCloseTo(9.06, 2);
   });
 
-  it('stands on its plan: the turrets on its corners, the frontispiece on the axis, the great door 8 m to its apex', () => {
-    expect(TURRETS.map((t) => [KEEP.rect[0] + t.x, KEEP.rect[1] + t.z])).toEqual([[64, 15], [88, 15], [64, 39], [88, 39]]);
+  it('stands on its plan: the turrets on its corners, the frontispiece on the axis, the great door 10.5 m to its apex', () => {
+    expect(TURRETS.map((t) => [KEEP.rect[0] + t.x, KEEP.rect[1] + t.z])).toEqual([[70, 20], [102, 20], [70, 52], [102, 52]]);
     expect(KEEP.rect[0] + (FRONTISPIECE.x0 + FRONTISPIECE.x1) / 2).toBe(KEEP.door.x);
-    expect(GREAT_DOOR.apex).toBe(8);
+    expect(GREAT_DOOR.apex).toBe(10.5);
     // The wall walk's door on each flank stands on the walk's middle.
     expect(KEEP.rect[1] + WALK_DOOR_U).toBeCloseTo(CURTAIN.north + 0.445, 6);
   });
@@ -57,9 +57,9 @@ describe('the great keep', () => {
       for (const c of KEEP_H.courses) expect(head < c - 0.5 || w.sill > c + 0.5, name).toBe(true);
     }
     // On the back, each axis climbs from a small lancet to a tall one, a pair, and a small light.
-    const axis = KEEP_WINDOWS.filter((w) => w.side === 'n' && w.u === 6.5).sort((a, b) => a.sill - b.sill).map((w) => w.kind);
+    const axis = KEEP_WINDOWS.filter((w) => w.side === 'n' && w.u === 8.7).sort((a, b) => a.sill - b.sill).map((w) => w.kind);
     expect(axis).toEqual(['lancet', 'lancet', 'pair', 'square']);
-    const tall = KEEP_WINDOWS.filter((w) => w.side === 'n' && w.u === 6.5).sort((a, b) => a.sill - b.sill);
+    const tall = KEEP_WINDOWS.filter((w) => w.side === 'n' && w.u === 8.7).sort((a, b) => a.sill - b.sill);
     expect(tall[1].h).toBeGreaterThan(tall[0].h);
     expect(tall[3].h).toBeLessThan(tall[2].h);
   });
@@ -71,7 +71,7 @@ describe('the great keep', () => {
     });
     const show = KEEP_WINDOWS.find((w) => w.kind === 'showpiece')!;
     // Through the west light of its tracery, from out over the terrace.
-    const from = new THREE.Vector3(KEEP.door.x - 1.0, TERRACE_Y + show.sill + 2, KEEP.rect[3] + 8);
+    const from = new THREE.Vector3(KEEP.door.x - 1.3, TERRACE_Y + show.sill + 2, KEEP.rect[3] + 8);
     const hits = new THREE.Raycaster(from, new THREE.Vector3(0, 0, -1)).intersectObjects(meshes, false);
     const glass = hits.find((h) => h.object.name === 'glass');
     expect(glass, 'the showpiece has glass').toBeDefined();
@@ -94,11 +94,11 @@ describe('the great keep', () => {
     const liftBox = new THREE.Box3().setFromObject(lifted), midBox = new THREE.Box3().setFromObject(mid);
     expect(Math.min(liftBox.min.y, midBox.min.y)).toBeGreaterThan(TERRACE_Y + 0.9);
     // It opens inside it, and at the great hall's dais and the chapel's west end against it.
-    expect(K.contains(KEEP.door.x, 27)).toBe(true);
-    expect(K.contains(RANGE.hall[2] - 3, 29)).toBe(true);
-    expect(K.contains(RANGE.chapel[0] + 3, 29)).toBe(true);
+    expect(K.contains(KEEP.door.x, 36)).toBe(true);
+    expect(K.contains(RANGE.hall[2] - 3, 38)).toBe(true);
+    expect(K.contains(RANGE.chapel[0] + 3, 38)).toBe(true);
     expect(K.contains(KEEP.door.x, KEEP.rect[3] + 6)).toBe(false);
-    expect(K.contains(RANGE.hall[0] + 4, 29)).toBe(false);
+    expect(K.contains(RANGE.hall[0] + 4, 38)).toBe(false);
   });
 
   it('the stairs\' half landings lie open to the hall, their doors into the turrets clear over them', () => {
@@ -124,17 +124,17 @@ describe('the great keep', () => {
 describe('the keep on the grid', () => {
   const L = ZONES.keep.build(1000 + 'keep'.length * 97), at = (x: number, z: number) => L.cells[z * L.w + x];
   it('its front turrets and frontispiece block the terrace they stand on; the great door\'s porch stays open', () => {
-    for (const [x, z] of [[62, 41], [90, 41], [65, 41], [72, 39], [79, 40]]) expect(at(x, z), `${x},${z}`).toBe(Cell.Blocked);
-    for (let x = KEEP.door.x - KEEP.door.w / 2; x < KEEP.door.x + KEEP.door.w / 2; x++) for (const z of [39, 40]) expect(at(x, z), `porch ${x},${z}`).toBe(Cell.Ground);
+    for (const [x, z] of [[67, 54], [105, 54], [71, 55], [80, 52], [91, 53]]) expect(at(x, z), `${x},${z}`).toBe(Cell.Blocked);
+    for (let x = KEEP.door.x - KEEP.door.w / 2; x < KEEP.door.x + KEEP.door.w / 2; x++) for (const z of [52, 53]) expect(at(x, z), `porch ${x},${z}`).toBe(Cell.Ground);
     // The side bays' fronts between the turrets and the frontispiece stay terrace.
-    expect(at(69, 41)).toBe(Cell.Ground);
-    expect(cellRole(KEEP_SPEC, 76, 38)).toBe('door');
+    expect(at(77, 55)).toBe(Cell.Ground);
+    expect(cellRole(KEEP_SPEC, KEEP.door.x, 51)).toBe('door');
   });
   it('only the front turrets and the frontispiece block the grid: the back turrets stand over the moat', () => {
     const blocked: [number, number][] = [];
     const site = { G: { inside: () => true, idx: (x: number, z: number) => `${x},${z}` }, block: (i: string) => blocked.push(i.split(',').map(Number) as [number, number]) } as unknown as Site;
     keepGround(site);
     expect(blocked.length).toBeGreaterThan(0);
-    for (const [x, z] of blocked) expect(z, `${x},${z}`).toBeGreaterThan(KEEP.rect[1] + 12);
+    for (const [x, z] of blocked) expect(z, `${x},${z}`).toBeGreaterThan(KEEP.rect[1] + 16);
   });
 });

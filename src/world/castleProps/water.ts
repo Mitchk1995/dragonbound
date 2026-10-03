@@ -327,7 +327,8 @@ export const WATER_PROPS: Record<string, Builder> = {
     wall.userData.boxes = [[-hw, 0, -T, -ow, H, 0], [ow, 0, -T, hw, H, 0], [-ow, 0, -T, ow, sill, 0], [-ow, spring + ow, -T, ow, H, 0]];
     k.mesh(g, wall, BASE, [0, 0, 0]);
     // The voussoirs round the spout, standing a little proud, and its keystone under the coping.
-    const nv = 7, tv = H - spring - ow - 0.01;
+    // (A ring of stones its own size round the spout, however high the bank stands over it.)
+    const nv = 7, tv = Math.min(0.3, H - spring - ow - 0.01);
     for (let i = 0; i < nv; i++) {
       const a = (Math.PI * (i + 0.5)) / nv, key = i === 3, rr = ow + tv / 2;
       cb(k, g, [(Math.PI * rr) / nv - 0.02, tv, 0.32 + (key ? 0.04 : 0)], [Math.cos(a) * rr, spring + Math.sin(a) * rr, -0.1 + (key ? 0.02 : 0)], DRESS, [0, 0, a - Math.PI / 2], 0.02);

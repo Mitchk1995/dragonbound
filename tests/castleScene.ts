@@ -30,9 +30,13 @@ export interface CastleScene {
   ground: (x: number, z: number) => number;
 }
 
-/** The castle on its crown and the moat round it, the gate terrace, the ledge, the landing and the climb's stair. */
-export const CASTLE_AREA = { x0: 14, x1: 136, z0: 0, z1: 132 };
-const inArea = (x: number, z: number) => x > CASTLE_AREA.x0 && x < CASTLE_AREA.x1 && z > CASTLE_AREA.z0 && z < CASTLE_AREA.z1;
+/**
+ * The castle on its crown and the moat round it, the gate terrace, the ledge, the landing and the climb's
+ * stair (not the farm in the fields at the rock's foot west of the pool).
+ */
+export const CASTLE_AREA = { x0: 4, x1: 167, z0: 0, z1: 172 };
+const FARM_FIELDS = { x1: 70, z0: 162 };
+const inArea = (x: number, z: number) => x > CASTLE_AREA.x0 && x < CASTLE_AREA.x1 && z > CASTLE_AREA.z0 && z < CASTLE_AREA.z1 && !(x < FARM_FIELDS.x1 && z > FARM_FIELDS.z0);
 
 let scene: CastleScene | null = null;
 

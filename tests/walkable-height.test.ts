@@ -82,9 +82,9 @@ describe('walkable ground levels', () => {
   it('the castle\'s stairs are walked up flight by flight: the ground under the hero climbs every flight and stands level on every landing', () => {
     const L = ZONES.keep.build(1000 + 'keep'.length * 97), t = buildTerrain(L, ZONES.keep.theme, 7);
     // Up the climb's middle from the lane to the ledge, a step at a time.
-    const route: [number, number][] = [[131, 131.5]];
-    for (let z = 131; z >= 117.5; z -= 0.25) route.push([131, z]);
-    for (let x = 131; x >= 115.5; x -= 0.25) route.push([x, 117.5]);
+    const route: [number, number][] = [[157.5, 171.5]];
+    for (let z = 171; z >= 155.5; z -= 0.25) route.push([157.5, z]);
+    for (let x = 157.5; x >= 139.5; x -= 0.25) route.push([x, 155.5]);
     const ys = route.map(([x, z]) => t.floorAt(x, z));
     for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1], `at ${route[i]}`).toBeGreaterThan(-0.01);
     expect(ys[0]).toBeLessThan(0.6);

@@ -123,7 +123,7 @@ function drumShaft(k: ModelKit, g: THREE.Object3D, r: number, y0: number, y1: nu
  */
 export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number, o: number, y: number, foot = 0) {
   const { w: W, h } = DOORS.single, rise = Math.min(W * 0.866, h * 0.62);
-  const wd = walkDoor(), L = foot ? W + 0.6 : wd.L, top = foot ? 3.9 - y : wd.top, back = foot ? 0.08 : wd.back, deep = foot ? 0.62 : wd.out;
+  const wd = walkDoor(), L = foot ? W + 0.6 : wd.L, top = foot ? CURTAIN_COURSES[0] + 0.4 - y : wd.top, back = foot ? 0.08 : wd.back, deep = foot ? 0.62 : wd.out;
   const R = r + (deep - back) / 2, dep = deep + back;
   // (The doorway faces straight down the walk that comes to it, its middle on the walk's middle: the
   // frame turned to the walk's bearing, everything in it set `o` across.)
@@ -180,7 +180,7 @@ export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number
 /**
  * A round tower of radius r (the round_tower and corner_tower props), laid in rings of flat stones as
  * a stone tower is (see drum): a deep, battered base course, a drum rising a full storey or more over
- * the wall walk (+7) to its platform at H + 1.4, a string course and the course under the wall walk
+ * the wall walk (+9) to its platform at H + 1.4, a string course and the course under the wall walk
  * level with the curtain's (CURTAIN_COURSES), a band under the crown, and the crown (a parapet ring on
  * a course stepped out from the drum, merlons), all in the castle's one stone on the course lines. Each
  * course that stands proud is the drum's own course at that height, the same stones a little larger,
@@ -198,7 +198,7 @@ export interface TowerOpts {
 }
 
 function drumTower(k: ModelKit, g: THREE.Object3D, r: number, H: number, corner: boolean, opt: TowerOpts = {}) {
-  const N = 20, P = H + 1.4, spired = corner || !!opt.spire, top = crownFoot(P);
+  const N = crownBays(r), P = H + 1.4, spired = corner || !!opt.spire, top = crownFoot(P);
   drumFoot(k, g, r, r + 0.5, r + 0.15);
   drumShaft(k, g, r, BASE_COURSE, P, ASHLAR, opt.walks ?? [], DOORS.walk.y);
   for (const y of CURTAIN_COURSES) drumCourse(k, g, r, 0.06, y);
@@ -581,10 +581,16 @@ export function royalLeaf(k: ModelKit, g: THREE.Object3D, w: number, h: number, 
  * round every tower and across its gates, so the lines run on unbroken (each one course of the
  * castle's dressed stone, on the course lines).
  */
-export const CURTAIN_COURSES = [3.5, 6.5];
+export const CURTAIN_COURSES = [4.5, 8.5];
+
+/** How far in from a corner of the curtain the inner parapet's first merlon stands (clear of the turning run's parapet). */
+const CORNER_CLEAR = 2.1;
 
 /** The heights of a tower's two rows of arrow loops, one in each storey between its courses. */
-const LOOP_ROWS = [5.25, 9.0];
+const LOOP_ROWS = [6.75, 12.0];
+
+/** How many bays a round crown of radius r has: as many as keep its merlons each about a metre across. */
+const crownBays = (r: number) => 2 * Math.round((Math.PI * (r + 0.25)) / 1.3);
 
 /** Mark a part as paving: laid on its top in the castle paving's own rows (a third of a metre deep) of stones two thirds long. */
 export function paved<T extends THREE.Object3D>(m: T): T {
@@ -599,9 +605,10 @@ export function paved<T extends THREE.Object3D>(m: T): T {
  * parapet and the parapet flush on it; on the inner face the parapet carried out over the bailey on two
  * courses stepping out from the wall (a corbelled crown cut from the same stone, no corbel blocks); the
  * walk's deck between them, a coping on each parapet and merlons spread evenly along both, `clear` in
- * from the ends. All in the castle's stone on the course lines over the wall's top.
+ * from the ends (the inner ones `inner` = [-X end, +X end] in, clear of the next run's parapet where the
+ * walk turns a corner). All in the castle's stone on the course lines over the wall's top.
  */
-function curtainCrown(k: ModelKit, g: THREE.Object3D, L: number, LL: number, uc: number, clear: number) {
+function curtainCrown(k: ModelKit, g: THREE.Object3D, L: number, LL: number, uc: number, clear: number, inner: [number, number] = [clear, clear]) {
   const { T, H } = CURTAIN_WALL, fi = T / 2 + 0.85, cp = H + COURSE;
   k.box(g, [L, 0.06, fi - 0.56 + 0.52], [0, H + 0.03, (fi - 0.56 - 0.52) / 2], DECK);
   cb(k, g, [L, COURSE, 0.2], [0, H - COURSE / 2, -T / 2 + 0.02], DRESS, undefined, 0.02);
@@ -611,11 +618,9 @@ function curtainCrown(k: ModelKit, g: THREE.Object3D, L: number, LL: number, uc:
   cb(k, g, [LL, COURSE, fi - T / 2 + 0.1], [uc, H - COURSE / 2, (fi + T / 2 - 0.1) / 2], DRESS, undefined, 0.02);
   cb(k, g, [LL, COURSE, 0.56], [uc, H + COURSE / 2, fi - 0.28], ASHLAR, undefined, 0.03);
   cb(k, g, [LL, 0.12, 0.66], [uc, cp + 0.06, fi - 0.28], DRESS, undefined, 0.02);
-  for (const u of spread(L, 1.4, clear)) {
-    const c = hash01(u, T) > 0.7 ? ASHLAR_L : ASHLAR;
-    cb(k, g, [0.72, 0.6, 0.6], [u, cp + 0.42, -T / 2 + 0.3], c, undefined, 0.05);
-    cb(k, g, [0.72, 0.56, 0.54], [u, cp + 0.4, fi - 0.28], c, undefined, 0.05);
-  }
+  for (const u of spread(L, 1.4, clear)) cb(k, g, [0.72, 0.6, 0.6], [u, cp + 0.42, -T / 2 + 0.3], hash01(u, T) > 0.7 ? ASHLAR_L : ASHLAR, undefined, 0.05);
+  const [i0, i1] = inner;
+  for (const u of spread(L - i0 - i1 + 2 * clear, 1.4, clear)) cb(k, g, [0.72, 0.56, 0.54], [u + (i0 - i1) / 2, cp + 0.4, fi - 0.28], hash01(u, T) > 0.7 ? ASHLAR_L : ASHLAR, undefined, 0.05);
 }
 
 export const CURTAIN_PROPS: Record<string, Builder> = {
@@ -633,27 +638,29 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
     cb(k, g, [L, BASE_COURSE, T + 0.5], [0, BASE_COURSE / 2, 0], BASE, undefined, 0.06);
     cb(k, g, [L, H - BASE_COURSE, T], [0, BASE_COURSE + (H - BASE_COURSE) / 2, 0], ASHLAR, undefined, 0.04);
     cb(k, g, [L, COURSE, T + 0.12], [0, CURTAIN_COURSES[0] + COURSE / 2, 0], DRESS, undefined, 0.03);
-    // (Where the walk runs into a tower, the last merlons stand well clear of its doorway.)
-    curtainCrown(k, g, L, LL, uc, ends & 3 ? 1.35 : 0.8);
+    // (Where the walk runs into a tower, the last merlons stand well clear of its doorway; at a corner of
+    // the curtain the inner ones stand clear of the turning run's inner parapet.)
+    const clear = ends & 3 ? 1.35 : 0.8;
+    curtainCrown(k, g, L, LL, uc, clear, [ends & 16 ? CORNER_CLEAR : clear, ends & 32 ? CORNER_CLEAR : clear]);
     // The lord's banner on the outer face, all one size: one centred on every run between towers,
     // two at even spacing on a long run, so every face carries the same navy-and-gold rhythm as the
     // south front; beside a small gate the banner stands a little clear of its lanterns, and a short
     // stub beside one carries none. (The towers carry the arrow loops; the curtain's faces stay plain
     // between its banners.)
     const gate0 = ends & 4 ? 1.2 : 0, gate1 = ends & 8 ? 1.2 : 0;
-    const nb = L < 7 || (ends & 12 && L < 9) ? 0 : L > 24 ? 2 : 1;
+    const nb = L < 9 || (ends & 12 && L < 12) ? 0 : L > 31 ? 2 : 1;
     const at = Array.from({ length: nb }, (_, i) => -L / 2 + (L * (i + 0.5)) / nb + (gate0 - gate1) / nb);
     for (const b of at) {
       const out = new THREE.Group();
       out.position.set(b, 0, -T / 2 - 0.2);
       out.rotation.y = Math.PI;
       g.add(out);
-      livery(k, out, 0, H - 0.6, 0, 1.3, 2.3);
+      livery(k, out, 0, H - 0.6, 0, 1.7, 3.0);
     }
   },
   /**
    * A round wall tower, radius `len`: a deep battered base course, a drum rising a full storey over
-   * the wall walk (+7) to its platform, and on top a parapet ring on a course stepped out from the drum,
+   * the wall walk (+9) to its platform, and on top a parapet ring on a course stepped out from the drum,
    * with ten evenly spaced merlons. `v` sets how tall: the platform stands at v + 1.4.
    */
   round_tower: (k, g, arg) => drumTower(k, g, lenOf(arg) ?? 3.2, vOf(arg) || 9, false, arg?.opt),
@@ -672,9 +679,9 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
     // The pole rises well clear of the merlons (their tops at P + 1.75), so the whole flag flies a
     // full flag's height above the battlements, a gold ball on its top.
     const P = (vOf(arg) || 9) + 1.4, dir = (lenOf(arg) ?? 1) < 0 ? -1 : 1;
-    cb(k, g, [0.13, 5.6, 0.13], [0, P + 2.8, 0], LAMP_NAVY, undefined, 0.02);
-    k.mesh(g, new THREE.OctahedronGeometry(0.14, 1), PAL.gold, [0, P + 5.7, 0]);
-    flag(k, g, 0, P + 5.5, 0, 2.3, 1.4, dir);
+    cb(k, g, [0.16, 7.3, 0.16], [0, P + 3.65, 0], LAMP_NAVY, undefined, 0.02);
+    k.mesh(g, new THREE.OctahedronGeometry(0.18, 1), PAL.gold, [0, P + 7.42, 0]);
+    flag(k, g, 0, P + 7.15, 0, 3.0, 1.8, dir);
     shadowless(g);
   },
   /**
@@ -688,11 +695,11 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
    * toward -Z.
    */
   outer_gatehouse: (k, g, arg) => {
-    // The drums rise a stage over the wall towers either side to 13, each a flat platform behind its
+    // The drums rise a stage over the wall towers either side to 17, each a flat platform behind its
     // battlements flying the lord's flag outward from a pole at its middle, so the keep's spires rise
     // over the gate front seen from below the rock.
     const o = (arg?.opt ?? {}) as { cx?: number; R?: number };
-    const P = lenOf(arg) ?? 4, R = o.R ?? 2.6, H = 13, cx = o.cx ?? 6.0, T = 2.2, D = T + 0.8, GH = 10.5, N = 20;
+    const P = lenOf(arg) ?? 4, R = o.R ?? 2.6, H = 17, cx = o.cx ?? 6.0, T = CURTAIN_WALL.T, D = T + 0.8, GH = 13.5, N = crownBays(R);
     for (const sx of [-1, 1]) {
       // (Each drum in its own group at its centre, its rings of stone laid round its own axis.)
       const dg = new THREE.Group();
@@ -704,9 +711,9 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       drumBand(k, dg, 0, 0, R, crownFoot(H) - 1.5 * COURSE);
       crown(k, dg, 0, 0, R, H, N);
       // (The pole rises well clear of the merlons, as on the wall towers, a gold ball on its top.)
-      cb(k, dg, [0.13, 5.6, 0.13], [0, H + 2.8, 0], LAMP_NAVY, undefined, 0.02);
-      k.mesh(dg, new THREE.OctahedronGeometry(0.14, 1), PAL.gold, [0, H + 5.7, 0]);
-      flag(k, dg, 0, H + 5.5, 0, 2.3, 1.4, sx);
+      cb(k, dg, [0.16, 7.3, 0.16], [0, H + 3.65, 0], LAMP_NAVY, undefined, 0.02);
+      k.mesh(dg, new THREE.OctahedronGeometry(0.18, 1), PAL.gold, [0, H + 7.42, 0]);
+      flag(k, dg, 0, H + 7.15, 0, 3.0, 1.8, sx);
       shadowless(dg);
       // The wall walk comes in from the curtain beyond it (local +X on the right drum) to a doorway.
       drumDoorway(k, dg, R, (sx * Math.PI) / 2, -sx * DOORS.walk.off, DOORS.walk.y);
@@ -718,8 +725,8 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
     }
     // The gatehouse block in one piece, its passage cut through it as a pointed (two-centred) arch:
     // as wide as the drums' centres up to the wall walk, then rising between the drums to its parapet.
-    const spring = 3.6, ra = P * 0.8, off = ra - P / 2, apex = spring + Math.sqrt(ra * ra - off * off);
-    const zc = 0.2, bw = cx - R + 0.45, WW = 8.0, tA = Math.acos(off / ra);
+    const spring = 4.7, ra = P * 0.8, off = ra - P / 2, apex = spring + Math.sqrt(ra * ra - off * off);
+    const zc = 0.2, bw = cx - R + 0.45, WW = CURTAIN_WALL.H + 1, tA = Math.acos(off / ra);
     const half = (y: number) => Math.max(0, Math.sqrt(Math.max(0, ra * ra - (y - spring) ** 2)) - off);
     {
       const s = new THREE.Shape();
@@ -792,11 +799,11 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
     const pz = zc - D / 2 + 0.6;
     for (let x = -P / 2 + 0.3; x < P / 2 - 0.2; x += 0.42) {
       const top = spring + Math.sqrt(Math.max(0, ra * ra - (Math.abs(x) + off) ** 2)) - 0.05;
-      k.box(g, [0.1, top - 3.72, 0.1], [x, (top + 3.72) / 2, pz], IRON);
-      k.mesh(g, taper(0.1, 0.1, 0.01, 0.01, 0.25), IRON, [x, 3.6, pz], [Math.PI, 0, 0]);
+      k.box(g, [0.1, top - spring - 0.12, 0.1], [x, (top + spring + 0.12) / 2, pz], IRON);
+      k.mesh(g, taper(0.1, 0.1, 0.01, 0.01, 0.25), IRON, [x, spring, pz], [Math.PI, 0, 0]);
     }
     // (Its rails run into the grooves in the arch's sides, so the grid hangs in the stone.)
-    for (const y of [3.85, 4.6, 5.3, 6.0]) {
+    for (const y of [0.33, 1.3, 2.2, 3.1].map((dy) => spring + dy)) {
       const hw = half(y) + 0.12;
       if (hw > 0.3) k.box(g, [hw * 2, 0.09, 0.12], [0, y, pz], IRON);
     }
@@ -827,7 +834,7 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       out.position.set(0, 0, zc - D / 2 - 0.19);
       out.rotation.y = Math.PI;
       g.add(out);
-      livery(k, out, 0, GH - COURSE - 0.08, 0, 1.2, 1.2);
+      livery(k, out, 0, GH - COURSE - 0.08, 0, 1.6, 1.6);
     }
     // The passage floor: the castle's paving laid on through the gate, a dressed threshold stone across
     // each end.

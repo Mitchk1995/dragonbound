@@ -753,12 +753,12 @@ describe('castle geometry', () => {
       }
     }
     // The piers: the parapets' (a shaft 0.95 square), each garden gate's two (1.04 square, either side
-    // of its opening) and the champions' plinths (1.6 square), each with its piece and its middle in
+    // of its opening) and the champions' plinths (2.1 square), each with its piece and its middle in
     // that piece's frame.
     const piers = [
       ...P.filter((p) => p.kind === 'parapet_pier').map((p) => ({ p, at: new THREE.Vector3(), half: 0.475 })),
       ...P.filter((p) => p.kind === 'garden_gate').flatMap((p) => [-1, 1].map((sx) => ({ p, at: new THREE.Vector3(sx * ((p.spawn!.len ?? 3) / 2 + 0.52), 0, 0), half: 0.52 }))),
-      ...P.filter((p) => p.kind === 'champion').map((p) => ({ p, at: new THREE.Vector3(), half: 0.8 })),
+      ...P.filter((p) => p.kind === 'champion').map((p) => ({ p, at: new THREE.Vector3(), half: 1.05 })),
     ];
     for (const { p: pier, at, half } of piers) {
       const c = pier.obj.localToWorld(at.clone());

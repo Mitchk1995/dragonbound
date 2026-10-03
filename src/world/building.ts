@@ -49,6 +49,8 @@ export interface Fit {
   len?: number;
   /** Half-extents in cells (world axes) of the floor it blocks; omitted = walk over it (rugs, wall hangings). */
   block?: [number, number];
+  /** Its scale (the castle's furniture grew 1.3× with its rooms): `len` is given before scaling. */
+  s?: number;
 }
 
 export type BuildingStyle = 'hall' | 'stone' | 'timber' | 'keep';
@@ -183,7 +185,7 @@ function onStairEnd(st: Stair, lx: number, lz: number, floor: Floor) {
 const stairOn = (b: BuildingSpec, lx: number, lz: number) => (b.stairs ?? []).find((st) => stairParts(st).some((r) => inLocal(r, lx, lz)));
 
 /** The house rules for a stair (as for every stair the castle builds, inside or out). */
-export const STAIR_RULE = { riserMin: 0.16, riserMax: 0.17, perFlight: 17, width: 1 };
+export const STAIR_RULE = { riserMin: 0.18, riserMax: 0.2, perFlight: 17, width: 2 };
 
 /** Each flight of a stair as built: its risers, their height and the height it climbs from. */
 export interface FlightSteps {
@@ -218,7 +220,7 @@ export function stairProblems(b: BuildingSpec): string[] {
     const name = `${b.id} stair ${k}`;
     for (const s of stairSteps(st, b.storeyH ?? 0)) {
       if (s.risers > STAIR_RULE.perFlight) out.push(`${name}: a flight of ${s.risers} risers (at most ${STAIR_RULE.perFlight} between landings)`);
-      if (s.riser < STAIR_RULE.riserMin - 1e-3 || s.riser > STAIR_RULE.riserMax + 1e-3) out.push(`${name}: risers of ${(s.riser * 100).toFixed(1)} cm (16 to 17)`);
+      if (s.riser < STAIR_RULE.riserMin - 1e-3 || s.riser > STAIR_RULE.riserMax + 1e-3) out.push(`${name}: risers of ${(s.riser * 100).toFixed(1)} cm (18 to 20)`);
       if (s.flight.w < STAIR_RULE.width) out.push(`${name}: a flight ${s.flight.w} wide (at least ${STAIR_RULE.width})`);
     }
     // Inside the building's walls, clear of its interior walls, and every flight running on from

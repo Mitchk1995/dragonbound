@@ -128,6 +128,8 @@ function rakedBoxes(x0: number, x1: number, y0a: number, y0b: number, y1a: numbe
 
 /** How far a talus (a battered plinth) stands out at its foot from the face it leans against. */
 const TALUS_OUT = 0.7;
+/** The top of a crown-level parapet's coping (at the hero's chest), and of its piers' shafts under their caps. */
+export const PARAPET = 1.3, PIER = 1.5;
 
 /**
  * The climb's stone: its flights of treads, its landings' flagstones, its walls with raking copings,
@@ -245,7 +247,7 @@ export const GATE_FRONT_PROPS: Record<string, Builder> = {
    */
   gate_bastion: (k, g, arg) => {
     const o = { w: 20, d: 2, h: 11, batter: 0.1, arch: { w: 2, sill: 8.8 }, ...arg?.opt } as { w: number; d: number; h: number; batter: number; arch: { w: number; sill: number } };
-    const { h: H, batter: B } = o, hw = o.w / 2, back = -o.d, aw = o.arch.w / 2, ys = o.arch.sill, yc = ys + 0.4 + aw, deepIn = -2;
+    const { h: H, batter: B } = o, hw = o.w / 2, back = -o.d, aw = o.arch.w / 2, ys = o.arch.sill, yc = ys + 0.9 + aw, deepIn = -2;
     // (Its top a hair under the terrace's ground, so no stone lies in one plane with it.)
     const top = H - 0.02, out = (y: number) => B * (H - y);
     // The body in five blocks round the culvert's slot: west and east of it full height, under its
@@ -336,14 +338,14 @@ export const GATE_FRONT_PROPS: Record<string, Builder> = {
    * lord's banner hanging from it on both faces (toward ±Z).
    */
   banner_pole: (k, g) => {
-    cb(k, g, [0.56, 0.5, 0.56], [0, 0.25, 0], DRESS, undefined, 0.04);
-    cb(k, g, [0.14, 6.6, 0.14], [0, 3.8, 0], LAMP_NAVY, undefined, 0.02);
-    k.mesh(g, new THREE.OctahedronGeometry(0.16, 1), PAL.gold, [0, 7.22, 0]);
+    cb(k, g, [0.7, 0.5, 0.7], [0, 0.25, 0], DRESS, undefined, 0.04);
+    cb(k, g, [0.17, 8.6, 0.17], [0, 4.8, 0], LAMP_NAVY, undefined, 0.02);
+    k.mesh(g, new THREE.OctahedronGeometry(0.2, 1), PAL.gold, [0, 9.3, 0]);
     for (const r of [0, Math.PI]) {
       const side = new THREE.Group();
       side.rotation.y = r;
       g.add(side);
-      livery(k, side, 0, 6.6, 0.1, 1.0, 2.6);
+      livery(k, side, 0, 8.6, 0.12, 1.3, 3.4);
     }
   },
 };
@@ -352,15 +354,15 @@ export const APPROACH_PROPS: Record<string, Builder> = {
   ...CLIMB_PROPS,
   ...GATE_FRONT_PROPS,
   /**
-   * A low stone parapet along local X (`arg` = length): a solid breast wall on a weathered base
-   * course under a dressed coping, all the castle's stone, standing straight on the rock's lip (no
-   * built footing under it: the rock masses rise to meet the road; worldView).
+   * A low stone parapet along local X (`arg` = length), at the hero's chest: a solid breast wall on a
+   * weathered base course under a dressed coping, all the castle's stone, standing straight on the
+   * rock's lip (no built footing under it: the rock masses rise to meet the road; worldView).
    */
   parapet: (k, g, arg) => {
     const L = Math.max(2, arg ?? 6);
-    cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], BASE, undefined, 0.04);
-    cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], ASHLAR, undefined, 0.04);
-    cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], DRESS, undefined, 0.03);
+    cb(k, g, [L + 0.2, COURSE, 0.9], [0, COURSE / 2, 0], BASE, undefined, 0.04);
+    cb(k, g, [L, PARAPET - 0.14 - COURSE + 0.02, 0.62], [0, (COURSE - 0.02 + PARAPET - 0.14) / 2, 0], ASHLAR, undefined, 0.04);
+    cb(k, g, [L + 0.12, 0.14, 0.78], [0, PARAPET - 0.07, 0], DRESS, undefined, 0.03);
   },
   /**
    * An open balustrade along local X, `len` long (its outer face toward +Z like the parapet's): a
@@ -403,25 +405,25 @@ export const APPROACH_PROPS: Record<string, Builder> = {
    */
   parapet_pier: (k, g, arg) => {
     // `v`: 0 a low stone pyramid on top, 1 a small urn with a gilt cap, 2 a lantern.
-    const v = vOf(arg), z = 0;
+    const v = vOf(arg), z = 0, C = PIER;
     // (Its base course at the parapet's own height, standing on the ground: nothing of it hangs
     // below, down a cliff face.)
-    cb(k, g, [1.2, 0.24, 1.2], [0, 0.12, z], BASE, undefined, 0.03);
-    cb(k, g, [0.95, 1.0, 0.95], [0, 0.72, z], ASHLAR, undefined, 0.04);
-    cb(k, g, [1.15, 0.16, 1.15], [0, 1.26, z], DRESS, undefined, 0.03);
+    cb(k, g, [1.2, COURSE, 1.2], [0, COURSE / 2, z], BASE, undefined, 0.03);
+    cb(k, g, [0.95, C - COURSE + 0.02, 0.95], [0, (C + COURSE - 0.02) / 2, z], ASHLAR, undefined, 0.04);
+    cb(k, g, [1.15, 0.16, 1.15], [0, C + 0.08, z], DRESS, undefined, 0.03);
     if (v === 1) {
-      k.mesh(g, taper(0.26, 0.26, 0.4, 0.4, 0.14), ASHLAR_L, [0, 1.41, z]);
-      k.mesh(g, taper(0.4, 0.4, 0.7, 0.7, 0.42), ASHLAR_L, [0, 1.69, z]);
-      cb(k, g, [0.76, 0.08, 0.76], [0, 1.94, z], DRESS, undefined, 0.02);
-      ball(k, g, 0.3, [0, 2.12, z], 0x4a7a34);
-      k.mesh(g, new THREE.OctahedronGeometry(0.1, 1), PAL.gold, [0, 2.48, z]);
+      k.mesh(g, taper(0.26, 0.26, 0.4, 0.4, 0.14), ASHLAR_L, [0, C + 0.23, z]);
+      k.mesh(g, taper(0.4, 0.4, 0.7, 0.7, 0.42), ASHLAR_L, [0, C + 0.51, z]);
+      cb(k, g, [0.76, 0.08, 0.76], [0, C + 0.76, z], DRESS, undefined, 0.02);
+      ball(k, g, 0.3, [0, C + 0.94, z], 0x4a7a34);
+      k.mesh(g, new THREE.OctahedronGeometry(0.1, 1), PAL.gold, [0, C + 1.3, z]);
     } else if (v === 2) {
-      cb(k, g, [0.42, 0.08, 0.42], [0, 1.38, z], LAMP_NAVY, undefined, 0.02);
-      k.box(g, [0.32, 0.42, 0.32], [0, 1.64, z], 0xffcf86, undefined, 0xffa038, 1.4);
-      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) k.box(g, [0.05, 0.46, 0.05], [dx * 0.17, 1.64, z + dz * 0.17], LAMP_NAVY);
-      k.mesh(g, taper(0.5, 0.5, 0.1, 0.1, 0.22), LAMP_NAVY, [0, 1.96, z]);
-      k.mesh(g, new THREE.OctahedronGeometry(0.08, 1), PAL.gold, [0, 2.14, z]);
-    } else k.mesh(g, taper(0.95, 0.95, 0.12, 0.12, 0.42), ASHLAR_L, [0, 1.55, z]);
+      cb(k, g, [0.42, 0.08, 0.42], [0, C + 0.2, z], LAMP_NAVY, undefined, 0.02);
+      k.box(g, [0.32, 0.42, 0.32], [0, C + 0.46, z], 0xffcf86, undefined, 0xffa038, 1.4);
+      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) k.box(g, [0.05, 0.46, 0.05], [dx * 0.17, C + 0.46, z + dz * 0.17], LAMP_NAVY);
+      k.mesh(g, taper(0.5, 0.5, 0.1, 0.1, 0.22), LAMP_NAVY, [0, C + 0.78, z]);
+      k.mesh(g, new THREE.OctahedronGeometry(0.08, 1), PAL.gold, [0, C + 0.96, z]);
+    } else k.mesh(g, taper(0.95, 0.95, 0.12, 0.12, 0.42), ASHLAR_L, [0, C + 0.37, z]);
   },
   /**
    * A round paved terrace of radius `len` (its threshold toward +Z): flagstones laid radially in two
