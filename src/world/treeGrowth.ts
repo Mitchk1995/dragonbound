@@ -455,8 +455,10 @@ export function growTree(sp: Species, seed: number): Skeleton {
         const T = tangentOn(L, s), radial = around(T, UP, phi + turn);
         const at = pointOn(L, s).addScaledVector(radial, range(rng, [0.04, 0.16]));
         const depth = crownDepth(crown, at);
-        // (None deep in the crown, and none low enough to brush the hero's head.)
-        if (depth < 0.45 || at.y < 3) continue;
+        // None deep in the lower crown, where the wood shows from the side; the upper crown fills in
+        // further, so from the play camera above it reads as one leafy dome. None hang low enough to
+        // brush the hero's head.
+        if (depth < (at.y > crown.centre.y ? 0.22 : 0.45) || at.y < 3) continue;
         const dir = T.clone().addScaledVector(radial, 0.75).addScaledVector(crownNormal(crown, at, out), 0.4).addScaledVector(UP, 0.15).normalize();
         sprays.push({ at, dir, size: range(rng, sp.spray) * (0.85 + 0.2 * clamp(depth, 0, 1)), sway: 0, limb: li, s });
       }
