@@ -21,7 +21,8 @@ import type { Slot } from '../types';
  * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
  * perf, memory, trees (tree style comparison and the grown oak, see treeLineup.ts; trees:oak for the oak alone,
  * trees:grown:<kind> for one grown kind's progress pictures), approved (approved artwork, see approvedInspect.ts),
- * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts).
+ * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts),
+ * uitext (the menus' tinted lettering, see uiTextInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
  * orbits round each: bailey-angles:hall-door+landing).
@@ -136,6 +137,8 @@ export async function runInspect(g: Game, suites: string) {
     if (suites.split(',').includes('digits')) await (await import('./digitsInspect')).digitsSuite(g, shot);
     // The painted alphabets: names, portal titles, the zone plaque, the boss bar and a small-text test (explicit only: `font`).
     if (suites.split(',').includes('font')) report.font = await (await import('./fontInspect')).fontSuite(g, shot);
+    // The menus' tinted lettering: inventory card, equipment, shop, title, and what it costs (explicit only: `uitext`).
+    if (suites.split(',').includes('uitext')) report.uitext = await (await import('./uiTextInspect')).uiTextSuite(g, shot);
   } catch (e) {
     errors.push(`inspect aborted: ${(e as Error).stack ?? e}`);
   }

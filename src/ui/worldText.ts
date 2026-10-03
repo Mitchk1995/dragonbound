@@ -5,6 +5,7 @@ import type { GroundItem } from '../entities/groundItem';
 import type { Game } from '../game';
 import type { DigitKind } from './digitGlyphs';
 import { isDigitText, paintDigits, paintText, preloadDigits, preloadFonts } from './paintedText';
+import { worldTextShows } from './worldTextRule';
 
 interface Floater {
   el: HTMLElement;
@@ -104,6 +105,11 @@ export class WorldText {
   }
 
   update(dt: number) {
+    if (!worldTextShows(this.g.mode)) {
+      // Title, creation or any other menu-only state: drop whatever play left behind and draw nothing.
+      if (this.floaters.length || this.labels.size || this.bars.size || this.names.size) this.clear();
+      return;
+    }
     for (const f of this.floaters) {
       f.t += dt;
       const p = this.project(f.x, f.y, f.z);

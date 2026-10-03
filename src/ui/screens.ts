@@ -3,6 +3,7 @@ import type { Game } from '../game';
 import type { Appearance } from '../save/save';
 import { SKILLS } from '../types';
 import { esc, fmt } from './dom';
+import { paintTree, setText } from './uiText';
 import { levelForXp } from '../progression/skills';
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
@@ -37,6 +38,7 @@ export class Screens {
         <button class="mbtn" data-m="quit">Quit</button>
       </div>
       <div class="title-foot">A chunky ARPG of dragons, forges and very long grinds.</div>`;
+    paintTree(this.root);
     this.root.querySelectorAll<HTMLElement>('[data-m]').forEach((b) =>
       b.addEventListener('click', () => {
         g.sfx.unlock();
@@ -86,6 +88,7 @@ export class Screens {
         </div>
       </div>
       <div class="create-hint">Drag to rotate</div>`;
+    paintTree(this.root);
     const root = this.root;
     const name = root.querySelector<HTMLInputElement>('.nameinp')!;
     name.addEventListener('input', () => (L.name = name.value));
@@ -108,7 +111,7 @@ export class Screens {
     root.querySelector('[data-act="begin"]')!.addEventListener('click', () => {
       const clean = L.name.trim().replace(/[^\p{L}\p{N} '-]/gu, '');
       if (clean.length < 2) {
-        root.querySelector('.err')!.textContent = 'Your hero needs a name (2+ letters).';
+        setText(root.querySelector('.err')!, 'Your hero needs a name (2+ letters).');
         return;
       }
       L.name = clean;
