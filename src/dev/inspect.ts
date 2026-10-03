@@ -20,7 +20,7 @@ import type { Slot } from '../types';
  * point of interest, model, pose and panel and writes full-window PNGs plus report.json to
  * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
  * perf, memory, trees (tree style comparison and the grown oak, see treeLineup.ts; trees:oak for the oak alone,
- * trees:grown:<kind> for one grown kind's progress pictures), approved (approved artwork, see approvedInspect.ts),
+ * trees:grown:<kind> for one grown kind's progress pictures, trees:roots for their roots and crowns), approved (approved artwork, see approvedInspect.ts),
  * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts),
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
  * charactersInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts).
