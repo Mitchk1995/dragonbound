@@ -76,7 +76,7 @@ export enum Lawn {
   Meadow = 1,
   /** Clipped castle lawn: short, striped. */
   Clipped = 2,
-  /** A private garden's lawn: a little longer, scattered with daisies and clover. */
+  /** A private garden's lawn: a little longer, with clover under the grass. */
   Garden = 3,
 }
 

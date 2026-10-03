@@ -12,7 +12,7 @@ import { isRelief, smoothNoise } from './terrain';
  * clipped lawn), dark at the root and light at the tip, swaying with the wind. Each shell traces the
  * view ray down to the next, so a blade reads as one solid blade even from low down. Blades vary in
  * height, lean and hue; clipped castle lawns are short with soft mower stripes, private gardens
- * (Lawn.Garden) are scattered with daisies and clover, and the grass grows longer and darker at
+ * (Lawn.Garden) are scattered with clover, and the grass grows longer and darker at
  * the foot of hedges, beds and statues; meadows grow taller. The carpet ends exactly on the lawn's
  * own cells (a straight, square edge against paving; a true circle where the layout cuts one), and
  * far away it settles into one layer painted with the blades' own grain.
@@ -186,8 +186,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           float minor = abs(ddx.x * ddy.y - ddx.y * ddy.x) / max(max(length(ddx), length(ddy)), 1e-4);
           float lod = max(smoothstep(0.35, 0.9, minor), 1.0 - vLawn.z);
           // vLawn.x: the lawn's outline where the layout cuts a circle from it (else 1); the carpet
-          // otherwise covers exactly its own cells. vLawnX: x the share of garden lawn (daisies and
-          // clover), y how close a hedge, bed or statue stands (the grass grows long at its foot).
+          // otherwise covers exactly its own cells. vLawnX: x the share of garden lawn (clover), y how close a hedge, bed or statue stands (the grass grows long at its foot).
           if (vLawn.x < 0.5) discard;
           bool lowest = vShell < ${(LOWEST + 0.01).toFixed(3)};
           if (!lowest && vShell > 1.0 - lod) discard;
@@ -205,16 +204,13 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           float t = lawnBlade(p1, vShell, tall, lean0, run * bladeScale, gap, clipped ? 2.6 : 4.2, tint);
           // (The second field only where the first leaves a gap: the shell shows one blade either way.)
           if (!clipped && t < 0.0) t = lawnBlade(p1 + vec2(37.5, 11.5), vShell, tall, lean0, run * bladeScale, gap, 4.2, tint);
-          // Daisies and clover in the private gardens: round white heads with gold eyes at the tips
-          // of the grass, low trefoil leaves under it.
+          // Clover in the private gardens and the paddock: low trefoil leaves under the grass (no
+          // white heads, which read as spots strewn on the lawn: the owner, October 3).
           vec3 bloom = vec3(-1.0);
           if (vLawnX.x > 0.5 && lod < 0.6) {
             vec2 q = wp * 2.4, qi = floor(q), qf = fract(q);
             vec3 h = lawnHash(qi + 17.0);
-            if (h.z < 0.16) {
-              float d = length(qf - (0.25 + 0.5 * h.xy));
-              if (vShell > 0.82 && d < 0.16) bloom = d < 0.06 ? vec3(0.95, 0.78, 0.25) : vec3(0.96, 0.95, 0.9);
-            } else if (h.z > 0.8 && vShell < 0.45) {
+            if (h.z > 0.8 && vShell < 0.45) {
               vec2 o = qf - (0.25 + 0.5 * h.yx);
               float a = atan(o.y, o.x), rr = length(o);
               if (rr < 0.17 * (0.65 + 0.35 * abs(cos(a * 1.5)))) bloom = uLawnRoot * 2.1 * vec3(0.92, 1.05, 0.9);

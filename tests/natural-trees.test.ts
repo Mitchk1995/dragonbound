@@ -98,7 +98,7 @@ describe('grown trees: every kind', () => {
     for (const { kind, v, sk } of grown) {
       const sp = grownSpecies(kind, v), count = (order: number) => sk.limbs.filter((L) => L.order === order).length;
       expect(count(0)).toBe(1);
-      expect(count(-1)).toBe(sp.roots);
+      expect(sk.roots.length).toBe(sp.roots);
       expect(count(1)).toBeGreaterThanOrEqual(sp.limbs[0]);
       expect(count(1)).toBeLessThanOrEqual(sp.limbs[1]);
       expect(count(2)).toBeGreaterThan(15);
@@ -186,6 +186,50 @@ describe('grown trees: every kind', () => {
         up += nrm.getY(i);
       }
       expect(up / nrm.count).toBeGreaterThan(0.25);
+    }
+  });
+});
+
+describe('grown trees: roots and twigs', () => {
+  it("its roots swell out of the trunk's foot and go into the ground close by: no wood runs out over the grass", () => {
+    for (const { kind, sk, wood } of grown) {
+      const pos = wood.getAttribute('position'), reach = Math.max(...sk.roots.map((r) => r.reach));
+      expect(sk.roots.length, kind).toBe(sk.species.roots);
+      // (Just above the ground there is only the trunk's flared foot and its roots' shoulders.)
+      for (let i = 0; i < pos.count; i++) {
+        if (pos.getY(i) < 0.02 || pos.getY(i) > 0.3) continue;
+        expect(Math.hypot(pos.getX(i), pos.getZ(i)), kind).toBeLessThan(sk.species.trunk * 1.85 + reach);
+      }
+      for (const r of sk.roots) expect(r.reach, kind).toBeLessThan(sk.species.trunk * 1.5);
+    }
+  });
+
+  it('its roots end under the ground: on a slope of 1 in 2.5 the open rim of its foot stays buried on the downhill side', () => {
+    for (const { kind, wood } of grown) {
+      const pos = wood.getAttribute('position');
+      let rim = 0;
+      for (const [key, n] of edgeUse(wood)) {
+        if (n !== 1) continue;
+        for (const v of key.split(',').map(Number)) {
+          rim++;
+          expect(pos.getY(v) + 0.4 * Math.hypot(pos.getX(v), pos.getZ(v)), kind).toBeLessThan(-0.02);
+        }
+      }
+      expect(rim).toBeGreaterThan(0);
+    }
+  });
+
+  it('no bare twig pokes out of the crown to a lone tuft: every branch carries leaves along it, among the rest of the crown', () => {
+    for (const { kind, v, sk } of grown) {
+      const near = (p: THREE.Vector3, li: number, d: number) => sk.sprays.some((o) => o.limb !== li && (o.hang?.drop ?? 0) === 0 && o.at.distanceTo(p) < d);
+      sk.limbs.forEach((L, li) => {
+        if (L.order !== 2) return;
+        const len = L.arc[L.arc.length - 1], mine = sk.sprays.filter((q) => q.limb === li), at = `${kind} ${v + 1} branch ${li}`;
+        expect(mine.some((q) => q.s < len - 1e-6), at).toBe(true);
+        if (mine.length <= 8) expect(mine.some((q) => near(q.at, li, 1)), at).toBe(true);
+        const tip = L.path[L.path.length - 1];
+        expect(sk.sprays.some((o) => !(o.limb === li && o.s >= len - 1e-6) && (o.hang?.drop ?? 0) === 0 && o.at.distanceTo(tip) < 1.2), at).toBe(true);
+      });
     }
   });
 });

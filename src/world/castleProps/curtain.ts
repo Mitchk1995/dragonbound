@@ -7,20 +7,19 @@ import { studioEnv } from '../../render/env';
 import { COURSE, drumStones } from '../../render/masonry';
 import { addPatch } from '../../render/surface';
 import { chamferBox, hash01, taper } from '../../render/blocks';
-import { type Builder, archPane, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, BASE, BASE_COURSE, boardedLeaf, cb, CLIMBER_BLOOM, CLIMBER_IVY, CLIMBER_ROSE_LEAF, crownFoot, DARK, DECK, deep, DOORS, DRESS, dressedArch, drum, flag, GILT, glassMat, INLAY, IRON, LAMP_NAVY, lenOf, limb, livery, PAVE, pointedArch, pointedDoor, roomMat, spandrels, spire, spread, vOf, WOOD_D } from '../props';
+import { type Builder, archPane, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, BASE, BASE_COURSE, boardedLeaf, cb, CLIMBER_BLOOM, CLIMBER_IVY, CLIMBER_ROSE_LEAF, crownFoot, DARK, DECK, DOORS, DRESS, dressedArch, drum, flag, GILT, glassMat, INLAY, IRON, LAMP_NAVY, lenOf, limb, livery, PAVE, pointedArch, pointedDoor, roomMat, spandrels, spire, spread, vOf, WOOD_D } from '../props';
 
 /** A climber's leaf card: a flat pointed leaf (a squashed octahedron), lying flat to the wall. */
 /** A climber's leaf: a small flat card (five-sided, so a sheet of them reads as foliage, not tiles). */
 const CLIMBER_LEAF = new THREE.CircleGeometry(1, 7);
 
 /**
- * A drum's deep battered base course (the castle's one other block size, a metre high), leaning in
- * from radius `foot` to `head`: as many stones as the drum of radius r rising from it, turned half a
- * stone on its first course.
+ * A drum's battered base course (two courses of the stone, a metre high), leaning in from radius `foot`
+ * to `head`: as many stones as the drum of radius r rising from it, in the same bond, so its joints run
+ * on up into the drum's.
  */
 function drumFoot(k: ModelKit, g: THREE.Object3D, r: number, foot: number, head: number, x = 0, z = 0) {
-  const n = drumStones(r);
-  drum(k, g, { r: foot, rTop: head, y0: 0, y1: BASE_COURSE, n, course: BASE_COURSE, turn: Math.PI / n }, BASE, x, z);
+  drum(k, g, { r: foot, rTop: head, y0: 0, y1: BASE_COURSE, n: drumStones(r) }, BASE, x, z);
 }
 
 /**
@@ -631,7 +630,7 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
     const e0 = ends & 1 ? 0.7 : 0, e1 = ends & 2 ? 0.7 : 0, LL = L + e0 + e1, uc = (e1 - e0) / 2;
     // Cream ashlar on a deep base course of the same stone, a string course of its dressed stone on
     // both faces level with the towers' (CURTAIN_COURSES), and the crown that carries the wall walk.
-    deep(cb(k, g, [L, BASE_COURSE, T + 0.5], [0, BASE_COURSE / 2, 0], BASE, undefined, 0.06));
+    cb(k, g, [L, BASE_COURSE, T + 0.5], [0, BASE_COURSE / 2, 0], BASE, undefined, 0.06);
     cb(k, g, [L, H - BASE_COURSE, T], [0, BASE_COURSE + (H - BASE_COURSE) / 2, 0], ASHLAR, undefined, 0.04);
     cb(k, g, [L, COURSE, T + 0.12], [0, CURTAIN_COURSES[0] + COURSE / 2, 0], DRESS, undefined, 0.03);
     // (Where the walk runs into a tower, the last merlons stand well clear of its doorway.)
@@ -742,7 +741,7 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       k.mesh(g, geo, ASHLAR, [0, 0, 0]);
     }
     // (The deep base course runs a hair into the passage, so the jambs stand on it all across.)
-    for (const sx of [-1, 1]) deep(cb(k, g, [cx - P / 2 + 0.02, BASE_COURSE, D + 0.12], [sx * (P / 2 - 0.01 + (cx - P / 2 + 0.02) / 2), BASE_COURSE / 2, zc], BASE, undefined, 0.03));
+    for (const sx of [-1, 1]) cb(k, g, [cx - P / 2 + 0.02, BASE_COURSE, D + 0.12], [sx * (P / 2 - 0.01 + (cx - P / 2 + 0.02) / 2), BASE_COURSE / 2, zc], BASE, undefined, 0.03);
     // The ceremonial arch, the great door's twin, all in the castle's dressed stone: on both faces a
     // deep ring of voussoirs (0.6 deep, flush on one radius just proud of the face, every other one a
     // hair prouder), springing from moulded imposts on jambs set flush in the same plane, and a big

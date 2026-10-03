@@ -76,10 +76,11 @@ describe('pose audit: models loaded', () => {
       });
       return n;
     };
-    // Authored part counts are 86 / 121 / 40; merged they must drop to a few per rig part (measured 18 / 27 / 8), with rig parts intact.
-    // Cinderwing keeps a glowing throat plate on every neck segment and double-sided cheek frills, hence its extra meshes.
+    // Merged, every rig part drops to a few meshes (Cinderwing measured 29), with rig parts intact.
+    // Cinderwing's glowing cracks (on the body, neck and every leg), eyes and molten mouth each keep their own material,
+    // hence its extra meshes.
     expect(count('drakeling')).toBeLessThanOrEqual(20);
-    expect(count('cinderwing')).toBeLessThanOrEqual(28);
+    expect(count('cinderwing')).toBeLessThanOrEqual(31);
     expect(count('goblin')).toBeLessThanOrEqual(9);
     for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
   });
@@ -284,6 +285,27 @@ describe('pose audit: dragons', () => {
           expect((head.y - body.y) / Math.max(0.01, head.z - body.z), 'neck rise per forward unit').toBeLessThan(0.6);
         }
       });
+      if (name !== 'whelp') {
+        it('flying: the two wings never cross over the back, all through the flap', () => {
+          const m = makeModel(name);
+          const rig = new Rig(m.root);
+          const s = { ...newAnimState(), fly: 1, speed: 3 };
+          const v = new THREE.Vector3();
+          for (let f = 0; f < 90; f++) {
+            rig.update(1 / 60, s);
+            m.root.updateMatrixWorld(true);
+            for (const [side, sign] of [['wingL', 1], ['wingR', -1]] as const) {
+              let inmost = Infinity;
+              m.root.getObjectByName(side)!.traverse((o) => {
+                if (!(o instanceof THREE.Mesh)) return;
+                const pos = o.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) inmost = Math.min(inmost, v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).x * sign);
+              });
+              expect(inmost, `${side} frame ${f}`).toBeGreaterThan(0);
+            }
+          }
+        });
+      }
     });
   }
 });

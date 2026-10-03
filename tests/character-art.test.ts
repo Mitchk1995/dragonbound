@@ -1,7 +1,7 @@
 /**
  * Character and gear art rules from the owner's review, measured on the real exported GLBs: hair covers the whole
  * scalp (no bald patches at the temples), the tunic front is plain cloth (no floating V-neck wedge), kobolds are
- * short, drakelings have wings as wide as they are long, swords are long, every hairstyle is one sculpted piece, plate
+ * short, dragon wings are mirrored on the shoulder blades and span most of a drakeling's length, swords are long, every hairstyle is one sculpted piece, plate
  * stays a few bold blocks, the Emberforged set glows only in thin seams and its visor slit, swept and tied hair sit on
  * the head (no gap under their edge), and the Wyrmbone shoulders stay compact behind the hero.
  */
@@ -236,9 +236,22 @@ describe('creatures', () => {
   it('kobolds are short: well under two thirds of the hero', () => {
     expect(makeModel('kobold').height).toBeLessThan(makeModel('hero').height * 0.65);
   });
-  it('drakeling wings span about the length of its body, nose to tail tip', () => {
+  it('drakeling wings, raised as on its approved sheet, still span most of its length, nose to tail tip', () => {
     const s = extent(makeModel('drakeling').root);
-    expect(s.x).toBeGreaterThan(s.z * 0.9);
+    expect(s.x).toBeGreaterThan(s.z * 0.8);
+  });
+  it('dragon wings are mirrored and rooted on the shoulder blades: high on the back, over the forelegs', () => {
+    for (const name of ['drakeling', 'cinderwing']) {
+      const root = makeModel(name).root;
+      root.updateMatrixWorld(true);
+      const at = (part: string) => root.getObjectByName(part)!.getWorldPosition(new THREE.Vector3());
+      const [l, r, body, fore, hind] = [at('wingL'), at('wingR'), at('body'), at('legFL'), at('legBL')];
+      expect(l.x, `${name} wingL on the left`).toBeGreaterThan(0);
+      expect(l.x + r.x, `${name} wings mirrored`).toBeCloseTo(0, 4);
+      expect(l.y - r.y, `${name} wings level`).toBeCloseTo(0, 4);
+      expect(l.y, `${name} wings on the back`).toBeGreaterThan(body.y);
+      expect(l.z, `${name} wings over the forelegs`).toBeGreaterThan((fore.z + hind.z) / 2);
+    }
   });
 });
 

@@ -20,10 +20,11 @@ import type { Slot } from '../types';
  * point of interest, model, pose and panel and writes full-window PNGs plus report.json to
  * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
  * perf, memory, trees (tree style comparison and the grown oak, see treeLineup.ts; trees:oak for the oak alone,
- * trees:grown:<kind> for one grown kind's progress pictures), approved (approved artwork, see approvedInspect.ts),
+ * trees:grown:<kind> for one grown kind's progress pictures, trees:roots for their roots and crowns), approved (approved artwork, see approvedInspect.ts),
  * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts),
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
- * charactersInspect.ts).
+ * charactersInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), dragons (the
+ * drakeling and Cinderwing, see dragonInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
  * orbits round each: bailey-angles:hall-door+landing).
@@ -117,7 +118,14 @@ export async function runInspect(g: Game, suites: string) {
     const baileyAngles = suites.split(',').find((s) => s.startsWith('bailey-angles:'))?.slice(14).split('+');
     if (want('bailey') || rockOnly || baileyOnly || baileyAngles)
       report.bailey = await (await import('./castleInspect')).baileySuite(g, shot, rockOnly, baileyOnly ?? baileyAngles, !!baileyAngles);
+    // `cams:name@ex_ey_ez_lx_ly_lz_span+…`: free cameras over the keep (see camSuite).
+    const camArg = suites.split(',').find((s) => s.startsWith('cams:'));
+    if (camArg) report.cams = await (await import('./castleInspect')).camSuite(g, shot, camArg.slice(5));
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
+    // The light: the engine test's castle views and the play camera round the island and in every zone (explicit only:
+    // `lighting`, `lighting:keep` for the island alone, `lighting:cost` for what each part of the light costs, `lighting:quality` for switching quality mid-session).
+    const lightArg = suites.split(',').find((s) => s === 'lighting' || s.startsWith('lighting:'));
+    if (lightArg) report.lighting = await (await import('./lightingInspect')).lightingSuite(g, shot, lightArg === 'lighting:keep', lightArg === 'lighting:cost', lightArg === 'lighting:quality');
     if (suites.split(',').includes('memory')) report.memory = await (await import('./memoryCheck')).memoryCheck(g);
     if (want('effects')) await effectsSuite(g, shot);
     if (want('boss')) await bossSuite(g, shot);
@@ -136,6 +144,8 @@ export async function runInspect(g: Game, suites: string) {
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
     // The redesigned characters close up and at the play camera (explicit only: `characters`).
     if (suites.split(',').includes('characters')) await (await import('./charactersInspect')).charactersSuite(g, shot);
+    // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
+    if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).
     if (suites.split(',').includes('digits')) await (await import('./digitsInspect')).digitsSuite(g, shot);
     // The painted alphabets: names, portal titles, the zone plaque, the boss bar and a small-text test (explicit only: `font`).
@@ -195,8 +205,9 @@ function lumStats(g: Game): LumStats {
  * - cpuMs: update + render submission on the CPU;
  * - gpuMs: GPU time of the whole render (EXT_disjoint_timer_query_webgl2), the real render cost.
  * Wall-clock with a readPixels sync is NOT used: it quantises to the display's vsync period.
+ * `render` replaces update + draw (a free camera that the game's own update would move).
  */
-export async function perf(g: Game, n = 60): Promise<PerfStats> {
+export async function perf(g: Game, n = 60, render?: () => void): Promise<PerfStats> {
   const gl = g.renderer.getContext() as WebGL2RenderingContext;
   const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
   const cpu: number[] = [];
@@ -208,8 +219,11 @@ export async function perf(g: Game, n = 60): Promise<PerfStats> {
     const t0 = performance.now();
     const q = ext ? gl.createQuery() : null;
     if (q && ext) gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
-    g.update(0, 1 / 60);
-    g.draw();
+    if (render) render();
+    else {
+      g.update(0, 1 / 60);
+      g.draw();
+    }
     if (q && ext) {
       gl.endQuery(ext.TIME_ELAPSED_EXT);
       queries.push(q);
