@@ -32,11 +32,12 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   many-sided and no brick bends. And the stones must clearly stand out from the play camera: deeper joints and stronger
   shading, and real blocks standing proud of the wall wherever its outline shows the stones (tops, corners, arches,
   tower outlines), since painted depth cannot change an outline.
-- **Trees: pick B, "Natural", loosely.** Redo the trees at true size, no longer blocky, as the woodcutting ladder in
-  RuneScape's order: tree, oak, willow, maple, yew, magic. They need not be realistic: a mix of styles and a more cartoony
-  look are fine, and Mitchell is unsure what is best, so one oak is grown in the game in three looks (natural, cartoony
-  and a mix) for him to choose from before the rest follow. Everything else should get a nice texture too (the crops and
-  plants). He judged the first natural oak "decent".
+- **Trees: pick B, "Natural".** Redo the trees at true size, no longer blocky, as the woodcutting ladder in RuneScape's
+  order: tree, oak, willow, maple, yew, magic. After seeing the first grown oak he chose the natural, realistic look
+  ("i kinda like the realistic one") and dropped the cartoony and mixed versions planned for comparison. The rest of the
+  ladder follows in the same style. Cartoony and blocky stay for the characters, enemies and NPCs, because that is what
+  Claude models well. Everything else should get a nice texture too: the crops and plants, whose blocky beds look
+  toy-like beside the natural oak.
 - **Everything must make structural sense** (October 3): "it all has to make structural sense". His examples: the walled
   climb up to the landing "doesnt make sense the way it is built" and should have stairs, and the ledge road needs a wall
   on its other side too. He added that the insides of the buildings must work with their outsides, so the interiors are
@@ -112,10 +113,12 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 
 Where things stand (October 3):
 - **Castle:** after the fifth round of notes (see "The new look and the great keep" above), three jobs run side by side:
-  the stone finish on the castle as it stands, the castle-v4 blueprint around the great keep, and one natural oak as the
-  proof for the new trees. The review page, https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins
-  notes and picks options; a fixed note is marked `status: done` and drops off the page. Once the blueprint is approved
-  the castle is rebuilt to it, then the woodcutting trees follow.
+  the stone finish on the castle as it stands (now reworked for flat-stone towers and stones that stand out), the
+  castle-v4 blueprint around the great keep (now revised for stairs, walls, structural sense and interiors), and the
+  woodcutting trees (the natural oak is done; the other five follow in its style). The review page,
+  https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins notes and picks options; a fixed note is
+  marked `status: done` and drops off the page. Once the blueprint is approved the castle is rebuilt to it; the new
+  trees then replace the forests and garden trees.
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
   - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided (the castle-v4 plan may move it anyway).
