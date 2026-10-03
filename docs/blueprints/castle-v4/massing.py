@@ -6,7 +6,8 @@ castle-v4-massing.png is the overview angle of the bailey suite (src/dev/castleI
 today's curtain exactly as the review picture v5-overview.jpg. camera-*.png are the game's own camera
 (game.ts updateCamera: 21 up and 14 back per zoom step, 42 degree field of view) at the avenue, the
 great door, the bridge and the stables' door, and with `climb` at the stair's foot and head; plan.py lays
-them out with captions. `extra` adds check
+them out with captions, with `lookout` (the play camera on the south-west knoll) and `north` (from above the
+Veil to the north-west: the moat behind the keep and the slate roofs). `extra` adds check
 views (from the farm, the landing, the north, the west, and the play camera at the great hall's dais,
 where it lands inside the keep's front turret). Plain blocks, cylinders and cones in the castle's
 colours (trim in the same stone, a shade darker); the blue post is the 2 m hero.
@@ -18,7 +19,7 @@ D = json.load(open(os.path.join(HERE, 'design.json'), encoding='utf-8'))
 CY = D['conventions']['crown_world_y']
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 OUT = ARGS[0] if ARGS else HERE
-ONLY = set(ARGS[1:]) or {'overview', 'camera', 'climb'}
+ONLY = set(ARGS[1:]) or {'overview', 'camera', 'climb', 'lookout', 'north'}
 
 # ── scene, materials ───────────────────────────────────────────────────────
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -66,7 +67,7 @@ M = {k: mat(k, *v) for k, v in {
     'navy': ((61, 90, 142), 0.6), 'gold': ((214, 166, 70), 0.35, 0.8), 'lead': ((88, 108, 140), 0.6), 'deck': ((138, 132, 120),),
     'box': ((54, 100, 52),), 'leaf': ((70, 128, 60),), 'blossom': ((236, 170, 196),), 'bed': ((110, 82, 56),), 'fence': ((110, 76, 48),),
     'flag': ((47, 90, 208), 0.7), 'bronze': ((150, 98, 48), 0.4, 0.7), 'hero': ((40, 90, 230), 0.5), 'flower': ((226, 110, 150),),
-    'farm': ((122, 96, 62),), 'horse': ((120, 76, 44),), 'glass': ((60, 78, 104), 0.3),
+    'farm': ((122, 96, 62),), 'horse': ((120, 76, 44),), 'glass': ((60, 78, 104), 0.3), 'slate': ((70, 90, 132), 0.55),
 }.items()}
 
 
@@ -173,16 +174,21 @@ for h, poly in ((3, [[206, 104], [262, 100], [270, 130], [256, 156], [214, 160],
     flat([tuple(p) for p in poly], h, M['meadow'], f'level{h}-top')
 crown = [tuple(p) for p in D['crown']['outline']]
 Wt = D['water']
-moat = [tuple(p) for p in Wt['moat']['poly']]
+moat = [tuple(p) for p in Wt['moat']['counterscarp']]
 mo = Wt['moat']['outer']
 rock = prism(crown, 0, CY - 0.02, M['rock'], 'crown-rock')
 turf = prism(crown, CY - 0.4, CY, M['lawn'], 'crown-turf')
+# the moat rings the castle: cut everything inside its outer bank, then put back the bailey's rock inside the curtain
 cutter = prism(moat, Y(Wt['moat']['bed']), Y(1), M['water'], 'moat-cut')
 for ob in (rock, turf):
     cut_out(ob, cutter)
 bpy.data.objects.remove(cutter)
+cf = D['curtain']['faces']['outer']
+bailey_rock = [(cf['west_x'] + 0.1, cf['north_z'] + 0.1), (cf['east_x'] - 0.1, cf['north_z'] + 0.1), (cf['east_x'] - 0.1, cf['south_z'] - 0.1), (cf['west_x'] + 0.1, cf['south_z'] - 0.1)]
+prism(bailey_rock, Y(Wt['moat']['bed']), CY - 0.42, M['rock'], 'bailey-rock')
+prism(bailey_rock, CY - 0.4, CY, M['lawn'], 'bailey-turf')
 flat(moat, Y(Wt['moat']['surface']), M['water'], 'moat-water')
-for (ax, az, bx, bz) in ((mo['west_x'], mo['north_z'], mo['west_x'], mo['south_z']), (mo['west_x'], mo['south_z'], mo['east_x'], mo['south_z']), (mo['east_x'], mo['south_z'], mo['east_x'], mo['north_z'])):
+for (ax, az), (bx, bz) in zip(moat, moat[1:] + moat[:1]):
     obox(ax, az, bx, bz, 0.7, Y(-0.4), Y(0.3), M['trim'], 'coping')
 
 # falls, springs, pool, stream
@@ -193,7 +199,8 @@ for f in Wt['falls']:
         box(f['x'] - 0.5, f['z'] - f['w'] / 2, mo['west_x'], f['z'] + f['w'] / 2, Y(-2.6), Y(f['top']), M['water'], 'overflow')
         box(f['x'] - 1.2, f['z'] - f['w'] / 2, f['x'] - 0.5, f['z'] + f['w'] / 2, -14, Y(f['top']), M['foam'], 'west-fall')
 for s in Wt['springs']:
-    box(s['x'] - 0.7, mo['north_z'] - 0.2, s['x'] + 0.7, mo['north_z'] + 0.4, Y(Wt['moat']['surface']), Y(0.1), M['foam'], 'spring')
+    box(s['x'] - 0.7, s['z'] - 0.1, s['x'] + 0.7, s['z'] + 0.5, Y(Wt['moat']['surface']), Y(-0.5), M['foam'], 'spring')
+    box(s['x'] - 1.1, s['z'] + 0.5, s['x'] + 1.1, s['z'] + 2.0, Y(Wt['moat']['surface']), Y(Wt['moat']['surface']) + 0.05, M['foam'], 'spring-foam')
 pl = Wt['pool']
 cyl(pl['x'], pl['z'], pl['r'], 0.0, 0.08, M['water'], 32, 'pool')
 for (ax, az), (bx, bz) in zip(Wt['stream'], Wt['stream'][1:]):
@@ -217,8 +224,11 @@ def parapet(ax, az, bx, bz, h=1.1):
     obox(ax, az, bx, bz, 0.72, Y(h - 0.15), Y(h), M['trim'], 'coping')
 
 
-for key in ('ledge_road', 'ledge_walk', 'landing', 'lookout', 'gate_terrace'):
-    flat(rp(A[key]['rect']), Y(0.04), M['pave'], key)
+for key in ('ledge_road', 'ledge_walk', 'landing', 'lookout'):
+    flat([tuple(p) for p in A[key]['paving']], Y(0.04), M['pave'], key)
+flat(rp(A['gate_terrace']['rect']), Y(0.04), M['pave'], 'gate_terrace')
+# the gate bastion: built masonry from the rock at the cliff's foot, projecting beyond the natural brink
+box(*A['gate_terrace']['bastion'], 0.0, Y(0.0), M['curtain'], 'bastion')
 PA = A['parapets']
 pt = PA['top_world'] - PA['base_world']
 for ln in PA['lines']:
@@ -371,19 +381,45 @@ def building(r, floor, top, m):
         crenels(ax, az, bx, bz, 0.6, Y(top - 1.0), m)
 
 
+def slate_building(b):
+    """walls to the eaves, a steep slate roof along x between stone-coped gables, the gutter parapet on the north wall"""
+    x0, z0, x1, z1 = b['rect']
+    rf = b['roof']
+    ev, rg, zr = rf['eaves'], rf['ridge'], rf['ridge_z']
+    box(x0, z0, x1, z1, Y(b['floor']), Y(ev), M['cream'], 'walls')
+    box(x0 - 0.05, z1 - 0.1, x1 + 0.05, z1 + 0.35, Y(ev - 0.7), Y(ev), M['trim'], 'cornice')
+    sl = (rg - ev) / (zr - z0)
+    ov = 0.5
+    sec = [(z1 + ov, Y(ev - ov * sl)), (zr, Y(rg)), (z0 + 0.6, Y(ev + 0.6 * sl))]
+    gx0, gx1 = x0 + 0.6, x1 - 0.6
+    verts = [V(gx0, z, h) for z, h in sec] + [V(gx1, z, h) for z, h in sec]
+    mesh_obj('slate-roof', verts, [(0, 3, 4, 1), (1, 4, 5, 2), (0, 2, 5, 3), (0, 1, 2), (3, 5, 4)], M['slate'])
+    # the gables: wall triangles rising 0.35 above the slate, coped
+    tri = [(z0, Y(ev)), (z1, Y(ev)), (zr, Y(rg + 0.35))]
+    for gx in (x0, x1 - 0.6):
+        verts = [V(gx, z, h) for z, h in tri] + [V(gx + 0.6, z, h) for z, h in tri]
+        mesh_obj('gable', verts, [(0, 1, 2), (3, 5, 4), (0, 3, 4, 1), (1, 4, 5, 2), (2, 5, 3, 0)], M['cream'])
+    # the north parapet over the walk, the gutter behind it
+    box(x0, z0, x1, z0 + 0.6, Y(ev), Y(rf['north_parapet']), M['cream'], 'gutter-parapet')
+
+
 IN = {b['id']: b for b in D['interiors']['buildings']}
 for b in D['buildings']:
-    building(b['rect'], b['floor'], b['parapet_top'], M['cream'])
+    rf = b.get('roof', {})
+    if rf.get('kind') == 'slate':
+        slate_building(b)
+    else:
+        building(b['rect'], b['floor'], b['parapet_top'], M['cream'])
     for (x, z, h) in b.get('chimneys', []):
         box(x - 0.6, z - 0.6, x + 0.6, z + 0.6, Y(b['floor']), Y(h), M['cream'], 'chimney')
     if 'lantern' in b:
         x, z, h = b['lantern']
-        box(x - 1.3, z - 1.3, x + 1.3, z + 1.3, Y(b['parapet_top'] - 1.0), Y(h - 1.2), M['cream'], 'lantern')
-        cone(x, z, 1.8, Y(h - 1.2), Y(h + 0.6), M['navy'], 4, 'lantern-cap')
-    if 'bellcote' in b:
-        x, z, h = b['bellcote']
-        box(x - 1.0, z - 0.6, x + 1.0, z + 0.6, Y(b['parapet_top'] - 1.0), Y(h - 1.5), M['cream'], 'bellcote')
-        cone(x, z, 1.0, Y(h - 1.5), Y(h + 1.0), M['navy'], 8, 'bellcote-spire')
+        box(x - 1.3, z - 1.3, x + 1.3, z + 1.3, Y(rf['ridge'] - 1.5), Y(h - 2.0), M['cream'], 'lantern')
+        cone(x, z, 1.9, Y(h - 2.0), Y(h), M['slate'], 4, 'lantern-cap')
+    if 'fleche' in b:
+        x, z, h = b['fleche']
+        box(x - 0.7, z - 0.7, x + 0.7, z + 0.7, Y(rf['ridge'] - 1.0), Y(rf['ridge'] + 2.2), M['cream'], 'fleche')
+        cone(x, z, 0.95, Y(rf['ridge'] + 2.2), Y(h), M['slate'], 8, 'fleche-spire')
     x0, z0, x1, z1 = b['rect']
     ib = IN.get(b['id'], {})
     for w in ib.get('windows', []):
@@ -397,14 +433,21 @@ for b in D['buildings']:
         xs = sorted(x for w in ib['windows'] if not w.get('round') for x in w['xs'])
         for xa, xb in zip(xs, xs[1:]):
             if xb - xa > 2.5 and not any(xa < dd['at'][0] < xb and abs(dd['at'][0] - (xa + xb) / 2) < 1.5 for dd in ib['doors'] if 'at' in dd):
-                box((xa + xb) / 2 - 0.4, z1, (xa + xb) / 2 + 0.4, z1 + 0.6, Y(b['floor']), Y(b['parapet_top'] - 2.5), M['cream'], 'buttress')
+                box((xa + xb) / 2 - 0.4, z1, (xa + xb) / 2 + 0.4, z1 + 0.6, Y(b['floor']), Y(rf.get('eaves', b['parapet_top']) - 1.2), M['cream'], 'buttress')
 
 # ── the keep ───────────────────────────────────────────────────────────────
 K = D['keep']
 building(K['rect'], K['floor'], K['parapet_top'], M['keep'])
+# the back half stands in the moat: a battered plinth from the bed, the walls on it up to the terrace's level
+kx0, kz0, kx1, _ = K['rect']
+box(kx0 - 0.4, kz0 - 0.4, kx1 + 0.4, cf['north_z'] + 0.6, Y(Wt['moat']['bed']), Y(-0.6), M['trim'], 'keep-plinth')
+box(kx0, kz0, kx1, cf['north_z'] + 1.0, Y(-0.6), Y(K['floor']), M['keep'], 'keep-footing')
 for t in K['turrets']:
     top = t['parapet_top'] - 1.0
-    cyl(t['x'], t['z'], t['r'], Y(0), Y(top - 1.8), M['keep'], 32, 'turret')
+    back = t['z'] < cf['north_z']
+    if back:
+        cyl(t['x'], t['z'], t['r'] + 0.4, Y(Wt['moat']['bed']), Y(-0.6), M['trim'], 32, 'plinth')
+    cyl(t['x'], t['z'], t['r'], Y(-0.6 if back else 0), Y(top - 1.8), M['keep'], 32, 'turret')
     cyl(t['x'], t['z'], t['r'] + 0.15, Y(top - 1.8), Y(top - 1.4), M['trim'], 32, 'corbels')
     cyl(t['x'], t['z'], t['r'] + 0.5, Y(top - 1.4), Y(top), M['keep'], 32, 'crown')
     ring_merlons(t['x'], t['z'], t['r'] + 0.5, Y(top), M['keep'], 14)
@@ -536,6 +579,11 @@ if 'camera' in ONLY:
     play('camera-door.png', 76, 46, 2.0, 1.0)
     play('camera-bridge.png', 76, 106, 0.0, 1.0)
     play('camera-yards.png', 56, 72, 0.0, 1.2)
+if 'lookout' in ONLY:
+    play('camera-lookout.png', *D['camera']['views_rendered']['lookout'])
+if 'north' in ONLY:
+    hero.location = V(76, 82, Y(0))
+    shoot('view-north.png', (18, -34, Y(36)), (74, 24, Y(8)), 1200, 675)
 if 'climb' in ONLY:
     for name, key in (('camera-stair-foot.png', 'stair_foot'), ('camera-stair-head.png', 'stair_head')):
         play(name, *D['camera']['views_rendered'][key])

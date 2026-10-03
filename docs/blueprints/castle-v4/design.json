@@ -1,6 +1,6 @@
 {
  "title": "Castle v4: the Great Keep",
- "status": "proposal for review, revised so every part makes structural sense and every building inside fits its outside (design only, nothing built)",
+ "status": "proposal for review, revised so every part makes structural sense and every building inside fits its outside; October 3 second round: the moat rings all four sides, the rock's edges are natural with the built work on them, and the great hall and the chapel take steep slate roofs (design only, nothing built)",
  "conventions": {
   "cells": "island cells, 1 cell = 1 m; x east, z south (north is -Z), as src/data/zoneMaps.ts and CASTLE_PLAN",
   "rects": "[x0, z0, x1, z1] in cell edges",
@@ -12,7 +12,7 @@
   "cross_z": 70.0
  },
  "curtain": {
-  "note": "One rectangle, symmetric about the main axis; wall walk at +7.06 between crenellated parapets. Every tower projects outward into the moat, so the inside faces stay straight and the buildings, gardens and yards stand right against them (no slots between a building and the wall). The north runs meet the keep's flanks square, between its turrets, and the walk enters the keep at its gallery level, which is the walk's own level.",
+  "note": "One rectangle, symmetric about the main axis, standing in the moat on all four sides; wall walk at +7.06 between crenellated parapets. Every tower projects outward into the moat, so the inside faces stay straight and the buildings, gardens and yards stand right against them (no slots between a building and the wall). The north runs meet the keep's flanks square, between its turrets, and the walk enters the keep at its gallery level, which is the walk's own level.",
   "centre_lines": {
    "west_x": 32.0,
    "east_x": 120.0,
@@ -245,7 +245,7 @@
    39
   ],
   "floor": 2.0,
-  "note": "A massive square keep on the axis. Its front half stands on the raised terrace; its back half stands on the crown outside the north curtain, its back wall 4.9 m beyond the curtain and its back turrets 5 m in from the brink, on solid rock. Where it stands on the crown its walls rise from a 2 m battered plinth to the terrace's level. The north runs of the curtain meet its flanks square, between its turrets. Four round corner turrets rise a stage above its parapet to blue spires; a projecting frontispiece on the axis carries the great door and the showpiece window between two slender pinnacles.",
+  "note": "A massive square keep on the axis. Its front half stands on the raised terrace; its back half stands on the crown outside the north curtain, its back wall 4.9 m beyond the curtain, standing in the moat: the water passes behind it in a basin 5 m clear of its back turrets, and its back half rises straight out of the water on a battered plinth founded on the moat's rock bed, as the towers do. The north runs of the curtain meet its flanks square, between its turrets. Four round corner turrets rise a stage above its parapet to blue spires; a projecting frontispiece on the axis carries the great door and the showpiece window between two slender pinnacles.",
   "storeys": [
    {
     "floor": 2.0,
@@ -581,7 +581,8 @@
   },
   "plinth": {
    "top": 2.0,
-   "note": "battered, round the back half and the flanks outside the curtain, where the keep stands on the crown at 0"
+   "bed": -4.2,
+   "note": "battered, round the back half and the flanks outside the curtain, from the moat's bed through the water (-2) to the terrace's level; inside it the back of the throne hall's floor stands on a vaulted undercroft on the rock"
   },
   "turret_stairs": "each front turret holds a spiral stair, its door on the hall stair's half landing (+4.54), climbing past the great chamber to the roof deck and the turret's own deck: its slit lights step up the drum facing the bailey; the back turrets hold a garderobe and a closet off each storey"
  },
@@ -764,7 +765,12 @@
      15.0
     ]
    ],
-   "doors": "onto the terrace at +2 (its floor); a hatch into the hall's screens passage"
+   "doors": "onto the terrace at +2 (its floor); a hatch into the hall's screens passage",
+   "roof": {
+    "kind": "flat",
+    "deck": 10.3,
+    "note": "flat lead roof behind battlements: the range's two low ends, so the eye climbs from their battlements over the hall's and the chapel's slate to the keep"
+   }
   },
   {
    "id": "great-hall",
@@ -775,16 +781,30 @@
     36.0
    ],
    "floor": 2.0,
-   "parapet_top": 14.0,
+   "parapet_top": 13.6,
    "role": "hall",
-   "note": "today's residence range turned round and built against the north curtain: the screens passage at the west end with the minstrels' gallery over it, the hall open to its roof with its central hearth under the lantern and long tables, the high table on the dais at the keep end",
+   "note": "today's residence range turned round and built against the north curtain under a steep blue slate roof: the screens passage at the west end with the minstrels' gallery over it, the hall open to its timber roof with its central hearth under the lantern on the ridge and long tables, the high table on the dais at the keep end",
    "windows": "three tall paired windows between buttresses, the east one over the high table; the hall door under a porch at the screens end",
    "lantern": [
     55.75,
-    29.0,
-    17.0
+    29.05,
+    24.6
    ],
-   "doors": "the hall door under a porch at the screens (west) end, onto the terrace at +2; the dais door into the keep at +2"
+   "doors": "the hall door under a porch at the screens (west) end, onto the terrace at +2; the dais door into the keep at +2",
+   "roof": {
+    "kind": "slate",
+    "eaves": 12.0,
+    "ridge": 20.9,
+    "pitch": 52,
+    "ridge_along": "x",
+    "ridge_z": 29.05,
+    "gables": "stone-coped gables at both ends: the hall's west gable rises over the kitchen's roof deck, its east end abuts the keep under a lead flashing (the chapel's mirror)",
+    "south_eaves": "open eaves on a corbelled cornice, no battlements, so the slate shows from the bailey",
+    "north_gutter": "the north slope drains into a lead gutter at its foot (+12) behind a parapet to +13.6 on the back wall, over the wall walk; the gutter spouts through the curtain into the moat, so the walk stays dry",
+    "north_parapet": 13.6,
+    "note": "the slopes span the walls' outer faces (z 22.1 to 36), 52 degrees, so the ridge stands 7 m under the keep's parapet and level with the corner towers' spire tips (21.5)"
+   },
+   "lantern_note": "a timber louvre on the ridge over the central hearth, slate-capped, letting the smoke out (its base on the ridge at +20.9, its cap's tip +24.6)"
   },
   {
    "id": "chapel",
@@ -795,16 +815,30 @@
     36.0
    ],
    "floor": 2.0,
-   "parapet_top": 14.0,
+   "parapet_top": 13.6,
    "role": "chapel",
-   "note": "the chapel, built against the north curtain, open to its roof: the nave, the chancel and the altar at its east end, the lord's pew at the keep end; a slender bellcote over the south door",
+   "note": "the chapel, built against the north curtain under a steep blue slate roof, open to a boarded wagon ceiling: the nave, the chancel and the altar at its east end, the lord's pew at the keep end; a slender slate flèche on the ridge over the south door",
    "windows": "four tall lancets between buttresses (three to the nave, one to the chancel) and one rose window over the south door",
-   "bellcote": [
+   "doors": "the south door under the rose window, onto the terrace at +2; the lord's door from the keep at +2",
+   "roof": {
+    "kind": "slate",
+    "eaves": 12.0,
+    "ridge": 20.9,
+    "pitch": 52,
+    "ridge_along": "x",
+    "ridge_z": 29.05,
+    "gables": "stone-coped gables at both ends: the west end abuts the keep under a lead flashing, the east gable rises over the solar's roof deck",
+    "south_eaves": "open eaves on a corbelled cornice, no battlements, so the slate shows from the bailey",
+    "north_gutter": "the north slope drains into a lead gutter at its foot (+12) behind a parapet to +13.6 on the back wall, over the wall walk; the gutter spouts through the curtain into the moat, so the walk stays dry",
+    "north_parapet": 13.6,
+    "note": "the slopes span the walls' outer faces (z 22.1 to 36), 52 degrees, so the ridge stands 7 m under the keep's parapet and level with the corner towers' spire tips (21.5)"
+   },
+   "fleche": [
     98.5,
-    29.0,
-    19.0
+    29.05,
+    27.0
    ],
-   "doors": "the south door under the rose window, onto the terrace at +2; the lord's door from the keep at +2"
+   "fleche_note": "a slender open timber bell turret on the ridge over the south door, its slate spire's tip at +27, under the keep's parapet"
   },
   {
    "id": "solar",
@@ -831,7 +865,12 @@
      15.0
     ]
    ],
-   "doors": "onto the terrace at +2"
+   "doors": "onto the terrace at +2",
+   "roof": {
+    "kind": "flat",
+    "deck": 10.5,
+    "note": "flat lead roof behind battlements: the range's two low ends, so the eye climbs from their battlements over the hall's and the chapel's slate to the keep"
+   }
   },
   {
    "id": "stables",
@@ -1270,68 +1309,81 @@
   }
  ],
  "water": {
-  "note": "Two springs break out of the rock at the moat's head walls beside the north corner towers. The moat rings the west, south and east walls at one level, 2 m below the turf, held there by a weir: on the axis under the gate terrace the water slips over the weir into an arched culvert, runs south under the terrace and pours from an arch in the bastion's face as one fall to the pool at the rock's foot, from which the stream runs on to the pond. A sluice in the west arm's outer bank, its sill at the same level, feeds today's west fall off the brink into the Veil. The north side has no moat: the keep and the north curtain stand on the brink of the tear face.",
+  "note": "Two springs break out of the rock behind the keep, through arched spouts in the moat's north bank. The moat rings all four sides at one level, 2 m below the turf, held there by a weir: the water runs round both sides of the castle to the axis under the gate terrace, slips over the weir into an arched culvert, runs south under the terrace and pours from an arch in the bastion's face as one fall to the pool at the rock's foot, from which the stream runs on to the pond. A sluice in the west arm's outer bank, its sill at the same level, feeds today's west fall off the brink into the Veil. Behind the keep the moat widens into a basin, so the keep's back rises straight out of the water like the towers; a rim of natural rock 3 to 4 m wide carries the north bank, the crown grown north for it.",
   "moat": {
-   "poly": [
+   "counterscarp": [
     [
      24.4,
-     14.0
-    ],
-    [
-     30.9,
-     14.0
-    ],
-    [
-     30.9,
-     101.1
-    ],
-    [
-     121.1,
-     101.1
-    ],
-    [
-     121.1,
-     14.0
-    ],
-    [
-     127.6,
-     14.0
-    ],
-    [
-     127.6,
      109.0
     ],
     [
      24.4,
+     16.4
+    ],
+    [
+     27.4,
+     13.4
+    ],
+    [
+     51.0,
+     13.4
+    ],
+    [
+     57.5,
+     6.0
+    ],
+    [
+     94.5,
+     6.0
+    ],
+    [
+     101.0,
+     13.4
+    ],
+    [
+     124.6,
+     13.4
+    ],
+    [
+     127.6,
+     16.4
+    ],
+    [
+     127.6,
      109.0
     ]
    ],
+   "counterscarp_note": "the outer bank as a closed loop, west, north and east; its north-west and north-east corners cut at 45 degrees round the corner towers' plinths; behind the keep it splays out into a basin",
+   "scarp": "the curtain's outer faces (x 30.9 and 121.1, z 19.9 and 101.1) and the keep's back half (x 64 to 88, z 15 to 19.9, its back turrets to z 11.4)",
    "outer": {
     "west_x": 24.4,
     "east_x": 127.6,
     "south_z": 109.0,
-    "north_z": 14.0
+    "north_z": 13.4,
+    "basin_north_z": 6.0
    },
    "width_sides": 6.5,
+   "width_north": 6.5,
    "width_south": 7.9,
+   "behind_keep": "5.0 m of water behind the back turrets' plinths (z 6 to 11), 8.6 m behind the back wall's (z 6 to 14.6), 6.5 m along the keep's flanks to the splays",
    "surface": -2.0,
    "bed": -4.2,
    "banks": {
-    "counterscarp": "the outer bank is dressed masonry from the bed to a coping level with the turf; along the ledge, the gate terrace, the landing and the lookout the inner parapet stands on that coping",
-    "scarp": "the curtain, its towers and the gatehouse's drums rise straight out of the water on battered plinths founded on the bed",
-    "heads": "each arm ends at a head wall at z 14, the springs pouring from clefts in it; the berms between the arms and the brink are shut off from the approach by walls, so no one walks a drop without a parapet"
+    "counterscarp": "the outer bank is dressed masonry from the bed to a coping level with the turf, all the way round; along the ledge, the gate terrace, the landing and the lookout the inner parapet stands on that coping",
+    "scarp": "the curtain, its towers, the gatehouse's drums and the keep's back half rise straight out of the water on battered plinths founded on the bed",
+    "rim": "beyond the bank on the west, north and east a rim of natural rock and turf runs to the brink (3 m at least); no one walks it: the landing's and the lookout's walls shut it off at the south"
    }
   },
   "springs": [
    {
-    "x": 25.6,
-    "z": 14.0,
-    "note": "out of a mossy cleft in the west arm's head wall, spilling two metres into the moat"
+    "x": 59.5,
+    "z": 6.0,
+    "note": "out of a mossy cleft in the rock behind the keep, through an arched spout in the north bank, spilling two metres into the basin"
    },
    {
-    "x": 126.4,
-    "z": 14.0,
-    "note": "its mirror at the east arm's head"
+    "x": 92.5,
+    "z": 6.0,
+    "note": "its mirror"
    }
   ],
   "outlet": {
@@ -1355,12 +1407,12 @@
    },
    {
     "id": "west-fall",
-    "x": 21.0,
+    "x": 20.8,
     "z": 81.0,
     "top": -2.0,
     "bottom": -60.0,
     "w": 2.5,
-    "note": "today's west fall, fed by a sluice in the west arm's outer bank (its sill at the weir's level) and a rock channel across the berm to the brink, falling into the Veil"
+    "note": "today's west fall, fed by a sluice in the west arm's outer bank (its sill at the weir's level) and a rock channel across the rim to the brink, falling into the Veil"
    }
   ],
   "pool": {
@@ -1409,10 +1461,11 @@
    "z": 81.0,
    "sill": -2.0
   },
-  "level_logic": "two springs in, two outlets at one sill level (-2.0): the weir under the gate terrace takes almost all of it, the west sluice the rest, so the moat stands 2 m below the turf and 2.2 m deep whatever the springs bring"
+  "level_logic": "two springs in behind the keep, two outlets at one sill level (-2.0): the weir under the gate terrace takes almost all of it, the west sluice the rest, so the moat stands 2 m below the turf and 2.2 m deep whatever the springs bring; the water runs round both arms from the basin to the weir, so none of it stands still",
+  "roof_water": "the slate roofs' north gutters and the keep's roof deck drain by spouts through the north curtain and the keep's back wall into the moat"
  },
  "approach": {
-  "note": "From the portal court the ore lane runs west along the foot of the castle rock to the foot of the climb under its south-east corner. The climb is a stone stair of four flights of 17 steps: two north between walls to a turning landing against the rock, two west along the rock face to the ledge, 11 m in all. Two lamp pillars stand at its head. The ledge road runs west between two walls, the moat below the inner one and the cliff below the outer one, to the gate terrace on the axis, where a bridge of two stone arches crosses the moat to the gate. East of the stair's head the landing is a walled terrace over the court; west of the gate terrace the ledge walk runs between the same two walls to the lookout, so the south front is symmetric about the gate. Everything from the stair's head to the gate is level with the crown.",
+  "note": "From the portal court the ore lane runs west along the foot of the castle rock to the foot of the climb under its south-east corner. The climb is a stone stair of four flights of 17 steps: two north between walls to a turning landing against the rock, two west along the rock face to the ledge, 11 m in all. Two lamp pillars stand at its head. The ledge road runs west between two walls, the moat below the inner one and the cliff below the outer one, to the gate terrace on the axis, where a bridge of two stone arches crosses the moat to the gate. East of the stair's head the landing is a walled terrace over the court; west of the gate terrace the ledge walk runs between the same two walls to the lookout, so the south front balances about the gate. The inner wall is straight, on the moat's coping; the outer wall follows the rock's natural brink in straight runs a pier to a pier, so the ledge is wider here and narrower there, a strip of turf between the paved way and the outer wall where the rock swells. Everything from the stair's head to the gate is level with the crown.",
   "levels": "world heights: the court, the ore lane and the stair's foot at 0; the ledge, the landing, the gate terrace, the bridge and the gate at 11",
   "gate_terrace": {
    "rect": [
@@ -1427,7 +1480,7 @@
     86.0,
     119.5
    ],
-   "note": "the middle of the ledge widened into a bastion that projects 3.5 m over the cliff: its west, south and east faces are battered masonry founded on the rock at the cliff's foot, carrying the parapet; the culvert runs under it and the fall pours from the arch in its south face; two lamps, two banner poles at the bridge's foot",
+   "note": "the middle of the ledge widened into a bastion that projects 2.5 m beyond the natural brink: its west, south and east faces are battered masonry founded on the rock at the cliff's foot, carrying the parapet; the culvert runs under it and the fall pours from the arch in its south face; two lamps, two banner poles at the bridge's foot",
    "lamps": [
     [
      70.0,
@@ -1481,47 +1534,131 @@
    "note": "two segmental stone arches, one pier in the middle of the moat founded on its bed (pointed cutwaters east and west, where the water comes from), the south abutment the gate terrace's bank over the culvert, the north end landing at the gate's threshold between the drums; parapets both sides ending on piers"
   },
   "ledge_road": {
-   "rect": [
-    86.0,
-    109.0,
-    117.8,
-    116.0
+   "paving": [
+    [
+     86.0,
+     109.0
+    ],
+    [
+     113.9,
+     109.0
+    ],
+    [
+     113.9,
+     114.6
+    ],
+    [
+     86.0,
+     114.6
+    ]
    ],
    "clear": [
     109.6,
-    115.4
+    114.6
    ],
-   "walls": "the inner wall stands on the moat's outer bank, the outer wall on the brink of the cliff (its outer face flush with a masonry facing that caps the rock); one coping line, piers at every end and every 8 m, lamps on the outer wall's piers"
+   "walls": "the inner wall stands on the moat's outer bank, straight; the outer wall stands on the brink, following the rock in runs of 4 to 7 m with a pier at every angle, its outer face flush with the rock face below; lamps on its piers. Between the paved way (5 m clear) and the outer wall a turf verge 0.5 to 2.5 m wide follows the rock"
   },
   "landing": {
-   "rect": [
-    117.8,
-    109.0,
-    131.0,
-    116.0
+   "paving": [
+    [
+     113.9,
+     109.0
+    ],
+    [
+     132.4,
+     109.0
+    ],
+    [
+     131.9,
+     111.2
+    ],
+    [
+     130.4,
+     115.4
+    ],
+    [
+     118.1,
+     115.4
+    ],
+    [
+     118.1,
+     116.0
+    ],
+    [
+     113.9,
+     116.0
+    ]
    ],
-   "note": "the walled terrace at the stair's head over the court: walled on the moat side (its wall running on across the end of the east berm to the brink), on the east brink and on the south brink over the stair; a bench and two lamps"
+   "note": "the walled terrace at the stair's head over the court, paved to its walls: walled on the moat side (its wall running on across the end of the east rim to the brink), along the rock's natural east brink in two runs, and on the dressed rock face over the stair; a bench and two lamps"
   },
   "ledge_walk": {
-   "rect": [
-    34.2,
-    109.0,
-    66.0,
-    116.0
+   "paving": [
+    [
+     34.0,
+     109.0
+    ],
+    [
+     66.0,
+     109.0
+    ],
+    [
+     66.0,
+     114.6
+    ],
+    [
+     34.0,
+     114.6
+    ]
    ],
-   "note": "the road's mirror west of the gate terrace, between the same two walls"
+   "note": "the road's mirror west of the gate terrace, between the same two walls, its outer wall following the brink"
   },
   "lookout": {
-   "rect": [
-    21.0,
-    109.0,
-    34.2,
-    116.0
+   "paving": [
+    [
+     21.9,
+     109.0
+    ],
+    [
+     43.0,
+     109.0
+    ],
+    [
+     43.0,
+     114.6
+    ],
+    [
+     40.0,
+     115.2
+    ],
+    [
+     37.0,
+     117.0
+    ],
+    [
+     33.6,
+     118.9
+    ],
+    [
+     29.0,
+     120.6
+    ],
+    [
+     25.0,
+     119.8
+    ],
+    [
+     22.3,
+     117.0
+    ],
+    [
+     21.5,
+     112.5
+    ]
    ],
-   "note": "the landing's mirror: a walled terrace over the farm and the Veil, a bench and two lamps"
+   "note": "a walled terrace on the rock's south-west knoll over the farm and the Veil: its wall follows the knoll's rim in five straight runs, a pier at every angle, standing on the rock; paved to its walls, the paving narrowing in a curve into the ledge walk where the knoll falls back; a bench and two lamps"
   },
   "parapets": {
-   "note": "crown-level parapets: 0.6 thick, 1.1 high over the paving (world 11 to 12.1), coped, piers at every end and corner and every 8 m",
+   "note": "crown-level parapets: 0.6 thick, 1.1 high over the paving (world 11 to 12.1), coped, piers at every end and every angle and at least every 8 m; the inner lines are straight on the moat's coping, the outer lines follow the brink about 0.4 m in",
    "base_world": 11.0,
    "top_world": 12.1,
    "t": 0.6,
@@ -1530,7 +1667,7 @@
      "id": "inner-west",
      "pts": [
       [
-       21.0,
+       21.6,
        109.3
       ],
       [
@@ -1538,7 +1675,7 @@
        109.3
       ]
      ],
-     "note": "on the moat's outer bank; across the west berm's end at the lookout"
+     "note": "on the moat's outer bank; across the west rim's end at the lookout"
     },
     {
      "id": "inner-east",
@@ -1548,25 +1685,75 @@
        109.3
       ],
       [
-       131.0,
+       132.3,
        109.3
       ]
      ],
-     "note": "on the moat's outer bank; across the east berm's end at the landing"
+     "note": "on the moat's outer bank; across the east rim's end at the landing"
     },
     {
-     "id": "outer",
+     "id": "outer-west",
      "pts": [
       [
-       21.0,
-       115.7
+       21.6,
+       109.6
+      ],
+      [
+       21.2,
+       112.5
+      ],
+      [
+       22.0,
+       117.2
+      ],
+      [
+       24.8,
+       120.2
+      ],
+      [
+       29.0,
+       121.0
+      ],
+      [
+       34.0,
+       119.2
+      ],
+      [
+       40.0,
+       117.6
+      ],
+      [
+       46.0,
+       118.2
+      ],
+      [
+       53.0,
+       117.2
+      ],
+      [
+       60.0,
+       118.0
       ],
       [
        66.3,
-       115.7
+       116.8
       ],
       [
        66.3,
+       119.2
+      ],
+      [
+       76.0,
+       119.2
+      ]
+     ],
+     "note": "round the lookout's knoll and along the brink to the gate bastion and round its west half"
+    },
+    {
+     "id": "outer-east",
+     "pts": [
+      [
+       76.0,
        119.2
       ],
       [
@@ -1575,54 +1762,52 @@
       ],
       [
        85.7,
-       115.7
+       116.6
       ],
       [
-       114.2,
+       90.0,
+       117.2
+      ],
+      [
+       97.0,
+       116.4
+      ],
+      [
+       104.0,
+       117.0
+      ],
+      [
+       110.0,
+       116.2
+      ],
+      [
+       113.9,
        115.7
       ]
      ],
-     "note": "on the brink, round the gate bastion, to the stair's head"
+     "note": "round the bastion's east half and along the brink to the stair's head"
     },
     {
      "id": "outer-landing",
      "pts": [
       [
-       117.8,
+       118.1,
        115.7
       ],
       [
-       131.0,
+       130.7,
        115.7
+      ],
+      [
+       132.2,
+       111.0
+      ],
+      [
+       132.3,
+       109.6
       ]
      ],
-     "note": "the landing's south wall on the brink over the stair"
-    },
-    {
-     "id": "lookout-end",
-     "pts": [
-      [
-       21.3,
-       109.6
-      ],
-      [
-       21.3,
-       115.4
-      ]
-     ]
-    },
-    {
-     "id": "landing-end",
-     "pts": [
-      [
-       130.7,
-       109.6
-      ],
-      [
-       130.7,
-       115.4
-      ]
-     ]
+     "note": "the landing's walls over the stair and along the east brink"
     }
    ],
    "bridge": [
@@ -1655,16 +1840,16 @@
    ],
    "lamps": [
     [
-     27.6,
-     115.7
+     29.0,
+     121.0
     ],
     [
-     49.6,
-     115.7
+     46.0,
+     118.2
     ],
     [
-     102.4,
-     115.7
+     104.0,
+     117.0
     ],
     [
      124.4,
@@ -1950,71 +2135,211 @@
   }
  },
  "crown": {
-  "note": "The crown grows to carry the moat and the ledge: north to the tear face (the keep's back turrets 5 m in from the brink), west and east to x 21 and 131 (symmetric about the axis), south to z 116 along the ledge, with the gate bastion projecting to 119.5. Its outline stays inside the island's everywhere. Its faces are today's natural mossy rock; only the gate bastion and the stair are built masonry.",
+  "note": "The crown grows to carry the moat all round and the ledge: north far enough that a rim of rock 3 to 4 m wide carries the moat's north bank behind the keep, west and east to about x 21 and 132, south to the ledge's natural brink. Its edge is natural mossy rock, never a ruled line: it wanders a metre or two in and out, swells into a knoll at the south-west corner (the lookout) and round the landing at the south-east. Its outline stays inside the island's everywhere. Only the gate bastion and the climb are built masonry; where the climb's last two flights run along the rock, the rock face is dressed straight (z 116) so the stair's fill bears against it.",
   "outline": [
    [
     21.5,
-    11.5
-   ],
-   [
-    30.0,
-    7.5
-   ],
-   [
-    40.0,
-    6.5
-   ],
-   [
-    60.0,
-    6.0
-   ],
-   [
-    76.0,
-    6.0
-   ],
-   [
-    92.0,
-    8.0
-   ],
-   [
-    100.0,
     11.0
    ],
    [
+    27.0,
+    8.2
+   ],
+   [
+    36.0,
+    6.8
+   ],
+   [
+    46.0,
+    5.0
+   ],
+   [
+    54.0,
+    3.2
+   ],
+   [
+    64.0,
+    2.4
+   ],
+   [
+    76.0,
+    2.0
+   ],
+   [
+    88.0,
+    2.4
+   ],
+   [
+    97.0,
+    3.2
+   ],
+   [
+    103.0,
+    7.0
+   ],
+   [
     112.0,
-    8.5
+    8.0
    ],
    [
-    125.0,
-    10.7
+    122.0,
+    9.6
+   ],
+   [
+    130.5,
+    12.6
+   ],
+   [
+    132.4,
+    20.0
+   ],
+   [
+    131.6,
+    30.0
+   ],
+   [
+    133.2,
+    40.0
+   ],
+   [
+    132.0,
+    50.0
+   ],
+   [
+    133.6,
+    58.0
+   ],
+   [
+    132.2,
+    68.0
+   ],
+   [
+    131.4,
+    78.0
+   ],
+   [
+    132.8,
+    88.0
+   ],
+   [
+    132.0,
+    98.0
+   ],
+   [
+    133.2,
+    105.0
+   ],
+   [
+    132.6,
+    111.0
    ],
    [
     131.0,
-    13.0
+    116.0
    ],
    [
-    131.0,
+    114.0,
     116.0
+   ],
+   [
+    110.0,
+    116.6
+   ],
+   [
+    104.0,
+    117.4
+   ],
+   [
+    97.0,
+    116.8
+   ],
+   [
+    90.0,
+    117.6
    ],
    [
     86.0,
-    116.0
-   ],
-   [
-    86.0,
-    119.5
+    117.0
    ],
    [
     66.0,
-    119.5
+    117.2
    ],
    [
-    66.0,
-    116.0
+    60.0,
+    118.4
    ],
    [
-    21.0,
-    116.0
+    53.0,
+    117.6
+   ],
+   [
+    46.0,
+    118.6
+   ],
+   [
+    40.0,
+    118.0
+   ],
+   [
+    34.0,
+    119.6
+   ],
+   [
+    29.0,
+    121.4
+   ],
+   [
+    24.5,
+    120.6
+   ],
+   [
+    21.6,
+    117.4
+   ],
+   [
+    20.8,
+    112.5
+   ],
+   [
+    21.4,
+    107.0
+   ],
+   [
+    20.6,
+    100.0
+   ],
+   [
+    21.8,
+    90.0
+   ],
+   [
+    20.8,
+    80.0
+   ],
+   [
+    21.6,
+    70.0
+   ],
+   [
+    20.6,
+    60.0
+   ],
+   [
+    21.4,
+    50.0
+   ],
+   [
+    20.9,
+    40.0
+   ],
+   [
+    21.2,
+    30.0
+   ],
+   [
+    20.6,
+    20.0
    ]
   ],
   "level_world": 11
@@ -2038,16 +2363,20 @@
     3.5
    ],
    [
-    58,
-    4
+    56,
+    0.5
    ],
    [
-    84,
-    4
+    76,
+    -0.5
    ],
    [
-    100,
-    10
+    96,
+    1.0
+   ],
+   [
+    104,
+    5.5
    ],
    [
     118,
@@ -2234,7 +2563,7 @@
     54
    ]
   ],
-  "changes": "north-west: (22,40) (30,22) (44,14) (58,6) become (20,40) (19,22) (21,8) (40,3.5) (58,4); south-west: (24,108) becomes (20,108), so the lookout and the west berm stand on the island (before, the lookout's corner hung over the void)"
+  "changes": "north-west: (22,40) (30,22) (44,14) (58,6) become (20,40) (19,22) (21,8) (40,3.5) (58,4); south-west: (24,108) becomes (20,108), so the lookout and the west rim stand on the island; north (October 3, the moat behind the keep): (58,4) (84,4) (100,10) become (56,0.5) (76,-0.5) (96,1) (104,5.5), up to 4.5 m further north, so the crown's rim behind the moat stands on the island"
  },
  "context": {
   "note": "today's neighbours of the climb, unchanged",
@@ -2326,10 +2655,11 @@
    "the great keep",
    "the terrace and the grand stair",
    "the chapel and the solar",
-   "the moat, its springs, weir and south fall",
+   "the moat on all four sides, its springs behind the keep, weir and south fall",
    "the climb's stair",
    "the bridge, the gate bastion, the ledge walk and the lookout",
-   "the privy garden and the muster yard"
+   "the privy garden and the muster yard",
+   "slate roofs on the great hall and the chapel"
   ]
  },
  "camera": {
@@ -2385,9 +2715,16 @@
     112.5,
     0.0,
     1.0
+   ],
+   "lookout": [
+    30.0,
+    115.0,
+    0.0,
+    1.2
    ]
   },
-  "climb": "from the stair's foot the play camera looks straight up flights 1 and 2 (their risers face it) to the turning landing against the rock; from the turn it sees flights 3 and 4 climbing west along the rock face; from the head it looks along the ledge road between its two walls with the moat beyond the inner one"
+  "climb": "from the stair's foot the play camera looks straight up flights 1 and 2 (their risers face it) to the turning landing against the rock; from the turn it sees flights 3 and 4 climbing west along the rock face; from the head it looks along the ledge road between its two walls with the moat beyond the inner one",
+  "north": "a view from above the Veil to the north-west (not a play view): the moat round the keep's back and the slate roofs over the north range"
  },
  "walking": {
   "speed": 4.8,
@@ -2449,6 +2786,18 @@
   {
    "note": "October 3: every enterable building's inside must work with its outside",
    "answer": "a simple plan for each building (castle-v4-interiors.png and interiors): every door one door from both sides at one level, every window lighting a room, every chimney over a hearth, every upper floor with its stair; this moved the keep's second floor up to +20 so the great door and the showpiece window rise clear in the hall, made the stables and barracks 2 m deeper and 0.5 m taller so stalls flank an aisle and a loft clears the 4 m doors, and centred the hall's lantern on its hearth"
+  },
+  {
+   "note": "October 3, on the plan: the water moat should go around the back too",
+   "answer": "the moat rings all four sides: behind the north curtain and round the keep's back, which now rises out of the water on its plinth; the crown and the island grow up to 4.5 m north so a rim of rock carries the north bank; the springs move behind the keep and the water runs round both sides to the weir"
+  },
+  {
+   "note": "October 3, on the plan: the ledge walk, the lookout and the rock edge around them should be more naturally shaped",
+   "answer": "the crown's edge is natural rock all round (west, north, east and the south brink); the lookout sits on a knoll with its wall following the rim; the ledge's outer wall follows the brink in straight runs with a turf verge where the rock swells; the landing follows the east brink; only the gate bastion and the climb stay squared, as built masonry"
+  },
+  {
+   "note": "October 3, roofs: pick B, steep blue slate roofs as in the painting on the great hall and the chapel",
+   "answer": "the hall and the chapel get steep slate roofs (52 degrees, eaves +12, ridge +20.9) with the hall's lantern and the chapel's flèche on the ridges; their north gutters stay behind parapets over the wall walk; the kitchen and the solar keep flat roofs behind battlements as the range's low ends, so the range climbs from battlements to slate to the keep"
   }
  ],
  "structural_review": [
@@ -2466,7 +2815,7 @@
   },
   {
    "check": "every drop has a wall or a parapet",
-   "how": "the ledge road, the walk, the landing, the lookout, the gate terrace, the bridge and every flight and landing of the climb are walled on every open side; the terrace has its balustrade; the wall walk and every tower top their parapets; the keep's galleries and the minstrels' gallery a balustrade along their open sides; the berms outside the moat are shut off by the landing's and the lookout's walls"
+   "how": "the ledge road, the walk, the landing, the lookout, the gate terrace, the bridge and every flight and landing of the climb are walled on every open side; the terrace has its balustrade; the wall walk and every tower top their parapets; the keep's galleries and the minstrels' gallery a balustrade along their open sides; the rims outside the moat are shut off by the landing's and the lookout's walls"
   },
   {
    "check": "every bridge stands on arches or piers that reach water or rock",
@@ -2474,7 +2823,7 @@
   },
   {
    "check": "the moat has built banks, a held level and an outfall",
-   "how": "dressed outer bank with a coping; the curtain and towers rise from the water on plinths; the weir and the west sluice share one sill at -2, so the water stands 2 m below the turf; it leaves by the culvert and the fall to the pool and the stream"
+   "how": "dressed outer bank with a coping all the way round; the curtain, the towers and the keep's back half rise from the water on plinths; the springs feed the basin behind the keep and the water runs round both arms to the weir; the weir and the west sluice share one sill at -2, so the water stands 2 m below the turf; it leaves by the culvert and the fall to the pool and the stream"
   },
   {
    "check": "every door opens onto a floor or a stair at its own level",
@@ -2486,7 +2835,7 @@
   },
   {
    "check": "no building or tower over a void or half on rock",
-   "how": "the towers and drums stand on the moat's bed; the keep's back half on the crown; the gate bastion and the stair on the rock at the cliff's foot; the crown's outline now lies inside the island's everywhere"
+   "how": "the towers, the drums and the keep's back half stand on the moat's bed; the moat's north bank on a rim of rock 3 m wide or more; the gate bastion and the stair on the rock at the cliff's foot; the ledge's outer walls on the brink; the crown's outline lies inside the island's everywhere"
   },
   {
    "check": "no slots and nothing doubled",
@@ -2495,6 +2844,10 @@
   {
    "check": "every building's inside fits its outside",
    "how": "see interiors: rooms inside the walls, each door the same door from both sides at one floor level, each window within one storey and lighting a room, chimneys over hearths, the hall's lantern over its hearth, every loft or upper floor with a stair and headroom, no door taller than the floor over it"
+  },
+  {
+   "check": "every roof sheds its water somewhere it can go",
+   "how": "the slate roofs' south eaves drip onto the terrace's paving; their north slopes drain into parapet gutters over the wall walk that spout through the curtain into the moat; the flat roofs fall to spouts in their parapets; no gutter empties onto a walk or a door"
   }
  ],
  "structural_changes": [
@@ -2511,7 +2864,10 @@
   "the keep's throne hall rises to the great chamber's floor at +20 and its galleries stop short of the south wall, so the 8 m great door and the showpiece window no longer pass through a gallery or a floor",
   "the keep's front turrets hold its spiral stairs (their stepping slit lights face the bailey), reached from the hall stairs' half landings",
   "the stables and the barracks are 10 m deep (were 8) and 7 m to their parapets (were 6.5): stalls either side of an aisle, and a loft at +2.9 over the stalls, the 4 m gable doors standing in bays open to the roof",
-  "the hall's lantern moves 2.25 m east over its hearth; the kitchen's and the solar's chimneys stand on their hearths"
+  "the hall's lantern moves 2.25 m east over its hearth; the kitchen's and the solar's chimneys stand on their hearths",
+  "the moat rings the north side too: the keep's back half and the north curtain rise out of it, the crown grows north so the north bank stands on a rim of rock, and the springs move from the arms' head walls (which go) to the north bank behind the keep",
+  "the crown's edge is natural rock instead of ruled lines; the ledge's outer walls, the lookout's and the landing's follow the brink in straight runs with a pier at every angle; the gate bastion is the one squared projection, and it is built",
+  "the great hall and the chapel are roofed in slate on stone-coped gables with gutters behind a parapet over the wall walk; the hall's lantern and the chapel's flèche stand on their ridges"
  ],
  "build_stages": [
   {
@@ -2532,7 +2888,7 @@
    "stage": "A",
    "name": "the great keep",
    "parallel": true,
-   "what": "its own model: frontispiece, pinnacles, showpiece window, storey-by-storey windows, machicolated parapet, four turrets with stair lights and spires, great door, banners, great flag; interior: throne hall to +20, dais, piers, two stairs with doors into the front turrets' spirals, galleries on three sides; the north range opens as one round the hero",
+   "what": "its own model, its back half on a battered plinth out of the moat: frontispiece, pinnacles, showpiece window, storey-by-storey windows, machicolated parapet, four turrets with stair lights and spires, great door, banners, great flag; interior: throne hall to +20, dais, piers, two stairs with doors into the front turrets' spirals, galleries on three sides; the north range opens as one round the hero",
    "files": [
     "src/world/keep model (new)",
     "the keep's building spec"
@@ -2542,7 +2898,7 @@
    "stage": "B",
    "name": "moat and water",
    "parallel": true,
-   "what": "moat surface, its dressed outer bank and coping, the springs at its heads, the weir, culvert and outlet arch, the south fall and pool, the west sluice, channel and fall, the stream's new head and the viewing bay",
+   "what": "moat surface on all four sides, its dressed outer bank and coping, the basin behind the keep, the springs in its north bank, the weir, culvert and outlet arch, the south fall and pool, the west sluice, channel and fall, the stream's new head and the viewing bay; the crown's natural edge",
    "files": [
     "src/world/water.ts",
     "src/world/moat props (new)"
@@ -2552,7 +2908,7 @@
    "stage": "C",
    "name": "approach and gate front",
    "parallel": true,
-   "what": "the climb's stair (flights with nosings, landings, walls whose copings rake with each flight and step level over the landings, piers, buttresses, lamps), the ledge road and walk between their two walls, the landing and the lookout, the gate bastion (battered masonry faces, parapets, banner poles, lamps), the bridge (two arches on a pier, parapets)",
+   "what": "the climb's stair (flights with nosings, landings, walls whose copings rake with each flight and step level over the landings, piers, buttresses, lamps), the ledge road and walk between their two walls (the outer one following the brink, the turf verge), the landing and the lookout on the knoll, the gate bastion (battered masonry faces, parapets, banner poles, lamps), the bridge (two arches on a pier, parapets)",
    "files": [
     "src/world/approach props (new: stair flight, raking wall, parapet run, bridge arch)",
     "the approach part of the castle plan module"
@@ -2572,7 +2928,7 @@
    "stage": "E",
    "name": "the other buildings",
    "parallel": true,
-   "what": "the great hall (today's range turned round), the kitchen moved, the chapel and the solar, the stables and barracks; each its own window scheme; each built inside to its plan in interiors (rooms, doors from both sides, stairs, hearths)",
+   "what": "the great hall (today's range turned round), the kitchen moved, the chapel and the solar (slate roofs on coped gables for the hall and the chapel, the lantern and the flèche on their ridges, gutters behind the north parapets), the stables and barracks; each its own window scheme; each built inside to its plan in interiors (rooms, doors from both sides, stairs, hearths)",
    "files": [
     "src/world/buildingModel.ts",
     "their building specs"
@@ -2608,10 +2964,10 @@
   "one wall where there is one wall: nothing built in front of the curtain"
  ],
  "painting_departures": [
-  "flat roofs behind parapets on every castle building (the standing rule) instead of the painting's steep slate roofs",
+  "slate roofs only on the great hall and the chapel (owner's pick, October 3); the keep, the kitchen, the solar, the stables, the barracks and the towers without spires keep flat roofs behind battlements",
   "one fall on the axis under the gate terrace instead of two either side of the bridge: the water has one way out to the stream",
   "the approach climbs a stone stair up the rock's south-east corner and runs along the ledge to the gate, instead of a straight causeway up the cliff",
-  "the keep's back stands on the north brink and the hall and the chapel are mirrored either side of it, where the painting has a hall on one side only",
+  "the keep's back rises out of the moat and the hall and the chapel are mirrored either side of it, where the painting has a hall on one side only",
   "no cottage houses round the forecourt: the service buildings stand along the side walls, so the axis stays open",
   "the gate drums stay flat with flags; only the corner towers and the keep carry spires (the painting gives every tower one)",
   "the moat lies two metres down between built banks, held by a weir, rather than brimming at the foot of the walls"
@@ -2777,7 +3133,7 @@
       ],
       "floor": 5.4,
       "upper": true,
-      "note": "over the screens, looking down the hall"
+      "note": "over the screens, open above to the timber roof, looking down the hall"
      },
      {
       "id": "hall",
@@ -2788,7 +3144,7 @@
        35.0
       ],
       "floor": 2.0,
-      "note": "open to its roof deck (+12.6): the central hearth under the lantern, long tables either side"
+      "note": "open to its timber roof (arched braces on wall posts, the ridge at +20.9): the central hearth under the lantern's louvre in the ridge, long tables either side"
      },
      {
       "id": "dais",
@@ -2864,7 +3220,7 @@
       "note": "paired lights between buttresses; the east one over the high table"
      }
     ],
-    "agrees": "the lantern on the roof stands over the hearth; the porch over the screens door; the three windows light the hall itself (none falls on the gallery over the screens); the dais door is the same door as the keep's hall door"
+    "agrees": "the lantern on the ridge stands over the hearth; the porch over the screens door; the three windows light the hall itself (none falls on the gallery over the screens) and their heads (+11.1) stand under the eaves (+12); the roof is the hall's ceiling, so it has no roof space; the dais door is the same door as the keep's hall door"
    },
    {
     "id": "keep",
@@ -2942,7 +3298,7 @@
        35.0
       ],
       "floor": 2.0,
-      "note": "open to its roof deck (+12.6); benches either side of an aisle from the south door; the lord's pew at the west end by the keep door"
+      "note": "open to its boarded wagon ceiling under the rafters (up to +19); benches either side of an aisle from the south door; the lord's pew at the west end by the keep door"
      },
      {
       "id": "chancel",
@@ -2953,7 +3309,7 @@
        35.0
       ],
       "floor": 2.5,
-      "note": "two steps up behind a low rail; the altar against the east wall"
+      "note": "two steps up behind a low rail under the same wagon ceiling; the altar against the east wall"
      }
     ],
     "doors": [
@@ -3005,7 +3361,7 @@
       "note": "the rose window over the door"
      }
     ],
-    "agrees": "the altar stands at the east wall against the solar, so the chancel is lit from the south; the bellcote stands over the door on the nave's middle"
+    "agrees": "the altar stands at the east wall against the solar, so the chancel is lit from the south; the lancets' heads (+11) and the rose window's (+10.6) stand under the eaves (+12); the flèche stands on the ridge over the door on the nave's middle, its bell rope dropping through the wagon ceiling at the west end"
    },
    {
     "id": "solar",

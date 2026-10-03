@@ -23,6 +23,7 @@ C = {
     'navy': (52, 74, 128), 'gold': (210, 160, 60), 'terrace': (229, 222, 207), 'fence': (122, 84, 52), 'text': (40, 34, 30),
     'paper': (246, 240, 228), 'tag': (255, 252, 244), 'dark': (52, 46, 40), 'light': (255, 246, 226), 'axis': (196, 140, 40), 'road': (205, 197, 182),
     'farm': (150, 120, 80), 'title': (36, 30, 26), 'blue_tag': (222, 238, 250), 'flag': (47, 90, 208), 'horse': (124, 78, 44),
+    'slate': (96, 114, 152), 'slate_dark': (62, 78, 112),
 }
 
 
@@ -73,6 +74,8 @@ island = [tuple(p) for p in D['island']['outline']]
 d.polygon([P(*p) for p in island], fill=C['meadow'])
 crown = [tuple(p) for p in D['crown']['outline']]
 d.polygon([P(*p) for p in crown], fill=C['rock'])
+# the natural cliff: a band of rock straddling the brink, so its wandering edge reads in plan
+d.line([P(*p) for p in crown + crown[:1]], fill=C['rock'], width=int(1.6 * PX), joint='curve')
 # (the turf drawn a little inside the rock's edge, so the cliff's lip shows as a dark rim)
 inset = [(x - (x - AX) * 1.3 / math.hypot(x - AX, z - 62), z - (z - 62) * 1.3 / math.hypot(x - AX, z - 62)) for x, z in crown]
 d.polygon([P(*p) for p in inset], fill=C['crown'])
@@ -92,9 +95,11 @@ rect(fm['fence'], None, C['fence'], 2)
 # water
 Wt = D['water']
 mo = Wt['moat']['outer']
-d.polygon([P(*p) for p in Wt['moat']['poly']], fill=C['water'])
-line([(mo['west_x'], mo['north_z']), (mo['west_x'], mo['south_z']), (mo['east_x'], mo['south_z']), (mo['east_x'], mo['north_z'])], C['stone'], 0.7 * PX)
-line([(mo['west_x'], mo['north_z']), (mo['west_x'], mo['south_z']), (mo['east_x'], mo['south_z']), (mo['east_x'], mo['north_z'])], C['ink'], 1 * SS)
+# the moat rings the castle: its outer bank is one closed loop, the curtain and the keep drawn over its inside later
+cs = [tuple(p) for p in Wt['moat']['counterscarp']]
+d.polygon([P(*p) for p in cs], fill=C['water'])
+line(cs + [cs[0]], C['stone'], 0.7 * PX)
+line(cs + [cs[0]], C['ink'], 1 * SS)
 pl = Wt['pool']
 line(Wt['stream'], C['water'], 2.2 * PX)
 disc(pl['x'], pl['z'], pl['r'], C['water'], C['water_edge'], 2)
@@ -105,12 +110,12 @@ for f in Wt['falls']:
         rect([f['x'] - 0.5, f['z'] - f['w'] / 2, mo['west_x'], f['z'] + f['w'] / 2], C['water'])
         rect([f['x'] - 6.0, f['z'] - f['w'] / 2, f['x'] - 0.5, f['z'] + f['w'] / 2], C['foam'])
 for s in Wt['springs']:
-    rect([s['x'] - 0.8, s['z'] - 1.4, s['x'] + 0.8, s['z'] + 0.6], C['foam'])
+    rect([s['x'] - 0.8, s['z'] - 0.4, s['x'] + 0.8, s['z'] + 1.8], C['foam'])
 
 # the approach outside the moat
 A = D['approach']
 for key in ('ledge_road', 'ledge_walk', 'landing', 'lookout'):
-    rect(A[key]['rect'], C['road'])
+    d.polygon([P(*p) for p in A[key]['paving']], fill=C['road'])
 rect(A['gate_terrace']['rect'], C['pave'])
 
 
@@ -260,15 +265,27 @@ rect([ax_ - 1.0, az_ - 2.5, ax_ + 1.0, az_ + 2.5], (176, 120, 96), C['ink'], 1)
 
 # buildings
 for b in D['buildings']:
-    rect(b['rect'], C['cream'], C['ink'], 2)
+    x0, z0, x1, z1 = b['rect']
+    if b.get('roof', {}).get('kind') == 'slate':
+        # the slate seen from above: two slopes either side of the ridge, the gutter parapet on the north wall
+        rect(b['rect'], C['slate'], C['ink'], 2)
+        rect([x0, z0, x1, z0 + 0.7], C['cream'], C['ink'], 1)
+        zr = b['roof']['ridge_z']
+        rect([x0, zr, x1, z1], (108, 126, 164))
+        line([(x0, zr), (x1, zr)], C['slate_dark'], 2 * SS)
+        for xx in (x0, x1):
+            line([(xx, z0), (xx, z1)], C['stone'], 0.6 * PX)
+        d.rectangle(R(b['rect']), outline=C['ink'], width=2 * SS)
+    else:
+        rect(b['rect'], C['cream'], C['ink'], 2)
     for (x, z, h) in b.get('chimneys', []):
         rect([x - 0.6, z - 0.6, x + 0.6, z + 0.6], C['stone'], C['ink'], 1)
     if 'lantern' in b:
         x, z, h = b['lantern']
-        rect([x - 1.3, z - 1.3, x + 1.3, z + 1.3], C['navy'])
-    if 'bellcote' in b:
-        x, z, h = b['bellcote']
-        d.polygon([P(x, z - 1.3), P(x + 1.3, z), P(x, z + 1.3), P(x - 1.3, z)], fill=C['navy'])
+        rect([x - 1.3, z - 1.3, x + 1.3, z + 1.3], C['navy'], C['ink'], 1)
+    if 'fleche' in b:
+        x, z, h = b['fleche']
+        d.polygon([P(x, z - 1.1), P(x + 1.1, z), P(x, z + 1.1), P(x - 1.1, z)], fill=C['navy'], outline=C['ink'])
 for b in D['buildings']:
     if b['id'] in ('stables', 'barracks'):
         x0, z0, x1, z1 = b['rect']
@@ -372,14 +389,15 @@ def htag(x, z, text):
 
 
 tag(76, 24.0, 'GREAT KEEP', 17, True)
+tag(76, 8.6, 'MOAT', 12, True, fill=C['blue_tag'])
 htag(76, 29.0, 'keep 28 m')
 htag(76, 33.6, 'turrets 34.5, spires 44')
-tag(53.5, 26.5, 'GREAT HALL', 12, True)
-htag(53.5, 31.0, '14 m')
+tag(50.0, 25.6, 'GREAT HALL', 12, True)
+htag(50.0, 32.8, 'ridge 20.9')
 tag(38.5, 26.5, 'KITCHEN', 10, True)
 htag(38.5, 31.0, '11.5')
-tag(98.5, 26.5, 'CHAPEL', 12, True)
-htag(98.5, 31.0, '14 m')
+tag(103.0, 25.6, 'CHAPEL', 12, True)
+htag(103.0, 32.8, 'ridge 20.9')
 tag(113.5, 26.5, 'SOLAR', 10, True)
 htag(113.5, 31.0, '11.5')
 tag(48, 40.2, 'terrace, raised 2 m', 10)
@@ -399,14 +417,14 @@ tag(76, 113.5, 'GATE TERRACE', 10, True)
 tag(101.5, 112.2, 'LEDGE ROAD', 11, True)
 tag(50.5, 112.2, 'LEDGE WALK', 11, True)
 tag(124.4, 112.4, 'LANDING', 10, True)
-tag(27.6, 112.4, 'LOOKOUT', 10, True)
+tag(28.0, 115.6, 'LOOKOUT', 10, True)
 tag(124.4, 50, 'MOAT', 12, True, fill=C['blue_tag'])
 tag(27.6, 50, 'MOAT', 12, True, fill=C['blue_tag'])
 tag(76, 105.2, 'bridge', 9, fill=C['blue_tag'])
 tag(86.5, 122.8, 'fall and pool', 10, fill=C['blue_tag'], anchor='lm')
 tag(14.0, 84.6, 'overflow fall', 9, fill=C['blue_tag'], anchor='lm')
-tag(27.5, 7.0, 'spring', 9, fill=C['blue_tag'])
-tag(124.5, 7.0, 'spring', 9, fill=C['blue_tag'])
+for s_ in Wt['springs']:
+    tag(s_['x'] + (-4.2 if s_['x'] < AX else 4.2), 3.6, 'spring', 9, fill=C['blue_tag'])
 tag(139.5, 122.5, 'STAIR', 10, True)
 tag(139.5, 125.6, '4 flights of 17', 9)
 tag(139.5, 136.6, 'to the portal court', 9)
@@ -462,7 +480,21 @@ d.line([E(24, 0), E(128, 0)], fill=C['ink'], width=int(2 * SS))
 erect(30, 0, 122, 8.4, C['stone'])
 for b in D['buildings']:
     if b['floor'] > 0:
-        erect(b['rect'][0], 0, b['rect'][2], b['parapet_top'], C['cream'])
+        rf = b.get('roof', {})
+        if rf.get('kind') == 'slate':
+            # seen from the south an east-west ridge shows as the slope's face, eaves to ridge
+            erect(b['rect'][0], 0, b['rect'][2], rf['eaves'], C['cream'])
+            erect(b['rect'][0], rf['eaves'], b['rect'][2], rf['ridge'], C['slate'])
+        else:
+            erect(b['rect'][0], 0, b['rect'][2], b['parapet_top'], C['cream'])
+        if 'lantern' in b:
+            x, z, h = b['lantern']
+            erect(x - 1.3, rf['ridge'], x + 1.3, h - 2.0, C['cream'])
+            d.polygon([E(x - 1.9, h - 2.0), E(x + 1.9, h - 2.0), E(x, h)], fill=C['navy'], outline=C['ink'])
+        if 'fleche' in b:
+            x, z, h = b['fleche']
+            erect(x - 0.7, rf['ridge'], x + 0.7, rf['ridge'] + 2.2, C['cream'])
+            espire(x, 0.95, rf['ridge'] + 2.2, h)
 erect(64, 0, 88, 28, C['keep'], 2)
 erect(72, 0, 80, 30.5, C['keep'])
 for x in (64, 88):
@@ -483,11 +515,11 @@ for x in (70, 82):
     erect(x - 2.6, 0, x + 2.6, 13.4, C['stone'])
 erect(73, 0, 79, 12.6, C['stone'])
 erect(45.7, 0, 46.3, 2.0, C['flag'])
-for h in (8.4, 14, 28, 34.5, 44):
+for h in (8.4, 20.9, 28, 34.5, 44):
     d.line([E(126, h), E(128, h)], fill=C['ink'], width=int(1 * SS))
     d.text((E(128, h)[0] + 5 * SS, E(128, h)[1]), f'{h:g}', font=font(11), fill=C['text'], anchor='lm')
-d.text((SX, ey0 + 18 * SS), 'curtain 8.4, wings 11.5 and 14, keep 28, turrets 34.5, spires 44', font=font(11), fill=C['text'], anchor='lm')
-d.text((SX, ey0 + 36 * SS), 'the blue post is the 2 m hero', font=font(11), fill=C['text'], anchor='lm')
+d.text((SX, ey0 + 18 * SS), 'curtain 8.4, kitchen and solar 11.5, hall and chapel eaves 12,', font=font(11), fill=C['text'], anchor='lm')
+d.text((SX, ey0 + 36 * SS), 'slate ridges 20.9, keep 28, turrets 34.5, spires 44; the blue post is the 2 m hero', font=font(11), fill=C['text'], anchor='lm')
 
 
 # ── inside the buildings: one drawer for the keep's plans here and the interiors sheet ──
@@ -707,13 +739,14 @@ d.text((SX, fy + 30 * SS + 33 * s + 64 * SS), 'Every building inside: castle-v4-
 ly = TOP + 990 * SS
 d.text((SX, ly), 'Key', font=font(17, True), fill=C['text'], anchor='lm')
 items = [(C['lawn'], 'lawn and gardens'), (C['pave'], 'paving and walks'), (C['setts'], 'working yards'), (C['earth'], 'training ground'),
-         (C['water'], 'moat and water'), (C['terrace'], 'terrace, raised 2 m'), (C['cream'], 'buildings'), (C['navy'], 'spires')]
+         (C['water'], 'moat and water'), (C['terrace'], 'terrace, raised 2 m'), (C['cream'], 'buildings, flat roofs'), (C['navy'], 'spires'),
+         (C['slate'], 'slate roofs, ridge line'), (C['rock'], 'natural rock edge')]
 for k, (col, txt) in enumerate(items):
     y = ly + 36 * SS + (k // 2) * 34 * SS
     x = SX + (k % 2) * 280 * SS
     d.rectangle([x, y - 10 * SS, x + 34 * SS, y + 10 * SS], fill=col, outline=C['ink'])
     d.text((x + 46 * SS, y), txt, font=font(13), fill=C['text'], anchor='lm')
-y = ly + 36 * SS + 4 * 34 * SS
+y = ly + 36 * SS + 5 * 34 * SS
 d.line([SX, y, SX + 34 * SS, y], fill=C['axis'], width=int(3 * SS))
 d.text((SX + 46 * SS, y), 'the axes', font=font(13), fill=C['text'], anchor='lm')
 
@@ -801,13 +834,15 @@ print('saved castle-v4-interiors.png', out2.size)
 if len(sys.argv) > 1:
     src = sys.argv[1]
     save(Image.open(os.path.join(src, 'castle-v4-massing.png')), 'castle-v4-massing.png', True)
-    views = [('camera-avenue.png', 'On the avenue by the fountain, camera zoomed out: the keep is beyond the top of the screen'),
+    views = [('camera-avenue.png', 'By the fountain, zoomed out: the keep is beyond the top of the screen'),
              ('camera-door.png', 'At the great door: the front turrets and the frontispiece frame the door'),
              ('camera-bridge.png', 'On the bridge: the moat, the gate drums and the gate terrace'),
              ('camera-yards.png', 'At the stables\' door: stable yard, kitchen garden, paddock, parterre'),
              ('camera-stair-foot.png', "At the stair's foot: two flights up to the turning landing"),
-             ('camera-stair-head.png', "At the stair's head: the ledge road between its two walls")]
-    tw, th, cap, gap, cols = 800, 450, 40, 12, 3
+             ('camera-stair-head.png', "At the stair's head: the ledge road between its two walls"),
+             ('camera-lookout.png', "At the lookout: its wall on the knoll's natural rim, the ledge walk beyond"),
+             ('view-north.png', 'From above the Veil, not a play view: the moat behind the keep, the slate roofs')]
+    tw, th, cap, gap, cols = 720, 405, 40, 12, 4
     sheet = Image.new('RGB', (cols * tw + (cols + 1) * gap, 2 * (th + cap) + 3 * gap + 56), C['paper'])
     sd = ImageDraw.Draw(sheet)
     sd.rectangle([0, 0, sheet.width, 56], fill=C['title'])

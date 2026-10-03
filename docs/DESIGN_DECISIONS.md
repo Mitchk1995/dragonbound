@@ -70,6 +70,11 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   stairs (a stone stair of four flights with level landings); the ledge road has a wall on both sides; the whole plan is
   checked as a mason would build it. Every enterable building's inside must work with its outside, with a simple interior
   plan for each (`docs/blueprints/castle-v4/castle-v4-interiors.png`).
+- **Castle v4 plan notes (October 3, pins on the plan).** The moat goes round the back too, so it rings all four sides
+  and the keep's back rises out of it; the ledge walk, the lookout and the rock round them are shaped naturally, with the
+  walls following and sitting on the natural rock (and the same for the landing and the crown's whole edge). Roofs: pick
+  B, steep blue slate roofs as in the painting on the great hall and the chapel; the kitchen and the solar stay flat
+  behind battlements so the keep stays the star (our call, open to change).
 - **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
   no flag shadow from nowhere, the fountain dragon's front legs, more variety in the small garden trees, the sunken tree
   and the grass seam by the landing.
