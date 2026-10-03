@@ -1,4 +1,5 @@
 import { Ground, type ZoneLayout } from '../world/layout';
+import type { Woods } from '../world/trees';
 import { buildFoothills, buildKeep, buildLair, buildMine, buildRuin } from './zoneMaps';
 
 export { KEEP_ARCHES, KEEP_STAGE } from './zoneMaps';
@@ -26,6 +27,8 @@ export interface ZoneTheme {
   water?: [number, number];
   /** Tree species mix (weights); defaults to all `trees`. */
   forest?: Partial<Record<'pine' | 'ash' | 'grove', number>>;
+  /** The grown species standing in for each tree kind in the natural tree style (trees.ts; DEFAULT_WOODS when left out). */
+  woods?: Woods;
   /** Chance of a tree on each interior plateau/cliff-top cell. */
   reliefTrees?: number;
   /** Wildflower colours for grassy meadows. */
@@ -77,6 +80,9 @@ export const ZONES: Record<string, ZoneDef> = {
       rockMoss: 1,
       reliefTrees: 0.08,
       forest: { grove: 0.75, pine: 0.25 },
+      // The first rungs of the woodcutting ladder: common trees and oaks, willows by the water, a
+      // few maples on the uplands.
+      woods: { kinds: { grove: { tree: 4, oak: 4, willow: 2, maple: 1 }, pine: { maple: 1, oak: 1 } } },
       flowers: [0xf0d060, 0xe86a8a, 0xb0a0ff, 0xffffff],
       water: [0x4aa0b8, 0x1a4a62],
     },
@@ -86,6 +92,7 @@ export const ZONES: Record<string, ZoneDef> = {
     theme: {
       bg: 0x0c0908, fog: [26, 60], hemi: [0xaaa49c, 0x3e3026, 1.3], sun: [0xffc88c, 1.65], exposure: 1.35,
       ambient: 'cave', trees: 'pine', wall: 'cave',
+      woods: { kinds: { pine: { yew: 1 } } },
       ground: { [Ground.Cave]: [0x5e5042, 0x86725a] },
       cliff: [0x6e5c4a, 0x56463a],
       water: [0x2e7282, 0x0a2632],
@@ -100,6 +107,9 @@ export const ZONES: Record<string, ZoneDef> = {
       bg: 0x3a3440, fog: [46, 110], hemi: [0xb8c8e8, 0x5a4636, 1.25], sun: [0xffe2b8, 2.6], exposure: 1.05,
       ambient: 'embers', trees: 'pine', wall: 'cave', ground: FOOTHILLS_GROUND,
       forest: { pine: 0.55, grove: 0.3, ash: 0.15 },
+      // The middle rungs: dark yews and maples in their autumn reds, oaks among them, willows by the
+      // water; the dead ash stays dead.
+      woods: { kinds: { pine: { yew: 3, maple: 1 }, grove: { maple: 2, oak: 2, willow: 1 } }, autumn: ['maple'] },
       reliefTrees: 0.08,
       mesaTop: Ground.Grass,
       edgeFade: true,
@@ -115,6 +125,8 @@ export const ZONES: Record<string, ZoneDef> = {
       ambient: 'ash', trees: 'grove', wall: 'ruin',
       ground: { [Ground.Stone]: [0x6a7070, 0x5a6060], [Ground.Grass]: [0x3a5a3a, 0x4a6a44] },
       forest: { grove: 0.7, ash: 0.3 },
+      // The top rung: magic trees glowing among the willows and old yews of the drowned ruin.
+      woods: { kinds: { grove: { willow: 3, magic: 2, yew: 1 } } },
       cliff: [0x4a5456, 0x3a4244],
       water: [0x2c8a84, 0x08203a],
     },

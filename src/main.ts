@@ -1,10 +1,10 @@
 import { Game } from './game';
-import { preloadBark } from './render/foliage';
+import { preloadTreeTextures } from './render/foliage';
 import { MODEL_FILES, preloadModels } from './render/registry';
 import { loadUiFont } from './ui/uiText';
 
 async function boot() {
-  await Promise.all([preloadModels(MODEL_FILES), preloadBark(), loadUiFont()]);
+  await Promise.all([preloadModels(MODEL_FILES), preloadTreeTextures(), loadUiFont()]);
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const game = new Game(canvas);
   await game.start();
