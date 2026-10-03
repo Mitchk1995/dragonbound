@@ -2248,7 +2248,7 @@ export function archedWall(L: number, H: number, P: number, h: number, rise: num
  * head over the gate with the lord's crest on its inner face, `lanterns` hangs a lantern either side
  * of the arch on the faces listed (-1 outer, 1 inner).
  */
-function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: number; steps?: boolean; head?: boolean; lanterns?: number[] }) {
+function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: number; steps?: boolean; lanterns?: number[] }) {
   // (The leaves stand to the lintel at the springing, under the tympanum: a gate's leaves tower over
   // the hero.)
   const cls = P >= 3 ? 'wide_gate' : 'narrow_gate', L = P + 2.4, T = 2.2, H = 7, S = DOORS[cls].h + 0.1, rise = P >= 3 ? 1.9 : 1.25, apex = S + rise;
@@ -2291,25 +2291,13 @@ function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: number
     // across at the springing and over it a tympanum of the surround's pale dressed stone, both set
     // back in the reveal (so from above they never read as a slab across the way), the leaves filling
     // the opening below and the arch framing the whole doorway.
-    // (Deep enough at the outer gate to carry its raised portcullis behind it.)
-    cb(k, f, [P + 0.06, 0.3, opt.head ? 0.42 : 0.14], [0, S + 0.1, z - (opt.head ? 0.2 : 0.17)], TRIM, undefined, 0.02);
+    cb(k, f, [P + 0.06, 0.3, 0.14], [0, S + 0.1, z - 0.17], TRIM, undefined, 0.02);
     k.mesh(f, archTympanum(P, apex, 0.12, rise), ASHLAR_L, [0, 0, z - 0.3]);
     if (opt.lanterns?.includes(e)) for (const sx of [-1, 1]) wallLamp(k, f, sx * (P / 2 + 0.95), S - 0.6, z);
-    if (opt.head && e > 0) {
-      // The lord's crest over the arch: a blue shield rimmed in gold with the gold dragon diamond.
-      crest(k, f, 0, apex + 1.7, z + 0.06, 0.8);
-    }
   }
-  // The wall walk carried over the gate: the outer parapet and merlons, the inner rail; a gate's head
-  // rises above it, crenellated on both faces.
-  if (opt.head) {
-    cb(k, g, [L + 0.5, 1.4, T + 0.36], [0, H + 0.7, 0], ASHLAR, undefined, 0.04);
-    cb(k, g, [L + 0.6, 0.16, T + 0.46], [0, H + 1.42, 0], TRIM, undefined, 0.03);
-    for (const e of [-1, 1]) for (let i = 0; i < 4; i++) cb(k, g, [0.7, 0.66, 0.5], [-L / 2 + 0.4 + (i * (L - 0.8)) / 3, H + 1.83, e * (T / 2 - 0.05)], ASHLAR, undefined, 0.04);
-    for (let i = 0; i < 6; i++) for (const e of [-1, 1]) cb(k, g, [0.32, 0.36, 0.4], [-L / 2 + 0.5 + (i * (L - 1.0)) / 5, H - 0.2, e * (T / 2 + 0.12)], TRIM, undefined, 0.03);
-  } else {
-    // The wall walk carried over the gate exactly as along the curtain: the outer parapet, its
-    // coping and merlons, the parapet band under it, and the inner parapet corbelled out over the face.
+  // The wall walk carried over the gate exactly as along the curtain: the outer parapet, its
+  // coping and merlons, the parapet band under it, and the inner parapet corbelled out over the face.
+  {
     const fi = T / 2 + 0.85;
     k.box(g, [L, 0.06, fi - 0.56 + 0.52], [0, H + 0.03, (fi - 0.56 - 0.52) / 2], DECK);
     cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], ASHLAR, undefined, 0.03);
@@ -2344,19 +2332,6 @@ function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: number
   }
   if (opt.steps) for (let i = 0; i < 2; i++) cb(k, g, [P + 0.9 - i * 0.3, 0.16, 0.5], [0, 0.08 + i * 0.12, -T / 2 - 0.55 + i * 0.25], i ? ASHLAR_L : ASHLAR_W, undefined, 0.02);
   k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], TRIM_D);
-}
-
-/**
- * The lord's crest (facing +Z, its top edge at `top`): a heater shield `w` wide in royal blue, a gold
- * rim standing out behind it, and the gold dragon diamond.
- */
-export function crest(k: ModelKit, p: THREE.Object3D, x: number, top: number, z: number, w: number) {
-  const body = w * 0.7, point = w * 0.62;
-  cb(k, p, [w + 0.1, body + 0.08, 0.06], [x, top - body / 2 + 0.02, z - 0.03], PAL.gold, undefined, 0.02);
-  k.mesh(p, clothPoint(w + 0.1, point + 0.1, 0.06), PAL.gold, [x, top - body + 0.01, z - 0.03]);
-  cb(k, p, [w, body, 0.1], [x, top - body / 2, z], HERALD_BLUE, undefined, 0.02);
-  k.mesh(p, clothPoint(w, point, 0.1), HERALD_BLUE, [x, top - body + 0.005, z]);
-  k.box(p, [w * 0.4, w * 0.4, 0.05], [x, top - body * 0.8, z + 0.06], PAL.gold, [0, 0, Math.PI / 4]);
 }
 
 /** The layer a pool's mirror draws (the fountain's own dragon, rock and jets). */
@@ -2782,14 +2757,7 @@ const BUILDERS: Record<string, Builder> = {
     // between its banners.)
     const gate0 = ends & 4 ? 1.2 : 0, gate1 = ends & 8 ? 1.2 : 0;
     const nb = L < 7 || (ends & 12 && L < 9) ? 0 : L > 24 ? 2 : 1;
-    // (A banner that would hang behind something built against the face (`opt.clear`: spans along
-    // the run, as the outer gate's wing) moves to the middle of the longer stretch beside it.)
-    const clear = ((arg?.opt ?? {}) as { clear?: [number, number][] }).clear ?? [];
-    const at = Array.from({ length: nb }, (_, i) => -L / 2 + (L * (i + 0.5)) / nb + (gate0 - gate1) / nb).map((b) => {
-      const hit = clear.find(([u0, u1]) => b + 1.0 > u0 && b - 1.0 < u1);
-      if (!hit) return b;
-      return hit[0] + L / 2 > L / 2 - hit[1] ? (-L / 2 + hit[0]) / 2 : (hit[1] + L / 2) / 2;
-    });
+    const at = Array.from({ length: nb }, (_, i) => -L / 2 + (L * (i + 0.5)) / nb + (gate0 - gate1) / nb);
     for (const b of at) {
       const out = new THREE.Group();
       out.position.set(b, 0, -T / 2 - 0.2);
@@ -3673,73 +3641,6 @@ const BUILDERS: Record<string, Builder> = {
    */
   postern: (k, g, arg) => gateway(k, g, lenOf(arg) ?? 2, { door: 1, steps: true, lanterns: [-1, 1] }),
   /**
-   * The outer gate across the ledge road at the head of the climb (built along local X, outer face
-   * toward -Z, like the curtain): the passage `len` wide under a pointed arch with a crenellated head
-   * (the lord's crest on its inner face, his banner over the arch outside), the portcullis raised in
-   * the arch, lanterns either side on both faces, a corbelled round bartizan with a slate spire on
-   * each outer corner, a gilt frieze under the head, its north wing (`v` long, toward -X) running on to
-   * the curtain's face and its south end seated on a battered footing down over the cliff's lip.
-   */
-  outer_gate: (k, g, arg) => {
-    const P = lenOf(arg) ?? 4.6, wing = Math.max(0, vOf(arg)), L = P + 2.4, T = 2.2, H = 7;
-    gateway(k, g, P, { head: true, lanterns: [-1, 1] });
-    // The raised portcullis in the arch head.
-    const S = 3.0, rise = 1.9, { arc } = pointedArch(P, S + rise, 8, rise);
-    const archY = (x: number) => {
-      for (let i = 0; i < arc.length - 1; i++) if (Math.abs(x) <= arc[i][0] && Math.abs(x) >= arc[i + 1][0]) {
-        const t = (arc[i][0] - Math.abs(x)) / (arc[i][0] - arc[i + 1][0] || 1);
-        return arc[i][1] + (arc[i + 1][1] - arc[i][1]) * t;
-      }
-      return S;
-    };
-    const pz = -T / 2 + 0.45;
-    for (let x = -P / 2 + 0.35; x < P / 2 - 0.2; x += 0.42) {
-      const top = archY(x) - 0.05;
-      if (top < 3.9) continue;
-      k.box(g, [0.1, top - 3.7, 0.1], [x, (top + 3.7) / 2, pz], IRON);
-      k.mesh(g, taper(0.1, 0.1, 0.01, 0.01, 0.25), IRON, [x, 3.58, pz], [Math.PI, 0, 0]);
-    }
-    k.box(g, [P - 0.8, 0.09, 0.12], [0, 4.1, pz], IRON);
-    // The gilt frieze under the head, and the lord's banner hanging from it over the arch, outside.
-    frieze(k, g, L + 0.4, 0, H - 0.05, -T / 2 - 0.2);
-    {
-      const out = new THREE.Group();
-      out.position.set(0, 0, -T / 2 - 0.3);
-      out.rotation.y = Math.PI;
-      g.add(out);
-      livery(k, out, 0, H + 1.2, 0, 1.2, 1.55);
-    }
-    // The north wing on to the curtain: the curtain's own stone, plinth, string course, merlons.
-    if (wing > 0.1) {
-      const x = -L / 2 - wing / 2;
-      cb(k, g, [wing + 0.1, 0.8, T + 0.5], [x, 0.4, 0], TRIM_D, undefined, 0.05);
-      cb(k, g, [wing + 0.1, H - 0.8, T], [x, 0.8 + (H - 0.8) / 2, 0], ASHLAR, undefined, 0.04);
-      cb(k, g, [wing + 0.1, 0.2, T + 0.16], [x, 3.6, 0], TRIM, undefined, 0.03);
-      cb(k, g, [wing + 0.1, 0.75, 0.6], [x, H + 0.37, -T / 2 + 0.3], ASHLAR, undefined, 0.03);
-      cb(k, g, [wing + 0.1, 0.12, 0.72], [x, H + 0.78, -T / 2 + 0.3], TRIM, undefined, 0.02);
-      cb(k, g, [0.72, 0.6, 0.6], [x, H + 1.05, -T / 2 + 0.3], ASHLAR, undefined, 0.05);
-    }
-    // The south end's footing: a battered talus in the castle's honey stone running down into the
-    // rock below the lip, one blue-grey coping line at the top.
-    k.mesh(g, taper(2.6, T + 1.6, 1.8, T + 0.9, 6), ASHLAR_W, [L / 2 - 0.6, -3, 0]);
-    cb(k, g, [2.2, 0.3, T + 1.1], [L / 2 - 0.6, 0.1, 0], TRIM, undefined, 0.03);
-    // A bartizan on each outer corner: a round turret carried on stepped corbel courses of pale
-    // stone (a blue-grey band between them, a small gold drop under the last), a slate spire.
-    for (const sx of [-1, 1]) {
-      const bx = sx * (L / 2 - 0.25), bz = -T / 2 - 0.15, r = 0.8, y0 = H - 1.0;
-      [[r, 0.3, ASHLAR_L], [r * 0.78, 0.28, ASHLAR], [r * 0.56, 0.26, ASHLAR_L], [r * 0.34, 0.24, ASHLAR]].forEach(([rr, hh, c], i, all) => {
-        const top = y0 - all.slice(0, i).reduce((a, b) => a + (b[1] as number), 0);
-        k.cyl(g, rr as number, (rr as number) * 0.9, hh as number, [bx, top - (hh as number) / 2, bz], c as number, undefined, 12);
-      });
-      k.cyl(g, r * 0.8, r * 0.8, 0.08, [bx, y0 - 0.32, bz], TRIM, undefined, 12);
-      k.mesh(g, new THREE.OctahedronGeometry(0.12, 0), PAL.gold, [bx, y0 - 1.18, bz]);
-      k.cyl(g, r, r, 2.2, [bx, y0 + 1.1, bz], ASHLAR, undefined, 12);
-      k.cyl(g, r + 0.06, r + 0.06, 0.16, [bx, y0 + 0.6, bz], TRIM, undefined, 12);
-      k.box(g, [0.12, 0.6, 0.08], [bx + sx * 0.35, y0 + 1.2, bz - r + 0.12], DARK, [0, sx * -0.4, 0]);
-      spire(k, g, bx, y0 + 2.2, bz, r + 0.12, 2.4, 12, sx);
-    }
-  },
-  /**
    * The round stair turret east of the great door (radius `len`, its platform at `v` + 1.4): the
    * donjon's answer across the axis, so the door is framed by two round masses. Built in the
    * donjon's own language (a battered blue-grey plinth, cream ashlar, blue-grey bands at the
@@ -4342,13 +4243,29 @@ const BUILDERS: Record<string, Builder> = {
       cb(k, g, [0.14, 0.1, 0.14], [x + 0.04, 0.78, z], [0xd05a8a, 0xe8c040, 0xe8dcc0, 0x8a5aa0][i % 4], [0, i, 0], 0.03);
     }
   },
-  /** A kitchen-garden bed: dark soil in rows of cabbages and leeks. */
-  veg_patch: (k, g) => {
+  /**
+   * A field plot of one crop (`v`): 0 cabbages, 1 lettuces, 2 carrots, 3 leeks, 4 red cabbages, in
+   * three rows on ridged dark soil, each plant the kitchen garden's own a size up (field-grown), so
+   * every plot reads as what grows in it.
+   */
+  veg_patch: (k, g, arg) => {
+    const v = vOf(arg) % 5;
     cb(k, g, [3.2, 0.2, 1.8], [0, 0.1, 0], 0x4a3624, undefined, 0.06);
-    for (let r = 0; r < 3; r++) for (let i = 0; i < 5; i++) {
-      const x = -1.2 + i * 0.6, z = -0.55 + r * 0.55;
-      if (r === 1) cb(k, g, [0.08, 0.36, 0.08], [x, 0.36, z], 0x6a9a3a, [0, 0, (hash01(i, r) - 0.5) * 0.4], 0.01);
-      else chunk(k, g, 300 + r * 5 + i, [0.34, 0.24, 0.32], [x, 0.16, z], hash01(i, r, 1) > 0.5 ? 0x5a8a3a : 0x6a9a44, i);
+    const S = 1.4, rows = new THREE.Group();
+    rows.position.y = 0.2;
+    rows.scale.setScalar(S);
+    g.add(rows);
+    const step = v === 2 || v === 3 ? 0.36 : 0.6;
+    for (const z of [-0.55, 0, 0.55]) {
+      // (Each row on its own ridge of turned earth, a shade darker than the plot.)
+      k.box(rows, [2.9 / S, 0.05 / S, 0.36 / S], [0, 0.0, z / S], 0x3a2a1c);
+      spread(2.9, step, step / 2).forEach((x, i) => {
+        const seed = i * 1.37 + z * 5.1, px = x / S, pz = z / S;
+        if (v === 0 || v === 4) PLANT.cabbage(k, rows, px, pz, seed, v === 4);
+        else if (v === 1) PLANT.lettuce(k, rows, px, pz, seed);
+        else if (v === 2) PLANT.carrot(k, rows, px, pz, seed);
+        else PLANT.leek(k, rows, px, pz, seed);
+      });
     }
   },
   /** A round haystack with a pitchfork leaning on it. */
@@ -5404,7 +5321,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
 }
 
 /** Big walls that should dissolve around the hero when they stand between them and the camera. */
-export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'corner_tower', 'door_turret', 'outer_gate', 'outer_gatehouse', 'postern', 'ward_gate', 'donjon', 'pavilion', 'forge_canopy', 'dragon_fountain', 'great_doors', 'pergola', 'garden_tree', 'wall_climber', 'tower_flag']);
+export const OCCLUDING_PROPS = new Set(['castle_wall', 'round_tower', 'corner_tower', 'door_turret', 'outer_gatehouse', 'postern', 'ward_gate', 'donjon', 'pavilion', 'forge_canopy', 'dragon_fountain', 'great_doors', 'pergola', 'garden_tree', 'wall_climber', 'tower_flag']);
 
 /** Every code-built prop kind (plus 'portal' and 'rock_<ore>', built by their own functions). */
 export const PROP_KINDS = Object.keys(BUILDERS);

@@ -644,7 +644,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       const px = Math.floor(pr.x), pz = Math.floor(pr.z);
       for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
         const xx = px + dx, zz = pz + dz;
-        if (xx >= 0 && zz >= 0 && xx < w && zz < h) propNear[zz * w + xx] = 1;
+        if (xx >= 0 && zz >= 0 && xx < w && zz < h) propNear[zz * w + xx] = Math.max(propNear[zz * w + xx], r > 1 ? 2 : 1);
       }
     }
     const cliffA = new THREE.Color(theme.cliff?.[0] ?? 0x7a6e62), cliffB = new THREE.Color(theme.cliff?.[1] ?? 0x5e544a);
@@ -722,6 +722,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         for (const [ff, nA] of [[0, 1], [0.35, 6], [0.65, 12], [0.9, 18]] as const) for (let j = 0; j < nA && ok; j++) {
           const ang = (j / nA) * Math.PI * 2 + yaw, sx = px + Math.cos(ang) * R * ff, sz = pz + Math.sin(ang) * R * ff;
           const xi = Math.floor(sx), zi = Math.floor(sz);
+          // (No mass reaches into the room kept round a fall.)
+          if (xi >= 0 && zi >= 0 && xi < w && zi < h && propNear[zi * w + xi] === 2) ok = false;
           if (!walkable(xi, zi)) continue;
           const fl = floorAt(xi + 0.5, zi + 0.5);
           if (fl < foot + 0.5) {
@@ -977,9 +979,27 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     rocky(inst(rockMassMoss(v), rockMasses[v], mossCols[v], 0, true, ts.paint.grove, false));
   }
   if (ferns.length) {
-    // A fern: a ring of long, narrow fronds arching up and out from the root.
-    const frond = (i: number, n: number) => new THREE.OctahedronGeometry(1, 0).scale(0.1, 0.025, 0.42).translate(0, 0, 0.4).rotateX(-0.55 - (i % 2) * 0.25).rotateY((i / n) * Math.PI * 2 + (i % 2) * 0.3);
-    inst(mergeGeometries(Array.from({ length: 7 }, (_, i) => frond(i, 7)))!, ferns, fernCols, 0, false, ts.paint.grove, false);
+    // A fern: a ring of fronds arching up and out from the root and nodding over at their tips,
+    // each a slender stalk set with pairs of blocky leaflets that shorten toward the tip, so it reads
+    // as a fern, not a spiky rosette.
+    const frond = (i: number, n: number) => {
+      const reach = 0.85 + (i % 2) * 0.15, rise = 0.42 - (i % 2) * 0.1;
+      /** A point along the frond (t: 0 root .. 1 tip): out along +Z, rising and then nodding over. */
+      const at = (t: number) => new THREE.Vector3(0, rise * Math.sin(Math.PI * 0.85 * t) * 1.1, reach * t);
+      const parts: THREE.BufferGeometry[] = [];
+      // (The stalk in two straight lengths, root to mid and mid to tip.)
+      for (const [t0, t1] of [[0, 0.5], [0.5, 1]]) {
+        const a = at(t0), b = at(t1), d = b.clone().sub(a), L = d.length();
+        parts.push(new THREE.OctahedronGeometry(1, 0).scale(0.03, 0.03, L / 2 + 0.02).rotateX(-Math.atan2(d.y, d.z)).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2));
+      }
+      for (const t of [0.24, 0.4, 0.55, 0.69, 0.82, 0.93]) {
+        const c = at(t), len = 0.09 + 0.24 * (1 - t);
+        for (const sx of [-1, 1]) parts.push(new THREE.OctahedronGeometry(1, 0).scale(len / 2, 0.02, 0.07).rotateY(sx * 0.45).translate(sx * len * 0.42, c.y + 0.01, c.z + len * 0.12));
+      }
+      parts.push(new THREE.OctahedronGeometry(1, 0).scale(0.03, 0.02, 0.07).translate(0, at(1).y, at(1).z + 0.05));
+      return mergeGeometries(parts)!.rotateY((i / n) * Math.PI * 2 + (i % 2) * 0.3);
+    };
+    inst(mergeGeometries(Array.from({ length: 6 }, (_, i) => frond(i, 6)))!, ferns, fernCols, 0, false, ts.paint.grove, false);
   }
   // Masonry: stacked, offset courses with a broken top (instances turn in 90° steps for variety).
   const masonry = mergeGeometries([

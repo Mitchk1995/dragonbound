@@ -145,8 +145,8 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
         // height along the blade (0 root .. 1 tip) where covered, else -1; tint gets its shade.
         // seg: how far the view ray runs across the gap down to the next shell (grid units); the
         // blade is tested along it, so from a low camera the slices of a blade join up into one
-        // solid blade instead of a stack of thin slivers.
-        float lawnBlade(vec2 p, float s, float tall, vec3 lean0, vec2 seg, float gap, out float tint) {
+        // solid blade instead of a stack of thin slivers. thin: how many times longer than wide.
+        float lawnBlade(vec2 p, float s, float tall, vec3 lean0, vec2 seg, float gap, float thin, out float tint) {
           vec2 id = floor(p), f = fract(p);
           vec3 r = lawnHash(id);
           float hb = (0.55 + 0.45 * r.z) * tall;
@@ -163,7 +163,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           for (int k = 0; k < 2; k++) {
             float u = float(k) * 0.5;
             vec2 ok = o + seg * u;
-            if (length(vec2(dot(ok, dir), dot(ok, side) * 2.6)) * 2.0 < rad) return clamp((s - gap * u) / max(hb, 1e-3), 0.0, 1.0);
+            if (length(vec2(dot(ok, dir), dot(ok, side) * thin)) * 2.0 < rad) return clamp((s - gap * u) / max(hb, 1e-3), 0.0, 1.0);
           }
           return -1.0;
         }`,
@@ -174,14 +174,16 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
         {
           vec2 wp = vLawnPos.xz;
           bool clipped = vLawn.y < 0.2;
-          // Fine blades on clipped lawns (several hundred to a cell, mown short into a dense turf),
-          // coarser in meadows.
-          float bladeScale = clipped ? 40.0 : 7.5;
+          // Fine blades on clipped lawns (several hundred to a cell, mown short into a dense turf);
+          // in meadows longer, slender blades, two interleaved fields of them so the sward stays full.
+          float bladeScale = clipped ? 40.0 : 8.5;
           vec2 p1 = wp * bladeScale;
-          // How small a blade is on screen: tiny blades shimmer, so the far lawn settles into one
-          // layer and loses its upper shells.
-          vec2 fw = fwidth(p1);
-          float lod = max(smoothstep(0.35, 0.9, sqrt(fw.x * fw.y)), 1.0 - vLawn.z);
+          // How small a blade is on screen (the narrow side of a pixel's footprint on the ground, so
+          // a lawn seen low across keeps its blades): tiny blades shimmer, so the far lawn settles
+          // into one layer and loses its upper shells.
+          vec2 ddx = dFdx(p1), ddy = dFdy(p1);
+          float minor = abs(ddx.x * ddy.y - ddx.y * ddy.x) / max(max(length(ddx), length(ddy)), 1e-4);
+          float lod = max(smoothstep(0.35, 0.9, minor), 1.0 - vLawn.z);
           // vLawn.x: the lawn's outline where the layout cuts a circle from it (else 1); the carpet
           // otherwise covers exactly its own cells. vLawnX: x the share of garden lawn (daisies and
           // clover), y how close a hedge, bed or statue stands (the grass grows long at its foot).
@@ -199,7 +201,9 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
           vec3 ray = vLawnPos - cameraPosition;
           vec2 run = ray.xz / max(abs(ray.y), 0.2 * length(ray.xz)) * gap * vLawn.y;
           float tint;
-          float t = lawnBlade(p1, vShell, tall, lean0, run * bladeScale, gap, tint);
+          float t = lawnBlade(p1, vShell, tall, lean0, run * bladeScale, gap, clipped ? 2.6 : 4.2, tint);
+          // (The second field only where the first leaves a gap: the shell shows one blade either way.)
+          if (!clipped && t < 0.0) t = lawnBlade(p1 + vec2(37.5, 11.5), vShell, tall, lean0, run * bladeScale, gap, 4.2, tint);
           // Daisies and clover in the private gardens: round white heads with gold eyes at the tips
           // of the grass, low trefoil leaves under it.
           vec3 bloom = vec3(-1.0);

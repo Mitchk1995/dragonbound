@@ -29,12 +29,10 @@ const TIGHT = 0.05;
 const JOINTS: { a: string[]; b: string[]; why: string; rule?: (a: Piece, b: Piece) => string[] }[] = [
   { a: ['castle_wall'], b: ['round_tower', 'corner_tower'], why: 'a curtain run ends inside its tower\'s drum, its wall walk at a doorway', rule: (w, t) => wallIntoTower(w, t) },
   { a: ['castle_wall'], b: ['outer_gatehouse', 'ward_gate', 'postern'], why: 'a gate is built across the curtain\'s run; the wall stops at its sides', rule: (w, g) => wallAtGate(w, g) },
-  { a: ['castle_wall'], b: ['outer_gate'], why: 'the outer gate\'s north wing is bonded into the curtain\'s outer face' },
   { a: ['castle_wall', 'round_tower', 'corner_tower', 'donjon', 'building'], b: ['wall_climber'], why: 'ivy and roses lie flat on the masonry, rooted in its foot' },
   { a: ['building'], b: ['pavilion', 'door_turret', 'donjon', 'castle_wall', 'building'], why: 'built against a building\'s wall (never through it into its rooms)', rule: (b, o) => intoRooms(b, o) },
   { a: ['building'], b: ['great_doors'], why: 'the great door\'s leaves hang in the hall\'s doorway, standing open into the hall' },
   { a: ['parapet', 'balustrade', 'ramp_wall', 'kerb'], b: ['parapet', 'balustrade', 'parapet_pier'], why: 'runs of one low wall meet end to end or on their pier' },
-  { a: ['outer_gate'], b: ['parapet', 'parapet_pier'], why: 'the landing\'s parapet starts at the outer gate\'s jamb' },
   { a: ['ramp_paving'], b: ['ramp_wall', 'parapet_pier'], why: 'the climb\'s paving runs in under the feet of its kerb walls and their piers' },
   { a: ['round_tower', 'corner_tower'], b: ['tower_flag'], why: 'the flagpole is stepped into the tower\'s platform' },
   { a: ['fence'], b: ['gate_piers'], why: 'a fence runs into its gate pier' },
@@ -333,7 +331,7 @@ describe('castle geometry', () => {
   it('the wall walks are clear: nothing of another piece crosses a curtain\'s walk', () => {
     const bad: string[] = [];
     const { T, H } = CURTAIN_WALL, z0 = -T / 2 + 0.66, z1 = T / 2 + 0.85 - 0.6;
-    const own = new Set(['round_tower', 'corner_tower', 'outer_gatehouse', 'ward_gate', 'postern', 'outer_gate']);
+    const own = new Set(['round_tower', 'corner_tower', 'outer_gatehouse', 'ward_gate', 'postern']);
     for (const w of P.filter((p) => p.kind === 'castle_wall')) {
       const L = w.spawn!.len!, m = w.obj.matrixWorld;
       const c = new THREE.Vector3(0, H + 1.06, (z0 + z1) / 2).applyMatrix4(m);
@@ -389,7 +387,7 @@ describe('castle geometry', () => {
     const bad: string[] = [];
     // (Not the climb's kerb walls: each sloping stretch is bounded as a level box from its low end, so
     // its corners stand nowhere near the wall's own foot.)
-    const KINDS = /^(parapet|parapet_pier|castle_wall|round_tower|corner_tower|outer_gate|outer_gatehouse|postern|ward_gate|building:.*)$/;
+    const KINDS = /^(parapet|parapet_pier|castle_wall|round_tower|corner_tower|outer_gatehouse|postern|ward_gate|building:.*)$/;
     for (const p of P.filter((q) => KINDS.test(q.kind))) for (const s of p.solids) {
       if (s.part.thin || s.part.fx || s.part.hollow) continue;
       if (s.lo.y > S.ground(s.c.x, s.c.z) + 0.3) continue;
@@ -461,7 +459,7 @@ describe('castle geometry', () => {
   it('no two faces of different stones lie in one plane over each other (they would flicker)', () => {
     const bad: string[] = [];
     // (The architecture, where the eye rests on long faces; not the furnishings inside.)
-    const ARCH = /^(castle_wall|round_tower|corner_tower|donjon|outer_gatehouse|ward_gate|postern|outer_gate|door_turret|pavilion|parapet|parapet_pier|balustrade|ramp_wall|kerb|great_doors|building:.*)$/;
+    const ARCH = /^(castle_wall|round_tower|corner_tower|donjon|outer_gatehouse|ward_gate|postern|door_turret|pavilion|parapet|parapet_pier|balustrade|ramp_wall|kerb|great_doors|building:.*)$/;
     const boxes = S.solids.map((s, i) => [s, i] as const).filter(([s]) => s.part.box && !s.r && !s.part.thin && !s.part.fx && !s.part.hollow && !s.part.fit && ARCH.test(P[s.piece].kind));
     const isBox = new Set(boxes.map(([, i]) => i));
     for (const [A, i] of boxes) for (const j of S.grid.near(A.lo, A.hi, 0.01)) {
@@ -554,7 +552,7 @@ describe('castle geometry', () => {
       else if (!range && ox > -1.5 && oz > -1.5) bad.push(`${a.name} and ${b.name} stand jammed together (less than 1.5 apart)`);
     }
     // Every gate keeps a clear space round its arch on both faces: no building within 1.5 of its ends.
-    for (const g of P.filter((p) => ['ward_gate', 'postern', 'outer_gate', 'outer_gatehouse'].includes(p.kind))) {
+    for (const g of P.filter((p) => ['ward_gate', 'postern', 'outer_gatehouse'].includes(p.kind))) {
       const L = (g.spawn!.len ?? 4) + 2.4;
       for (const b of bs) {
         const [x0, z0, x1, z1] = rect(b);
@@ -575,7 +573,7 @@ describe('castle geometry', () => {
     // hedge round a bed) laid as separate blocks of one stone overlap with their tops at one height:
     // a seam or a flicker where they cross. Such a thing is built as one shape instead. (Sculpture and
     // planting are left alone: a statue's or a plant's parts may overlap.)
-    const ARCH = /^(castle_wall|round_tower|corner_tower|donjon|outer_gatehouse|ward_gate|postern|outer_gate|door_turret|pavilion|parapet|parapet_pier|balustrade|ramp_wall|kerb|kerb_ring|box_border|round_terrace|field_shelter|gate_piers|fence|building:.*)$/;
+    const ARCH = /^(castle_wall|round_tower|corner_tower|donjon|outer_gatehouse|ward_gate|postern|door_turret|pavilion|parapet|parapet_pier|balustrade|ramp_wall|kerb|kerb_ring|box_border|round_terrace|field_shelter|gate_piers|fence|building:.*)$/;
     const bad: string[] = [];
     for (const p of P.filter((q) => ARCH.test(q.kind))) {
       const ss = p.solids.filter((s) => !s.part.thin && !s.part.hollow && !s.part.fit && s.e[0] * s.e[1] * s.e[2] * 8 > 0.004);
@@ -615,6 +613,48 @@ describe('castle geometry', () => {
       for (const g of p.solids.filter((s) => s.part.tag === 'glass')) for (const b of bands) {
         const over = Math.min(b.hi.x, g.hi.x) - Math.max(b.lo.x, g.lo.x) > 0 && Math.min(b.hi.z, g.hi.z) - Math.max(b.lo.z, g.lo.z) > -0.6;
         if (over && b.lo.y > g.hi.y - 0.05 && b.lo.y - g.hi.y < 0.5) bad.push(`${p.name}: a string course at ${fmt(b.c)} runs ${(b.lo.y - g.hi.y).toFixed(2)} over a window's head at ${fmt(g.c)}`);
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
+  });
+
+  it('paving stops at the inside face of every rail: no road shows outside a parapet, a balustrade or a wall of the climb', () => {
+    const { layout: L } = S, bad: string[] = [];
+    /** Is the ground at a point laid as a road or a walk (paving, gravel, the climb's earth)? */
+    const road = (x: number, z: number) => {
+      const i = Math.floor(z) * L.w + Math.floor(x);
+      return L.ground[i] === Ground.Stone || L.ground[i] === Ground.Path || L.ground[i] === Ground.Dirt;
+    };
+    const check = (name: string, x: number, z: number) => {
+      if (road(x, z)) bad.push(`${name}: road shows outside its outer face at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+    };
+    // Parapets and balustrades: built along local X, the outer face toward +Z (the parapet's base 0.9
+    // deep, the balustrade's plinth 0.34 deep, set 0.33 out); looked at a hand's breadth beyond it.
+    // (Every run on the crown, the ledge and the landing, whether or not it lies in the castle's area.)
+    const Y = new THREE.Vector3(0, 1, 0);
+    for (const sp of L.props.filter((q) => q.kind === 'parapet' || q.kind === 'balustrade')) {
+      const L2 = (sp.len ?? 6) / 2, out = sp.kind === 'parapet' ? 0.6 : 0.65, name = `${sp.kind}@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`;
+      for (let u = -L2 + 0.3; u <= L2 - 0.3; u += 0.25) {
+        const v = new THREE.Vector3(u, 0, out).applyAxisAngle(Y, sp.rot ?? 0);
+        check(name, sp.x + v.x, sp.z + v.z);
+      }
+    }
+    // The climb's walls: each stretch looked at beyond its outer face (0.31 out from its line), on the
+    // side away from the road it kerbs.
+    const pave = L.props.find((q) => q.kind === 'ramp_paving')!;
+    const line = (pave.opt as { pts: number[][] }).pts.map(([x, z]) => [x + pave.x, z + pave.z]);
+    const fromRoad = (x: number, z: number) => Math.min(...line.slice(0, -1).map(([ax, az], k) => {
+      const [bx, bz] = line[k + 1], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+      return Math.hypot(x - ax - dx * t, z - az - dz * t);
+    }));
+    for (const sp of L.props.filter((q) => q.kind === 'ramp_wall')) {
+      const pts = (sp.opt as { pts: number[][] }).pts.map(([x, z]) => [x + sp.x, z + sp.z]), name = `ramp_wall@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`;
+      for (let k = 0; k < pts.length - 1; k++) {
+        const [ax, az] = pts[k], [bx, bz] = pts[k + 1], l = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / l, nz = (bx - ax) / l;
+        for (let t = 0.1; t <= 0.9; t += 0.8 / Math.ceil(l / 0.25)) {
+          const x = ax + (bx - ax) * t, z = az + (bz - az) * t, sg = fromRoad(x + nx, z + nz) > fromRoad(x - nx, z - nz) ? 1 : -1;
+          check(name, x + sg * nx * 0.46, z + sg * nz * 0.46);
+        }
       }
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);

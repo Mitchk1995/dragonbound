@@ -202,8 +202,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('rock-east', [P.gate.x + 100, 7, P.gate.z + 14], [P.gate.x + 62, 7, P.gate.z - 12], 45);
   await view('rock-cutting', [P.gate.x + 74, 5, P.gate.z + 28], [P.gate.x + 58, 6, P.gate.z + 8], 22);
   await view('rock-west', [-14, 16, 86], [28, 8, 64], 40);
-  // The head of the climb: the landing, the outer gate across the ledge road and the castle's
-  // south-east corner over them, from out over the court.
+  // The head of the climb: the landing, the ledge road turning off it and the castle's south-east
+  // corner over them, from out over the court.
   await view('landing', [P.gate.x + 72, y0 + 12, P.gate.z + 22], [P.gate.x + 50, y0 + 2, P.gate.z + 6], 24);
   // The crown's north-east rim and the fracture notch beyond the castle.
   await view('ne-rim', [165, y0 + 26, 92], [138, y0 - 2, 42], 40);
@@ -215,6 +215,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('falls-west', [4, y0 + 6, 92], [19.6, y0 - 4, 80.5], 24);
   // The rock's foot through the gameplay camera, from the spring's landing (frame cost measured).
   await play('rock-foot', P.gate.x + 21, P.gate.z + 17, 1.0, true);
+  // The fields at the rock's foot, low across the plots and the meadow rolling between them.
+  await view('farm', [P.gate.x + 14, 2.6, P.gate.z + 44], [P.gate.x + 4, 0.2, P.gate.z + 26], 20);
   if (rockOnly) return finish();
 
   // The whole castle: from high in the south-east, and as a plan from almost straight above.
