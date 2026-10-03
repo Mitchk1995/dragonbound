@@ -366,7 +366,7 @@ function clipConvex(poly: P2[], f: (v: P2) => number): P2[] {
  * bed shows beyond the course laid on it (the lip at each corner of a ring turned half a stone on the
  * next, the ledge of a course standing proud of a drum).
  */
-export function convexMinus(a: P2[], b: P2[]): P2[][] {
+function convexMinus(a: P2[], b: P2[]): P2[][] {
   const s = Math.sign(area2(b)) || 1, out: P2[][] = [];
   let rest = a;
   for (let j = 0; j < b.length && rest.length >= 3; j++) {

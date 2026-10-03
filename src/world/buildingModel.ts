@@ -7,10 +7,9 @@ import {
   fitsOf, inRoom, isVoid, partitionRuns, partitionsOf, sideLen, stairRect, wallRuns,
   type BuildingSpec, type Fit, type Floor, type Side, type Stair, type Window,
 } from './building';
-import { studioEnv } from '../render/env';
 import { COURSE } from '../render/masonry';
 import {
-  archDressing, archInset, archPane, archRing, archTympanum, roomMaterial, roomPlate, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, deep, DOORS, DRESS, frieze, pointedDoor, singleDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
+  archDressing, archInset, archPane, archRing, roomMaterial, roomPlate, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, deep, DOORS, DRESS, frieze, pointedDoor, singleDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
   GILT, LAMP_NAVY, PLOT_MARK, pointedArch, quoins, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
