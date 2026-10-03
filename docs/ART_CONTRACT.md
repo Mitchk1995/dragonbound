@@ -46,14 +46,21 @@ photoreal.
 
 **Surfaces.** Soft stylized shading, and every surface carries a hand-painted texture: stone, wood, bark, leaves, crops,
 cloth. Dressed stone is the owner's pick B (October 3): chunky blocks with recessed dark joints, bevelled and slightly
-chipped edges, a lit top edge and a little tone variation block to block, its relief drawn in the shader rather than
-modelled stone by stone. The castle is being moved to this finish now: until it lands, the old painted stone is not a defect in other work. A few accents of real material:
+chipped edges, a lit top edge and a little tone variation block to block. Its relief is drawn in the shader across wall
+faces, and wherever a wall's outline shows the stones (tops, corners, arches, tower outlines) they are real blocks standing
+proud of the face, so the stones clearly stand out from the play camera. Round towers are laid in flat stones, one flat
+face per stone with each course turned half a stone, so they are very slightly many-sided, never smooth cylinders. The
+castle is being moved to this finish now: until it lands, the old painted stone is not a defect in other work. A few accents of real material:
 - forged metal;
 - clear glass with a cool tint that you can genuinely see into;
 - running water.
 
 Texture scale is consistent: a few block sizes laid in courses that line up across every wall and tower, nothing
 stretched, squeezed or bent round a corner or a curve.
+
+**Structure.** Everything is built as a mason would build it: where the way climbs it is real stairs (flights,
+landings, cheek walls, a parapet over every drop), never a tilted ramp; every terrace edge is a retaining wall, every
+bridge stands on arches or piers, every door opens onto a floor at its own level.
 
 **The castle and the island.** The castle is becoming a grand royal castle round a dominant great keep (castle v4, in
 planning) in cream limestone, its trim cut from the same stone; royal blue slate spires banded in gold, royal blue and gold

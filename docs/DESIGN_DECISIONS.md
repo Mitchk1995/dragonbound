@@ -25,13 +25,23 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   own taste ("usually they are kind of generic"). The plan comes first as a blueprint (castle v4) for his approval.
 - **Stone: pick B, "Hand-painted chunky".** One stone system for the whole castle instead of spot fixes: real depth
   (bump-mapped joints and chipped, bevelled edges with a lit top edge), only a few block sizes laid in courses that line
-  up everywhere, truly round towers, and trim, kerbs and borders cut from the same stone rather than stuck-on blocks in
-  another colour (his note on the blue-grey quoins; the dark corbel blocks go too).
+  up everywhere, and trim, kerbs and borders cut from the same stone rather than stuck-on blocks in another colour (his
+  note on the blue-grey quoins; the dark corbel blocks go too). After the first work-in-progress pictures he added two
+  things. Round towers are laid in flat stones, never a smooth cylinder ("brick buildings cant be fully round"): each
+  stone is one flat face with its joints on the facet edges, each course turned half a stone, so a tower is very slightly
+  many-sided and no brick bends. And the stones must clearly stand out from the play camera: deeper joints and stronger
+  shading, and real blocks standing proud of the wall wherever its outline shows the stones (tops, corners, arches,
+  tower outlines), since painted depth cannot change an outline.
 - **Trees: pick B, "Natural", loosely.** Redo the trees at true size, no longer blocky, as the woodcutting ladder in
   RuneScape's order: tree, oak, willow, maple, yew, magic. They need not be realistic: a mix of styles and a more cartoony
   look are fine, and Mitchell is unsure what is best, so one oak is grown in the game in three looks (natural, cartoony
   and a mix) for him to choose from before the rest follow. Everything else should get a nice texture too (the crops and
-  plants).
+  plants). He judged the first natural oak "decent".
+- **Everything must make structural sense** (October 3). Where the way climbs, it is built as real stairs (flights,
+  landings, cheek walls, a parapet over every drop), never a tilted ramp; first the walled ramp up from the landing,
+  which "doesnt make sense the way it is built". The ledge road has walls on both sides. Every terrace edge is a
+  retaining wall, every bridge stands on arches or piers, and every door opens onto a floor at its own level. The
+  castle-v4 blueprint is revised for this before he approves it.
 - **Characters stay blocky and modular, like Lego.** Mitchell knows complex organic shapes are Claude's weak spot when
   built from pieces; trees are where we leave blocks behind, grown as one piece.
 - **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
@@ -152,7 +162,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - Doors fill their doorways: closed blue leaves under a lintel with a deep blue tympanum filling the arch above, the gate-close treatment, on every castle door and gate.
   - One cohesive banner and flag shape, each a single painted cloth: long banners with a deep swallowtail edged in gold, flags with a gold hoist and a forked fly.
   - Windows are real leaded glass that catches the sky, the mullion running the full light; the court wings have fewer, symmetric windows.
-  - The stone's blocks keep one size on every face and run round the drums without stretching. (Refined October 3: a few block sizes, laid in courses that line up everywhere, on truly round drums.)
+  - The stone's blocks keep one size on every face and run round the drums without stretching. (Refined October 3: a few block sizes, laid in courses that line up everywhere; drums are laid in flat stones, very slightly many-sided.)
   - Recognisable plants in the beds (tulips, rose bushes, lavender, delphiniums and daisies; cabbages, lettuces, carrots and leeks), blocky horses, a neater champion's helm comb, the training yard centred between matching towers, wider kitchen-garden lanes, the orchard bench clear of the tower, one continuous spring fall, and real lawn instead of loose grass tufts on the island.
 - **Castle review notes, third round: no clipping, nothing floating, things stitched into real shapes** (Mitchell, October 2). He found clipping and placement problems everywhere, "shapes placed together instead of stitched into a shape that makes sense". Decided and built (this supersedes the round-two door, window and mullion entries above):
   - Every tower meets the curtain's wall walk at a real doorway (a single blue door in a dressed frame); a stair tower with its own door replaces the square turret that clipped the north-east wall; the gatehouse's drums stand on the wall's line, each with its doorway; the ward gates carry the walk over them.
