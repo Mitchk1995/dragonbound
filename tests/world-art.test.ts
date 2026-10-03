@@ -6,7 +6,7 @@ import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/pa
 import { patchKeys } from '../src/render/surface';
 import { ZONES } from '../src/data/zones';
 import { Cell, Ground } from '../src/world/layout';
-import { ASHLAR, buildProp, PROP_KINDS, spread } from '../src/world/props';
+import { ASHLAR, buildProp, propKinds, spread } from '../src/world/props';
 
 const finite = (geo: THREE.BufferGeometry) => {
   for (const name of ['position', 'normal']) {
@@ -56,7 +56,7 @@ describe('world props', () => {
     expect(smooth).toBe(0);
   });
   it('every prop builds with finite geometry and no bumped materials', () => {
-    for (const kind of [...PROP_KINDS, 'portal', 'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_emberite']) {
+    for (const kind of [...propKinds(), 'portal', 'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_emberite']) {
       const p = buildProp(kind, kind === 'portal' ? 0xff6a2a : undefined);
       let meshes = 0;
       p.obj.traverse((o) => {
@@ -70,7 +70,7 @@ describe('world props', () => {
     }
   });
   it('no glowing crack props remain, and bones do not glow', () => {
-    expect(PROP_KINDS).not.toContain('crack');
+    expect(propKinds()).not.toContain('crack');
     buildProp('bones', 2).obj.traverse((o) => {
       if (o instanceof THREE.Mesh) expect((o.material as THREE.MeshStandardMaterial).emissiveIntensity * (o.material as THREE.MeshStandardMaterial).emissive.getHex()).toBe(0);
     });
