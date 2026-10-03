@@ -100,7 +100,7 @@ export class UI {
     const tabs = SIDE_TABS.map((t) => `<button class="stab" data-tab="${t.id}"><img src="${tabArtUrl(t.id)}" alt="" draggable="false"></button>`).join('');
     this.hud.innerHTML = `
       <div class="vignette"></div>
-      <div class="topleft"><div class="zoneline"><div class="zone plaque"><span class="zname"></span><i class="sheen"></i></div><div class="zkind"></div></div><div class="weak"></div></div>
+      <div class="topleft"><div class="zoneline"><div class="zone plaque"><span class="zname"></span></div><div class="zkind"></div></div><div class="weak"></div></div>
       <div class="objective hidden"><div class="obj-title">Objective</div><div class="obj-text"></div></div>
       <div class="target"><div class="tname"></div><div class="tbar"><div></div></div></div>
       <div class="bossbar"><div class="bname"></div><div class="bbar"><div class="bfill"></div></div></div>
