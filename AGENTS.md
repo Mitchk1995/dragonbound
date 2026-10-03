@@ -36,6 +36,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 
 ## Finding context and checking work
 
+- **"Continue from the last chat" means read that chat first (owner, October 3).** Before doing anything else, find the most recent previous session, archived ones included (titles can be misleading, so search transcripts and check dates), and read how it ended. Do exactly what it left next; if it left the owner judging pictures, wait for the owner's picks instead of starting new work.
 - Start with `git status --short --branch` and `git worktree list`, then this file and the README. Work only in your assigned checkout; another agent's uncommitted work, branch and worktree belong to that agent.
 - Read the latest decisions and the relevant section of `docs/DESIGN_DECISIONS.md` for game direction. Search with `rg` before opening whole files. Read the implementation and its nearby tests for current behaviour; `docs/history/` is background, not current instructions.
 - Narrow context by task: saves use `src/save/` and `electron/save-*`; launch/check tooling uses `tools/play.cjs`, `package.json` and `vite.config.ts`; world loading and resource lifetime use `src/world/zone.ts`, `src/render/resources.ts` and `src/render/registry.ts`. Art and layout work starts with `docs/ART_CONTRACT.md` and the relevant blueprint/concept.
