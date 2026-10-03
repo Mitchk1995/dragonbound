@@ -245,6 +245,21 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await play('paddock', Z.paddock.x, Z.paddock.z, 1.1);
   await play('training', Z.training.x, Z.training.z, 1.1);
   await play('lookout', 30, 115, 1.2);
+  // The north range from the bailey, its roofs from over each end of the terrace and its fronts close
+  // by from it; the stables' and the barracks' fronts on the paddock and the training yard; and inside
+  // the great hall (its minstrels' gallery over the screens), the chapel, the stables and the barracks.
+  await view('range', [P.door.x + 6, y0 + 46, 112], [P.door.x, y0 + 8, 32], 60);
+  await view('range-roofs', [34, y0 + 24, 60], [52, y0 + 13, 29], 30);
+  await view('range-roofs-east', [118, y0 + 24, 60], [100, y0 + 13, 29], 30);
+  await view('range-hall', [47, y0 + 8, 51], [54, y0 + 8, 30], 18);
+  await view('range-chapel', [105, y0 + 8, 51], [98, y0 + 8, 30], 18);
+  await view('stables-front', [41, y0 + 8, 87], [43, y0 + 2.5, 73], 16);
+  await view('barracks-front', [111, y0 + 8, 87], [109, y0 + 2.5, 73], 16);
+  await play('terrace-east', Z.terrace.x + 22, Z.terrace.z, 1.1);
+  await play('hall', 52, 32.5, 1.35);
+  await play('chapel', 97.5, 30.5, 1.0);
+  await play('stables', 43, 70.5, 1.1);
+  await play('barracks', 110, 69.5, 1.1);
   // The fountain up close, low down, from the side and from the front; a champion at the grand
   // stair's foot.
   await view('fountain-close', [P.fountain.x + 7.5, y0 + 4.2, P.fountain.z + 14.5], [P.fountain.x, y0 + 4.4, P.fountain.z + 0.5], 14);
@@ -265,6 +280,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('walk-south-east', [P.gate.x + 11, walkY, P.gate.z - mid], [P.gate.x + 20, walkY - 0.6, P.gate.z - mid], 10);
   await view('walk-south-west', [P.gate.x + 15, walkY, P.gate.z - mid], [P.gate.x + 6, walkY - 0.6, P.gate.z - mid], 10);
   await view('walk-east', [120 - mid, walkY, 72], [120 - mid, walkY - 0.6, 63], 10);
+  // The north-west walk along the great hall's back wall, toward the keep.
+  await view('walk-north', [38, walkY, 21 + mid], [56, walkY - 1.2, 21 + mid], 12);
   // Frame cost in a meadow outside the castle, for comparison with the fountain's.
   await play('meadow', 56, 150, 1.0);
   return finish();
