@@ -14,7 +14,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - **Parallel jobs for implementation (October 3).** Run parallel jobs (Claude's Workflow tool, or several agents) where they help, partitioned so they never edit the same code, each job in its own worktree on its own branch. Heavy jobs still run one at a time through the shared lock (see "How work lands"). Keep the repo, branches and scratch output clean.
 - **Spend usage carefully (October 3).** Even on the larger allowance, three max-effort jobs used 6% of the week in about two hours. To make it last:
   - give each job one focused task in a fresh context, and continue an agent by message rather than starting a new one on the same work;
-  - run builders at high effort, keeping max for the hardest design work;
+  - keep max effort for visual work the owner will judge (it gives clearly more polished results); run planning, code and groundwork at high;
   - run routine work (doc edits, code reviews, placing things, simple fixes) on Sonnet;
   - take only the captures needed to judge, and read pictures at the size they need.
 - **How to work through a batch of owner notes.**
