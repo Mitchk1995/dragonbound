@@ -37,6 +37,9 @@ export const SWING_WRIST = 1.23;
 /** Where the blow lands in every attack animation (see COMBAT_TUNING.impact). */
 const IMPACT = COMBAT_TUNING.impact;
 
+/** How far the hanging arms turn out from the body (radians, about Z); tools/blender/fitcheck.py poses with it. */
+export const ARM_SPLAY = 0.1;
+
 /** How much of the upper arm's rotation the pauldron follows (see Rig.followShoulders). */
 export const SHOULDER_FOLLOW = 0.75;
 
@@ -163,8 +166,9 @@ export class Rig {
     this.offset('body', 0, Math.abs(sw) * 0.06 * moveAmt + breathe);
     this.rot('body', hurtLean + moveAmt * 0.08);
     this.rot('head', -moveAmt * 0.05, Math.sin(t * 0.7) * 0.05);
-    this.rot('armL', -sw * 0.5 * moveAmt, 0, -0.08);
-    this.rot('armR', sw * 0.3 * moveAmt, 0, 0.08);
+    // The arms hang a little out from the sides (armL is at +X, armR at -X), so the fists clear the hips and skirts.
+    this.rot('armL', -sw * 0.5 * moveAmt, 0, ARM_SPLAY);
+    this.rot('armR', sw * 0.3 * moveAmt, 0, -ARM_SPLAY);
     this.rot('sock_handR');
     this.rot('tail1', 0, Math.sin(t * 3) * 0.3);
     this.rot('tail2', 0, Math.sin(t * 3 - 0.8) * 0.4);
@@ -209,7 +213,7 @@ export class Rig {
         else if (a < down) x = -3.2 + 2.85 * ease((a - up) / (down - up));
         // The strike ends with the arm still a little forward so long tools (pickaxe) clear the ground.
         else x = -0.35 * (1 - ease((a - down) / (1 - down)));
-        this.rot('armR', x, 0, 0.1);
+        this.rot('armR', x, 0, -ARM_SPLAY);
         // Wrist: cock the blade back over the head in the windup, keep it through the impact, relax after.
         const wrist = a < IMPACT ? SWING_WRIST * ease(Math.min(1, a / up)) : SWING_WRIST * (1 - ease((a - IMPACT) / (1 - IMPACT)));
         this.rot('sock_handR', wrist);
@@ -218,8 +222,8 @@ export class Rig {
       }
       case 'slam': {
         const x = a < IMPACT ? -3.0 * ease(a / IMPACT) : -3.0 + 2.8 * ease((a - IMPACT) / (1 - IMPACT));
-        this.rot('armR', x);
-        this.rot('armL', x);
+        this.rot('armR', x, 0, -ARM_SPLAY);
+        this.rot('armL', x, 0, ARM_SPLAY);
         this.rot('body', a < IMPACT ? -0.2 : 0.25);
         break;
       }

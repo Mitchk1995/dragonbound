@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ENEMIES } from '../data/enemies';
+import { COMBAT_TUNING } from '../data/tuning';
 import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
 import { Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
@@ -28,6 +29,9 @@ const ENEMY_ATTACK: Record<string, AttackKind> = { chaser: 'swing', kiter: 'thro
 
 /** The wind-up's peak, where each attack reads best in a still. */
 const MID_ATTACK: Record<AttackKind, number> = { swing: 0.36, bow: 0.4, cast: 0.4, throw: 0.36, slam: 0.4, bite: 0.4 };
+
+/** Mid-strike, the sword arm swinging forward past the body. */
+const IMPACT_FRAME = COMBAT_TUNING.impact;
 
 function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attack: number) {
   const m = makeModel('hero');
@@ -89,7 +93,67 @@ export async function charactersSuite(g: Game, shot: Shot) {
       return o;
     }, kind);
   }
+  await closeUps(st, shot);
   await playCamera(g, shot);
+}
+
+/** A camera `dist` from the named part (world centre), looking at it from `dir`. */
+function near(root: THREE.Object3D, part: string, dir: THREE.Vector3, dist: number, lift = 0) {
+  root.updateMatrixWorld(true);
+  const at = root.getObjectByName(part)!.getWorldPosition(new THREE.Vector3());
+  at.y += lift;
+  return { eye: at.clone().add(dir.clone().normalize().multiplyScalar(dist)), at };
+}
+
+/**
+ * Close-ups the owner judges hands and hoods from: the hero's fist round the sword at rest and raised, the cultist's
+ * hood and its fist round the staff (at rest and in the cast), and all five from the side mid-attack, where an arm
+ * cutting into the body would show.
+ */
+async function closeUps(st: Studio, shot: Shot) {
+  const sword = HERO_SETS[0][1];
+  const cells: Parameters<Studio['sheet']>[0] = [];
+  const add = (label: string, obj: THREE.Object3D, cam: { eye: THREE.Vector3; at: THREE.Vector3 }) => cells.push({ label, obj, ...cam });
+  const flush = async (name: string, cols: number, rows: number) => {
+    st.sheet(cells, cols, rows);
+    await shot(name);
+    st.clear(cells.map((c) => c.obj));
+    cells.length = 0;
+  };
+  let h = hero(sword, 'swing', -1);
+  add('sword hand · 3/4', h, near(h, 'sock_handR', new THREE.Vector3(-0.8, 0.35, 0.7), 1.3));
+  h = hero(sword, 'swing', -1);
+  add('sword hand · front', h, near(h, 'sock_handR', new THREE.Vector3(-0.15, 0.2, 1), 1.3));
+  h = hero(sword, 'swing', MID_ATTACK.swing);
+  add('raised · 3/4', h, near(h, 'sock_handR', new THREE.Vector3(-0.75, 0.25, 0.8), 1.4, -0.1));
+  h = hero(sword, 'swing', MID_ATTACK.swing);
+  add('raised · front', h, near(h, 'sock_handR', new THREE.Vector3(-0.1, 0.1, 1), 1.4, -0.1));
+  await flush('char-close-hero-hands', 2, 2);
+
+  let c = creature('cultist', 'cast', -1);
+  add('cultist hood · front', c, near(c, 'head', new THREE.Vector3(0, 0.15, 1), 1.9, 0.3));
+  c = creature('cultist', 'cast', -1);
+  add('cultist hood · side', c, near(c, 'head', new THREE.Vector3(1, 0.15, 0.1), 2.2, 0.3));
+  c = creature('cultist', 'cast', -1);
+  add('staff grip · 3/4', c, near(c, 'sock_handR', new THREE.Vector3(-0.8, 0.3, 0.7), 1.5, 0.15));
+  c = creature('cultist', 'cast', MID_ATTACK.cast);
+  add('staff grip · cast', c, near(c, 'sock_handR', new THREE.Vector3(-0.8, 0.2, 0.7), 1.3));
+  await flush('char-close-cultist', 2, 2);
+
+  // From each one's right side (the attacking arm's side), mid-attack: the arm swings past the body's side.
+  const side = new THREE.Vector3(-1, 0.12, 0.08);
+  for (const [label, set] of [HERO_SETS[0], HERO_SETS[3]]) {
+    h = hero(set, 'swing', IMPACT_FRAME);
+    add(`hero ${label} · strike`, h, fit(h, side));
+  }
+  for (const id of ['goblin', 'kobold', 'cultist', 'cinder_priest']) {
+    const def = ENEMIES[id];
+    const kind = ENEMY_ATTACK[def.behavior];
+    const o = creature(def.model, kind, MID_ATTACK[kind]);
+    o.scale.setScalar(def.scale);
+    add(`${id} · ${kind}`, o, fit(o, side));
+  }
+  await flush('char-side-attacks', 3, 2);
 }
 
 /** The hero and one of each enemy in a row in the Foothills, posed by hand (the simulation is held). */
