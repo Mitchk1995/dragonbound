@@ -62,10 +62,23 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   no problem to design. Our reading of it: where the way climbs, real stairs (flights, landings, cheek walls, a parapet
   over every drop) rather than a tilted ramp; every built terrace edge a retaining wall (natural rock edges stay rock);
   every bridge on arches or piers; every door onto a floor at its own level; and rooms, floors, stairs and windows that
-  fit each building's outside, with the play camera working in every room. The castle-v4 blueprint is revised for this
-  before he approves it.
+  fit each building's outside, with the play camera working in every room. The castle-v4 blueprint was revised for this
+  and then approved (below).
 - **Characters stay blocky and modular, like Lego.** Mitchell knows complex organic shapes are Claude's weak spot when
   built from pieces; trees are where we leave blocks behind, grown as one piece.
+- **Castle v4 must make structural sense (October 3, notes on the first v4 pictures).** The ramp up to the ledge becomes
+  stairs (a stone stair of four flights with level landings); the ledge road has a wall on both sides; the whole plan is
+  checked as a mason would build it. Every enterable building's inside must work with its outside, with a simple interior
+  plan for each (`docs/blueprints/castle-v4/castle-v4-interiors.png`).
+- **Castle v4 plan notes (October 3, pins on the plan).** The moat goes round the back too, so it rings all four sides
+  and the keep's back rises out of it; the ledge walk, the lookout and the rock round them are shaped naturally, with the
+  walls following and sitting on the natural rock (and the same for the landing and the crown's whole edge). Roofs: pick
+  B, steep blue slate roofs as in the painting on the great hall and the chapel; the kitchen and the solar stay flat
+  behind battlements so the keep stays the star.
+- **Castle v4 approved (October 3, on the decision page).** The revised plan (`docs/blueprints/castle-v4/`) is the plan
+  to build, superseding its open choices: slate roofs on the hall and the chapel only, the keep at 28 m (spires 44), one
+  waterfall to the stream under the gate terrace (today's west fall off the brink stays), the belvedere and the little west gate gone, today's gatehouse unchanged, the farm
+  moved 8 m south.
 - **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
   no flag shadow from nowhere, the fountain dragon's front legs, more variety in the small garden trees, the sunken tree
   and the grass seam by the landing.
@@ -132,10 +145,10 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 Where things stand (October 3):
 - **Castle:** after the fifth round of notes (see "The new look and the great keep" above), three jobs run side by side:
   the stone finish on the castle as it stands (now reworked for flat-stone towers and stones that stand out), the
-  castle-v4 blueprint around the great keep (now revised for stairs, walls, structural sense and interiors), and the
+  castle-v4 blueprint around the great keep (approved October 3), and the
   woodcutting trees (the natural oak is done; the other five follow in its style). The review page,
   https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins notes and picks options; a fixed note is
-  marked `status: done` and drops off the page. Once the blueprint is approved the castle is rebuilt to it; the new
+  marked `status: done` and drops off the page. Now the blueprint is approved the castle is rebuilt to it; the new
   trees then replace the forests and garden trees.
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
