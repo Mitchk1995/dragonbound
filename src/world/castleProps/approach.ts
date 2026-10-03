@@ -1,8 +1,14 @@
-/** The castle's approach: its parapets, balustrades, ramp walls and paving, terrace and bench. */
+/**
+ * The castle's approach: its parapets, balustrades, ramp walls and paving, terrace and bench; the
+ * climb's stair, walls and piers; the gate terrace's bastion, the bridge and the banners at its foot.
+ */
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { PAL } from '../../render/kit';
 import { taper } from '../../render/blocks';
-import { type Builder, ASHLAR, ASHLAR_L, ASHLAR_W, ball, BASE, cb, DRESS, KERB, laidBand, LAMP_NAVY, lenOf, vOf } from '../props';
+import { COURSE } from '../../render/masonry';
+import { type Builder, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, ball, BASE, BASE_COURSE, cb, DARK, deep, DRESS, KERB, laidBand, LAMP_NAVY, lenOf, livery, PAVE, spandrels, vOf } from '../props';
+import { paved } from './curtain';
 
 /** Flagstones laid as props (the round terrace's): the road's flagstone tone, and a little darker. */
 const FLAG = 0x958f86, FLAG_D = 0x8a847b;
@@ -99,7 +105,252 @@ export function flatSlab(outline: THREE.Vector2[], h: number) {
   return geo;
 }
 
+/** A convex block from its corners (x, y, z), for the battered and raking masonry of the approach. */
+function hull(pts: number[][]) {
+  const geo = new ConvexGeometry(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * For the geometry audit: boxes filling a stretch along X from x0 to x1 whose foot and head rake
+ * straight between their heights at its ends (y0a to y0b under it, y1a to y1b over it), `z0` to `z1`
+ * across: short slices, each from the higher of its foot's ends to the lower of its head's, so every
+ * box lies inside the stone.
+ */
+function rakedBoxes(x0: number, x1: number, y0a: number, y0b: number, y1a: number, y1b: number, z0: number, z1: number, step = 0.2) {
+  const n = Math.max(1, Math.ceil((x1 - x0) / step)), at = (a: number, b: number, t: number) => a + (b - a) * t;
+  return Array.from({ length: n }, (_, i) => {
+    const t0 = i / n, t1 = (i + 1) / n;
+    return [at(x0, x1, t0), Math.max(at(y0a, y0b, t0), at(y0a, y0b, t1)), z0, at(x0, x1, t1), Math.min(at(y1a, y1b, t0), at(y1a, y1b, t1)), z1];
+  });
+}
+
+/** How far a talus (a battered plinth) stands out at its foot from the face it leans against. */
+const TALUS_OUT = 0.7;
+
+/**
+ * The climb's stone: its flights of treads, its landings' flagstones, its walls with raking copings,
+ * the piers where the copings change pitch and the buttresses on the tall wall over the lane.
+ */
+export const CLIMB_PROPS: Record<string, Builder> = {
+  /**
+   * A flight of steps from its foot (local z = 0) up toward -Z, `opt.w` wide between its walls: `n`
+   * risers of `r` and a tread `g` deep for each but the last. Each step is a riser of the base course's
+   * weathered stone under a tread slab of the paler dressed stone whose nosing stands out over it, so every step
+   * reads from above as a pale tread over a line of shadow; each laid in two stones breaking joint with
+   * the steps under and over it. The last step runs on as the head's landing to `run`. All `lift` over
+   * the ground the flight stands on.
+   */
+  stair_flight: (k, g, arg) => {
+    const o = { w: 4, run: 5, n: 17, r: 2.75 / 17, g: 0.28, lift: 0, ...arg?.opt } as { w: number; run: number; n: number; r: number; g: number; lift: number };
+    const W = o.w, NOSE = 0.05, SLAB = 0.07;
+    for (let i = 1; i <= o.n; i++) {
+      const front = -(i - 1) * o.g, back = i < o.n ? -i * o.g : -o.run, y0 = o.lift + (i - 1) * o.r, y1 = o.lift + i * o.r;
+      // (Each step in two stones, their joint half a metre off the middle on every other step.)
+      const split = i % 2 ? 0 : 0.5;
+      for (const [a, b] of [[-W / 2, split], [split, W / 2]]) {
+        cb(k, g, [b - a, y1 - SLAB - y0, front - back], [(a + b) / 2, (y0 + y1 - SLAB) / 2, (front + back) / 2], BASE, undefined, 0.02);
+        cb(k, g, [b - a, SLAB, front + NOSE - back], [(a + b) / 2, y1 - SLAB / 2, (front + NOSE + back) / 2], DRESS, undefined, 0.025);
+      }
+    }
+  },
+  /** A landing's flagstones, `opt.lx` by `opt.lz`, laid in the castle paving's rows in the dressed stone, their top `opt.lift` up. */
+  stair_landing: (k, g, arg) => {
+    const o = { lx: 4, lz: 4, lift: 0, ...arg?.opt } as { lx: number; lz: number; lift: number };
+    paved(cb(k, g, [o.lx, 0.16, o.lz], [0, o.lift - 0.08, 0], DRESS, undefined, 0.02));
+  },
+  /**
+   * A wall along local X, its stair side toward -Z and its outer face toward +Z, `opt.w` thick, as
+   * stretches between the points `opt.pts` ([x, foot, coping top]): its walling from its foot (or from
+   * the deep base course, `opt.base`, standing on the lane, a hand proud of the outer face) up to its
+   * coping, the coping of dressed stones raking from one end to the other; with `opt.talus` its outer
+   * face stands on a battered talus that high, running out over the base course at its foot.
+   */
+  climb_wall: (k, g, arg) => {
+    const o = { pts: [[-2, 0, 1.1], [2, 0, 3.6]], w: 1, base: true, talus: 0, ...arg?.opt } as { pts: number[][]; w: number; base: boolean; talus: number; trim?: [number, number] };
+    const hw = o.w / 2, C = 0.16, pts = o.pts, first = pts[0], last = pts[pts.length - 1], L = last[0] - first[0];
+    const foot = (p: number[]) => (o.base ? BASE_COURSE : p[1]);
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (b[0] - a[0] < 0.01) continue;
+      const geo = hull([[a[0], foot(a), -hw], [a[0], foot(a), hw], [b[0], foot(b), -hw], [b[0], foot(b), hw], [a[0], a[2] - C, -hw], [a[0], a[2] - C, hw], [b[0], b[2] - C, -hw], [b[0], b[2] - C, hw]]);
+      geo.userData.boxes = rakedBoxes(a[0], b[0], foot(a), foot(b), a[2] - C, b[2] - C, -hw, hw, 0.25);
+      k.mesh(g, geo, ASHLAR, [0, 0, 0]);
+    }
+    const mid = (first[0] + last[0]) / 2;
+    if (o.base) deep(cb(k, g, [L, BASE_COURSE, o.w + (o.talus ? 0 : 0.08)], [mid, BASE_COURSE / 2, o.talus ? 0 : 0.04], BASE, undefined, 0.03));
+    if (o.talus) {
+      // (Laid in the deep base course's own size, leaning back from its foot into the face at its top;
+      // cut back square at an end that meets the inside of a corner, clear of the wall turning there.)
+      const T = o.talus, [ta, tb] = o.trim ?? [0, 0], x0 = first[0] + ta, x1 = last[0] - tb;
+      deep(k.mesh(g, hull([[x0, 0, hw], [x1, 0, hw], [x0, 0, hw + TALUS_OUT], [x1, 0, hw + TALUS_OUT], [x0, T, hw], [x1, T, hw], [x0, T, hw + 0.002], [x1, T, hw + 0.002]]), BASE, [0, 0, 0]));
+    }
+    // The coping, a finger over the walling's faces on both sides.
+    const cope = slopedBand([new THREE.Vector2(first[0], 0), new THREE.Vector2(last[0], 0)], [first[2] - C, last[2] - C], [first[2], last[2]], o.w + 0.05);
+    // (Its boxes reach down into the walling under it, so the audit sees it laid on the wall.)
+    cope.userData.boxes = rakedBoxes(first[0], last[0], first[2] - 2 * C - 0.2, last[2] - 2 * C - 0.2, first[2], last[2], -hw - 0.025, hw + 0.025).map(([x0, y0, z0, x1, y1, z1]) => ({ c: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], h: [(x1 - x0) / 2, Math.max(0.001, (y1 - y0) / 2), (z1 - z0) / 2], ry: 0 }));
+    k.mesh(g, cope, DRESS, [0, 0, 0]);
+  },
+  /**
+   * A pier of the climb's walls, standing on the lane: a shaft `opt.lx` by `opt.lz` rising a hand over
+   * the copings it takes (to `opt.top`), standing a hand proud of the walls' outer faces on the sides
+   * `opt.out` names (1 -X, 2 +X, 4 -Z, 8 +Z; on a battered talus where `opt.talus`), the castle's deep
+   * base course at its foot, a moulded cap and a low pyramid on it, or a lantern (`v` 2).
+   */
+  climb_pier: (k, g, arg) => {
+    const o = { lx: 1, lz: 1.2, top: 2, out: 0, ...arg?.opt } as { lx: number; lz: number; top: number; out: number; talus?: number; flush?: number };
+    const P = 0.15, x0 = -o.lx / 2 - (o.out & 1 ? P : 0), x1 = o.lx / 2 + (o.out & 2 ? P : 0), z0 = -o.lz / 2 - (o.out & 4 ? P : 0), z1 = o.lz / 2 + (o.out & 8 ? P : 0);
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, sx = x1 - x0, sz = z1 - z0, H = o.top;
+    // (The shaft stands on the lane inside its base course, which stands a finger proud all round.)
+    deep(cb(k, g, [sx + 0.06, BASE_COURSE, sz + 0.06], [cx, BASE_COURSE / 2, cz], BASE, undefined, 0.03));
+    cb(k, g, [sx, H, sz], [cx, H / 2, cz], ASHLAR, undefined, 0.04);
+    if (o.talus && o.out & 8) deep(k.mesh(g, hull([[x0, 0, z1], [x1, 0, z1], [x0, 0, z1 + TALUS_OUT], [x1, 0, z1 + TALUS_OUT], [x0, o.talus, z1], [x1, o.talus, z1], [x0, o.talus, z1 + 0.002], [x1, o.talus, z1 + 0.002]]), BASE, [0, 0, 0]));
+    // (The cap stands out over every side but one built against a higher wall, `opt.flush`, in the same bits.)
+    const f = o.flush ?? 0, c0 = f & 1 ? 0 : 0.09, c1 = f & 2 ? 0 : 0.09, c4 = f & 4 ? 0 : 0.09, c8 = f & 8 ? 0 : 0.09;
+    cb(k, g, [sx + c0 + c1, 0.16, sz + c4 + c8], [cx + (c1 - c0) / 2, H + 0.08, cz + (c8 - c4) / 2], DRESS, undefined, 0.03);
+    if (vOf(arg) === 2) {
+      cb(k, g, [0.42, 0.08, 0.42], [cx, H + 0.2, cz], LAMP_NAVY, undefined, 0.02);
+      k.box(g, [0.32, 0.42, 0.32], [cx, H + 0.46, cz], 0xffcf86, undefined, 0xffa038, 1.4);
+      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) k.box(g, [0.05, 0.46, 0.05], [cx + dx * 0.17, H + 0.46, cz + dz * 0.17], LAMP_NAVY);
+      k.mesh(g, taper(0.5, 0.5, 0.1, 0.1, 0.22), LAMP_NAVY, [cx, H + 0.78, cz]);
+      k.mesh(g, new THREE.OctahedronGeometry(0.08, 1), PAL.gold, [cx, H + 0.96, cz]);
+    } else k.mesh(g, taper(sx, sz, 0.12, 0.12, 0.42), ASHLAR_L, [cx, H + 0.37, cz]);
+  },
+  /**
+   * A buttress against a wall's outer face (its back on local z = 0, standing out toward +Z), `opt.h`
+   * high: two stages, each with a sloping weathering, the lower 1.3 deep, the upper 0.8, on the castle's
+   * deep base course.
+   */
+  climb_buttress: (k, g, arg) => {
+    const H = ({ h: 8, ...arg?.opt } as { h: number }).h, W = 0.5, y1 = Math.round((H * 0.45) / COURSE) * COURSE;
+    deep(cb(k, g, [2 * W + 0.1, BASE_COURSE, 1.4], [0, BASE_COURSE / 2, 0.7], BASE, undefined, 0.03));
+    k.mesh(g, hull([[-W, BASE_COURSE, 0], [W, BASE_COURSE, 0], [-W, BASE_COURSE, 1.3], [W, BASE_COURSE, 1.3], [-W, y1, 1.3], [W, y1, 1.3], [-W, y1 + 0.5, 0], [W, y1 + 0.5, 0], [-W, y1 + 0.5, 0.8], [W, y1 + 0.5, 0.8]]), ASHLAR, [0, 0, 0]);
+    k.mesh(g, hull([[-W, y1 + 0.5, 0], [W, y1 + 0.5, 0], [-W, y1 + 0.5, 0.8], [W, y1 + 0.5, 0.8], [-W, H, 0.8], [W, H, 0.8], [-W, H + 0.8, 0], [W, H + 0.8, 0]]), ASHLAR, [0, 0, 0]);
+  },
+};
+
+/**
+ * The gate front below the gate: the bastion under the gate terrace with the culvert's arch, the
+ * bridge over the moat on its arches, and the banners at the bridge's foot.
+ */
+export const GATE_FRONT_PROPS: Record<string, Builder> = {
+  /**
+   * The gate terrace's bastion, standing on the rock at the cliff's foot (y = 0): its top `opt.w` wide
+   * and `opt.d` deep (its south face's top on local z = 0, its back toward -Z in the rock), `opt.h`
+   * high, its west, south and east faces leaning back `opt.batter` per metre up; a deep base course
+   * round its foot and a cornice of dressed stone under the terrace's parapet. In its south face on the
+   * axis the culvert's mouth (`opt.arch`: its width and sill): a round arch over a channel running back
+   * into the dark, its lip a stone spout standing out over the face, so the moat pours out clear of it.
+   */
+  gate_bastion: (k, g, arg) => {
+    const o = { w: 20, d: 2, h: 11, batter: 0.1, arch: { w: 2, sill: 8.8 }, ...arg?.opt } as { w: number; d: number; h: number; batter: number; arch: { w: number; sill: number } };
+    const { h: H, batter: B } = o, hw = o.w / 2, back = -o.d, aw = o.arch.w / 2, ys = o.arch.sill, yc = ys + 0.4 + aw, deepIn = -2;
+    // (Its top a hair under the terrace's ground, so no stone lies in one plane with it.)
+    const top = H - 0.02, out = (y: number) => B * (H - y);
+    // The body in five blocks round the culvert's slot: west and east of it full height, under its
+    // sill, over its arch, and behind its mouth.
+    const side = (sx: number) => hull([[sx * (hw + out(0)), 0, back], [sx * (hw + out(0)), 0, out(0)], [sx * aw, 0, back], [sx * aw, 0, out(0)], [sx * hw, top, back], [sx * hw, top, out(top)], [sx * aw, top, back], [sx * aw, top, out(top)]]);
+    const mid = (y0: number, y1: number, z1?: number) => hull([-aw, aw].flatMap((x) => [[x, y0, back], [x, y0, z1 ?? out(y0)], [x, y1, back], [x, y1, z1 ?? out(y1)]]));
+    for (const geo of [side(-1), side(1), mid(0, ys), mid(yc, top), mid(ys, yc, deepIn)]) k.mesh(g, geo, ASHLAR, [0, 0, 0]);
+    // The culvert's mouth: its back in shadow, the round head's spandrels filling the slot, and the
+    // dressed ring of voussoirs and jambs leaning with the face.
+    k.box(g, [2 * aw, yc - ys, 0.04], [0, (ys + yc) / 2, deepIn + 0.02], DARK);
+    const dep = out(yc) - deepIn;
+    k.mesh(g, spandrels(2 * aw, yc - ys, dep, aw), ASHLAR, [0, ys, deepIn + dep / 2]);
+    const ring = new THREE.Group();
+    ring.position.set(0, ys, out(ys));
+    ring.rotation.x = -Math.atan(B);
+    g.add(ring);
+    archRing(k, ring, 0, 0, 0, 2 * aw, yc - ys, { rise: aw, n: 3, t: 0.34, p: 0.12, dep: 0.1, jamb: true });
+    // The spout: a channel stone over two corbels, its lip standing out over the face's foot.
+    const lip = out(0) + 0.5, z0 = out(ys) - 0.3;
+    cb(k, g, [2 * aw + 0.5, 0.26, lip - z0], [0, ys - 0.13, (z0 + lip) / 2], DRESS, undefined, 0.03);
+    for (const sx of [-1, 1]) for (const [y, d] of [[ys - 0.26, 0.9], [ys - 0.62, 0.5]]) cb(k, g, [0.34, 0.36, d], [sx * (aw + 0.05), y - 0.18, out(y) + d / 2 - 0.15], DRESS, undefined, 0.03);
+    // The cornice under the terrace's parapet round the three faces, and the deep base course at the foot.
+    const round3 = (off: number, z: number) => [new THREE.Vector2(-hw - off, z), new THREE.Vector2(-hw - off, off), new THREE.Vector2(hw + off, off), new THREE.Vector2(hw + off, z)];
+    k.mesh(g, laidBand(round3(out(top - 0.4) + 0.17, back + 0.4), 0.55, 0.4, 1.0, 11), DRESS, [0, top - 0.4, 0]);
+    // A string course round the faces at half their height, a course of the dressed stone standing proud.
+    const sc = Math.round(H / 2 / COURSE) * COURSE;
+    k.mesh(g, laidBand(round3(out(sc) + 0.12, back + 0.4), 0.45, COURSE, 1.0, 13), DRESS, [0, sc, 0]);
+    deep(k.mesh(g, laidBand(round3(out(0) + 0.05, back + 0.4), 0.5, BASE_COURSE, 2.0, 12), BASE, [0, 0, 0]));
+  },
+  /**
+   * The bridge over the moat (along local Z from `opt.z0` to `opt.z1`, `opt.hw` either side of its
+   * middle), from the moat's bed (y = 0) to its deck (`opt.deck`): one mass of the castle's stone pierced
+   * by its round arches (`opt.arches`, each [z0, z1], springing at `opt.spring`) either side of the pier
+   * between them, a ring of voussoirs round each arch on both faces, pointed cutwaters with sloping caps
+   * at the pier's two ends, a string course along both faces under the parapets and the deck paved in
+   * the castle's paving.
+   */
+  castle_bridge: (k, g, arg) => {
+    const o = { hw: 2.95, z0: -4, z1: 4, arches: [[-3, -1], [0, 2]], spring: 2.7, deck: 4.5, ...arg?.opt } as { hw: number; z0: number; z1: number; arches: number[][]; spring: number; deck: number };
+    const { hw, deck: D, spring: S } = o, shape = new THREE.Shape();
+    shape.moveTo(o.z0, 0);
+    for (const [a, b] of o.arches) {
+      const R = (b - a) / 2, c = (a + b) / 2;
+      shape.lineTo(a, 0);
+      shape.lineTo(a, S);
+      for (let i = 1; i < 16; i++) {
+        const t = Math.PI - (Math.PI * i) / 16;
+        shape.lineTo(c + R * Math.cos(t), S + R * Math.sin(t));
+      }
+      shape.lineTo(b, S);
+      shape.lineTo(b, 0);
+    }
+    shape.lineTo(o.z1, 0);
+    shape.lineTo(o.z1, D);
+    shape.lineTo(o.z0, D);
+    shape.closePath();
+    const body = new THREE.ExtrudeGeometry(shape, { depth: 2 * hw, bevelEnabled: false, curveSegments: 1 });
+    body.applyMatrix4(new THREE.Matrix4().makeRotationY(-Math.PI / 2)).translate(hw, 0, 0);
+    body.computeVertexNormals();
+    // (For the geometry audit: the abutments and the piers between the arches, and the spandrels over each arch's crown.)
+    const ends = [o.z0, ...o.arches.flat(), o.z1];
+    body.userData.boxes = [
+      ...Array.from({ length: ends.length / 2 }, (_, i) => [-hw, 0, ends[2 * i], hw, D, ends[2 * i + 1]]),
+      ...o.arches.map(([a, b]) => [-hw, S + (b - a) / 2, a, hw, D, b]),
+    ];
+    k.mesh(g, body, ASHLAR, [0, 0, 0]);
+    for (const sx of [-1, 1]) {
+      // The voussoirs round each arch, flush on both faces.
+      const face = new THREE.Group();
+      face.position.set(sx * hw, 0, 0);
+      face.rotation.y = (sx * Math.PI) / 2;
+      g.add(face);
+      for (const [a, b] of o.arches) archRing(k, face, -sx * ((a + b) / 2), S, 0, b - a, (b - a) / 2, { rise: (b - a) / 2, n: 4, t: 0.3, p: 0.1, dep: 0.1 });
+      // A cutwater at this end of each pier, pointing into the stream, its cap sloping up to the face.
+      const yt = S + 0.2, x0 = sx * hw, x1 = sx * (hw + 1.0);
+      for (let i = 0; i + 1 < o.arches.length; i++) {
+        const p0 = o.arches[i][1], p1 = o.arches[i + 1][0], c = (p0 + p1) / 2;
+        k.mesh(g, hull([[x0, 0, p0], [x0, 0, p1], [x1, 0, c], [x0, yt, p0], [x0, yt, p1], [x1, yt, c], [x0, yt + 0.7, c]]), ASHLAR, [0, 0, 0]);
+      }
+      // The string course along the face under the parapet.
+      cb(k, g, [0.24, COURSE, o.z1 - o.z0], [sx * (hw + 0.02), D - COURSE / 2, (o.z0 + o.z1) / 2], DRESS, undefined, 0.03);
+    }
+    // The deck: the castle's paving between the parapets, a hair over the stone it lies on.
+    paved(k.box(g, [2 * hw - 1.8, 0.04, o.z1 - o.z0], [0, D - 0.008, (o.z0 + o.z1) / 2], PAVE));
+  },
+  /**
+   * A banner pole on a dressed stone plinth: a tall navy pole with a gold finial and a crossbar, the
+   * lord's banner hanging from it on both faces (toward ±Z).
+   */
+  banner_pole: (k, g) => {
+    cb(k, g, [0.56, 0.5, 0.56], [0, 0.25, 0], DRESS, undefined, 0.04);
+    cb(k, g, [0.14, 6.6, 0.14], [0, 3.8, 0], LAMP_NAVY, undefined, 0.02);
+    k.mesh(g, new THREE.OctahedronGeometry(0.16, 1), PAL.gold, [0, 7.22, 0]);
+    for (const r of [0, Math.PI]) {
+      const side = new THREE.Group();
+      side.rotation.y = r;
+      g.add(side);
+      livery(k, side, 0, 6.6, 0.1, 1.0, 2.6);
+    }
+  },
+};
+
 export const APPROACH_PROPS: Record<string, Builder> = {
+  ...CLIMB_PROPS,
+  ...GATE_FRONT_PROPS,
   /**
    * A low stone parapet along local X (`arg` = length): a solid breast wall on a weathered base
    * course under a dressed coping, all the castle's stone, standing straight on the rock's lip (no

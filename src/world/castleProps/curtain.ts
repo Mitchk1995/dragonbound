@@ -676,15 +676,16 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
    * The outer gatehouse in the curtain: two drum towers (radius `opt.R`) standing on the curtain's line
    * either side of the passage (`len` wide, their centres `opt.cx` either side of it, so the
    * ceremonial arch and its hood stand clear between them), each rising a stage over the wall walk
-   * with a doorway onto it, and between them the gatehouse block, through the curtain's thickness and
-   * a storey higher than it: the passage under a pointed arch of dressed voussoirs, the portcullis
-   * raised in the arch, a machicolated, crenellated parapet, the lord's banner over the arch and one
-   * on each drum. Built along local X, outer face toward -Z.
+   * with a doorway onto it to a flat platform behind battlements, and between them the gatehouse
+   * block, through the curtain's thickness and a storey higher than it: the passage under a pointed
+   * arch of dressed voussoirs, the portcullis raised in the arch, a machicolated, crenellated parapet,
+   * the lord's banner over the arch and a flag flying from each drum. Built along local X, outer face
+   * toward -Z.
    */
   outer_gatehouse: (k, g, arg) => {
-    // The drums rise a stage over the wall towers either side to 13, each crowned with a slate spire
-    // banded in gold and flying the gate's pennant from its finial, so the skyline steps up at the
-    // gate as it does at the corners and the keep.
+    // The drums rise a stage over the wall towers either side to 13, each a flat platform behind its
+    // battlements flying the lord's flag outward from a pole at its middle, so the keep's spires rise
+    // over the gate front seen from below the rock.
     const o = (arg?.opt ?? {}) as { cx?: number; R?: number };
     const P = lenOf(arg) ?? 4, R = o.R ?? 2.6, H = 13, cx = o.cx ?? 6.0, T = 2.2, D = T + 0.8, GH = 10.5, N = 20;
     for (const sx of [-1, 1]) {
@@ -696,8 +697,11 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       drumShaft(k, dg, R, BASE_COURSE, H, ASHLAR, [[(sx * Math.PI) / 2, -sx * DOORS.walk.off]], DOORS.walk.y);
       for (const y of CURTAIN_COURSES) drumCourse(k, dg, R, 0.06, y);
       drumFrieze(k, dg, 0, 0, R, crownFoot(H) - 1.5 * COURSE, N);
-      crown(k, dg, 0, 0, R, H, N, false);
-      spire(k, dg, 0, H + 0.9, 0, R + 0.1, R * 1.75, N, sx, 1.6);
+      crown(k, dg, 0, 0, R, H, N);
+      // (The pole rises well clear of the merlons, as on the wall towers, a gold ball on its top.)
+      cb(k, dg, [0.13, 5.6, 0.13], [0, H + 2.8, 0], LAMP_NAVY, undefined, 0.02);
+      k.mesh(dg, new THREE.OctahedronGeometry(0.14, 1), PAL.gold, [0, H + 5.7, 0]);
+      flag(k, dg, 0, H + 5.5, 0, 2.3, 1.4, sx);
       // The wall walk comes in from the curtain beyond it (local +X on the right drum) to a doorway.
       drumDoorway(k, dg, R, (sx * Math.PI) / 2, -sx * DOORS.walk.off, DOORS.walk.y);
       // Arrow loops on its outer face, two storeys, set square to the field outside.

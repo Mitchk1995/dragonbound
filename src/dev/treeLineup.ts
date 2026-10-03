@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CASTLE_PLAN } from '../data/zoneMaps';
 import type { Game } from '../game';
 import { Cell, Ground } from '../world/layout';
-import { GROWN, GROWN_KINDS, grownTrees, TREE_STYLE, TREE_STYLES, treeSet, treeTriangles, triangles, type GrownKind, type TreeKind, type TreeStyle } from '../world/trees';
+import { GROWN, GROWN_KINDS, grownTrees, grownTriangles, TREE_STYLE, TREE_STYLES, treeSet, treeTriangles, type GrownKind, type TreeKind, type TreeStyle } from '../world/trees';
 import { grownMeshes, OCCLUDE, treeMeshes } from '../world/worldView';
 import { perf } from './inspect';
 
@@ -20,6 +20,8 @@ import { perf } from './inspect';
  *   (report.json `trees.oak`).
  * - a grown kind's progress (`trees:grown:<kind>`, see grownSuite): beside the hero and an oak on the
  *   lawn under the castle walls through the gameplay camera, and close up.
+ * - the whole woodcutting ladder (`trees:ladder`, see ladderSuite): its six species in two shapes
+ *   each, every new species close up, and a forest of the Foothills as it ships, with frame costs.
  * `trees:oak` captures only the oak; `trees:scout` captures candidate spots instead (to pick the views).
  */
 
@@ -52,6 +54,7 @@ export async function treesSuite(g: Game, shot: Shot, opts: string[]) {
   report.variants = Object.fromEntries((['grove', 'pine'] as TreeKind[]).map((k) => [k, treeSet('block').canopy[k].length]));
   const shipped = TREE_STYLE.value;
   if (opts[0] === 'grown' && GROWN_KINDS.includes(opts[1] as GrownKind)) return { ...report, grown: await grownSuite(g, shot, opts[1] as GrownKind) };
+  if (opts[0] === 'ladder') return { ...report, ladder: await ladderSuite(g, shot) };
   if (opts.includes('scout')) {
     await scout(g, shot);
     return report;
@@ -330,7 +333,7 @@ async function measure(g: Game) {
 
 /** Where the zone's grown oaks stand (their crowns' instances). */
 function oaksInZone(g: Game) {
-  const crowns = new Set(treeSet('natural').canopy.grove);
+  const crowns = new Set(grownTrees('oak').canopy);
   const at: THREE.Vector3[] = [];
   const m = new THREE.Matrix4();
   g.zone.group.traverse((o) => {
@@ -416,11 +419,11 @@ async function freeShot(g: Game, shot: Shot, name: string, eye: THREE.Vector3, l
   }
 }
 
-/** Plant one tree of a style into the current zone (instanced with the world's own materials). */
-function plantTree(g: Game, parent: THREE.Object3D, style: TreeStyle, x: number, z: number, variant: number, yaw: number, color: number) {
+/** Plant one tree into the current zone (instanced with the world's own materials): a grown kind, or a block broadleaf. */
+function plantTree(g: Game, parent: THREE.Object3D, kind: GrownKind | 'block', x: number, z: number, variant: number, yaw: number, color: number) {
   const pos = new THREE.Vector3(x, g.zone.view.heightAt(x, z) - 0.05, z);
   const m = new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(1, 1, 1));
-  const meshes = treeMeshes(style, 'grove', [m], [new THREE.Color(color)], variant);
+  const meshes = kind === 'block' ? treeMeshes('block', 'grove', [m], [new THREE.Color(color)], variant) : grownMeshes(kind, [m], [new THREE.Color(color)], variant);
   parent.add(...meshes);
   return { pos, meshes };
 }
@@ -448,7 +451,7 @@ const CLOSE_DIR = new THREE.Vector3(0.55, 0.22, 0.8).normalize();
 async function oakSuite(g: Game, shot: Shot) {
   const out: Record<string, unknown> = {};
   const shipped = TREE_STYLE.value;
-  out.triangles = treeTriangles('natural').grove;
+  out.triangles = grownTriangles('oak');
   g.debug.timeScale = 0;
   document.body.classList.add('inspect-clean');
 
@@ -463,7 +466,7 @@ async function oakSuite(g: Game, shot: Shot) {
   const c = openField(g, 9), hAt = g.zone.view.heightAt;
   const stage = new THREE.Group();
   g.zone.group.add(stage);
-  const oaks = [0, 1, 2].map((v) => plantTree(g, stage, 'natural', c.x + (v - 1) * 13.5, c.z - 2.5, v, 0.6 + v * 1.9, OAK_GREEN));
+  const oaks = [0, 1, 2].map((v) => plantTree(g, stage, 'oak', c.x + (v - 1) * 13.5, c.z - 2.5, v, 0.6 + v * 1.9, OAK_GREEN));
   const block = plantTree(g, stage, 'block', c.x + 22, c.z + 3, 0, 0.35, COLORS[0].color);
   standHero(g, c.x - 6.8, c.z + 3.2, 1.55);
   g.debug.hold = () => {
@@ -534,7 +537,7 @@ async function oakSuite(g: Game, shot: Shot) {
   if (field) {
     const staged = new THREE.Group();
     g.zone.group.add(staged);
-    const planted = [0, 1, 2].map((v) => plantTree(g, staged, 'natural', field.x, field.z, v, 2.2, OAK_GREEN));
+    const planted = [0, 1, 2].map((v) => plantTree(g, staged, 'oak', field.x, field.z, v, 2.2, OAK_GREEN));
     const solo = (v: number) => planted.forEach((p, i) => p.meshes.forEach((mesh) => (mesh.visible = i === v)));
     solo(0);
     const oak = planted[0].pos, spot = besideTree(g, oak) ?? { x: oak.x - 6.5, z: oak.z };
@@ -679,56 +682,185 @@ function clearTrees(g: Game, at: THREE.Vector3[], r: number) {
 async function grownSuite(g: Game, shot: Shot, kind: GrownKind) {
   const out: Record<string, unknown> = {};
   const shipped = TREE_STYLE.value;
-  for (const k of new Set<GrownKind>([kind, 'oak'])) {
-    const set = grownTrees(k);
-    out[k] = { triangles: set.canopy.map((c, v) => triangles(set.trunk[v]) + triangles(c)) };
-  }
+  for (const k of new Set<GrownKind>([kind, 'oak'])) out[k] = { triangles: grownTriangles(k) };
   TREE_STYLE.value = 'block';
-  for (const k of Object.keys(g.save.keep)) g.save.keep[k] = true;
-  g.travel('keep', true);
-  await frames(20);
-  hideEnemies(g);
-  g.debug.timeScale = 0;
-  document.body.classList.add('inspect-clean');
-  const lawn = castleLawn(g);
-  if (!lawn) throw new Error('no open lawn under the castle walls for the grown trees');
-  const plant = (k: GrownKind, x: number, z: number, yaw: number) => {
-    const pos = new THREE.Vector3(x, g.zone.view.heightAt(x, z) - 0.05, z);
-    const mm = new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(1, 1, 1));
-    stage.add(...grownMeshes(k, [mm], [new THREE.Color(GROWN[k].look.palette[0])]));
-    return pos;
-  };
   const stage = new THREE.Group();
-  g.zone.group.add(stage);
-  const oak = plant('oak', lawn.x - 7, lawn.z, 2.2), tree = plant(kind, lawn.x + 7, lawn.z, 0.9);
-  clearTrees(g, [oak, tree], 13);
-  out.stage = { oak: [oak.x, oak.z], [kind]: [tree.x, tree.z] };
+  try {
+    for (const k of Object.keys(g.save.keep)) g.save.keep[k] = true;
+    g.travel('keep', true);
+    await frames(20);
+    hideEnemies(g);
+    g.debug.timeScale = 0;
+    document.body.classList.add('inspect-clean');
+    const lawn = castleLawn(g);
+    if (!lawn) throw new Error('no open lawn under the castle walls for the grown trees');
+    const plant = (k: GrownKind, x: number, z: number, yaw: number) => {
+      const pos = new THREE.Vector3(x, g.zone.view.heightAt(x, z) - 0.05, z);
+      const mm = new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(1, 1, 1));
+      stage.add(...grownMeshes(k, [mm], [new THREE.Color(GROWN[k].look.palette[0])]));
+      return pos;
+    };
+    g.zone.group.add(stage);
+    const oak = plant('oak', lawn.x - 7, lawn.z, 2.2), tree = plant(kind, lawn.x + 7, lawn.z, 0.9);
+    clearTrees(g, [oak, tree], 13);
+    out.stage = { oak: [oak.x, oak.z], [kind]: [tree.x, tree.z] };
 
-  standHero(g, lawn.x, lawn.z + 1.5, 1.35);
-  g.debug.hold = () => {
-    OCCLUDE.uOccOn.value = 0;
-    return false;
-  };
-  await frames(4);
-  await shot(`progress-${kind}`);
-  out.progress = await measure(g);
-  g.debug.hold = null;
+    standHero(g, lawn.x, lawn.z + 1.5, 1.35);
+    g.debug.hold = () => {
+      OCCLUDE.uOccOn.value = 0;
+      return false;
+    };
+    await frames(4);
+    await shot(`progress-${kind}`);
+    out.progress = await measure(g);
+    g.debug.hold = null;
 
-  // Close up: the kind with the hero at its foot, then the oak and its bark.
-  const foot = standHero(g, tree.x - 2.6, tree.z + 2.2);
-  const h = GROWN[kind].species.height[1];
-  const look = tree.clone().add(new THREE.Vector3(0, h * 0.42, 0));
-  await freeShot(g, shot, `trees-${kind}-close`, look.clone().addScaledVector(CLOSE_DIR, h * 2.1), look, 20);
-  standHero(g, oak.x - 2.8, oak.z + 2.4);
-  const oakLook = oak.clone().add(new THREE.Vector3(0, 4.6, 0));
-  if (kind !== 'oak') await freeShot(g, shot, 'trees-oak-close', oakLook.clone().addScaledVector(CLOSE_DIR, 24), oakLook, 20);
-  await freeShot(g, shot, 'trees-oak-bark', oak.clone().add(new THREE.Vector3(1.2, 1.7, 5.2)), oak.clone().add(new THREE.Vector3(0, 1.9, 0)), 12);
-  out.hero = [foot.x, foot.z];
+    // Close up: the kind with the hero at its foot, then the oak and its bark.
+    const foot = standHero(g, tree.x - 2.6, tree.z + 2.2);
+    const h = GROWN[kind].species.height[1];
+    const look = tree.clone().add(new THREE.Vector3(0, h * 0.42, 0));
+    await freeShot(g, shot, `trees-${kind}-close`, look.clone().addScaledVector(CLOSE_DIR, h * 2.1), look, 20);
+    standHero(g, oak.x - 2.8, oak.z + 2.4);
+    const oakLook = oak.clone().add(new THREE.Vector3(0, 4.6, 0));
+    if (kind !== 'oak') await freeShot(g, shot, 'trees-oak-close', oakLook.clone().addScaledVector(CLOSE_DIR, 24), oakLook, 20);
+    await freeShot(g, shot, 'trees-oak-bark', oak.clone().add(new THREE.Vector3(1.2, 1.7, 5.2)), oak.clone().add(new THREE.Vector3(0, 1.9, 0)), 12);
+    out.hero = [foot.x, foot.z];
+  } finally {
+    restore(g, stage, shipped);
+  }
+  return out;
+}
 
+/** Put the inspect state back as the game had it (after a suite, however it ended). */
+function restore(g: Game, stage: THREE.Object3D, style: TreeStyle) {
   stage.removeFromParent();
+  g.debug.hold = null;
   document.body.classList.remove('inspect-clean');
   g.camZoom = 1;
   g.debug.timeScale = 1;
-  TREE_STYLE.value = shipped;
+  TREE_STYLE.value = style;
+}
+
+// ─── The woodcutting ladder ─────────────────────────────────────────────────
+
+/**
+ * Where the hero stands for the Foothills forest picture, its grown trees as they ship: open walkable
+ * ground (no trunk within 5 m) with the most grown trees, of the most species, in the gameplay
+ * camera's view beyond it, the camera drawn back as far as the player can draw it.
+ */
+async function forestSpot(g: Game) {
+  TREE_STYLE.value = 'natural';
+  g.travel('foothills', true);
+  await frames(20);
+  const crowns = new Map<THREE.BufferGeometry, GrownKind>();
+  for (const k of GROWN_KINDS) for (const geo of grownTrees(k).canopy) crowns.set(geo, k);
+  const at: { p: THREE.Vector3; k: GrownKind }[] = [];
+  const m = new THREE.Matrix4();
+  g.zone.group.traverse((o) => {
+    if (!(o instanceof THREE.InstancedMesh) || !crowns.has(o.geometry)) return;
+    for (let i = 0; i < o.count; i++) {
+      o.getMatrixAt(i, m);
+      at.push({ p: new THREE.Vector3().setFromMatrixPosition(m), k: crowns.get(o.geometry)! });
+    }
+  });
+  const L = g.zone.layout;
+  let best = { x: L.entry.x, z: L.entry.z, zoom: 1.35, score: -Infinity };
+  for (let z = 10; z < L.h - 10; z += 2) for (let x = 10; x < L.w - 10; x += 2) {
+    if (!g.zone.nav.isWalkable(x, z) || at.some((t) => Math.hypot(t.p.x - x, t.p.z - z) < 5)) continue;
+    const seen = at.filter((t) => Math.abs(t.p.x - x) < 17 && t.p.z - z > -18 && t.p.z - z < 4);
+    const score = Math.min(seen.length, 18) + new Set(seen.map((t) => t.k)).size * 3;
+    if (score > best.score) best = { x: x + 0.5, z: z + 0.5, zoom: 1.35, score };
+  }
+  return best;
+}
+
+/** The ladder's names as the pictures label them. */
+const LADDER_NAMES: Record<GrownKind, string> = { tree: 'tree', oak: 'oak', willow: 'willow', maple: 'maple', yew: 'yew', magic: 'magic tree' };
+
+/** The ladder's species new in this round (each gets a close-up). */
+const NEW_KINDS: GrownKind[] = ['willow', 'maple', 'yew', 'magic'];
+
+/**
+ * The whole woodcutting ladder, in the Foothills meadow:
+ * - trees-ladder: the six species in their order, two shapes each (the back row a species' first
+ *   shape, the front its second; the front maple in its autumn reds), the hero among them, through the
+ *   gameplay camera drawn back to fit;
+ * - trees-<kind>-close for each new species: its first shape on its own from a low three-quarter
+ *   angle, the hero at its foot, the wood round it as it ships;
+ * - trees-foothills-forest: a forest of the Foothills as it ships (grown trees) through the gameplay
+ *   camera; its frame cost there, and with the block trees at the same spot.
+ */
+async function ladderSuite(g: Game, shot: Shot) {
+  const out: Record<string, unknown> = {};
+  const shipped = TREE_STYLE.value;
+  out.triangles = Object.fromEntries(GROWN_KINDS.map((k) => [k, grownTriangles(k)]));
+  const stage = new THREE.Group();
+  try {
+    TREE_STYLE.value = 'natural';
+    g.travel('foothills', true);
+    await frames(20);
+    hideEnemies(g);
+    g.debug.timeScale = 0;
+    document.body.classList.add('inspect-clean');
+    const hidden: THREE.Object3D[] = [];
+    g.zone.group.traverse((o) => {
+      if ((o.name === 'tree' || o.name === 'bush') && o.visible) hidden.push(o);
+    });
+    hidden.forEach((o) => (o.visible = false));
+    g.zone.group.add(stage);
+    const c = openField(g, 12), hAt = g.zone.view.heightAt;
+    const SX = 11, SZ = 12;
+    const planted: { kind: GrownKind; row: number; pos: THREE.Vector3 }[] = [];
+    GROWN_KINDS.forEach((kind, i) => {
+      for (const row of [0, 1]) {
+        const look = GROWN[kind].look, color = row === 1 && look.autumn && kind === 'maple' ? look.autumn[0] : look.palette[0];
+        const x = c.x + (i - 2.5) * SX + (row ? 1.5 : -1.5), z = c.z + (row - 0.5) * SZ;
+        const { pos } = plantTree(g, stage, kind, x, z, row, 0.7 + i * 1.3 + row * 2.4, color);
+        planted.push({ kind, row, pos });
+      }
+    });
+    // The hero stands in front, between the common tree and the oak, for scale.
+    standHero(g, c.x - 2 * SX, c.z + SZ * 0.5 + 3.5);
+    g.debug.hold = () => {
+      OCCLUDE.uOccOn.value = 0;
+      gameplayCamera(g, c.x, hAt(c.x, c.z), c.z + 3, 2.45);
+      return false;
+    };
+    await frames(3);
+    const ov = overlay();
+    const toScreen = (v: THREE.Vector3) => {
+      const p = v.clone().project(g.camera);
+      return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight };
+    };
+    for (const t of planted.filter((p) => p.row === 1)) {
+      const sp = toScreen(t.pos.clone().add(new THREE.Vector3(0, 0, 4)));
+      ov.label(LADDER_NAMES[t.kind], sp.x - 30, sp.y, true);
+    }
+    await shot('trees-ladder');
+    ov.el.remove();
+    out.ladder = await measure(g);
+    g.debug.hold = null;
+    stage.clear();
+
+    // Each new species on its own, the wood round it as it ships.
+    hidden.forEach((o) => (o.visible = true));
+    for (const kind of NEW_KINDS) {
+      const { pos } = plantTree(g, stage, kind, c.x, c.z, 0, 0.9, GROWN[kind].look.palette[0]);
+      clearTrees(g, [pos], 12);
+      const foot = standHero(g, pos.x - 2.6, pos.z + 2.4);
+      const h = GROWN[kind].species.height[1], look = pos.clone().add(new THREE.Vector3(0, h * 0.42, 0));
+      await freeShot(g, shot, `trees-${kind}-close`, look.clone().addScaledVector(CLOSE_DIR, h * 2.1), look, 20);
+      out[`${kind}Hero`] = [foot.x, foot.z];
+      stage.clear();
+    }
+
+    // A forest of the Foothills as it ships, then with the block trees.
+    const spot = await forestSpot(g);
+    out.forestSpot = spot;
+    out.forest = await zoneShot(g, shot, 'foothills', 'natural', spot, 'trees-foothills-forest', true);
+    out.forestBlock = await zoneShot(g, shot, 'foothills', 'block', spot, 'trees-foothills-forest-block', true);
+  } finally {
+    restore(g, stage, shipped);
+  }
   return out;
 }

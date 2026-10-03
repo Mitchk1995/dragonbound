@@ -1,10 +1,9 @@
 /**
- * The castle's water: the moat's masonry (its dressed outer bank, the plinths the walls and towers
- * rise from it on, the bridge's arches), the springs that feed it, the sluice and the outfall that
- * drain it, the falls, reeds and stream stones.
+ * The castle's water: the moat's masonry (its dressed outer bank and the plinths the walls and towers
+ * rise from it on), the springs that feed it, the sluice and the fall from the outfall that drain it,
+ * the falls off the brink, reeds and stream stones.
  */
 import * as THREE from 'three';
-import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type V3 } from '../../render/kit';
 import { hash01 } from '../../render/blocks';
@@ -123,30 +122,6 @@ function along(pts: THREE.Vector2[], u: number, off: number) {
   const f = (L - lens[i]) / Math.max(1e-6, lens[i + 1] - lens[i]);
   const p = pts[i].clone().lerp(pts[i + 1], f), mm = m[i].clone().lerp(m[i + 1], f);
   return p.addScaledVector(mm, off);
-}
-
-/** A ring of stones round a segmental arch in a face at x = fx (facing -X or +X by `sx`): its voussoirs. */
-function archVoussoirs(k: Parameters<Builder>[0], g: THREE.Object3D, o: { z0: number; z1: number; spring: number; rise: number; t: number; fx: number; sx: number; p: number; dep: number; seed: number; color?: number }) {
-  const hw = (o.z1 - o.z0) / 2, zc = (o.z0 + o.z1) / 2, R = (hw * hw + o.rise * o.rise) / (2 * o.rise), yc = o.spring + o.rise - R;
-  const phi = Math.asin(Math.min(1, hw / R)), rm = R + o.t / 2, n = Math.max(5, Math.round((2 * phi * rm) / 0.42) | 1);
-  for (let i = 0; i < n; i++) {
-    const a = -phi + ((i + 0.5) * 2 * phi) / n, key = i === (n - 1) / 2;
-    const len = (2 * phi * rm) / n - 0.02, t = o.t + (key ? 0.08 : 0);
-    cb(k, g, [o.dep + o.p, t, len], [o.fx + o.sx * (o.p - o.dep) / 2, yc + (R + t / 2) * Math.cos(a), zc + (R + t / 2) * Math.sin(a)], o.color ?? DRESS, [a, 0, 0], 0.03);
-  }
-  return { R, yc, phi };
-}
-
-/** The outline of a segmental arch's opening (z, y) from its left foot at y0, over the arch, to its right foot. */
-function archOutline(z0: number, z1: number, spring: number, rise: number, y0: number, n = 10): [number, number][] {
-  const hw = (z1 - z0) / 2, zc = (z0 + z1) / 2, R = (hw * hw + rise * rise) / (2 * rise), yc = spring + rise - R, phi = Math.asin(Math.min(1, hw / R));
-  const out: [number, number][] = [[z0, y0]];
-  for (let i = 0; i <= n; i++) {
-    const a = -phi + (2 * phi * i) / n;
-    out.push([zc + R * Math.sin(a), yc + R * Math.cos(a)]);
-  }
-  out.push([z1, y0]);
-  return out;
 }
 
 /**
@@ -332,53 +307,6 @@ export const WATER_PROPS: Record<string, Builder> = {
     }, pts[0].distanceTo(pts[1]), o.wl, Math.round(pts[0].x * 7 + pts[0].y));
   },
   /**
-   * The gate's bridge over the moat, under its deck (local Z along it, toward the gate terrace): two
-   * segmental arches either side of a pier founded on the bed with pointed cutwaters both ways, the
-   * spandrels standing out over the water, dressed voussoirs round each arch on both faces and a
-   * string course at the deck under the parapets. Under the arches the shade of the bridge closes them.
-   */
-  moat_bridge: (k, g, arg) => {
-    const o = moatOpt(arg), H = o.h, spring = o.wl + 0.3, rise = 1.2;
-    // (Along it: the gate's face, the two arches either side of the pier, the bank at the far end.)
-    const zN = -4.33, zS = 3.3, arches: [number, number][] = [[-3.8, -0.75], [0.3, 2.85]], X = 3.4, back = 2.1, rev = 0.4, cap = 0.5;
-    for (const sx of [-1, 1]) {
-      // The face of the spandrels, cut by the arches, rev deep; behind it the bridge's body, solid.
-      const s = new THREE.Shape();
-      s.moveTo(zN, 0);
-      for (const [z0, z1] of arches) for (const [z, y] of archOutline(z0, z1, spring, rise, 0)) s.lineTo(z, y);
-      s.lineTo(zS, 0);
-      s.lineTo(zS, H - cap);
-      s.lineTo(zN, H - cap);
-      s.closePath();
-      const face = new THREE.ExtrudeGeometry(s, { depth: rev, bevelEnabled: false, curveSegments: 1 }).rotateY(-Math.PI / 2).translate(sx < 0 ? -X + rev : X, 0, 0);
-      face.computeVertexNormals();
-      const xa = sx < 0 ? -X : X - rev, xb = xa + rev;
-      face.userData.boxes = [[xa, 0, zN, xb, H - cap, arches[0][0]], [xa, 0, arches[0][1], xb, H - cap, arches[1][0]], [xa, 0, arches[1][1], xb, H - cap, zS], [xa, spring + rise + 0.05, zN, xb, H - cap, zS]];
-      k.mesh(g, face, BASE, [0, 0, 0]);
-      const bx0 = sx < 0 ? -X + rev : back, bx1 = sx < 0 ? -back : X - rev;
-      cb(k, g, [bx1 - bx0, H, zS - zN], [(bx0 + bx1) / 2, H / 2, (zN + zS) / 2], BASE, undefined, 0.02);
-      // The shade under each arch, on the body's face behind the opening.
-      for (const [z0, z1] of arches) {
-        const sh = new THREE.Shape(archOutline(z0 + 0.02, z1 - 0.02, spring, rise, -0.5).map(([z, y]) => new THREE.Vector2(z, y)));
-        const m = new THREE.Mesh(new THREE.ShapeGeometry(sh).rotateY(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: DEPTHS, side: THREE.DoubleSide }));
-        m.position.x = sx * (X - rev - 0.01);
-        m.name = 'shade';
-        g.add(m);
-      }
-      for (const [z0, z1] of arches) archVoussoirs(k, g, { z0, z1, spring, rise, t: 0.38, fx: sx * X, sx, p: 0.1, dep: 0.36, seed: Math.round(z0 * 10) });
-      // The string course at the deck, one course deep, its inner edge under the parapet's face.
-      cb(k, g, [0.57, cap, zS - zN], [sx * (X + 0.12 - 0.285), H - cap / 2, (zN + zS) / 2], DRESS, undefined, 0.03);
-      // The pier's cutwater: a pointed prow standing out into the water, capped with a stone pyramid.
-      const pz0 = arches[0][1], pz1 = arches[1][0], pm = (pz0 + pz1) / 2, tip = 1.0;
-      const pts = [new THREE.Vector3(sx * X, 0, pz0), new THREE.Vector3(sx * X, 0, pz1), new THREE.Vector3(sx * (X + tip), 0, pm), new THREE.Vector3(sx * X, spring, pz0), new THREE.Vector3(sx * X, spring, pz1), new THREE.Vector3(sx * (X + tip), spring, pm), new THREE.Vector3(sx * X, spring + 0.75, pm)];
-      const cw = new ConvexGeometry(pts.map((p) => p.clone().setX(p.x - sx * 0.02)));
-      cw.userData.boxes = [[Math.min(sx * X, sx * (X + tip)), 0, pz0, Math.max(sx * X, sx * (X + tip)), spring, pz1]];
-      k.mesh(g, cw, ASHLAR, [0, 0, 0]);
-      // (The wet line on the abutment and the pier, never across the arches' openings.)
-      for (const [z0, z1] of [[zN, arches[0][0]], [arches[0][1], arches[1][0]]]) wetBand(g, (u, y) => new THREE.Vector3(sx * (X + 0.012), y, z0 + (z1 - z0) * u), z1 - z0, o.wl, 40 + sx + z0);
-    }
-  },
-  /**
    * A spring spilling into the moat from the outer bank (facing +Z, the bank's face at z = 0): an arched
    * spout in the dressed bank, its voussoirs under the coping, dark inside, a lip stone the water
    * pours from into the moat in a short fall with foam spreading from it; over it on the rim the rock
@@ -472,43 +400,14 @@ export const WATER_PROPS: Record<string, Builder> = {
     };
   },
   /**
-   * Where the moat leaves the castle (facing +Z, `len` above the pool at y = 0): the culvert under the
-   * gate terrace opens in a dressed headwall set into the rock face, a segmental arch of voussoirs
-   * over a stone apron, and the water shoots off the apron's lip as one broad fall into the pool,
-   * churning foam that spreads in rings and a mist hugging the rock's foot; the rock's own masses
-   * lap round the headwall's sides, dark and wet down behind the fall, moss and ferns on their tops.
+   * The moat's water leaving the castle (facing +Z, `len` above the pool at y = 0): off the lip of the
+   * spout under the culvert's arch in the bastion's face it pours as one broad fall into the pool,
+   * churning foam that spreads in rings, a mist hugging the rock's foot. (`opt.w`: the culvert's width.)
    */
-  moat_outfall: (k, g, arg) => {
-    const top = lenOf(arg) ?? 8.8, time = { value: 0 }, F = 1.1, hw = 2.6, ow = 1.55, rise = 0.75, spring = top + 0.6, crown = top + 2.2, base = top - 1.8;
-    const s = new THREE.Shape([new THREE.Vector2(-hw, base), new THREE.Vector2(hw, base), new THREE.Vector2(hw, crown), new THREE.Vector2(-hw, crown)]);
-    const hole = new THREE.Path(archOutline(-ow, ow, spring, rise, top).map(([x, y]) => new THREE.Vector2(x, y)));
-    s.holes.push(hole);
-    const wall = new THREE.ExtrudeGeometry(s, { depth: 2.0, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, F - 2.0);
-    wall.computeVertexNormals();
-    wall.userData.boxes = [[-hw, base, F - 2, -ow, crown, F], [ow, base, F - 2, hw, crown, F], [-ow, base, F - 2, ow, top, F], [-ow, spring + rise, F - 2, ow, crown, F]];
-    deep(k.mesh(g, wall, BASE, [0, 0, 0]));
-    // Its voussoirs on the face (built along X: the helper's arch runs along Z, so it is turned).
-    const ring = new THREE.Group();
-    ring.rotation.y = Math.PI / 2;
-    ring.position.z = 0;
-    g.add(ring);
-    archVoussoirs(k, ring, { z0: -ow, z1: ow, spring, rise, t: 0.5, fx: -F, sx: -1, p: 0.1, dep: 0.4, seed: 7 });
-    const throat = new THREE.Mesh(new THREE.PlaneGeometry(ow * 2, spring + rise - top).translate(0, (spring + rise + top) / 2, F - 1.6), new THREE.MeshBasicMaterial({ color: DEPTHS }));
-    throat.name = 'shade';
-    g.add(throat);
-    cb(k, g, [ow * 2 + 0.3, 0.18, 1.0], [0, top - 0.09, F + 0.3], DRESS, undefined, 0.03);
-    // The rock round it: shoulders either side down to the pool, dark wet rock behind the fall.
-    for (const sx of [-1, 1]) {
-      chunk(k, g, 930 + sx, [2.2, base + 0.6, 2.6], [sx * 3.0, -0.3, F - 1.6], sx < 0 ? ROCK : ROCK_D, sx * 0.12);
-      chunk(k, g, 934 + sx, [1.5, top * 0.55, 1.6], [sx * 2.2, -0.3, F - 0.4], ROCK_D, sx * 0.3);
-      chunk(k, g, 936 + sx, [1.4, 2.6, 1.8], [sx * 3.3, base - 0.2, F - 1.5], ROCK, -sx * 0.2);
-      cushion(k, g, sx * 3.2, base + 0.25, F - 1.2, 1.0, 941 + sx);
-      cushion(k, g, sx * 3.3, base + 2.35, F - 1.4, 0.9, 945 + sx);
-    }
-    chunk(k, g, 938, [3.6, base + 0.3, 1.0], [0, -0.3, F - 0.85], ROCK_WET, 0);
-    // The fall: off the apron's lip, a broad sheet widening a little as it drops into the pool.
-    fallSheet(g, time, pour(new THREE.Vector3(0, top + 0.02, F + 0.75), new THREE.Vector3(0, -0.22, F + 2.6), 0.08, 26), ow * 2 - 0.1, ow * 2 + 0.5, 72);
-    const tick = landing(g, [0, -0.22, F + 2.6], 1.1, 80, 6, 0.7);
+  moat_outfall: (_k, g, arg) => {
+    const top = lenOf(arg) ?? 8.8, w = ((arg as { opt?: { w?: number } } | undefined)?.opt?.w ?? 2) - 0.1, time = { value: 0 };
+    fallSheet(g, time, pour(new THREE.Vector3(0, top + 0.03, -0.1), new THREE.Vector3(0, -0.22, 1.8), 0.06, 26), w, w + 0.45, 72);
+    const tick = landing(g, [0, -0.22, 1.8], 1.0, 80, 6, 0.7);
     return { obj: g, tick: (t) => ((time.value = t), tick(t)) };
   },
 };

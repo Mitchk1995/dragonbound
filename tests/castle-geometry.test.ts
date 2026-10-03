@@ -37,12 +37,15 @@ const JOINTS: { a: string[]; b: string[]; why: string; rule?: (a: Piece, b: Piec
   { a: ['castle_wall', 'round_tower', 'corner_tower', 'building'], b: ['wall_climber'], why: 'ivy and roses lie flat on the masonry, rooted in its foot' },
   { a: ['building'], b: ['castle_wall', 'building'], why: 'built against a building\'s wall (never through it into its rooms)', rule: (b, o) => intoRooms(b, o) },
   { a: ['building'], b: ['great_doors'], why: 'the great door\'s leaves hang in the hall\'s doorway, standing open into the hall' },
-  { a: ['parapet', 'balustrade', 'ramp_wall', 'kerb'], b: ['parapet', 'balustrade', 'parapet_pier'], why: 'runs of one low wall meet end to end or on their pier' },
+  { a: ['parapet', 'balustrade', 'ramp_wall', 'kerb', 'climb_wall'], b: ['parapet', 'balustrade', 'parapet_pier'], why: 'runs of one low wall meet end to end or on their pier (the climb\'s west wall ends in the ledge road\'s pier at the stair\'s head)' },
+  { a: ['climb_buttress'], b: ['climb_wall'], why: 'a buttress is bonded into the battered talus of the wall it stands against' },
+  { a: ['gate_bastion'], b: ['spring_fall'], why: 'the fall pours down the face of the bastion over it, its rock and moss lying back against the masonry' },
   { a: ['round_tower', 'corner_tower'], b: ['tower_flag'], why: 'the flagpole is stepped into the tower\'s platform' },
   { a: ['fence'], b: ['gate_piers'], why: 'a fence runs into its gate pier' },
   { a: ['stream_stone'], b: ['stream_stone'], why: 'stones heaped together in the stream' },
-  { a: ['moat_plinth', 'moat_plinth_run'], b: ['moat_plinth', 'moat_plinth_run', 'moat_bridge'], why: "the battered plinths of the curtain, its towers and the gate's drums are one footing in the moat, the bridge's abutment built against them" },
+  { a: ['moat_plinth', 'moat_plinth_run'], b: ['moat_plinth', 'moat_plinth_run', 'castle_bridge'], why: "the battered plinths of the curtain, its towers and the gate's drums are one footing in the moat, the bridge's abutment built against them" },
   { a: ['ramp_wall'], b: ['moat_plinth'], why: "under the turf the terrace's retaining wall is founded beside a tower's plinth" },
+  { a: ['moat_plinth_run'], b: ['building'], why: "the north curtain's plinth runs into the keep's stepped plinth where the curtain meets its flanks" },
 ];
 
 const listed = (a: Piece, b: Piece) => JOINTS.find((j) => (j.a.includes(kindOf(a)) && j.b.includes(kindOf(b))) || (j.a.includes(kindOf(b)) && j.b.includes(kindOf(a))));
@@ -241,7 +244,9 @@ describe('castle geometry', () => {
     for (const p of P) for (const g of p.solids.filter((s) => s.part.tag === 'glass')) {
       // The pane's face: its thinnest axis.
       const n = [0, 1, 2].reduce((a, k) => (g.e[k] < g.e[a] ? k : a), 0), N = g.u[n];
-      const solid = p.solids.filter((s) => s !== g && !s.part.thin && !s.part.hollow);
+      // (A drum notched for its windows, the keep's turrets' slit lights, is cut away round them: it is
+      // set aside only for a pane standing inside its own radius.)
+      const solid = p.solids.filter((s) => s !== g && !s.part.thin && !s.part.hollow && !(s.part.notched && s.r && Math.hypot(g.c.x - s.c.x, g.c.z - s.c.z) < s.r + 0.1));
       const set = [-1, 1].some((sg) => solid.some((s) => contains(s, g.c.clone().addScaledVector(N, sg * (g.e[n] + 0.12)), 0.02)));
       if (!set && !solid.some((s) => overlap(s, g) > -0.03)) bad.push(`${p.name}: a window pane at ${fmt(g.c)} hangs in the air, in no wall`);
       // From at least one side the whole pane shows: no block in front of its middle or across it.
@@ -436,19 +441,21 @@ describe('castle geometry', () => {
     const bad: string[] = [];
     // (Not the climb's kerb walls: each sloping stretch is bounded as a level box from its low end, so
     // its corners stand nowhere near the wall's own foot.)
-    const KINDS = /^(parapet|parapet_pier|castle_wall|round_tower|corner_tower|outer_gatehouse|building:.*)$/;
+    const KINDS = /^(parapet|parapet_pier|castle_wall|round_tower|corner_tower|outer_gatehouse|climb_pier|climb_buttress|building:.*)$/;
     for (const p of P.filter((q) => KINDS.test(q.kind))) for (const s of p.solids) {
       if (s.part.thin || s.part.fx || s.part.hollow) continue;
       if (s.lo.y > S.ground(s.c.x, s.c.z) + 0.3) continue;
       const foot = s.r
         ? Array.from({ length: 16 }, (_, i) => [s.c.x + Math.sin((i / 16) * Math.PI * 2) * s.r, s.c.z + Math.cos((i / 16) * Math.PI * 2) * s.r])
         : corners(s).filter((k) => k.y < s.c.y).map((k) => [k.x, k.z]);
-      // (Standing in the moat, a base stands on its plinth founded on the moat's bed.)
+      // (A course of a stepped plinth stands on the course under it, founded deeper: on its own masonry;
+      // at the moat, a base stands on its plinth or the bank's masonry founded on the moat's bed.)
+      const onOwn = (x: number, z: number) => p.solids.some((o) => o !== s && !o.part.thin && !o.part.hollow && o.lo.y < s.lo.y - 0.05 && contains(o, new THREE.Vector3(x, s.lo.y - 0.05, z), 0.02));
       const plinth = (x: number, z: number) => {
         const at = new THREE.Vector3(x, s.lo.y - 0.1, z);
-        return S.grid.near(at, at, 0.2).some((j) => /^moat_(plinth|plinth_run|bridge)$/.test(P[S.solids[j].piece].kind) && contains(S.solids[j], at, 0.2));
+        return S.grid.near(at, at, 0.2).some((j) => /^(moat_plinth|moat_plinth_run|moat_bank|castle_bridge)$/.test(P[S.solids[j].piece].kind) && contains(S.solids[j], at, 0.2));
       };
-      const under = foot.filter(([x, z]) => S.ground(x, z) < s.lo.y - 0.6 && !plinth(x, z));
+      const under = foot.filter(([x, z]) => S.ground(x, z) < s.lo.y - 0.6 && !onOwn(x, z) && !plinth(x, z));
       if (under.length) bad.push(`${p.name}: its ${s.part.color.toString(16)} base at ${fmt(s.c)} hangs out over a drop at (${under[0][0].toFixed(1)}, ${under[0][1].toFixed(1)})`);
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 60).join('\n')).toEqual([]);
@@ -632,7 +639,7 @@ describe('castle geometry', () => {
     // hedge round a bed) laid as separate blocks of one stone overlap with their tops at one height:
     // a seam or a flicker where they cross. Such a thing is built as one shape instead. (Sculpture and
     // planting are left alone: a statue's or a plant's parts may overlap.)
-    const ARCH = /^(castle_wall|round_tower|corner_tower|outer_gatehouse|parapet|parapet_pier|balustrade|ramp_wall|kerb|kerb_ring|box_border|round_terrace|gate_piers|fence|building:.*)$/;
+    const ARCH = /^(castle_wall|round_tower|corner_tower|outer_gatehouse|parapet|parapet_pier|balustrade|ramp_wall|kerb|kerb_ring|box_border|round_terrace|gate_piers|fence|climb_wall|climb_pier|climb_buttress|stair_flight|gate_bastion|castle_bridge|building:.*)$/;
     const bad: string[] = [];
     for (const p of P.filter((q) => ARCH.test(q.kind))) {
       const ss = p.solids.filter((s) => !s.part.thin && !s.part.hollow && !s.part.fit && s.e[0] * s.e[1] * s.e[2] * 8 > 0.004);

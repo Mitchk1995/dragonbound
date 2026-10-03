@@ -205,10 +205,11 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('falls-west', [4, y0 + 6, 92], [20.8, y0 - 4, 81], 24);
   // The fields at the rock's foot, low across the plots.
   await view('farm', [P.gate.x - 4, 2.6, P.gate.z + 56], [P.gate.x - 12, 0.2, P.gate.z + 38], 20);
-  // The lookout's knoll from the meadow under it, and the moat's west spring behind the keep and the
-  // turf round the landing from above.
+  // The lookout's knoll from the meadow under it, the moat's west spring and the keep's back in the
+  // basin behind it, and the turf round the landing from above.
   await view('lookout-rock', [14, 3, 140], [30, 8, 117], 22);
   await view('spring', [54, y0 + 13, 22], [59.5, y0 - 1.5, 6.5], 12);
+  await view('moat-keep', [46, y0 + 10, -2], [68, y0 - 2, 13], 18);
   await view('landing-turf', [142, y0 + 9, 101], [129, y0, 111], 14);
   if (rockOnly) return finish();
 
@@ -221,6 +222,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 80], [P.gate.x, y0 + 12, 50], 70);
   // The keep's front over the grand stair, and the gate front from the gate terrace.
   await view('keep-front', [P.door.x, y0 + 12, 70], [P.door.x, y0 + 10, 40], 24);
+  // The great keep over the gate front from the fields below the rock.
+  await view('keep-farm', [P.gate.x - 10, 6, P.gate.z + 85], [P.door.x, y0 + 22, 27], 70);
   await view('gatehouse-outer', [P.gate.x + 10, y0 + 6, P.gate.z + 22], [P.gate.x, y0 + 7, P.gate.z], 18);
   // Through the gameplay camera, on the way in: the stair's foot, its turn and its head, the
   // ledge, the bridge, the forecourt, the fountain, the avenue, the great door, and the yards and

@@ -8,6 +8,7 @@ import { buildLawn } from './lawn';
 import { buildProp, KERB, OCCLUDING_PROPS, type Prop } from './props';
 import { setWaterSky } from './water';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
+import { buildKeep } from './castle/keepModel';
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { laidRun } from '../render/masonry';
@@ -17,7 +18,7 @@ import { hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slab
 import { useStrataRock } from '../render/rock';
 
 import type { SurfaceKind } from '../render/textures';
-import { grownTrees, GROWN, thinWood, treeSet, type GrownKind, type GrownLook, type TreeKind, type TreeSet, type TreeStyle } from './trees';
+import { DEFAULT_WOODS, grownTrees, GROWN, GROWN_KINDS, pickGrown, thinWood, treeSet, type GrownKind, type GrownLook, type TreeKind, type TreeSet, type TreeStyle } from './trees';
 
 // ─── See-through occlusion ──────────────────────────────────────────────────
 
@@ -285,10 +286,8 @@ const grownArgs = (look: GrownLook): [SceneryArgs, SceneryArgs] => [
   [0xffffff, true, undefined, true, undefined, (m) => look.canopy(m, WIND)],
 ];
 
-/** Material arguments for a tree's trunk and canopy (shared by the world and the dev lineup). */
+/** Material arguments for a block or faceted tree's trunk and canopy (shared by the world and the dev lineup). */
 function treeArgs(ts: TreeSet, k: TreeKind): [SceneryArgs, SceneryArgs] {
-  const grown = ts.grown[k];
-  if (grown) return grownArgs(grown);
   return [
     [k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark'],
     [0, true, ts.paint[k], true, ts.grade, ts.shaded && k !== 'ash' ? withVertexShade : undefined],
@@ -328,7 +327,7 @@ export interface WorldView {
   buildings: BuildingProp[];
   /** Terrain height at a world point (scenery and props stand on it). */
   heightAt(x: number, z: number): number;
-  /** Height of the walkable ground level at a world point (units, stations and buildings stand on it). */
+  /** Height of the walkable ground level at a world point, a deck's where one spans it (units, stations and buildings stand on it). */
   floorAt(x: number, z: number): number;
   /** Advance animated surfaces (water, lava). */
   tick(t: number): void;
@@ -395,23 +394,42 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     return kinds[kinds.length - 1];
   };
   const trees: Record<TreeKind, { m: THREE.Matrix4[]; c: THREE.Color[] }> = { pine: { m: [], c: [] }, grove: { m: [], c: [] }, ash: { m: [], c: [] } };
+  // The natural style: the zone's woods say which grown species stands in for each kind, in groves
+  // (a smooth noise picks them), waterside ones by the water (never by lava).
+  const woods = ts.natural ? theme.woods ?? DEFAULT_WOODS : null;
+  const grown = {} as Record<GrownKind, { m: THREE.Matrix4[]; c: THREE.Color[] }>;
+  for (const g of GROWN_KINDS) grown[g] = { m: [], c: [] };
+  const groveNoise = smoothNoise(seed + 101);
+  const wet = (x: number, z: number) => {
+    if (theme.lava) return false;
+    for (let dz = -5; dz <= 5; dz++) for (let dx = -5; dx <= 5; dx++) {
+      const cx = Math.floor(x) + dx, cz = Math.floor(z) + dz;
+      if (cx >= 0 && cz >= 0 && cx < w && cz < h && layout.fluid[cz * w + cx]) return true;
+    }
+    return false;
+  };
+  const grownAt = (x: number, z: number, kind: TreeKind) => {
+    const weights = woods?.kinds[kind];
+    return weights ? pickGrown(weights, (groveNoise(x * 0.05, z * 0.05) * 4 + hash01(x, z, 13) * 0.3) % 1, wet(x, z)) : null;
+  };
   /** A tree at (x, z) (on the ground, or standing at `y`); with `keep` false its draws are made but it is left out. */
   const addTree = (x: number, z: number, scale = 1, y?: number, kind = speciesAt(x, z), keep = true) => {
     // (Grown trees vary less in size: they are true to size.)
-    const grown = ts.grown[kind], [lo, hi] = grown?.size ?? [0.8, 1.4];
+    const g = grownAt(x, z, kind), look = g ? GROWN[g].look : undefined, [lo, hi] = look?.size ?? [0.8, 1.4];
     const sc = (lo + rng() * (hi - lo)) * scale;
     if (y === undefined) p.set(x + (rng() - 0.5) * 0.3, heightAt(x, z) - 0.05, z + (rng() - 0.5) * 0.3);
     else p.set(x, y - 0.05, z);
     q.setFromEuler(e.set((rng() - 0.5) * 0.1, rng() * Math.PI * 2, (rng() - 0.5) * 0.1));
     const tall = rng();
-    s.set(sc, sc * (grown ? 0.96 + tall * 0.08 : 0.9 + tall * 0.3), sc);
+    s.set(sc, sc * (look ? 0.96 + tall * 0.08 : 0.9 + tall * 0.3), sc);
     const mm = m.compose(p, q, s).clone();
-    const pal = grown?.palette ?? leafPal[kind];
+    const pal = (g && look && woods?.autumn?.includes(g) ? look.autumn : undefined) ?? look?.palette ?? leafPal[kind];
     const tc = new THREE.Color(pal[rng() < 0.15 ? Math.min(pal.length - 1, 3 + Math.floor(rng() * 2)) : Math.floor(rng() * Math.min(3, pal.length))]);
     tc.offsetHSL(0, 0, (rng() - 0.5) * 0.05);
     if (!keep) return;
-    trees[kind].m.push(mm);
-    trees[kind].c.push(tc);
+    const into = g ? grown[g] : trees[kind];
+    into.m.push(mm);
+    into.c.push(tc);
   };
   const rocks: THREE.Matrix4[] = [], rockCols: THREE.Color[] = [];
   const rims: THREE.Matrix4[] = [], rimCols: THREE.Color[] = [];
@@ -602,8 +620,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         if (debrisFloor) addDebris(x, z);
         // Reeds along shores (water only, never lava), bushes where the forest thins out, flowers
         // in open meadows.
-        if (nearFluid(x, z) && !theme.lava && !theme.wallRise && rng() < 0.35) {
-          // A clump of reeds rooted on the bank (never standing out in the open water).
+        if (green && nearFluid(x, z) && !theme.lava && !theme.wallRise && rng() < 0.35) {
+          // A clump of reeds rooted on the bank (never standing out in the open water, nor on paving).
           const cx = x + 0.2 + rng() * 0.6, cz = z + 0.2 + rng() * 0.6;
           for (let k = 0; k < 6; k++) {
             const rx = cx + (rng() - 0.5) * 0.45, rz = cz + (rng() - 0.5) * 0.45, ry = heightAt(rx, rz);
@@ -1045,11 +1063,17 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   }
   // Grown trees need far more room than one to a cell: their woods are thinned (trees.ts thinWood),
   // and no bush is left in the shade of their crowns.
-  if (Object.keys(ts.grown).length) {
+  if (woods) {
     const tp = new THREE.Vector3();
-    const xz = (mm: THREE.Matrix4) => (tp.setFromMatrixPosition(mm), { x: tp.x, z: tp.z });
-    const thin = thinWood({ pine: trees.pine.m.map(xz), grove: trees.grove.m.map(xz), ash: trees.ash.m.map(xz) }, ts.grown, bushes.map(xz));
-    for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) trees[k] = { m: trees[k].m.filter((_, i) => thin.trees[k][i]), c: trees[k].c.filter((_, i) => thin.trees[k][i]) };
+    const xz = (mm: THREE.Matrix4, spacing?: number) => (tp.setFromMatrixPosition(mm), { x: tp.x, z: tp.z, spacing });
+    const lists = [...(['pine', 'grove', 'ash'] as TreeKind[]).map((k) => ({ list: trees[k], spacing: undefined })), ...GROWN_KINDS.map((g) => ({ list: grown[g], spacing: GROWN[g].look.spacing }))];
+    const thin = thinWood(lists.flatMap(({ list, spacing }) => list.m.map((mm) => xz(mm, spacing))), bushes.map((mm) => xz(mm)));
+    let n = 0;
+    for (const { list } of lists) {
+      const keep = list.m.map(() => thin.trees[n++]);
+      list.m = list.m.filter((_, i) => keep[i]);
+      list.c = list.c.filter((_, i) => keep[i]);
+    }
     for (let i = bushes.length - 1; i >= 0; i--) {
       if (thin.under[i]) continue;
       bushes.splice(i, 1);
@@ -1062,12 +1086,21 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     // Painted canopies: leaf clusters on broadleaves, needle tufts on pines, bark on dead ash.
     // Each tree takes one of the style's canopy variants, picked from its position (no pattern
     // along the rows, and the same tree every visit).
-    const vs = ts.canopy[k], trunks = ts.trunk[k], tp = new THREE.Vector3();
+    const vs = ts.canopy[k], tp = new THREE.Vector3();
     const variant = trees[k].m.map((mm) => (tp.setFromMatrixPosition(mm), Math.floor(hash01(tp.x, tp.z) * vs.length)));
     const pick = <T>(list: T[], v: number) => list.filter((_, i) => variant[i] === v);
-    // A grown tree's trunk is its own, paired with its crown; block trees share one trunk.
-    const wood = trunks.length === vs.length ? trunks.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), null, ...trunk) ?? []) : inst(trunks[0], trees[k].m, null, ...trunk)!;
-    const made = [...wood, ...vs.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), pick(trees[k].c, v), ...crown) ?? [])];
+    // (Block trees share one trunk.)
+    const made = [...inst(ts.trunk[k][0], trees[k].m, null, ...trunk)!, ...vs.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), pick(trees[k].c, v), ...crown) ?? [])];
+    for (const mesh of made) mesh.name = 'tree';
+  }
+  // Grown trees: each shape's own wood paired with its own leaves, every one instanced.
+  for (const g of GROWN_KINDS) {
+    const { m: at, c: cols } = grown[g];
+    if (!at.length) continue;
+    const set = grownTrees(g), [trunk, crown] = grownArgs(GROWN[g].look), tp = new THREE.Vector3();
+    const variant = at.map((mm) => (tp.setFromMatrixPosition(mm), Math.floor(hash01(tp.x, tp.z) * set.canopy.length)));
+    const pick = <T>(list: T[], v: number) => list.filter((_, i) => variant[i] === v);
+    const made = set.canopy.flatMap((geo, v) => [...(inst(set.trunk[v], pick(at, v), null, ...trunk) ?? []), ...(inst(geo, pick(at, v), pick(cols, v), ...crown) ?? [])]);
     for (const mesh of made) mesh.name = 'tree';
   }
   // Rocks are chunky faceted blocks (two shapes, alternating) sunk into the ground.
@@ -1307,10 +1340,17 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   // Buildings stand on the flat floor they stamped; their walls dissolve around the hero like
   // any other occluder.
   const buildings = (layout.buildings ?? []).map((b) => {
-    const bp = buildBuilding(b, floorAt(b.x + b.w / 2, b.z + b.d / 2));
+    // (The great keep has its own model.)
+    const bp = (b.id === 'keep' ? buildKeep : buildBuilding)(b, floorAt(b.x + b.w / 2, b.z + b.d / 2));
     occludeAll(bp.obj);
     group.add(bp.obj);
     return bp;
   });
-  return { group, followers, props, buildings, heightAt, floorAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; debrisTick?.(t); } };
+  // (On a deck, units stand on its paving, not on the ground under it.)
+  const decks = layout.decks ?? [];
+  const walkAt = (x: number, z: number) => {
+    for (const d of decks) if (x > d.box[0] && x < d.box[2] && z > d.box[1] && z < d.box[3]) return d.y;
+    return floorAt(x, z);
+  };
+  return { group, followers, props, buildings, heightAt, floorAt: walkAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; debrisTick?.(t); } };
 }

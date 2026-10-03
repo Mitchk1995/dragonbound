@@ -144,14 +144,31 @@ export const MOAT = {
   bed: CROWN_Y - 4.2,
 };
 
-/** The bridge from the gate terrace to the gate: its deck 4 clear between parapets on its two edges. */
+/**
+ * The bridge from the gate terrace to the gate: its deck 4 clear between parapets on its two edges,
+ * walked at the crown's level. It stands on two round arches either side of a pier in the moat's
+ * middle (pointed cutwaters east and west, where the water comes from), the arches springing just
+ * over the water from abutments against the gate's threshold and the terrace's bank.
+ */
 // (Its parapets start half a metre out from the gatehouse's face, clear of its drums' footings.)
-export const BRIDGE = { x0: 73.5, x1: 78.5, z0: 102.4, z1: 109, deck: [74, 78] as [number, number] };
+export const BRIDGE = {
+  x0: 73.5, x1: 78.5, z0: 102.4, z1: 109, deck: [74, 78] as [number, number],
+  /** Its two arches, each [z0, z1] between the abutments and the pier, and the arches' springing. */
+  arches: [[103, 105], [106, 108]] as [number, number][],
+  spring: MOAT.surface + 0.2,
+};
 
 /** The approach: everything from the stair's head to the gate is level with the crown. */
 export const APPROACH = {
   /** The gate terrace before the bridge, its bastion projecting over the brink (rows z 116 on). */
   gateTerrace: [66, 109, 86, 119.5] as Box,
+  /**
+   * The gate terrace's bastion: battered masonry on the rock at the cliff's foot (world 0), its top
+   * the terrace's edge on west, south and east (`rect`: the faces at the top, its back in the rock),
+   * leaning out `batter` per metre down; the culvert's arch in its south face on the axis, its sill
+   * just under the moat's water (the moat pours out of it as the fall to the pool).
+   */
+  bastion: { rect: [65.85, 118, 86.15, 120.15] as Box, batter: 1 / 10, culvert: { w: 2, sill: MOAT.surface - 0.2 } },
   ledgeRoad: [86, 109, 114, 114.6] as Box,
   ledgeWalk: [34, 109, 66, 114.6] as Box,
   /** The walled terrace at the stair's head over the court, and the lookout on the south-west knoll. */
@@ -161,42 +178,60 @@ export const APPROACH = {
   parapets: {
     innerWest: [[21.6, 109.5], [73.5, 109.5]] as [number, number][],
     innerEast: [[78.5, 109.5], [132.3, 109.5]] as [number, number][],
-    outerWest: [[21.6, 109.5], [21.2, 112.5], [22, 117.2], [24.8, 120.2], [29, 121], [34, 119.2], [40, 117.6], [46, 118.2], [53, 117.2], [60, 118], [66.3, 116.8], [66.3, 119.2], [76, 119.2]] as [number, number][],
-    outerEast: [[76, 119.2], [85.7, 119.2], [85.7, 116.6], [90, 117.2], [97, 116.4], [104, 117], [110, 116.2], [113.5, 115.4]] as [number, number][],
+    outerWest: [[21.6, 109.5], [21.2, 112.5], [22, 117.2], [24.8, 120.2], [29, 121], [34, 119.2], [40, 117.6], [46, 118.2], [53, 117.2], [60, 118], [66.6, 116.8], [66.6, 119.4], [76, 119.4]] as [number, number][],
+    outerEast: [[76, 119.4], [85.4, 119.4], [85.4, 116.6], [90, 117.2], [97, 116.4], [104, 117], [110, 116.2], [113.5, 115.4]] as [number, number][],
     landing: [[118.1, 114.4], [130.2, 114.4], [132.3, 109.5]] as [number, number][],
   },
+  /** Lanterns on the parapets' piers (each on the pier nearest its point): the lookout, the ledge walk and road, the landing, the stair's head. */
+  lamps: [[29, 121], [26, 109.3], [46, 118.2], [104, 117], [124.4, 114.4], [126, 109.3], [118.1, 114.4]] as [number, number][],
+  /** Stone benches looking out over the parapets, [x, z, the way each faces]. */
+  benches: [[27.4, 116.6, 0.55], [123.5, 113.3, 0]] as [number, number, number][],
+  /** The two banner poles at the bridge's foot on the gate terrace. */
+  banners: [[71, 110.6], [81, 110.6]] as [number, number][],
 };
 
 /**
- * The climb from the ore lane (world 0) to the ledge (CROWN_Y): four straight flights of 17 risers,
- * two north up the rock's south-east corner to the turning landing, two west along its face, with
- * level landings between them. Each flight climbs from `y0` at its foot to `y1` at its head, toward
- * `up`; rectangles are whole cells (the flights 4 m wide between walls a cell thick).
+ * The climb from the ore lane (world 0) to the ledge (CROWN_Y): four straight flights of 17 risers
+ * (16.2 cm) and 16 treads (28 cm), two north up the rock's south-east corner to the turning landing,
+ * two west along its face, with level landings between them. Each flight climbs from `y0` at its foot
+ * (the rectangle's downhill edge, where its first riser stands) to `y1` at its head, toward `up`;
+ * rectangles are whole cells (the flights 4 m wide between walls a cell thick, each flight's last half
+ * metre its head's landing).
  */
 export const CLIMB = {
+  risers: 17,
+  tread: 0.28,
   flights: [
     { rect: [129, 126, 133, 131], up: 'n', y0: 0, y1: 2.75 },
-    { rect: [129, 120, 133, 124], up: 'n', y0: 2.75, y1: 5.5 },
+    { rect: [129, 120, 133, 125], up: 'n', y0: 2.75, y1: 5.5 },
     { rect: [124, 116, 129, 120], up: 'w', y0: 5.5, y1: 8.25 },
     { rect: [118, 116, 123, 120], up: 'w', y0: 8.25, y1: 11 },
   ] as { rect: Box; up: 'n' | 's' | 'e' | 'w'; y0: number; y1: number }[],
   landings: [
-    { rect: [129, 124, 133, 126] as Box, y: 2.75 },
+    { rect: [129, 125, 133, 126] as Box, y: 2.75 },
     { rect: [129, 116, 133, 120] as Box, y: 5.5 },
     { rect: [123, 116, 124, 120] as Box, y: 8.25 },
     { rect: [114, 115, 118, 120] as Box, y: 11 },
   ],
   /**
-   * Its walls, each a cell thick along the centre of its cells, [x, z, coping height] at each point:
-   * the west run up the flights from the lane and along their outer side to the head, the east run
-   * on the court side up to the dressed rock face over the turning landing.
+   * Its walls, a cell thick, standing on the lane, along the centre of their cells: a pier at every
+   * point (each pier where a coping changes pitch; one long pier across each short landing), the
+   * copings raking with the flights and level over the landings. The west run climbs from the lane
+   * beside the flights and turns along their outer side to the head; the east run, on the court
+   * side, ends against the dressed rock face over the turning landing.
    */
   walls: [
-    [[128.5, 130.8, 1.1], [128.5, 126, 3.85], [128.5, 124, 3.85], [128.5, 120.5, 6.6], [124, 120.5, 9.35], [123, 120.5, 9.35], [118, 120.5, 12.1], [113.5, 120.5, 12.1], [113.5, 115.4, 12.1]],
-    [[133.5, 130.8, 1.1], [133.5, 126, 3.85], [133.5, 124, 3.85], [133.5, 120, 6.6], [133.5, 115.5, 6.6]],
-  ] as [number, number, number][][],
-  /** The dressed rock face over flights 3 and 4 and the turning landing: [x, z, its foot (the treads under it)]. */
-  face: [[117.6, 115.5, 11], [118, 115.5, 11], [123, 115.5, 8.25], [124, 115.5, 8.25], [129, 115.5, 5.5], [133.5, 115.5, 5.5]] as [number, number, number][],
+    [[128.5, 131], [128.5, 125.76], [128.5, 120.5], [123.76, 120.5], [118.52, 120.5], [113.5, 120.5], [113.5, 115.4]],
+    [[133.5, 131], [133.5, 125.76], [133.5, 120.52], [133.5, 116.6]],
+  ] as [number, number][][],
+  /** Buttresses on the outer face of the tall south wall, between its piers. */
+  buttresses: [126.23, 121.04, 116.01],
+  /**
+   * The dressed rock face over flights 3 and 4 and the turning landing, a cell thick along its middle
+   * (z), from its west end at the head to the east wall's outer face, where it comes down to the lane
+   * as the corner of the east wall.
+   */
+  face: { z: 115.5, x0: 118.52, x1: 134 },
 };
 
 /** The crown's natural edge (the rock round the moat, the ledge and the knolls), at CROWN_Y. */

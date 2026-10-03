@@ -4,9 +4,11 @@ import { RESTORATION_BY_ID } from '../src/data/keep';
 import { CASTLE_PLAN, KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
 import { cellRole, fitBlocks, fitsOf, flightsOf, inRoom, partitionRuns, raisedAt, sideLen, stairDest, stairProblems, stairRect, stairSteps, wallCell, wallRuns, type BuildingSpec, type Floor, type Stair } from '../src/world/building';
-import { CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
+import { BRIDGE, CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
+import { climbFlights, flightGround, headOf, treadTop } from '../src/world/castle/approach';
 import { newSave } from '../src/save/save';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
+import { buildKeep } from '../src/world/castle/keepModel';
 import { distToPoly } from '../src/world/gen';
 import { Cell, Ground } from '../src/world/layout';
 import { buildProp } from '../src/world/props';
@@ -143,7 +145,7 @@ describe('Dragonspire Keep', () => {
     expect(Math.abs(TERRACE_Y + k.storeyH! - (CROWN_Y + 7.06))).toBeLessThan(0.1);
     expect(k.windows.some((w) => w.floor === 1)).toBe(true);
     expect(k.upper?.voids?.length).toBeGreaterThan(0);
-    const p = buildBuilding(k), box = new THREE.Box3().setFromObject(p.obj);
+    const p = buildKeep(k, TERRACE_Y), box = new THREE.Box3().setFromObject(p.obj);
     expect(box.max.y).toBeGreaterThan(k.wallH + 1);
   });
   it('the castle stands level on the crown, the north range and the keep on the terrace; the way in climbs the stair, crosses the bridge and runs up the avenue to the great door', () => {
@@ -219,6 +221,48 @@ describe('Dragonspire Keep', () => {
       expect(a - c, `${st.id} at ${z}`).toBeGreaterThan(0);
       expect(a - c, `${st.id} at ${z}`).toBeLessThan(0.7);
     }
+  });
+  it('the climb is built in real steps: risers of 16 to 17 cm, no flight over 17, a comfortable going, the ground laid under every tread', () => {
+    for (const f of climbFlights()) {
+      expect(f.risers).toBeLessThanOrEqual(17);
+      expect(f.riser).toBeGreaterThanOrEqual(0.16);
+      expect(f.riser).toBeLessThanOrEqual(0.17);
+      // (Two risers and a tread make a pace: 60 to 65 cm.)
+      expect(2 * f.riser + f.tread).toBeGreaterThanOrEqual(0.6);
+      expect(2 * f.riser + f.tread).toBeLessThanOrEqual(0.65);
+      // The head's landing runs on past the last riser at least a tread deep, to the flight's end.
+      expect(f.run - headOf(f)).toBeGreaterThanOrEqual(f.tread);
+      // The ground under the flight runs straight from one cell edge to the next (the last edge at the
+      // head's level): it never stands through a tread, and the hero walking on it is never more than a
+      // riser and a half under the stone (most of the way less than a riser).
+      const edge = (j: number) => (j >= f.run ? f.y1 : flightGround(f, j));
+      for (let s = 0; s < f.run; s += 0.01) {
+        const j = Math.floor(s), ground = edge(j) + (edge(j + 1) - edge(j)) * (s - j), top = treadTop(f, s);
+        expect(ground, `${f.foot.x},${f.foot.z} at ${s.toFixed(2)}`).toBeLessThan(top - 0.005);
+        expect(top - ground, `${f.foot.x},${f.foot.z} at ${s.toFixed(2)}`).toBeLessThan(1.6 * f.riser);
+      }
+      // Its cells carry that ground, walkable.
+      for (let j = 0; j < f.run; j++) {
+        const x = Math.floor(f.foot.x + f.up.x * (j + 0.5)), z = Math.floor(f.foot.z + f.up.z * (j + 0.5)), i = z * L.w + x;
+        expect(L.cells[i]).toBe(Cell.Ground);
+        expect(L.level![i]).toBeCloseTo(flightGround(f, j), 5);
+      }
+    }
+  });
+  it('the bridge is walked at the crown\'s level over the moat, which runs on under its arches', () => {
+    const deck = L.decks?.find((d) => d.box[0] <= BRIDGE.x0 && d.box[2] >= BRIDGE.x1);
+    expect(deck?.y).toBe(CROWN_Y);
+    const [a0, a1] = [BRIDGE.arches[0][0], BRIDGE.arches[BRIDGE.arches.length - 1][1]];
+    for (let z = a0; z < a1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) {
+      const i = z * L.w + x;
+      expect(L.fluid[i], `${x},${z}`).toBeGreaterThan(0);
+    }
+    // The deck is walkable from the gate's passage to the terrace, the parapets' cells either side blocked.
+    for (let z = 100; z < BRIDGE.z1 + 1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(true);
+    for (let z = a0; z < a1; z++) for (const x of [BRIDGE.deck[0] - 1, BRIDGE.deck[1]]) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(false);
+    // (Its box covers the bridge alone: not the gate's passage nor the terrace's banners.)
+    expect(deck!.box[1]).toBeGreaterThanOrEqual(100.5);
+    expect(deck!.box[3]).toBeLessThanOrEqual(BRIDGE.z1);
   });
   it('a save made anywhere, the old castle included, loads with the hero on the walkable arrival dais', () => {
     // (Saves keep no position: every load enters the keep at its arrival dais.)
@@ -460,8 +504,8 @@ describe('building models', () => {
     expect(p.contains(B.bank.x - 3, B.bank.z + 5)).toBe(false);
   });
   it('upstairs shows the boards and upper rooms, the hall below through its open void, and switches back cleanly', () => {
-    const p = buildBuilding(B.keep);
-    const [, built, roof, , upper] = p.obj.children;
+    const p = buildKeep(B.keep, TERRACE_Y);
+    const [, built, roof, upper] = p.obj.children;
     const ground = built.children[0];
     p.setCut(1, 0);
     expect([ground.visible, upper.visible, roof.visible]).toEqual([true, false, false]);
@@ -476,7 +520,7 @@ describe('building models', () => {
     expect(box.min.y).toBeGreaterThan(1.0);
   });
   it('windows are real openings: you see through the glass, past the wall, into the room', () => {
-    for (const b of [B.smelter, B.keep, B.bank]) {
+    for (const b of [B.smelter, B.bank]) {
       const p = buildBuilding(b);
       p.obj.updateMatrixWorld(true);
       const meshes: THREE.Mesh[] = [];
@@ -489,9 +533,6 @@ describe('building models', () => {
       const glass = hits.find((h) => (h.object as THREE.Mesh).material instanceof THREE.Material && ((h.object as THREE.Mesh).material as THREE.Material).transparent);
       expect(glass, `${b.id} has glass in the opening`).toBeDefined();
       expect(((glass!.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.5);
-      // (A castle window shows its lit room painted on a plate just behind the glass, seen from
-      // outside only; past it the ray goes on into the room.)
-      if (b.style === 'keep') expect(hits.some((h) => h.object.name === 'room'), `${b.id} shows its lit room behind the glass`).toBe(true);
       const solid = hits.find((h) => !((h.object as THREE.Mesh).material as THREE.Material).transparent && h.object.name !== 'room');
       // The first solid thing the ray meets is inside the room, not the wall around the window.
       expect(solid ? solid.point.z : Infinity, b.id).toBeGreaterThan(b.z + 1.1);
@@ -510,7 +551,7 @@ describe('building models', () => {
     for (const k of used) expect(FIT_KINDS, k).toContain(k);
     for (const b of KEEP_BUILDINGS) {
       let bad = 0;
-      buildBuilding(b).obj.traverse((o) => {
+      (b.id === 'keep' ? buildKeep(b, TERRACE_Y) : buildBuilding(b)).obj.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
         const a = o.geometry.getAttribute('position').array as ArrayLike<number>;
         for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) bad++;

@@ -1,13 +1,13 @@
 import { CURTAIN_WALL, GATEHOUSE } from '../../data/castle';
 import { Cell, Fluid, Ground } from '../layout';
 import { WATER_Y } from '../terrain';
-import { AXIS, BRIDGE, CROWN_OUTLINE, CROWN_Y, CURTAIN, CURTAIN_RUNS, GATE, KEEP, MOAT, TERRACE_Y, TOWERS, WATER } from './plan';
+import { APPROACH, AXIS, BRIDGE, CROWN_OUTLINE, CROWN_Y, CURTAIN, CURTAIN_RUNS, GATE, KEEP, MOAT, TERRACE_Y, TOWERS, WATER } from './plan';
 import { inPoly, type Site } from './site';
 
 /**
  * The castle's ground and water: the crown it stands on, the moat round it two metres under the
  * turf (its dressed outer bank, the plinths the walls and towers rise from it on, the springs that
- * feed it, the bridge's arches, the sluice and the outfall that drain it) and the water below the
+ * feed it, the sluice and the fall from the outfall that drain it) and the water below the
  * rock (the south fall's pool and the stream from it, the west fall off the brink).
  */
 
@@ -144,7 +144,7 @@ export function moat(s: Site) {
     if (inMoat(x, z) && !masonry(x + 0.5, z + 0.5)) water(i, MOAT.surface - MOAT.bed);
   });
   // The sluice's channel: water a little deep in a cut through the rim from the bank to the brink,
-  // walled by the rim's own rock either side; past the brink the rock is broken away where it falls.
+  // walled by the rim's own rock either side.
   const end = channelEnd();
   for (let x = Math.floor(Math.min(...MOAT_EDGE.map((p) => p[0]))) - 1; x >= end; x--) {
     for (let z = SLUICE.z0; z < SLUICE.z1; z++) water(G.idx(x, z), 0.6);
@@ -158,7 +158,6 @@ export function moat(s: Site) {
       G.reserved[i] = 1;
     }
   }
-  for (let z = SLUICE.z0; z < SLUICE.z1; z++) for (let x = end - 1; x >= end - 4; x--) l.cells[G.idx(x, z)] = Cell.Void;
   // The bank's masonry: every cell of the crown beside the water outside the outer bank.
   s.cells([Math.min(...xs) - 3, Math.min(...ys) - 3, Math.max(...xs) + 3, Math.max(...ys) + 3], (i, x, z) => {
     if (l.fluid[i] || l.cells[i] === Cell.Void || l.cells[i] === Cell.Cliff || inMoat(x, z)) return;
@@ -173,19 +172,28 @@ export function moat(s: Site) {
 
 /**
  * The keep's back half stands out over the moat behind the curtain: its footprint and a plinth a
- * cell wide round it at the terrace's level, then a batter of rock a cell wide down to the water.
+ * cell wide round it at the terrace's level (the keep's own battered plinth stands on it, founded on
+ * the moat's bed), the water up to it all round; only at the curtain's outer face, where the
+ * curtain's run meets the keep's flank, the rock rises to the curtain's foot.
  */
 export function keepPlinth(s: Site) {
-  const [x0, z0, x1] = KEEP.rect;
-  s.cells([x0 - 1, z0 - 1, x1 + 1, CURTAIN.north - CURTAIN.T / 2], (i) => s.block(i, TERRACE_Y));
+  const [x0, z0, x1] = KEEP.rect, l = s.G.l, face = CURTAIN.north - CURTAIN.T / 2;
+  s.cells([x0 - 1, z0 - 1, x1 + 1, face], (i) => s.block(i, TERRACE_Y));
   // (Where the curtain meets its flanks the keep's floor runs on through at the terrace's level.)
   s.cells([x0, z0, x1, CURTAIN.north + CURTAIN.T], (i) => (s.level[i] = TERRACE_Y));
-  s.cells([x0 - 2, z0 - 2, x1 + 2, CURTAIN.north - CURTAIN.T / 2], (i, x, z) => {
+  s.cells([x0 - 2, z0 - 2, x1 + 2, face], (i, x, z) => {
     if (x >= x0 - 1 && x < x1 + 1 && z >= z0 - 1) return;
-    const l = s.G.l;
+    l.ground[i] = Ground.Cave;
+    if (z + 1 < face) {
+      l.fluid[i] = Fluid.Water;
+      l.cells[i] = Cell.Blocked;
+      l.elev[i] = MOAT.surface - MOAT.bed;
+      s.level[i] = MOAT_LEVEL;
+      s.G.reserved[i] = 1;
+      return;
+    }
     l.fluid[i] = Fluid.None;
     l.cells[i] = Cell.Cliff;
-    l.ground[i] = Ground.Cave;
     l.elev[i] = TERRACE_Y - CROWN_Y;
     s.level[i] = CROWN_Y;
   });
@@ -246,9 +254,9 @@ function run(s: Site, kind: string, pts: P2[], y: number, opt: Record<string, un
 /**
  * The moat's masonry and water works: the outer bank's dressed face from the bed to its coping
  * (along the ledge, the ledge's wall stands on it instead), the battered plinths the curtain, its
- * towers and the gatehouse's drums rise from the water on, the bridge's two arches and its pier, the
- * two springs spilling from arched spouts in the bank behind the keep, and the sluice in the west
- * arm's bank feeding the west fall.
+ * towers and the gatehouse's drums rise from the water on (the bridge on its arches is the
+ * approach's), the two springs spilling from arched spouts in the bank behind the keep, and the
+ * sluice in the west arm's bank feeding the west fall.
  */
 function moatWorks(s: Site) {
   // (Every cell the water touches, behind the face to the cell beyond, is the bank's: it holds it all.)
@@ -284,7 +292,6 @@ function moatWorks(s: Site) {
     else if (a.z === CURTAIN.south && b.z === CURTAIN.south) spans = [[0, tx(BRIDGE.x1 + 0.5)], [tx(BRIDGE.x0 - 0.5), L]];
     for (const [t0, t1] of spans) run(s, 'moat_plinth_run', [at(t0), at(t1)], MOAT_FOOT, { out: [nx, nz] });
   }
-  s.prop('moat_bridge', (BRIDGE.x0 + BRIDGE.x1) / 2, (BRIDGE.z0 + BRIDGE.z1) / 2, 0, 0, { y: MOAT_FOOT, opt: FRAME });
 }
 
 /**
@@ -294,7 +301,8 @@ function moatWorks(s: Site) {
  */
 export function falls(s: Site) {
   moatWorks(s);
-  const f = WATER.southFall;
-  s.prop('moat_outfall', f.x, f.z, 0, 0, { len: f.top, y: 0 });
+  // (From the spout's lip, standing out over the bastion's battered face at its foot.)
+  const b = APPROACH.bastion;
+  s.prop('moat_outfall', WATER.southFall.x, b.rect[3] + b.batter * CROWN_Y + 0.5, 0, 0, { len: b.culvert.sill, y: 0, opt: { w: b.culvert.w } });
   s.prop('edge_fall', channelEnd(), SLUICE.z, -Math.PI / 2, 0, { y: MOAT.surface + 0.25 });
 }
