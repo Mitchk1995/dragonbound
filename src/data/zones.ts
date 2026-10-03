@@ -45,6 +45,11 @@ export interface ZoneTheme {
   rockMoss?: number;
   /** The land dims over its last cells before the Void that ends it (an organic outline). */
   edgeFade?: boolean;
+  /**
+   * How deep the sun's shadows go, 0 (soft, much sky light) to 1 (the default: the full outdoor
+   * contrast). Lower where the place is lit more by its own glow than by a sun (the lair).
+   */
+  shade?: number;
 }
 
 export interface ZoneDef {
@@ -67,10 +72,10 @@ export const ZONES: Record<string, ZoneDef> = {
   keep: {
     id: 'keep', name: 'Dragonspire Keep', kind: 'hub', arch: 0xffffff, build: buildKeep,
     theme: {
-      // The golden hour: a warm low sun, a soft rose-lilac sky light and a warm bounce, so shade stays
-      // readable and the castle's cream stays honey in its shadow; distant land fades into the peach
-      // haze of the horizon.
-      bg: 0xc39a9c, fog: [70, 160], hemi: [0xc8b8d4, 0x8a7058, 1.9], sun: [0xffd9b2, 2.3], exposure: 1.1,
+      // Late afternoon in the Veil: a warm sun under a clear blue sky (the painted sky over the sea of
+      // cloud), a soft blue sky light and a warm bounce off the sunlit ground, so the shade stays
+      // coloured and readable; distant land fades into the pale haze of the horizon.
+      bg: 0xc4c6d2, fog: [70, 160], hemi: [0xb4c0e0, 0x9a7a5c, 1.9], sun: [0xffd9b2, 2.3], exposure: 1.1,
       ambient: 'void', trees: 'grove', wall: 'castle',
       ground: { [Ground.Grass]: [0x4a7a3a, 0x5a8a44], [Ground.Stone]: [0x928e88, 0x827e78], [Ground.Path]: [0x8a7a5e, 0x7a6a50], [Ground.Dirt]: [0x6e6048, 0x5e5240] },
       // The castle rock and the upland: dark blue-grey rock softened by moss (framing the cream
@@ -142,6 +147,7 @@ export const ZONES: Record<string, ZoneDef> = {
       topShade: 0.55,
       topRange: [2.5, 8],
       lava: 1,
+      shade: 0.35,
     },
   },
 };

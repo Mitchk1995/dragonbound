@@ -16,6 +16,7 @@ import { KERB_W, kerbStones } from './kerbStones';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
 import { hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock, taper } from '../render/blocks';
 import { useStrataRock } from '../render/rock';
+import { skyDome } from '../render/sky';
 
 import type { SurfaceKind } from '../render/textures';
 import { DEFAULT_WOODS, grownTrees, GROWN, GROWN_KINDS, pickGrown, thinWood, treeSet, type GrownKind, type GrownLook, type TreeKind, type TreeSet, type TreeStyle } from './trees';
@@ -129,54 +130,6 @@ function occludeAll(root: THREE.Object3D) {
       makeOccludable(m);
     }
   });
-}
-
-// ─── Sky ────────────────────────────────────────────────────────────────────
-
-/**
- * The Veil's sky at the golden hour (one time of day with the warm, low sun that lights the island):
- * soft blue-lilac overhead warming to peach at the horizon, a few long cloud bands high up, and below
- * the horizon a sea of soft cloud lit from above, deepening into lilac haze, so a view out from the
- * island's edge looks over cloud, never into darkness. No stars: it is day.
- */
-function voidSky(group: THREE.Group) {
-  const skyGeo = new THREE.SphereGeometry(180, 48, 24);
-  const skyMat = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    depthWrite: false,
-    fog: false,
-    uniforms: {
-      top: { value: new THREE.Color(0x6c7ab8) }, mid: { value: new THREE.Color(0xf2b48e) },
-      low: { value: new THREE.Color(0xdcaaa6) }, sea: { value: new THREE.Color(0x86729e) },
-    },
-    vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 sea;
-      float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }
-      void main() {
-        float h = vP.y;
-        vec3 c;
-        if (h > 0.0) {
-          c = mix(mid, top, pow(clamp(h * 1.6, 0.0, 1.0), 0.55));
-          vec2 q = vP.xz / (h + 0.3);
-          float cl = smoothstep(0.58, 0.86, vn(q * vec2(0.7, 2.2)) * 0.65 + vn(q * 3.1) * 0.35);
-          c = mix(c, vec3(1.0, 0.88, 0.8), cl * 0.32 * smoothstep(0.03, 0.3, h));
-        } else {
-          vec2 q = vP.xz / max(-h, 0.06) * 0.7;
-          float n = vn(q) * 0.55 + vn(q * 2.7 + 3.1) * 0.3 + vn(q * 6.3 + 7.7) * 0.15;
-          float d = clamp(-h * 2.0, 0.0, 1.0);
-          vec3 deep = mix(low, sea, d);
-          c = mix(deep, mix(mid, vec3(1.0, 0.93, 0.88), 0.35), smoothstep(0.42, 0.78, n) * (1.0 - d * 0.7));
-        }
-        c = mix(c, mid * 1.06, exp(-pow(h * 8.0, 2.0)) * 0.55);
-        gl_FragColor = vec4(c, 1.0);
-      }`,
-  });
-  const sky = new THREE.Mesh(skyGeo, skyMat);
-  sky.renderOrder = -10;
-  sky.name = 'sky';
-  group.add(sky);
 }
 
 // ─── Grass ──────────────────────────────────────────────────────────────────
@@ -1244,8 +1197,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
 
   let debrisTick: ((t: number) => void) | null = null;
   if (theme.ambient === 'void') {
+    // The Veil's sky: clear sky over a sea of soft cloud below the island's edge.
     const skyGroup = new THREE.Group();
-    voidSky(skyGroup);
+    skyGroup.add(skyDome());
     followers.push(skyGroup);
     group.add(skyGroup);
     // Drifting islets far out in the Veil: two loose clusters off the island's south-west, well out
@@ -1345,6 +1299,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     // (The great keep has its own model.)
     const bp = (b.id === 'keep' ? buildKeep : buildBuilding)(b, floorAt(b.x + b.w / 2, b.z + b.d / 2));
     occludeAll(bp.obj);
+    // Their walls take the sun's shadows too: a tower's shadow falls across the wall beside it, the
+    // battlements' across the wall walk, the hall's across the yard's buildings.
+    bp.obj.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.receiveShadow = true;
+    });
     group.add(bp.obj);
     return bp;
   });
