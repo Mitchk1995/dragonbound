@@ -164,6 +164,17 @@ Where things stand (October 3):
   bank feeds the west fall through a rock channel, and the moat leaves by the bastion's culvert as the south fall. The
   moat's still water mirrors the walls round it; the crown's edge wanders in bays and spurs, the rim beyond the moat
   grows the island's meadow grass and the turf thins out short of every brink. Awaiting Mitchell's look.
+  Stage 6 (the bailey's grounds) is in: the two walled gardens on their stairs' axes (the kitchen garden's four boxed
+  vegetable quarters with fruit trained on its walls round a well, the privy garden's lawns with shade maples, benches,
+  flower beds, a basin and the rose arbour), each with a gate into its yard and one on its cross walk out to the cour;
+  the stable yard and the muster yard furnished; the paddock fenced with its gate on the south walk, an oak, hay, water
+  and five horses; the training yard with its archery butts, shooting line, pells and arms racks; the parterre's
+  blossom trees now grown trees in pink and white, a lozenge of flowers in each panel and spiral and tiered topiary;
+  tall clipped yews along the forecourt and by the garden walks, a tree on each forecourt lawn; the grand stair and
+  the garden stairs built in twelve real steps. Carried fixes: the champions stand on the grand stair's cheeks in an
+  open-faced plumed helm, the dragon's forelegs are jointed (shoulder, elbow, forearm, paw), the gold diamonds are gone
+  from the towers' and the gatehouse's bands and from the fountain and the statues (kept on banners and flags), and the
+  flags high on the towers and the gatehouse cast no shadow into the bailey. Awaiting Mitchell's look.
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
   - Stage 1 departures from the plan, for the later stages: the wall towers stand 1.7 m out from the curtain's line
@@ -175,6 +186,10 @@ Where things stand (October 3):
     half a metre off the plan), so no step of the bank's earth shows in front of its face; the weir and the culvert's
     mouth under the bridge are not modelled (out of sight under the bridge's south arch); the rock faces of the knolls
     seen from below are still the cliff generator's broad facets.
+  - Stage 6 departures: each garden's side gate stands on the garden's cross axis and opens across the lawn to the cour
+    (the plan put it on the north walk, where the garden's corner leaves no room for it); the training yard's butts stand
+    before the barracks and its pells by the curtain (seen from the play camera, the south curtain hid butts against it);
+    the wall towers' drums bulge 0.4 m into the paddock and the training yard, so their fences stop at the drums.
 - **Characters** come after the castle and stay blocky and modular. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
 - **Trees:** the grown oak and the common tree are built and approved with their bark (Mitchell, "looks good", October 3; see "Trees" below); the willow, maple, yew and magic tree are built and every zone's woods and lawns now grow the ladder, waiting on Mitchell's verdict from pictures.
 

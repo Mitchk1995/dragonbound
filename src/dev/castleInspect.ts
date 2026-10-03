@@ -245,8 +245,15 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await play('paddock', Z.paddock.x, Z.paddock.z, 1.1);
   await play('training', Z.training.x, Z.training.z, 1.1);
   await play('lookout', 30, 115, 1.2);
-  // The fountain up close, low down.
+  // The fountain up close, low down, from the side and from the front; a champion at the grand
+  // stair's foot.
   await view('fountain-close', [P.fountain.x + 7.5, y0 + 4.2, P.fountain.z + 14.5], [P.fountain.x, y0 + 4.4, P.fountain.z + 0.5], 14);
+  await view('fountain-front', [P.fountain.x - 2, y0 + 3.6, P.fountain.z + 11], [P.fountain.x, y0 + 4.4, P.fountain.z + 0.5], 12);
+  await view('champion', [P.door.x - 10.5, y0 + 3.6, 60.5], [P.door.x - 7, y0 + 3.4, 54], 8);
+  // The yards and the paddock from over the gardens and the side walks (the stables and the barracks
+  // stand between them and the play camera).
+  await view('yards-west', [Z.stableYard.x + 4, y0 + 15, Z.stableYard.z - 12], [Z.stableYard.x, y0, Z.stableYard.z + 4], 18);
+  await view('yards-east', [Z.musterYard.x - 4, y0 + 15, Z.musterYard.z - 12], [Z.musterYard.x, y0, Z.musterYard.z + 4], 18);
   // The island beyond the castle: meadows, the approach, the portal court.
   await view('island', [c.x + 150, y0 + 70, c.z + 165], [c.x + 60, -4, c.z + 70], 100);
   // The hero by the camera-side (south) curtain: the wall stands full height and dissolves round them.

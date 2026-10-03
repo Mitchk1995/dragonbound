@@ -6,8 +6,10 @@ import { ModelKit, PAL, type V3 } from '../../render/kit';
 import { KERB_W } from '../kerbStones';
 import { drumStones, laidRun } from '../../render/masonry';
 import { hash01, octagon, prism, taper, wedge } from '../../render/blocks';
+import { GROWN, grownTrees, type GrownKind } from '../trees';
+import { shareResource } from '../../render/resources';
 import { crossedRibbons, fallingWaterMaterial, mistTexture, planarReflection, pour, poolWater, type Impact } from '../water';
-import { type Builder, ASHLAR, ASHLAR_L, ball, BASE, BELLY, brokenFoam, BRONZE, BRONZE_D, BRONZE_L, cb, DRESS, drum, GARDEN_LEAF, GILT, HERALD_BLUE, HERALD_BLUE_D, KERB, laidBand, LAMP_NAVY, lenOf, limb, MARBLE, MARBLE_D, MARBLE_L, MEMBRANE, PLANT, pointedArch, spread, STONE, STONE_D, STONE_L, vOf, WOOD, WOOD_D, WOOD_L, WORN } from '../props';
+import { type Builder, ASHLAR, ASHLAR_L, ball, BASE, BELLY, brokenFoam, BRONZE, BRONZE_D, BRONZE_L, cb, DRESS, drum, IRON, GILT, HERALD_BLUE, HERALD_BLUE_D, KERB, laidBand, LAMP_NAVY, lenOf, limb, MARBLE, MARBLE_D, MARBLE_L, MEMBRANE, PLANT, pointedArch, spread, STONE, STONE_D, STONE_L, vOf, WOOD, WOOD_D, WOOD_L, WORN } from '../props';
 
 /**
  * A band `w` wide and `h` high along a polyline in plan (points (x, z), closed into a loop when
@@ -82,8 +84,8 @@ function taperBand(pts: THREE.Vector2[], ws: number[], hs: number[]) {
 /**
  * The fountain's bronze dragon (pick A, October 2), a sentinel sitting upright like a guardian lion
  * and facing +Z, its base on y = 0, about 3.3 high: a few big blocky castings, the haunches folded
- * under it, the deep chest upright with paler belly plates, straight thick forelegs planted on broad
- * feet so they plainly carry it, the wings folded flat against its flanks, the tail curled round its
+ * under it, the deep chest upright with paler belly plates, jointed forelegs (shoulder, elbow,
+ * forearm) planted on broad paws so they plainly carry it, the wings folded flat against its flanks, the tail curled round its
  * side on the plinth, the head held high with a square snout, the jaw open; gold horns, spines,
  * claws, eyes and tail spade. Returns the point in its open mouth the water pours from.
  */
@@ -93,11 +95,11 @@ function sentinelDragon(k: ModelKit, g: THREE.Object3D): THREE.Vector3 {
   const claws = (x: number, z: number) => {
     for (const c of [-1, 0, 1]) k.mesh(g, taper(0.09, 0.12, 0.05, 0.02, 0.14), GOLD, [x + c * 0.11, 0.06, z + 0.05], [Math.PI / 2, 0, 0]);
   };
-  // The haunches, folded under at the back, and the hind feet planted forward of them.
+  // The haunches, folded under at the back, and the hind feet planted beside the forepaws.
   for (const s of [-1, 1]) {
     cb(k, g, [0.44, 0.88, 0.98], [s * 0.5, 0.48, -0.36], B, [-0.12, 0, 0], 0.1);
-    cb(k, g, [0.34, 0.2, 0.48], [s * 0.46, 0.1, 0.14], BD, undefined, 0.05);
-    claws(s * 0.46, 0.38);
+    cb(k, g, [0.3, 0.2, 0.46], [s * 0.58, 0.1, 0.02], BD, undefined, 0.05);
+    claws(s * 0.58, 0.25);
   }
   // The body: one deep upright casting, leaning back a little, its belly plates down the front.
   cb(k, g, [0.82, 1.4, 0.8], [0, 1.22, -0.22], B, [-0.16, 0, 0], 0.1);
@@ -105,13 +107,17 @@ function sentinelDragon(k: ModelKit, g: THREE.Object3D): THREE.Vector3 {
     const y = 0.72 + i * 0.3;
     cb(k, g, [0.2, 0.27, 0.12], [0, y + 0.1, 0.24 - (y - 0.72) * 0.16], i % 2 ? BELLY : BL, [-0.16, 0, 0], 0.03);
   }
-  // The forelegs carrying the chest as a seated guardian lion's do: each one thick squared block
-  // standing straight up from its paw to the shoulder, where it rises into the chest's flank, on a
-  // broad paw block with gold claws.
+  // The forelegs carrying the chest as a seated guardian lion's do, jointed like a beast's leg: a
+  // heavy shoulder on the chest's flank, the upper arm running down and back to an elbow tucked at
+  // the body's side, the forearm coming forward and down from it to the wrist, and a broad paw with
+  // gold claws planted in front of the haunches.
   for (const s of [-1, 1]) {
-    cb(k, g, [0.32, 1.5, 0.38], [s * 0.27, 0.2 + 0.75, 0.24], B, undefined, 0.06);
-    cb(k, g, [0.38, 0.2, 0.5], [s * 0.27, 0.1, 0.36], BD, undefined, 0.05);
-    claws(s * 0.27, 0.61);
+    cb(k, g, [0.34, 0.62, 0.56], [s * 0.39, 1.4, -0.02], B, [-0.1, 0, s * 0.08], 0.1);
+    limb(k, g, [s * 0.41, 1.36, 0.02], [s * 0.4, 0.84, -0.08], [0.3, 0.36, 0.25, 0.3], B);
+    cb(k, g, [0.27, 0.26, 0.3], [s * 0.4, 0.84, -0.08], BD, undefined, 0.09);
+    limb(k, g, [s * 0.38, 0.9, -0.04], [s * 0.32, 0.18, 0.36], [0.25, 0.29, 0.2, 0.24], B);
+    cb(k, g, [0.34, 0.2, 0.5], [s * 0.32, 0.1, 0.46], BD, undefined, 0.05);
+    claws(s * 0.32, 0.71);
   }
   // The neck rising high and a little forward, its front plated.
   cb(k, g, [0.5, 0.62, 0.5], [0, 2.02, -0.04], B, [0.12, 0, 0], 0.08);
@@ -173,6 +179,74 @@ function sentinelDragon(k: ModelKit, g: THREE.Object3D): THREE.Vector3 {
   head.updateMatrix();
   // (The water leaves from inside the dark mouth, so it is first seen pouring over the lower jaw.)
   return new THREE.Vector3(0, -0.11, 0.5).applyMatrix4(head.matrix);
+}
+
+/** The garden trees' wind clock (ticked by each tree, the world's time). */
+const TREE_WIND = { uWindT: { value: 0 } };
+const treeParts = new Map<string, THREE.BufferGeometry>(), treeMats = new Map<string, THREE.MeshStandardMaterial>();
+const leafDepths = new Map<GrownKind, THREE.MeshDepthMaterial>();
+
+/**
+ * A grown kind's leaf shadows: plain depth cut to the leaves' outline by their own atlas, one per kind
+ * (three.js sets a custom depth material's map from the leaves it draws, so kinds never share one).
+ */
+function leafDepth(kind: GrownKind) {
+  let mat = leafDepths.get(kind);
+  if (!mat) {
+    const leaves = treeMaterial(kind, 'canopy');
+    mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leaves.map, alphaTest: leaves.alphaTest });
+    leafDepths.set(kind, shareResource(mat));
+  }
+  return mat;
+}
+
+/**
+ * One shape of a grown kind's wood or leaves for a garden tree: the woods' own buffers (shared, never
+ * copied), in a geometry of its own that the geometry audit passes over (a tree is no masonry).
+ */
+function treeGeometry(kind: GrownKind, part: 'trunk' | 'canopy', v: number) {
+  const key = `${kind}:${part}:${v}`;
+  let geo = treeParts.get(key);
+  if (!geo) {
+    const src = grownTrees(kind)[part][v];
+    geo = new THREE.BufferGeometry();
+    for (const [name, attr] of Object.entries(src.attributes)) geo.setAttribute(name, attr);
+    geo.setIndex(src.index);
+    geo.userData.boxes = [];
+    treeParts.set(key, shareResource(geo));
+  }
+  return geo;
+}
+
+/** A grown kind's bark or leaves, as the woods wear them (one material for every garden tree of a kind). */
+function treeMaterial(kind: GrownKind, part: 'trunk' | 'canopy') {
+  const key = `${kind}:${part}`;
+  let mat = treeMats.get(key);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
+    GROWN[kind].look[part](mat, TREE_WIND);
+    treeMats.set(key, shareResource(mat));
+  }
+  return mat;
+}
+
+/** The still water in a small basin or trough (the colour props.ts finishes as still water, with a sheen). */
+const BASIN_WATER = 0x1a3238;
+
+/** A disc of still water of radius `r` lying flat, its underside on y = 0, 2 cm thick. */
+const waterDisc = (r: number) => new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, r, 0, Math.PI * 2, false), { depth: 0.02, bevelEnabled: false, curveSegments: 24 }).rotateX(-Math.PI / 2);
+
+/**
+ * A garden wall's pier at (x, z), a metre square, on a base course, rising over the wall (`h` high)
+ * to a moulded cap and a ball finial.
+ */
+function gardenPier(k: ModelKit, g: THREE.Object3D, x: number, z: number, h: number) {
+  const shaft = h + 0.2 - 0.24;
+  cb(k, g, [1.24, 0.24, 1.24], [x, 0.12, z], BASE, undefined, 0.03);
+  cb(k, g, [1.04, shaft, 1.08], [x, 0.24 + shaft / 2, z], ASHLAR, undefined, 0.04);
+  cb(k, g, [1.22, 0.18, 1.24], [x, h + 0.29, z], DRESS, undefined, 0.03);
+  cb(k, g, [0.5, 0.16, 0.5], [x, h + 0.46, z], DRESS, undefined, 0.03);
+  ball(k, g, 0.25, [x, h + 0.78, z], ASHLAR_L);
 }
 
 /** The layer a pool's mirror draws (the fountain's own dragon, rock and jets). */
@@ -259,10 +333,37 @@ export const BAILEY_PROPS: Record<string, Builder> = {
       spread(L, 0.36, 0.25).forEach((x, i) => PLANT.daisy(k, soil, x, 0.3, i * 1.9));
     }
   },
-  /** Clipped topiary in a square stone planter (`len`: 0 a ball, 1 a cone). */
+  /**
+   * Clipped topiary in a square stone planter (`len`): 0 a ball, 1 a cone, 2 a standard (a round
+   * head on a clean stem), 3 a spiral (a cone clipped into a corkscrew of five turns), 4 a tiered
+   * standard (three balls, smaller up the stem), 5 a tall clipped yew (a squared obelisk with a ball
+   * on its point, for an avenue).
+   */
   topiary: (k, g, arg) => {
-    const cone = (lenOf(arg) ?? 0) === 1, standard = (lenOf(arg) ?? 0) === 2;
+    const kind = lenOf(arg) ?? 0, cone = kind === 1, standard = kind === 2;
     cb(k, g, [0.95, 0.7, 0.95], [0, 0.35, 0], STONE_L, undefined, 0.05);
+    if (kind >= 3) {
+      cb(k, g, [1.05, 0.12, 1.05], [0, 0.72, 0], DRESS, undefined, 0.03);
+      k.box(g, [0.75, 0.05, 0.75], [0, 0.76, 0], 0x3a2a1e);
+      const DARK_LEAF = 0x3e6e2e, LIGHT_LEAF = 0x4a7a34;
+      if (kind === 3) {
+        // The corkscrew: one clipped cone cut into a spiral, each turn a cushion swelling out and
+        // turned a little further round than the one under it, a thin stem of leaf showing between.
+        k.mesh(g, taper(0.34, 0.34, 0.12, 0.12, 2.1), DARK_LEAF, [0, 0.78 + 1.05, 0]);
+        for (let i = 0; i < 5; i++) {
+          const s = 0.92 - i * 0.15, a = i * 0.62;
+          cb(k, g, [s, 0.3, s], [Math.sin(a) * 0.05, 0.98 + i * 0.4, Math.cos(a) * 0.05], i % 2 ? LIGHT_LEAF : DARK_LEAF, [0, a, 0], Math.min(0.13, s * 0.3));
+        }
+        ball(k, g, 0.13, [0, 2.92, 0], LIGHT_LEAF);
+      } else if (kind === 4) {
+        cb(k, g, [0.12, 2.2, 0.12], [0, 1.85, 0], WOOD_D, undefined, 0.02);
+        for (const [r, y] of [[0.5, 1.3], [0.38, 2.2], [0.27, 2.9]]) ball(k, g, r, [0, y, 0], y > 2 ? LIGHT_LEAF : DARK_LEAF, [1, 0.88, 1]);
+      } else {
+        k.mesh(g, taper(0.82, 0.82, 0.3, 0.3, 2.6), DARK_LEAF, [0, 0.78 + 1.3, 0]);
+        ball(k, g, 0.24, [0, 3.28, 0], LIGHT_LEAF);
+      }
+      return;
+    }
     if (standard) {
       // A clipped standard: a tall clean stem through a smaller clipped ball to a round head.
       cb(k, g, [1.05, 0.12, 1.05], [0, 0.72, 0], DRESS, undefined, 0.03);
@@ -302,16 +403,12 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     // The basin floor, dark under the water so the pool has depth.
     k.cyl(g, RI, RI, 0.1, [0, 0.15, 0], 0x1a2e30, undefined, 48);
     // The dragon's pedestal, carved in the castle's own stone: an octagonal drum of cream ashlar
-    // rising out of the water from a blue-grey plinth, a gilt inscription band round it and a
-    // moulded blue-grey coping under the dragon's feet.
+    // rising out of the water from a blue-grey plinth, a plain gilt band round it and a moulded
+    // blue-grey coping under the dragon's feet.
     k.cyl(g, 2.75, 2.95, 1.0, [0, 0.5, 0], BASE, [0, Math.PI / 8, 0], 8);
     k.cyl(g, 2.45, 2.45, 0.5, [0, 1.25, 0], ASHLAR, [0, Math.PI / 8, 0], 8);
     k.cyl(g, 2.47, 2.47, 0.14, [0, 1.12, 0], GILT, [0, Math.PI / 8, 0], 8);
     k.cyl(g, 2.7, 2.62, 0.16, [0, 1.56, 0], DRESS, [0, Math.PI / 8, 0], 8);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2, rr = 2.45 * Math.cos(Math.PI / 8) + 0.02;
-      k.box(g, [0.16, 0.16, 0.04], [Math.sin(a) * rr, 1.12, Math.cos(a) * rr], PAL.gold, [0, a, Math.PI / 4]);
-    }
     // The dragon sitting guard on the pedestal, its jaws open over the front of the pool.
     const beast = new THREE.Group();
     beast.position.y = 1.64;
@@ -471,54 +568,45 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     k.mesh(g, mitredBand(pts, !!o.closed, 0.4, 0.08), 0x4a7a34, [0, 0.44, 0]);
   },
   /**
-   * An ornamental garden tree on a straight clean trunk, its crown built of leafy blocks like the
-   * island's other trees (`v`: 0 a clipped standard, one squared head; 1 pink blossom, 2 golden, 3 a
-   * fruit tree hung with apples, each a big block with smaller ones swelling out of it), in a square
-   * stone planter when `len` is 1. About 4.6 tall, the crown about 3 across. Blossom drops a few
-   * petals on the ground round its foot.
+   * A garden tree: one of the island's grown trees (trees.ts, the woodcutting ladder's species) set
+   * by hand, `opt.kind` in its shape `opt.v`, `opt.s` its size (1: the species' true size), turned
+   * `opt.turn`, its leaves tinted `opt.tint` (a blossom's pink or white, or the species' own green);
+   * petals fallen round its foot when `opt.petals` gives their colour. It sways with the wind and,
+   * like the woods, is cut away round the hero (it is an occluding prop).
    */
   garden_tree: (k, g, arg) => {
-    const v = vOf(arg) % 4, potted = lenOf(arg) === 1;
-    const pal = GARDEN_LEAF[v];
-    const y0 = potted ? 0.62 : 0;
-    if (potted) {
-      cb(k, g, [1.5, 0.55, 1.5], [0, 0.28, 0], ASHLAR_L, undefined, 0.05);
-      cb(k, g, [1.62, 0.12, 1.62], [0, 0.58, 0], DRESS, undefined, 0.03);
-      k.box(g, [1.25, 0.05, 1.25], [0, 0.6, 0], 0x3a2a1e);
+    const o = (arg?.opt ?? {}) as { kind?: GrownKind; v?: number; s?: number; turn?: number; tint?: number; petals?: number };
+    const kind = o.kind ?? 'tree', set = grownTrees(kind), v = (o.v ?? 0) % set.canopy.length, s = o.s ?? 1;
+    // (Each tree's instance stands at its own offset, its mesh moved back by it: the wind's phase,
+    // read from the instance's place, differs from tree to tree while the tree stays at the prop.)
+    const off = new THREE.Vector3(hash01(s, v, 3) * 40 - 20, 0, hash01(v, s, 5) * 40 - 20);
+    const m = new THREE.Matrix4().compose(off, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), o.turn ?? 0), new THREE.Vector3(s, s, s));
+    const tint = new THREE.Color(o.tint ?? GROWN[kind].look.palette[0]);
+    for (const part of ['trunk', 'canopy'] as const) {
+      const mesh = new THREE.InstancedMesh(treeGeometry(kind, part, v), treeMaterial(kind, part), 1);
+      mesh.setMatrixAt(0, m);
+      if (part === 'canopy') mesh.setColorAt(0, tint);
+      mesh.position.copy(off).negate();
+      mesh.computeBoundingSphere();
+      mesh.name = `garden-tree-${part}`;
+      g.add(mesh);
     }
-    // (The trunk runs on up into the crown, so the head sits on it.)
-    k.mesh(g, taper(0.3, 0.3, 0.18, 0.18, 2.7), WOOD_D, [0, y0 + 1.35, 0]);
-    cb(k, g, [0.4, 0.22, 0.4], [0, y0 + 0.11, 0], WOOD_D, [0, 0.4, 0], 0.08);
-    const cy = y0 + 3.1;
-    if (v === 0) {
-      // A clipped standard: one squared head of close-clipped green, a smaller block crowning it.
-      cb(k, g, [2.2, 1.9, 2.2], [0, cy, 0], pal[1], [0, 0.3, 0], 0.32);
-      cb(k, g, [1.5, 0.7, 1.5], [0, cy + 1.05, 0], pal[2], [0, 0.75, 0], 0.22);
-      cb(k, g, [1.3, 0.5, 2.3], [0, cy - 0.55, 0], pal[0], [0, 1.1, 0], 0.18);
-      return;
-    }
-    // A full head of bloom (or leaf): one big block with smaller ones swelling out of it, each its own
-    // shade and turned a little, a little leaf showing under the blossom.
-    cb(k, g, [2.4, 1.6, 2.4], [0, cy + 0.1, 0], pal[0], [0, 0.2, 0], 0.26);
-    const lobes: V3[] = [[0.85, -0.1, 0.4], [-0.8, 0.0, 0.45], [0.25, 0.05, -0.85], [-0.4, -0.2, 0.9], [0.1, 0.7, 0.1], [-0.65, 0.4, -0.5], [0.7, 0.45, -0.4]];
-    lobes.forEach(([x, y, z], i) => {
-      const s = 1.15 + hash01(i, v) * 0.35;
-      cb(k, g, [s, s * 0.78, s], [x, cy + y, z], pal[(i % 2) + 1], [0, hash01(i, 7) * 1.2, 0], 0.18);
-    });
-    if (v !== 3) for (const [x, y, z] of [[0.75, -0.62, -0.3], [-0.65, -0.58, -0.4], [0.05, -0.7, 0.65]] as V3[]) cb(k, g, [0.9, 0.55, 0.9], [x, cy + y, z], GARDEN_LEAF[3][1], [0, x, 0], 0.14);
-    if (v === 3) {
-      // Apples on the outside of the crown.
-      for (let i = 0; i < 16; i++) {
-        const a = hash01(i, 11) * Math.PI * 2, b = (hash01(i, 12) - 0.35) * 1.2, r = 1.4;
-        k.gem(g, 0.11, [Math.cos(a) * Math.cos(b) * r, cy + Math.sin(b) * r * 0.85, Math.sin(a) * Math.cos(b) * r], i % 3 ? 0xc8342a : 0xe8a030);
+    if (o.petals !== undefined) {
+      for (let i = 0; i < 14; i++) {
+        const a = hash01(i, 21) * Math.PI * 2, r = (0.6 + hash01(i, 22) * 1.4) * s;
+        k.box(g, [0.12, 0.02, 0.09], [Math.cos(a) * r, 0.03, Math.sin(a) * r], o.petals, [0, a, 0]);
       }
-      return;
     }
-    // Fallen petals on the ground (or the planter's soil) round its foot.
-    for (let i = 0; i < (potted ? 5 : 12); i++) {
-      const a = hash01(i, 21) * Math.PI * 2, r = potted ? 0.25 + hash01(i, 22) * 0.35 : 0.4 + hash01(i, 22) * 0.8;
-      k.box(g, [0.12, 0.02, 0.09], [Math.cos(a) * r, y0 + 0.03, Math.sin(a) * r], pal[1 + (i % 2)], [0, a, 0]);
-    }
+    const canopy = g.getObjectByName('garden-tree-canopy') as THREE.InstancedMesh, depth = leafDepth(kind);
+    return {
+      obj: g,
+      tick: (t) => {
+        TREE_WIND.uWindT.value = t;
+        // (The world makes every occluder's shadow the cut-away's plain depth once the prop is built;
+        // on its first tick the tree takes back its leaves' own, cut to their outline as the woods'.)
+        if (canopy.customDepthMaterial !== depth) canopy.customDepthMaterial = depth;
+      },
+    };
   },
   /** A garden bench (facing +Z): an oak seat and back on stone ends. */
   garden_bench: (k, g) => {
@@ -599,17 +687,16 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     cb(k, g, [0.13, 0.78, 0.15], [0, 1.16, -0.86], dark, [0.26, 0, 0], 0.03);
   },
   /**
-   * A knight in stone on a stepped plinth (facing +Z), the lord's champion: plate armour and a
-   * crested helm, a cloak down the back, hands folded on the pommel of a sword planted point down
+   * A knight in stone on a stepped plinth (facing +Z), the lord's champion: plate armour and an
+   * open-faced plumed helm, a cloak down the back, hands folded on the pommel of a sword planted point down
    * before him, a kite shield leaning at his side.
    */
   champion: (k, g) => {
-    // Warm marble on a carved plinth in the castle's stone, the lord's blue and gold on his tabard.
+    // Warm marble on a carved plinth in the castle's stone, the lord's blue on his tabard.
     const S = MARBLE, SD = MARBLE_D, SL = MARBLE_L;
     cb(k, g, [2.0, 0.45, 2.0], [0, 0.225, 0], BASE, undefined, 0.06);
     cb(k, g, [1.6, 0.9, 1.6], [0, 0.9, 0], ASHLAR, undefined, 0.06);
     cb(k, g, [0.9, 0.4, 0.05], [0, 0.9, 0.81], ASHLAR_L, undefined, 0.02);
-    k.box(g, [0.24, 0.24, 0.04], [0, 0.9, 0.84], PAL.gold, [0, 0, Math.PI / 4]);
     cb(k, g, [1.75, 0.14, 1.75], [0, 1.42, 0], DRESS, undefined, 0.03);
     const y = 1.49;
     // Legs, knee cops and sabatons.
@@ -623,9 +710,9 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     cb(k, g, [0.68, 0.1, 0.48], [0, y + 1.34, 0], SD, undefined, 0.03);
     k.mesh(g, taper(0.62, 0.44, 0.84, 0.5, 0.78), S, [0, y + 1.78, 0]);
     k.mesh(g, wedge(0.08, 0.06, 0.7), SL, [0, y + 1.78, 0.25], [Math.PI / 2, 0, 0]);
-    // The tabard over the breastplate: the lord's blue falling in two folds, the gold diamond on it.
+    // The tabard over the breastplate: the lord's blue falling in two folds (the gold diamond is
+    // kept for the banners and flags).
     for (const sx of [-1, 1]) cb(k, g, [0.27, 0.95, 0.05], [sx * 0.14, y + 1.5, 0.29], sx < 0 ? HERALD_BLUE : HERALD_BLUE_D, [0.05, 0, 0], 0.01);
-    k.box(g, [0.2, 0.2, 0.05], [0, y + 1.78, 0.33], PAL.gold, [0, 0, Math.PI / 4]);
     // The cloak hanging down the back from a rolled collar at the shoulders, falling in deep folds
     // (pleats standing out of it at different depths), its hem flaring a little.
     // (Modelled all round: seen from behind on the parterre's walks he shows a full draped cloak in
@@ -636,7 +723,8 @@ export const BAILEY_PROPS: Record<string, Builder> = {
       k.mesh(g, taper(w, 0.2, w * 0.6, 0.12, 1.84), i === -0.5 || i === 1.5 ? SL : S, [i * 0.23, y + 1.08, -0.4 - dz], [-0.08, 0, i * 0.04]);
     }
     k.mesh(g, taper(1.0, 0.16, 1.0, 0.16, 0.12), SD, [0, y + 0.22, -0.5], [-0.06, 0, 0]);
-    for (const sx of [-1, 1]) k.box(g, [0.12, 0.12, 0.06], [sx * 0.34, y + 2.06, 0.02], PAL.gold, [0, 0, Math.PI / 4]);
+    // (Clasped at the shoulders with round gilt bosses.)
+    for (const sx of [-1, 1]) k.cyl(g, 0.07, 0.07, 0.06, [sx * 0.34, y + 2.06, 0.02], PAL.gold, [Math.PI / 2, 0, 0], 10);
     // The sword belt round him, over the cloak at the back, its buckle on the hip.
     cb(k, g, [0.72, 0.1, 0.5], [0, y + 1.3, 0], SL, undefined, 0.03);
     cb(k, g, [0.86, 0.1, 0.16], [0, y + 1.3, -0.52], SD, [-0.06, 0, 0], 0.03);
@@ -656,16 +744,220 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     cb(k, g, [0.13, 0.13, 0.13], [0, y + 1.62, 0.46], SL, [0, Math.PI / 4, 0], 0.03);
     cb(k, g, [0.66, 0.08, 0.1], [0, y + 1.26, 0.46], SL, undefined, 0.02);
     k.mesh(g, taper(0.05, 0.04, 0.16, 0.05, 1.18), SL, [0, y + 0.64, 0.46]);
-    // The helm: a great helm with a visor slit, its top closing in a low rounded crown with a short
-    // ridged comb running front to back along it (sitting on the helm, never a fin standing off it).
-    cb(k, g, [0.2, 0.14, 0.2], [0, y + 2.24, 0], SD, undefined, 0.03);
-    cb(k, g, [0.38, 0.44, 0.42], [0, y + 2.5, 0.01], S, undefined, 0.1);
-    k.box(g, [0.28, 0.05, 0.03], [0, y + 2.56, 0.22], 0x2e2c28);
-    k.box(g, [0.04, 0.16, 0.03], [0, y + 2.44, 0.22], 0x2e2c28);
-    k.mesh(g, taper(0.36, 0.4, 0.2, 0.24, 0.12), S, [0, y + 2.77, 0.01]);
-    cb(k, g, [0.07, 0.11, 0.36], [0, y + 2.86, 0.0], SL, undefined, 0.025);
+    // The helm: an open-faced knight's helm, round as a head is, on a mail collar: a rounded skull
+    // with a band round the brow, cheek guards either side of the face and a nasal down its middle,
+    // the face under it carved plain, and a stone plume springing from a socket at the crown and
+    // falling back over the nape.
+    k.cyl(g, 0.15, 0.2, 0.18, [0, y + 2.25, 0.0], SD, undefined, 10);
+    cb(k, g, [0.24, 0.26, 0.2], [0, y + 2.42, 0.06], S, undefined, 0.05);
+    for (const sx of [-1, 1]) k.box(g, [0.05, 0.025, 0.03], [sx * 0.06, y + 2.47, 0.16], SD);
+    ball(k, g, 0.21, [0, y + 2.56, 0.0], SL, [1, 0.92, 1.08]);
+    k.cyl(g, 0.215, 0.215, 0.06, [0, y + 2.53, 0.0], S, undefined, 10);
+    for (const sx of [-1, 1]) cb(k, g, [0.06, 0.26, 0.22], [sx * 0.16, y + 2.39, 0.05], SL, [0, sx * -0.25, 0], 0.015);
+    cb(k, g, [0.05, 0.2, 0.05], [0, y + 2.45, 0.175], SL, undefined, 0.01);
+    cb(k, g, [0.08, 0.08, 0.08], [0, y + 2.76, -0.01], SL, [0, Math.PI / 4, 0], 0.02);
+    limb(k, g, [0, y + 2.79, 0.0], [0, y + 2.72, -0.3], [0.1, 0.12, 0.08, 0.1], SL);
+    limb(k, g, [0, y + 2.72, -0.28], [0, y + 2.44, -0.42], [0.08, 0.1, 0.05, 0.06], SL);
     // A kite shield leaning against his side.
     k.mesh(g, taper(0.1, 0.07, 0.56, 0.07, 0.86), SD, [-0.56, y + 0.46, 0.12], [-0.08, 0.35, 0.1]);
-    cb(k, g, [0.18, 0.18, 0.04], [-0.57, y + 0.62, 0.17], SL, [0, 0.35, Math.PI / 4], 0.02);
+    k.cyl(g, 0.1, 0.1, 0.04, [-0.57, y + 0.62, 0.17], SL, [Math.PI / 2, 0, -0.35], 10);
+  },
+  // ─── The walled gardens ────────────────────────────────────────────────────────
+  /**
+   * A gateway through a garden wall (the way through along local Z), `len` wide between its piers: a
+   * pier either side a metre square, standing a little proud of the wall's faces and over its coping
+   * (`opt.h`, the wall's height), on a base course, under a moulded cap and a ball finial; a pair of
+   * navy iron gates hung on the piers' inner faces, standing open a quarter turn toward -Z (into the
+   * garden) against the gateway's sides.
+   */
+  garden_gate: (k, g, arg) => {
+    const W = lenOf(arg) ?? 3, H = (arg?.opt as { h?: number } | undefined)?.h ?? 2.6;
+    for (const sx of [-1, 1]) {
+      gardenPier(k, g, sx * (W / 2 + 0.52), 0, H);
+      // The leaf: a stile at its hinge against the pier, bars between top and bottom rails, gilt
+      // spear heads over the top rail, swung open along Z to lie beside the gateway's side.
+      const leaf = new THREE.Group(), L = W / 2 - 0.06;
+      leaf.position.set(sx * (W / 2 - 0.04), 0, 0);
+      leaf.rotation.y = -sx * (Math.PI / 2);
+      g.add(leaf);
+      const u = -sx;
+      cb(k, leaf, [0.07, 1.95, 0.07], [0, 0.98, 0], LAMP_NAVY, undefined, 0.01);
+      cb(k, leaf, [0.07, 1.8, 0.07], [u * L, 0.9, 0], LAMP_NAVY, undefined, 0.01);
+      for (const y of [0.18, 0.95, 1.72]) k.box(leaf, [L, 0.06, 0.05], [(u * L) / 2, y, 0], LAMP_NAVY);
+      const n = Math.max(3, Math.round(L / 0.14));
+      for (let i = 1; i < n; i++) {
+        const xb = (u * L * i) / n;
+        k.box(leaf, [0.035, 1.6, 0.035], [xb, 0.95, 0], LAMP_NAVY);
+        k.mesh(leaf, taper(0.07, 0.07, 0.01, 0.01, 0.14), PAL.gold, [xb, 1.82, 0]);
+      }
+    }
+  },
+  /**
+   * A fruit tree trained flat against a wall (facing +Z, its back on the wall's face at z = 0): a
+   * short trunk and three tiers of arms either side along the wall, `len` across, leafy spurs along
+   * every arm and fruit hanging from them (`v`: 0 apples, 1 pears).
+   */
+  espalier: (k, g, arg) => {
+    const L = lenOf(arg) ?? 2.6, pear = vOf(arg) === 1, z = 0.16, LEAF = [0x3e6e2e, 0x4a7a34, 0x56883c];
+    k.mesh(g, taper(0.16, 0.16, 0.1, 0.1, 2.0), WOOD_D, [0, 1.0, z]);
+    cb(k, g, [0.26, 0.14, 0.24], [0, 0.07, z], WOOD_D, undefined, 0.04);
+    [0.7, 1.25, 1.8].forEach((y, t) => {
+      const reach = L / 2 - t * 0.15;
+      for (const sx of [-1, 1]) {
+        k.mesh(g, taper(0.07, 0.07, 0.05, 0.05, reach), WOOD_D, [(sx * reach) / 2, y, z], [0, 0, Math.PI / 2]);
+        for (let i = 0, x = 0.3; x < reach - 0.05; i++, x += 0.34) {
+          ball(k, g, 0.13 + hash01(i, t, sx) * 0.05, [sx * x, y + 0.07, z + 0.02], LEAF[(i + t) % 3], [1.2, 0.8, 0.7]);
+          if ((i + t) % 2 === 0) k.gem(g, 0.06, [sx * x + 0.05, y - 0.08, z + 0.09], pear ? 0xc8b040 : i % 4 ? 0xc8342a : 0xe8a030);
+        }
+      }
+    });
+    ball(k, g, 0.16, [0, 2.02, z], LEAF[1], [1, 0.9, 0.7]);
+  },
+  /**
+   * A kitchen bed `opt.w` by `opt.d` (along X and Z) of dark tilled soil, planted in rows along X of
+   * one crop (`v`): 0 cabbages, 1 lettuces, 2 carrots, 3 leeks, 4 red cabbages, 5 runner beans on
+   * cane wigwams in red flower.
+   */
+  kitchen_bed: (k, g, arg) => {
+    const o = (arg?.opt ?? {}) as { w?: number; d?: number }, W = o.w ?? 4, D = o.d ?? 3, v = vOf(arg) % 6;
+    cb(k, g, [W, 0.14, D], [0, 0.07, 0], 0x4a3624, undefined, 0.05);
+    const soil = new THREE.Group();
+    soil.position.y = 0.14;
+    g.add(soil);
+    spread(D, v === 5 ? 1.1 : 0.55, 0.35).forEach((z, r) => {
+      k.box(soil, [W - 0.3, 0.05, 0.32], [0, 0.0, z], 0x3a2a1c);
+      if (v === 5) {
+        // Bean wigwams: four canes leaning in to a tie, leaves climbing them, red flowers.
+        spread(W, 1.0, 0.5).forEach((x, i) => {
+          for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) limb(k, soil, [x + dx * 0.3, 0, z + dz * 0.3], [x, 1.7, z], [0.035, 0.035, 0.03, 0.03], WOOD_L);
+          for (let j = 0; j < 4; j++) {
+            const a = j * 1.7 + i, rr = 0.24 - j * 0.04;
+            ball(k, soil, 0.14, [x + Math.cos(a) * rr, 0.35 + j * 0.34, z + Math.sin(a) * rr], j % 2 ? 0x4a7a34 : 0x3e6e2e, [1, 1.2, 1]);
+            k.gem(soil, 0.05, [x + Math.cos(a) * (rr + 0.1), 0.42 + j * 0.34, z + Math.sin(a) * (rr + 0.1)], 0xd8322e);
+          }
+        });
+        return;
+      }
+      spread(W, v === 2 || v === 3 ? 0.3 : 0.48, 0.3).forEach((x, i) => {
+        const seed = i * 1.37 + r * 5.1;
+        if (v === 0 || v === 4) PLANT.cabbage(k, soil, x, z, seed, v === 4);
+        else if (v === 1) PLANT.lettuce(k, soil, x, z, seed);
+        else if (v === 2) PLANT.carrot(k, soil, x, z, seed);
+        else PLANT.leek(k, soil, x, z, seed);
+      });
+    });
+  },
+  /**
+   * The privy garden's basin: a round pool in a ring of dressed stone (radius 1.3), a baluster rising
+   * from it to a shallow bowl brimming with water, the water still and dark.
+   */
+  garden_basin: (k, g) => {
+    const R = 1.3;
+    drum(k, g, { r: R, rIn: R - 0.3, y0: 0, y1: 0.5, n: drumStones(R), course: 0.5 }, DRESS);
+    k.mesh(g, waterDisc(R - 0.3), BASIN_WATER, [0, 0.3, 0]);
+    k.cyl(g, 0.34, 0.42, 0.3, [0, 0.15, 0], STONE, undefined, 8);
+    k.cyl(g, 0.16, 0.22, 0.9, [0, 0.75, 0], STONE_L, undefined, 8);
+    k.cyl(g, 0.6, 0.2, 0.22, [0, 1.31, 0], STONE_L, undefined, 12);
+    k.mesh(g, waterDisc(0.5), BASIN_WATER, [0, 1.42, 0]);
+  },
+  /** Two straw bee skeps on a stone shelf (facing +Z): coiled domes with a dark entrance at the foot. */
+  skeps: (k, g) => {
+    for (const x of [-0.7, 0.7]) cb(k, g, [0.3, 0.55, 0.5], [x, 0.275, 0], STONE_L, undefined, 0.04);
+    cb(k, g, [1.9, 0.12, 0.62], [0, 0.61, 0], DRESS, undefined, 0.03);
+    for (const x of [-0.5, 0.5]) {
+      for (let i = 0; i < 5; i++) k.cyl(g, 0.3 - i * 0.055, 0.32 - i * 0.055, 0.11, [x, 0.725 + i * 0.1, 0], i % 2 ? 0xc8a050 : 0xb89040, undefined, 12);
+      k.box(g, [0.12, 0.07, 0.06], [x, 0.71, 0.28], 0x2a1e14);
+    }
+  },
+  /** A paddock's water trough (along local X): a long timber trough on trestle legs, water standing in it. */
+  field_trough: (k, g) => {
+    for (const x of [-0.8, 0.8]) for (const z of [-0.22, 0.22]) cb(k, g, [0.1, 0.42, 0.1], [x, 0.21, z], WOOD_D, undefined, 0.02);
+    cb(k, g, [2.1, 0.08, 0.66], [0, 0.46, 0], WOOD, undefined, 0.02);
+    for (const z of [-0.3, 0.3]) cb(k, g, [2.1, 0.34, 0.06], [0, 0.67, z], WOOD, undefined, 0.02);
+    for (const x of [-1.02, 1.02]) cb(k, g, [0.06, 0.34, 0.54], [x, 0.67, 0], WOOD_D, undefined, 0.02);
+    k.box(g, [1.98, 0.02, 0.54], [0, 0.76, 0], BASIN_WATER);
+  },
+  /** A hay rack on its legs (along local X): a slatted manger of timber filled with hay. */
+  hay_rack: (k, g) => {
+    for (const x of [-0.9, 0.9]) for (const z of [-0.3, 0.3]) cb(k, g, [0.12, 1.3, 0.12], [x, 0.65, z], WOOD_D, undefined, 0.02);
+    cb(k, g, [1.9, 0.08, 0.7], [0, 0.66, 0], WOOD, undefined, 0.02);
+    for (const z of [-0.3, 0.3]) for (let i = 0; i < 7; i++) cb(k, g, [0.05, 0.6, 0.05], [-0.84 + i * 0.28, 0.98, z], WOOD_L, undefined, 0.01);
+    for (const z of [-0.3, 0.3]) cb(k, g, [1.9, 0.07, 0.07], [0, 1.27, z], WOOD, undefined, 0.01);
+    cb(k, g, [1.7, 0.42, 0.54], [0, 0.91, 0], 0xc8a858, undefined, 0.15);
+    for (let i = 0; i < 6; i++) cb(k, g, [0.4, 0.2, 0.36], [-0.65 + i * 0.26, 1.16 + hash01(i, 3) * 0.06, (hash01(i, 4) - 0.5) * 0.2], i % 2 ? 0xd8b868 : 0xb8984a, [0, hash01(i, 5), 0.2], 0.08);
+  },
+  /** A mounting block (climbed toward +Z): three stone steps up to a rider's stirrup. */
+  mounting_block: (k, g) => {
+    for (let i = 0; i < 3; i++) cb(k, g, [1.0, 0.25 * (i + 1), 0.4], [0, 0.125 * (i + 1), -0.4 + i * 0.4], i === 2 ? STONE : STONE_L, undefined, 0.03);
+  },
+  // ─── The training yard ────────────────────────────────────────────────────────
+  /** A pell: a stout post set on a stone block for sword practice, bound with iron, hacked about. */
+  pell: (k, g) => {
+    cb(k, g, [0.6, 0.18, 0.6], [0, 0.09, 0], STONE, undefined, 0.03);
+    cb(k, g, [0.26, 1.85, 0.26], [0, 1.1, 0], WOOD, [0, 0.2, 0], 0.03);
+    for (const y of [0.5, 1.75]) cb(k, g, [0.3, 0.06, 0.3], [0, y, 0], IRON, [0, 0.2, 0], 0.01);
+    // (Notches cut in it by the blows, pale wood showing.)
+    for (const [y, a] of [[1.15, 0.2], [1.35, 1.6], [0.95, 3.0], [1.5, 4.3]]) k.box(g, [0.14, 0.03, 0.04], [Math.sin(a) * 0.12, y, Math.cos(a) * 0.12], WOOD_L, [0, a, 0.15]);
+  },
+  /**
+   * A yard's arms rack (along local X, its front toward +Z): a timber A-frame with spears and a
+   * halberd leaning on its top rail, and practice swords and a bow hung along a lower rail.
+   */
+  arms_rack: (k, g) => {
+    for (const x of [-0.95, 0.95]) for (const e of [-1, 1]) cb(k, g, [0.1, 1.5, 0.1], [x, 0.7, e * 0.22], WOOD_D, [e * -0.3, 0, 0], 0.02);
+    cb(k, g, [2.1, 0.1, 0.1], [0, 1.35, 0], WOOD, undefined, 0.02);
+    cb(k, g, [2.1, 0.08, 0.08], [0, 0.62, 0.3], WOOD, undefined, 0.02);
+    for (const [x, tilt] of [[-0.75, 0.12], [-0.4, -0.08], [-0.05, 0.1], [0.3, -0.12]]) {
+      cb(k, g, [0.06, 1.9, 0.06], [x, 0.95, 0.12], WOOD_L, [0.25, 0, tilt], 0.01);
+      const top = new THREE.Vector3(0, 0.92, 0).applyEuler(new THREE.Euler(0.25, 0, tilt)).add(new THREE.Vector3(x, 0.95, 0.12));
+      k.mesh(g, prism(0.12, 0.35, 0.6), 0x6e7280, [top.x, top.y, top.z], [0.25, 0, tilt]);
+    }
+    // The halberd: its blade and spike at the top of a longer shaft.
+    cb(k, g, [0.07, 2.2, 0.07], [0.7, 1.08, 0.14], WOOD_D, [0.24, 0, -0.06], 0.01);
+    const hb = new THREE.Vector3(0, 0.95, 0).applyEuler(new THREE.Euler(0.24, 0, -0.06)).add(new THREE.Vector3(0.7, 1.08, 0.14));
+    cb(k, g, [0.3, 0.32, 0.04], [hb.x + 0.12, hb.y, hb.z], IRON, [0.24, 0, -0.06], 0.02);
+    // Wooden practice swords and a short bow hung on the lower rail.
+    for (const x of [-0.7, -0.45, -0.2]) {
+      cb(k, g, [0.08, 0.72, 0.03], [x, 0.3, 0.36], WOOD_L, [0.05, 0, 0], 0.01);
+      cb(k, g, [0.24, 0.05, 0.05], [x, 0.66, 0.36], WOOD_D, undefined, 0.01);
+    }
+    limb(k, g, [0.3, 0.6, 0.37], [0.55, 0.15, 0.37], [0.04, 0.04, 0.03, 0.03], WOOD_D);
+    limb(k, g, [0.3, 0.6, 0.37], [0.6, 0.98, 0.37], [0.04, 0.04, 0.03, 0.03], WOOD_D);
+  },
+  /**
+   * The archery yard's shooting line (along local X), `len` long: a timber sill laid in the earth,
+   * a white peg marking each archer's place every 2.5 metres.
+   */
+  shooting_line: (k, g, arg) => {
+    const L = lenOf(arg) ?? 12;
+    cb(k, g, [L, 0.08, 0.2], [0, 0.02, 0], WOOD_D, undefined, 0.02);
+    for (const x of spread(L, 2.5, 1.25)) cb(k, g, [0.12, 0.3, 0.12], [x, 0.15, -0.16], 0xe8e2d4, undefined, 0.02);
+  },
+  /**
+   * A lozenge bed in a parterre's lawn, `opt.w` across along X and `opt.d` along Z: one clipped box
+   * edging round its four sides, the soil inside planted with flowers in rings of colour (`v`: 0
+   * tulips gold to red, 1 roses white to pink, 2 white tulips ringed with lavender).
+   */
+  parterre_bed: (k, g, arg) => {
+    const o = (arg?.opt ?? {}) as { w?: number; d?: number }, W = o.w ?? 5, D = o.d ?? 3.6, v = vOf(arg) % 3;
+    const pts = [[-W / 2, 0], [0, -D / 2], [W / 2, 0], [0, D / 2]].map(([x, z]) => new THREE.Vector2(x, z));
+    const soil = new THREE.Shape(pts.map((q) => new THREE.Vector2(q.x, -q.y)));
+    k.mesh(g, new THREE.ExtrudeGeometry(soil, { depth: 0.1, bevelEnabled: false }).rotateX(-Math.PI / 2), 0x3a2a1e, [0, 0, 0]);
+    k.mesh(g, mitredBand(pts, true, 0.42, 0.4, 0.05), 0x3e6a2e, [0, 0, 0]);
+    k.mesh(g, mitredBand(pts, true, 0.32, 0.07), 0x4a7a34, [0, 0.4, 0]);
+    // Planted in staggered rows across the lozenge, every plant a hand's breadth clear of the box.
+    const ringOf = (x: number, z: number) => Math.abs(x) / (W / 2) + Math.abs(z) / (D / 2);
+    const bed = new THREE.Group();
+    bed.position.y = 0.1;
+    g.add(bed);
+    for (let r = 0, z = -D / 2 + 0.4; z <= D / 2 - 0.4; r++, z += 0.34) for (let x = -W / 2 + 0.4; x <= W / 2 - 0.4; x += 0.32) {
+      const xx = x + (r % 2 ? 0.16 : 0), ring = ringOf(xx, z), seed = xx * 3.1 + z * 7.7;
+      if (ring > 0.74) continue;
+      if (v === 0) PLANT.tulip(k, bed, xx, z, ring < 0.3 ? 0xf0b828 : ring < 0.52 ? 0xe86a2a : 0xd8323a, 0.32 + hash01(xx, z) * 0.08, seed);
+      else if (v === 1) {
+        if (Math.round(x / 0.32) % 2 === 0) PLANT.rose(k, bed, xx, z, ring < 0.4 ? 0xf4ece0 : 0xe0507a, 0.8, seed);
+      } else if (ring < 0.45) PLANT.tulip(k, bed, xx, z, 0xf4ece0, 0.34, seed);
+      else PLANT.lavender(k, bed, xx, z, seed);
+    }
   },
 };
