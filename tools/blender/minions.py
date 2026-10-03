@@ -246,12 +246,12 @@ def hood_rows_fn(rows, arch):
 
 
 # The cultist's cowl (head space, y up from the neck): a mantle on the shoulders (inside the arms, which hang against
-# the robe's sides), round the face, then up well over the head: the upper rows move forward and the hood ends in a
-# peak above the brow that tips forward over the face, as in the concept (never pulled back off a bald crown). The
-# opening is a V under the chin, widest round the face, closing in a tall arch under the forward peak.
+# the robe's sides), round the face, then a rounded crown over the head, as in the concept: a modest dome of cloth
+# rising steadily from the back to a small soft peak that tips forward over the brow (never pulled back off a bald
+# crown, never a spire). The opening is a V under the chin, widest round the face, closing in an arch under the peak.
 CULT_HOOD = ((-0.2, 0.355, 0.33, -0.02, 9), (-0.05, 0.33, 0.31, -0.01, 18), (0.1, 0.3, 0.3, 0.02, 42),
-             (0.26, 0.29, 0.31, 0.05, 40), (0.4, 0.28, 0.31, 0.09, 30), (0.52, 0.26, 0.3, 0.12, 14),
-             (0.62, 0.22, 0.26, 0.14, 0), (0.72, 0.15, 0.2, 0.2, 0), (0.79, 0.08, 0.12, 0.26, 0), (0.82, 0.0, 0.0, 0.32, 0))
+             (0.26, 0.29, 0.31, 0.04, 40), (0.4, 0.28, 0.31, 0.06, 30), (0.5, 0.26, 0.3, 0.08, 14),
+             (0.58, 0.22, 0.27, 0.09, 0), (0.64, 0.15, 0.2, 0.13, 0), (0.68, 0.07, 0.11, 0.2, 0), (0.7, 0.0, 0.0, 0.27, 0))
 # The priest's: the same cowl drawn up into a tall pointed hood.
 PRIEST_HOOD = ((-0.2, 0.375, 0.36, -0.02, 9), (-0.05, 0.35, 0.33, -0.01, 18), (0.1, 0.31, 0.32, 0.02, 42),
                (0.26, 0.3, 0.32, 0.04, 40), (0.4, 0.28, 0.31, 0.06, 26), (0.52, 0.24, 0.28, 0.06, 0),
