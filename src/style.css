@@ -777,4 +777,4 @@ svg { display: block; }
 .pui p-i { position: absolute; background-repeat: no-repeat; image-rendering: auto; }
 /* A real space, so lines wrap at the usual places; its width is set per run (--sp) to the alphabet's word space. */
 p-s.psp { font-family: Georgia, 'Times New Roman', serif; font-size: var(--sp, 4px); font-weight: 400; font-style: normal; letter-spacing: 0; }
-.pui p-f { font-family: var(--sans); font-weight: 700; }
+.pui p-f { font-family: var(--sans); font-weight: 700; letter-spacing: 0; }

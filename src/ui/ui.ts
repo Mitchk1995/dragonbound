@@ -257,18 +257,18 @@ export class UI {
         const artUrl = abilityArtUrl(def.id);
         if (artUrl) art.src = artUrl;
         else art.removeAttribute('src');
-        setText(d.querySelector('.cost') as HTMLElement, String(def.mana));
       }
       const locked = st.styleLevel < def.unlock;
       const rem = p.cds[def.id] ?? 0;
       const frac = cooldownFrac(rem, def.cooldown, st.cdr);
       d.className = `sk${locked ? ' locked' : ''}${!locked && !canAfford(mana, def.mana) ? ' nomana' : ''}${frac > 0 ? ' cooling' : ''}`;
+      setText(d.querySelector('.cost') as HTMLElement, String(def.mana));
       d.style.setProperty('--cd', frac.toFixed(3));
       setText(d.querySelector('.cdnum') as HTMLElement, rem > 0 ? rem.toFixed(rem < 1 ? 1 : 0) : '');
     });
     const pot = this.$('.bslot.potion');
-    setText(pot.querySelector('.count') as HTMLElement, `${s.potions}/${s.potionMax}`);
     pot.classList.toggle('spent', s.potions <= 0);
+    setText(pot.querySelector('.count') as HTMLElement, `${s.potions}/${s.potionMax}`);
 
     paintText(this.$('.zname'), g.zone.def.name, 'gold', PLAQUE_CAP);
     setText(this.$('.weak'), p.weakenedT > 0 ? `Weakened ${Math.ceil(p.weakenedT)}s` : p.warCryT > 0 ? `War Cry ${Math.ceil(p.warCryT)}s` : '');
@@ -366,7 +366,7 @@ export class UI {
     for (const selector of ['.banner', '.xpdrops', '.hoverlabel']) {
       const node = this.$(selector);
       if (!node) continue; // The initial zone loads before the HUD is built.
-      node.innerHTML = '';
+      setHtml(node, '');
       node.classList.remove('show');
     }
   }

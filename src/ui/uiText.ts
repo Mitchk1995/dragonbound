@@ -192,21 +192,24 @@ export function paintTree(root: Element): void {
   for (const j of jobs) j.node.replaceWith(buildRun(j.text, j.cap, j.rgb, j.track));
 }
 
-/** What `setHtml` / `setText` last put in each element. */
+/** What `setHtml` / `setText` last put in each element, with the tint it was set in (a class can recolour a line without changing its words). */
 const shown = new WeakMap<HTMLElement, string>();
+const stateOf = (el: HTMLElement, text: string) => `${getComputedStyle(el).getPropertyValue('--ptint')}|${text}`;
 
 /** Set an element's markup and paint it, unless it already holds exactly this (so a HUD can call it every frame). */
 export function setHtml(el: HTMLElement, html: string): void {
-  if (shown.get(el) === html) return;
-  shown.set(el, html);
+  const key = stateOf(el, html);
+  if (shown.get(el) === key) return;
+  shown.set(el, key);
   el.innerHTML = html;
   paintTree(el);
 }
 
 /** Set an element's text and paint it, unless it already says exactly this. */
 export function setText(el: HTMLElement, text: string): void {
-  if (shown.get(el) === text) return;
-  shown.set(el, text);
+  const key = stateOf(el, text);
+  if (shown.get(el) === key) return;
+  shown.set(el, key);
   el.textContent = text;
   paintTree(el);
 }
