@@ -97,7 +97,9 @@ Blender forces unique object names per file, so exports may carry `.001` suffixe
 Never name an object ending in three digits.
 
 ### Hero base: `hero.glb` (`tools/blender/hero.py`)
-Height ~2.0. Plain clothes only (tunic `ROLE_cloth`, trousers `ROLE_cloth2`, belt/shoes `ROLE_leather`, skin `ROLE_skin`), no armour, no weapon, no hair.
+Height ~2.0. The starting outfit from the approved concept sheet (October 3): tunic `ROLE_cloth` with its collar and sleeve bands in `ROLE_clothDark` (the tunic's dye, darkened by the game), trousers `ROLE_cloth2`, belt, bracers and boots `ROLE_leather`, skin `ROLE_skin`; no armour slot, no weapon, no hair.
+
+The outfit's extra pieces sit under empties named `outfit_<slot>_*`, and the game hides them while gear fills that slot (`registry.ts` HeroDresser): `outfit_body_*` (collar, the skirt's split, strap, buckle, pouch, the single pauldron) under body armour, `outfit_gloves_*` (bracers) under gloves, `outfit_boots_*` (boots) under boots. The body, arms, hands and legs under them keep the earlier hero's sizes, so every gear piece fits unchanged; `fitcheck.py` `fit_all()` and `tests/character-art.test.ts` check every piece on the hero.
 
 Rig parts (pivots = empties at joints, children are meshes):
 `body` (hips pivot) → `head`, `armL` (+X side), `armR` (−X side); `legL` (+X), `legR` (−X) on the root.
@@ -114,7 +116,7 @@ Sockets (empties, gear attaches here with identity transform):
 | `sock_footL` / `sock_footR` | `legL` / `legR` | ankle | boots |
 
 ### Role materials (recoloured at runtime)
-Name materials exactly: `ROLE_skin`, `ROLE_hair`, `ROLE_cloth`, `ROLE_cloth2`, `ROLE_leather`,
+Name materials exactly: `ROLE_skin`, `ROLE_hair`, `ROLE_cloth`, `ROLE_clothDark`, `ROLE_cloth2`, `ROLE_leather`,
 `ROLE_metal`, `ROLE_trim`, `ROLE_dark`, `ROLE_glow` (emissive, takes trim colour).
 Any other material keeps its authored colour.
 
@@ -169,5 +171,6 @@ the hairline. Every hairline point must be reachable from the pole without cross
 the head the side lines run level, so the temples cannot come lower than the hair over the ear.
 
 ### Enemies/NPCs/props
+Goblin Grunt, Kobold Slinger, Ember Cultist and Cinder Priest (`priest.glb`) are built in `minions.py` from their approved concept sheets (October 3).
 Rig names per `src/render/anim.ts` (humanoid: body/head/armL/armR/legL/legR/weapon; quadruped: legFL/legFR/legBL/legBR,
 neck1.., tail1.., wingL/wingR, jaw). Props are static; origin at ground centre.

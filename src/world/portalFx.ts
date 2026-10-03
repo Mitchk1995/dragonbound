@@ -406,9 +406,10 @@ const css = (c: THREE.Color, k = 1, a = 1) => {
  * Paint a title into a canvas: the zone's name in the glowing blue alphabet (case as written upper, the way the
  * plates always were), then a small rule with a gem beneath. Locked: the same letters drained to grey stone, no gem,
  * a padlock and the hint under them. `atlas` is the blue alphabet's image; until it arrives only the rule is drawn
- * (the caller repaints when it loads).
+ * (the caller repaints when it loads). Returns where the lettering and its rule sit, as fractions of the canvas, so the
+ * HUD can tell when the title would slide under a panel (ui/worldText.ts).
  */
-function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, open: boolean, hint: string, atlas: ImageBitmap | null, atlasFailed = false) {
+function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, open: boolean, hint: string, atlas: ImageBitmap | null, atlasFailed = false): TitleInk {
   const { width: W, height: H } = ctx.canvas;
   ctx.clearRect(0, 0, W, H);
   const zc = new THREE.Color(color);
@@ -447,6 +448,8 @@ function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, 
   const cx = W / 2;
   ctx.lineWidth = 3;
   const rw = Math.min(W * 0.34, 260);
+  const half = Math.max(rw, ...laid.map((l) => l.width / 2), open ? 0 : 200);
+  const ink: TitleInk = { left: (cx - half) / W, right: (cx + half) / W, top: (top - cap) / H, bottom: Math.min(1, (ry + (open ? 14 : 36)) / H) };
   const rule = ctx.createLinearGradient(cx - rw, 0, cx + rw, 0);
   rule.addColorStop(0, 'rgba(0,0,0,0)');
   rule.addColorStop(0.5, open ? css(new THREE.Color(0xe8c890)) : 'rgb(110,106,102)');
@@ -499,7 +502,11 @@ function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, 
     ctx.fillStyle = 'rgb(176,172,166)';
     ctx.fillText(label, lx + 52, ly + 5);
   }
+  return ink;
 }
+
+/** Where a title's lettering sits on its canvas: fractions of the width (left, right) and height (top, bottom). */
+export interface TitleInk { left: number; right: number; top: number; bottom: number }
 
 /** A camera-facing title sprite (null outside a browser, e.g. in tests). */
 function buildTitle(name: string, color: number, open: boolean, hint: string): THREE.Sprite | null {
@@ -514,9 +521,11 @@ function buildTitle(name: string, color: number, open: boolean, hint: string): T
   tex.anisotropy = 4;
   let atlas: ImageBitmap | null = null, atlasFailed = false;
   const draw = () => {
-    paintTitle(ctx, name, color, open, hint, atlas, atlasFailed);
+    ink = paintTitle(ctx, name, color, open, hint, atlas, atlasFailed);
+    if (s) s.userData.ink = ink;
     tex.needsUpdate = true;
   };
+  let s: THREE.Sprite | null = null, ink: TitleInk | null = null;
   draw();
   // Repaint once the alphabet has loaded, and once the display font has (the first paint may use the fallback serif).
   void loadAtlas(FONT_SETS.blue).then((a) => {
@@ -530,8 +539,9 @@ function buildTitle(name: string, color: number, open: boolean, hint: string): T
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
   // Lit titles glow just past the bloom threshold; sealed ones stay matte.
   mat.color.setScalar(open ? 1.12 : 0.9);
-  const s = new THREE.Sprite(mat);
+  s = new THREE.Sprite(mat);
   s.name = 'portal-title';
+  s.userData.ink = ink;
   s.scale.set(3.8, (3.8 * 384) / 1024, 1);
   s.renderOrder = 6;
   return s;

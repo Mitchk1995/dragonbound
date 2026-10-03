@@ -71,7 +71,7 @@ def metallic(color):
 # ─── Role materials (recoloured at runtime, see docs/ART_CONTRACT.md) ─────────
 # Neutral placeholder colours; the game replaces them per skin tone / cloth dye / gear tier.
 ROLE_COLORS = {
-    'skin': 0xE0AC84, 'hair': 0x5A3A22, 'cloth': 0x3A6EA5, 'cloth2': 0x4B4B58, 'leather': 0x6A4428,
+    'skin': 0xE0AC84, 'hair': 0x5A3A22, 'cloth': 0x3A6EA5, 'clothDark': 0x1F3F66, 'cloth2': 0x4B4B58, 'leather': 0x6A4428,
     'metal': 0xA9B3BD, 'trim': 0xD4A84A, 'dark': 0x3A3A44, 'glow': 0xFFB040,
 }
 

@@ -92,11 +92,15 @@ export interface LightingTheme {
   hemi: [number, number, number];
   sun: [number, number];
   wallRise?: number;
+  shade?: number;
 }
 
 export interface ZoneLighting {
   key: THREE.Color;
   keyIntensity: number;
+  /** The sky light from above and the bounce light from the ground below (a hemisphere light). */
+  sky: THREE.Color;
+  ground: THREE.Color;
   hemiIntensity: number;
   fill: THREE.Color;
   fillIntensity: number;
@@ -106,21 +110,39 @@ const WARM = new THREE.Color(0xffcf9a), COOL = new THREE.Color(0x8fb0ff);
 const warmth = (c: THREE.Color) => c.r - c.b;
 
 /**
- * The lights for a zone, from its theme: a slightly warmer key (sun), a little less flat
- * hemisphere ambient, and a cool fill from the side away from the sun (sky colour pushed toward
- * blue; underground it stays close to the cave's own warm bounce). Warm lit sides against cool
- * shaded sides carve form without darkening the scene: the total light stays about the same.
+ * How the light is shared between the sun (key), the sky light (sky) and the fill, as multiples of
+ * the theme's own intensities: `soft` where a theme's shade is 0, `deep` at its full outdoor contrast
+ * (1, the default); underground the sky light and fill stay as in `under`. `bounce` is how far the
+ * ground light takes the sun's colour; `exposure` scales every zone's exposure to match.
+ */
+export const LIGHT_BALANCE = {
+  soft: { key: 1.05, sky: 0.8, fill: 0.32 },
+  deep: { key: 1.6, sky: 0.4, fill: 0.13 },
+  under: { sky: 0.8, fill: 0.2 },
+  bounce: 0.3,
+  exposure: 1.08,
+};
+
+/**
+ * The lights for a zone, from its theme: a warm key (the sun) strong enough that its shadows read
+ * clearly, a gentler sky light (cool from above) and a warm bounce from the sunlit ground below, and
+ * a cool fill from the side away from the sun. The ambient occlusion (shadePass.ts) gives the shade
+ * its depth, so the sky and bounce light fill the shadows with colour instead of washing them out.
  */
 export function zoneLighting(t: LightingTheme): ZoneLighting {
-  const under = !!t.wallRise;
+  const under = !!t.wallRise, B = LIGHT_BALANCE, k = t.shade ?? 1;
+  const mix = (a: number, b: number) => a + (b - a) * k;
   const sun = new THREE.Color(t.sun[0]);
+  // Only nudged if the sun is cooler than WARM (the lair's is warmer already).
+  const key = warmth(sun) < warmth(WARM) ? sun.lerp(WARM, 0.3) : sun;
   return {
-    // Only nudged if the sun is cooler than WARM (the lair's is warmer already).
-    key: warmth(sun) < warmth(WARM) ? sun.lerp(WARM, 0.2) : sun,
-    keyIntensity: t.sun[1] * 1.05,
-    hemiIntensity: t.hemi[2] * 0.8,
+    key,
+    keyIntensity: t.sun[1] * mix(B.soft.key, B.deep.key),
+    sky: new THREE.Color(t.hemi[0]),
+    ground: new THREE.Color(t.hemi[1]).lerp(key, B.bounce),
+    hemiIntensity: t.hemi[2] * (under ? B.under.sky : mix(B.soft.sky, B.deep.sky)),
     fill: new THREE.Color(t.hemi[0]).lerp(COOL, under ? 0.15 : 0.4),
-    fillIntensity: t.sun[1] * (under ? 0.2 : 0.32),
+    fillIntensity: t.sun[1] * (under ? B.under.fill : mix(B.soft.fill, B.deep.fill)),
   };
 }
 
