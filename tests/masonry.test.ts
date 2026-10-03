@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { chamferBox } from '../src/render/blocks';
-import { bondPhases, cleanBreaks, COURSE, courseBand, laidRun, masonGeometry, STONE } from '../src/render/masonry';
+import { bondPhases, cleanBreaks, COURSE, courseBand, drumStones, laidDrum, laidRun, masonGeometry, STONE } from '../src/render/masonry';
 import { KERB_W, kerbStones, type LaidKerb } from '../src/world/kerbStones';
 import { archStones, ASHLAR, ASHLAR_B, buildProp, dressedArch } from '../src/world/props';
 
@@ -42,7 +42,7 @@ describe('masonry laid as a mason lays it', () => {
 
   it('lays every face from its ends in whole and half stones, each corner turned on a quoin long and short by turns', () => {
     for (const [w, d] of [[5.3, 1.7], [4, 4], [6.6, 2.2], [3.1, 1.2]]) {
-      const geo = masonGeometry(new THREE.BoxGeometry(w, 2, d), { m: new THREE.Matrix4(), wrap: false, breaks: [], seed: 1 });
+      const geo = masonGeometry(new THREE.BoxGeometry(w, 2, d), { m: new THREE.Matrix4(), breaks: [], seed: 1 });
       const v = layout(geo).filter((q) => q.mode === 1);
       // Every face is a whole number of half stones long (it ends on a whole or half stone, never a sliver).
       for (const q of v) expect(frac(2 * (q.xe - q.xs) + 1e-9)).toBeCloseTo(0);
@@ -64,7 +64,7 @@ describe('masonry laid as a mason lays it', () => {
   });
 
   it('lays a stone no bigger than one stone whole, with no joint across it', () => {
-    const geo = masonGeometry(chamferBox(0.72, 0.6, 0.6, 0.05), { m: new THREE.Matrix4(), wrap: false, breaks: [], seed: 1, single: true });
+    const geo = masonGeometry(chamferBox(0.72, 0.6, 0.6, 0.05), { m: new THREE.Matrix4(), breaks: [], seed: 1, single: true });
     for (const q of layout(geo)) {
       expect(q.X).toBeGreaterThan(0);
       expect(q.X).toBeLessThan(1);
@@ -73,17 +73,78 @@ describe('masonry laid as a mason lays it', () => {
     }
   });
 
-  it('lays round towers in whole stones round the drum, so no seam shows where the courses close', () => {
-    const tower = buildProp('round_tower', { len: 3.2, v: 9 }).obj;
-    let drums = 0;
-    tower.traverse((o) => {
-      if (!(o instanceof THREE.Mesh) || !o.geometry.getAttribute('aMasonK')) return;
-      for (const q of layout(o.geometry)) if (q.mode === 3) {
-        drums++;
-        expect(q.X).toBe(Math.round(q.X));
+  describe('round towers laid in rings of flat stones', () => {
+    const r = 3.2, n = drumStones(r), step = (2 * Math.PI) / n;
+    /** Each stone's side face as laid: its course, its stone (the shader's half-stone turn of an odd course undone) and its triangle. */
+    const stones = (geo: THREE.BufferGeometry) => {
+      const v = layout(geo), out: { c: number; i: number; tri: ReturnType<typeof layout> }[] = [];
+      for (let t = 0; t < v.length; t += 3) {
+        const tri = v.slice(t, t + 3);
+        if (tri[0].mode !== 1 || Math.abs(tri[0].n.y) > 1e-6) continue;
+        const c = Math.floor(Math.min(...tri.map((q) => q.C)) + 1e-6), par = c % 2 ? 0.5 : 0;
+        out.push({ c, i: Math.floor(Math.min(...tri.map((q) => q.X + par)) + 1e-6), tri });
+      }
+      return out;
+    };
+    const isJoint = (q: { X: number }, c: number) => {
+      const j = q.X + (c % 2 ? 0.5 : 0);
+      return Math.abs(j - Math.round(j)) < 1e-6;
+    };
+
+    it('lays each course in whole stones, each one flat face whose joints stand on the ring\'s corners', () => {
+      const faces = stones(laidDrum({ r, y0: 1, y1: 6, n, seed: 1 }));
+      const perCourse = new Map<number, Set<number>>();
+      for (const { c, i, tri } of faces) {
+        // No stone runs on past a corner: every triangle lies within one stone, between two joints.
+        for (const q of tri) expect(q.X + (c % 2 ? 0.5 : 0)).toBeLessThanOrEqual(i + 1 + 1e-6);
+        // Every joint is a corner of the ring (on the drum's radius, at the course's own turn).
+        for (const q of tri.filter((p) => isJoint(p, c))) {
+          expect(Math.hypot(q.p.x, q.p.z)).toBeCloseTo(r, 6);
+          const b = Math.atan2(q.p.x, q.p.z), want = (c % 2 ? step / 2 : 0) + Math.round(q.X + (c % 2 ? 0.5 : 0)) * step;
+          expect(Math.abs(Math.atan2(Math.sin(b - want), Math.cos(b - want)))).toBeLessThan(1e-6);
+        }
+        // And the stone's face is the flat between them: it faces straight out at its middle's bearing.
+        const mid = (c % 2 ? step / 2 : 0) + (i + 0.5) * step;
+        expect(tri[0].n.x).toBeCloseTo(Math.sin(mid), 6);
+        expect(tri[0].n.z).toBeCloseTo(Math.cos(mid), 6);
+        if (!perCourse.has(c)) perCourse.set(c, new Set());
+        perCourse.get(c)!.add(((i % n) + n) % n);
+      }
+      // Ten courses from 1 to 6, each a whole ring of n stones.
+      expect([...perCourse.keys()].sort((a, b) => a - b)).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+      for (const s of perCourse.values()) expect(s.size).toBe(n);
+    });
+
+    it('turns every course half a stone on the one under it, its courses on the castle\'s course lines', () => {
+      const faces = stones(laidDrum({ r, y0: 1, y1: 6, n, seed: 1 }));
+      for (const { c, tri } of faces) for (const q of tri) {
+        // The course coordinate is the height in courses, so a tower's courses run on level with the walls'.
+        expect(q.C * COURSE).toBeCloseTo(q.p.y, 6);
+        expect(q.p.y).toBeGreaterThanOrEqual(c * COURSE - 1e-6);
+        expect(q.p.y).toBeLessThanOrEqual((c + 1) * COURSE + 1e-6);
+      }
+      // Each joint of an odd course stands over the middle of a stone of the even course under it.
+      const joints = (c: number) => faces.filter((f) => f.c === c).flatMap((f) => f.tri.filter((q) => isJoint(q, c))).map((q) => Math.atan2(q.p.x, q.p.z));
+      for (const b of joints(3)) {
+        const k = (b - step / 2) / step;
+        expect(Math.abs(k - Math.round(k))).toBeLessThan(1e-6);
+        expect(joints(2).some((a) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) < 1e-3)).toBe(false);
       }
     });
-    expect(drums).toBeGreaterThan(0);
+
+    it('shows a course\'s bed only where its corners stand past the course over it, and cuts no stone into a doorway\'s notch', () => {
+      const lips = layout(laidDrum({ r, y0: 1, y1: 2, n, seed: 1 })).filter((q) => q.n.y > 0.99 && Math.abs(q.p.y - 1.5) < 1e-6);
+      // Between the two courses only the lip at each corner shows: a sliver r(1 - cos(pi / n)) deep.
+      expect(lips.length).toBeGreaterThan(0);
+      for (const q of lips) expect(Math.hypot(q.p.x, q.p.z)).toBeGreaterThan(r * Math.cos(Math.PI / n) - 1e-6);
+      const notch = { a: Math.PI / 2, o: 0.3, half: 1.0, back: r - 0.3, y0: 2, y1: 5 };
+      for (const { tri } of stones(laidDrum({ r, y0: 1, y1: 6, n, seed: 1, notches: [notch] }))) {
+        const m = tri.reduce((s, q) => s.add(q.p.clone().multiplyScalar(1 / 3)), new THREE.Vector3());
+        // (The stones of the drum's face, not the notch's own back and sides.)
+        if (Math.hypot(m.x, m.z) < r * Math.cos(Math.PI / n) - 1e-3 || m.y < notch.y0 || m.y > notch.y1 || m.x <= 0) continue;
+        expect(Math.abs(-m.z - notch.o)).toBeGreaterThan(notch.half - 1e-6);
+      }
+    });
   });
 
   it('lays the walling of the curtain, its towers, gates and the buildings\' pavilions on one set of course lines', () => {
@@ -105,7 +166,7 @@ describe('masonry laid as a mason lays it', () => {
         // (The walling's own faces: side faces whose triangles span more than one course.)
         for (let t = 0; t < v.length; t += 3) {
           const tri = v.slice(t, t + 3);
-          if (!tri.every((q) => q.mode === 1 || q.mode === 3) || Math.max(...tri.map((q) => q.C)) - Math.min(...tri.map((q) => q.C)) < 1.01) continue;
+          if (!tri.every((q) => q.mode === 1) || Math.max(...tri.map((q) => q.C)) - Math.min(...tri.map((q) => q.C)) < 1.01) continue;
           for (const q of tri) {
             const y = q.p.clone().applyMatrix4(o.matrixWorld).y;
             expect(q.h).toBeCloseTo(COURSE, 4);

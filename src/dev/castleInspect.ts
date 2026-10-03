@@ -227,6 +227,10 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   // the north skyline from far out in the south-east, the roses on the curtain behind the bower and
   // the west wing's door onto the cour.
   await view('keep-front', [P.door.x, y0 + 9, 62], [P.door.x, y0 + 7, 40], 18);
+  // The west pavilion's lower window (the glazing kit) from a little to its side, the glass and the lit
+  // chamber behind it.
+  const pane = { x: P.door.x - 6.2, z: P.door.z + 2.1 };
+  await view('keep-window', [pane.x + 2.6, y0 + 7.6, pane.z + 5.4], [pane.x, y0 + 6.8, pane.z - 0.4], 8);
   await view('gatehouse-outer', [P.gate.x + 10, y0 + 6, P.gate.z + 22], [P.gate.x, y0 + 7, P.gate.z], 18);
   await view('gate-close', [P.gate.x + 14, y0 + 9, P.gate.z + 22], [P.gate.x, y0 + 6, P.gate.z - 1], 20);
   await view('tower-close', [43, y0 + 8, 76], [31, y0 + 7, 66], 14);

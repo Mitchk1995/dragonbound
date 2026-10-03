@@ -11,7 +11,7 @@ import { studioEnv } from '../render/env';
 import { COURSE } from '../render/masonry';
 import {
   archDressing, archInset, archPane, archRing, archTympanum, roomMaterial, roomPlate, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, deep, DOORS, DRESS, frieze, pointedDoor, singleDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
-  GILT, LAMP_NAVY, PLOT_MARK, pointedArch, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, WOOD, WOOD_D, WOOD_L, type Prop,
+  GILT, LAMP_NAVY, PLOT_MARK, pointedArch, quoins, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
 /**
@@ -965,6 +965,8 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     const cf = crownFoot(wallH + 10.6), zb0 = d - 6.4, zb1 = zf + P, tz = (zb0 + zb1) / 2, td = zb1 - zb0, tw = u1 - u0;
     cb(ak, ap, [tw, cf - COURSE - wallH, td], [uc, (wallH + cf - COURSE) / 2, tz], ASHLAR_B, undefined, 0.04);
     for (const y of [wallH, wallH + 9 * COURSE]) cb(ak, ap, [tw + 0.12, COURSE, td + 0.12], [uc, y + COURSE / 2, tz], DRESS, undefined, 0.03);
+    // Its front corners turned on quoins standing proud, between its string courses and the frieze.
+    quoins(ak, ap, { x0: u0, x1: u1, z0: zb0, z1: zb1 }, [[-1, 1], [1, 1]], wallH + COURSE, cf - 2 * COURSE, ASHLAR_B, [[wallH + 9 * COURSE, wallH + 10 * COURSE]]);
     // Its windows: on the front a lancet over the great door and a taller one above; one on each side.
     lancet(ak, ap, uc, wallH + 0.9, zb1, 0.9, 2.4, false);
     lancet(ak, ap, uc, wallH + 5.4, zb1, 1.0, 2.9);

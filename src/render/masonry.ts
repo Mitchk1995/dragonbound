@@ -9,10 +9,10 @@ import * as THREE from 'three';
  * the parapets) is one or more whole courses on those lines, so the courses of every wall, tower and
  * building run on level with each other wherever they meet. Each face is laid in running bond from its
  * own ends, and at every corner the stone that turns it is a quoin: long on one face and short on the
- * other by turns, course over course, never a joint up the arris. Drums are laid in whole stones round
- * their circumference, so no seam shows where the courses close, and a battered foot keeps the same
- * stones per course as the drum above. The stone itself (joints, bevels, chips, its lit top edge) is
- * drawn in the shader (paint.ts) from these coordinates.
+ * other by turns, course over course, never a joint up the arris. Drums are laid in rings of whole flat
+ * stones, every course turned half a stone on the one under it (laidDrum), and a battered foot keeps
+ * the same stones per course as the drum above. The stone itself (joints, bevels, chips, its lit top
+ * edge) is drawn in the shader (paint.ts) from these coordinates.
  */
 
 /** The course height and stone length (metres): one standard block for every wall and tower. */
@@ -104,8 +104,6 @@ function sliceY(pos: ArrayLike<number>, nrm: ArrayLike<number>, ys: number[]) {
 export interface MasonOpts {
   /** Local space to the prop's space. */
   m: THREE.Matrix4;
-  /** A drum round its local Y axis (laid in whole stones round it). */
-  wrap: boolean;
   /** Course breaks in the prop's space (the prop's foot and the band edges, the courses running on at their height over the last); only used when the part stands upright. */
   breaks: number[];
   /** A number to vary the stones' tones between parts. */
@@ -129,9 +127,9 @@ export interface MasonOpts {
  * face, course coordinate, stone length, course height), `aMasonK` = (mode, seed) and `aMasonF` = the
  * face's arrises: its two ends in the stone coordinate (where the quoins turn it) and its foot and head
  * in the course coordinate (each pair equal where the face has none; see Laid); mode 1 a side face, 2 a
- * top or bottom face, 3 a drum's side (x = stones round it), 4 a drum's top. Upright parts are cut at the course breaks so each piece takes its own band of courses. A
- * geometry that carries its own layout already (a ring of voussoirs, a kerb laid along its line) is
- * returned as it is.
+ * top or bottom face. Upright parts are cut at the course breaks so each piece takes its own band of
+ * courses. A geometry that carries its own layout already (a ring of voussoirs, a kerb laid along its
+ * line, a drum laid in rings of flat stones) is returned as it is.
  */
 export function masonGeometry(src: THREE.BufferGeometry, o: MasonOpts): THREE.BufferGeometry {
   if (src.getAttribute('aMason')) return src.index ? src.toNonIndexed() : src.clone();
@@ -162,8 +160,6 @@ export function masonGeometry(src: THREE.BufferGeometry, o: MasonOpts): THREE.Bu
   // Each face laid from its own start, going round +Z, +X, -Z, -X from the corner (min x, max z), at
   // the phase that turns every corner on a quoin.
   const ph = bondPhases(nx, nz);
-  // Drums: whole stones round the circumference.
-  const r = Math.max(wx, wz) / 2, around = Math.max(3, Math.round((2 * Math.PI * r) / stone));
   // Tops: rows across the short side, stones along the long side.
   const longX = wx >= wz, wl = longX ? wx : wz, ws = longX ? wz : wx;
   const rows = Math.max(1, Math.round(ws / (o.course ?? COURSE * 1.2))), rowW = ws / rows, ntop = Math.max(1, Math.round(wl / stone)), ltop = wl / ntop;
@@ -215,10 +211,6 @@ export function masonGeometry(src: THREE.BufferGeometry, o: MasonOpts): THREE.Bu
           X = span(bb.min.z, bb.max.z, v.z);
           l = wz;
         }
-      } else if (o.wrap) {
-        mode = top ? 4 : 3;
-        X = around;
-        l = (2 * Math.PI * r) / around;
       } else if (top) {
         mode = 2;
         const s = longX ? v.x - bb.min.x : v.z - bb.min.z, q = longX ? v.z - bb.min.z : v.x - bb.min.x;
@@ -288,8 +280,17 @@ export class Laid {
   constructor(private seed: number) {}
 
   quad(c: [LaidCorner, LaidCorner, LaidCorner, LaidCorner], cut: LaidCut) {
+    this.put(c, [0, 1, 2, 0, 2, 3], cut);
+  }
+
+  /** A flat triangle (corners counter-clockwise seen from the front). */
+  tri(c: [LaidCorner, LaidCorner, LaidCorner], cut: LaidCut) {
+    this.put(c, [0, 1, 2], cut);
+  }
+
+  private put(c: LaidCorner[], order: number[], cut: LaidCut) {
     const { l, h, mode = 1, xs = 0, xe = 0, cs = 0, ce = 0 } = cut;
-    for (const i of [0, 1, 2, 0, 2, 3]) {
+    for (const i of order) {
       const [x, y, z, X, C] = c[i];
       this.P.push(x, y, z);
       this.A.push(X, C, l, h);
@@ -329,5 +330,222 @@ export function laidRun(L: number, w: number, h: number, n: number, seed: number
   const geo = g.build();
   // (A true box: its bounds are its faces, for the geometry audit.)
   geo.userData.box = true;
+  return geo;
+}
+
+/** Whole stones in each course round a drum whose corners stand at radius `r`, about one stone long each. */
+export const drumStones = (r: number, stone = STONE) => Math.max(8, Math.round((2 * Math.PI * r) / stone));
+
+/** A point in plan (x, z). */
+type P2 = [number, number];
+
+/** The point at bearing `t` (radians from +Z toward +X) and radius `r` from a drum's axis. */
+const atBearing = (t: number, r: number): P2 => [Math.sin(t) * r, Math.cos(t) * r];
+
+const area2 = (p: P2[]) => p.reduce((s, v, i) => {
+  const w = p[(i + 1) % p.length];
+  return s + v[0] * w[1] - w[0] * v[1];
+}, 0);
+
+/** A convex polygon cut down to where the linear function `f` is not negative. */
+function clipConvex(poly: P2[], f: (v: P2) => number): P2[] {
+  const out: P2[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const A = poly[i], B = poly[(i + 1) % poly.length], fa = f(A), fb = f(B);
+    if (fa >= 0) out.push(A);
+    if (fa >= 0 !== fb >= 0) {
+      const t = fa / (fa - fb);
+      out.push([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t]);
+    }
+  }
+  return out;
+}
+
+/**
+ * The part of convex polygon `a` lying outside convex polygon `b`, as convex pieces: where one course's
+ * bed shows beyond the course laid on it (the lip at each corner of a ring turned half a stone on the
+ * next, the ledge of a course standing proud of a drum).
+ */
+export function convexMinus(a: P2[], b: P2[]): P2[][] {
+  const s = Math.sign(area2(b)) || 1, out: P2[][] = [];
+  let rest = a;
+  for (let j = 0; j < b.length && rest.length >= 3; j++) {
+    const p = b[j], q = b[(j + 1) % b.length];
+    const inside = (v: P2) => s * ((q[0] - p[0]) * (v[1] - p[1]) - (q[1] - p[1]) * (v[0] - p[0]));
+    const piece = clipConvex(rest, (v) => -inside(v));
+    if (piece.length >= 3 && Math.abs(area2(piece)) > 1e-7) out.push(piece);
+    rest = clipConvex(rest, inside);
+  }
+  return out;
+}
+
+/**
+ * A doorway's notch in a drum (see laidDrum): on the bearing `a`, its middle `o` across from the line
+ * through the drum's centre, `half` its half width, cut straight back along the way through it to an
+ * arc `back` from the axis, between heights y0 and y1.
+ */
+export interface DrumNotch {
+  a: number;
+  o: number;
+  half: number;
+  back: number;
+  y0: number;
+  y1: number;
+}
+
+export interface DrumOpts {
+  /** The corners' radius at its foot and at its head (a battered course leans in), and a hollow ring's inner corners' (0: solid). */
+  r: number;
+  rTop?: number;
+  rIn?: number;
+  /** Its foot and head in the prop's space: its courses lie on the lines `course` apart counted up from y = 0. */
+  y0: number;
+  y1: number;
+  /** Stones in each course (drumStones). */
+  n: number;
+  course?: number;
+  /** The bearing of a joint in its courses on the even lines; each course on an odd line is turned half a stone from it. */
+  turn?: number;
+  /** Every course turned half a stone on the one under it (running bond); false lays them all at `turn`. */
+  bond?: boolean;
+  seed: number;
+  notches?: DrumNotch[];
+}
+
+/**
+ * A drum laid as a mason lays stone round a tower (the owner's rule, October 3): stone is never laid
+ * truly round. Each course is a ring of `n` whole stones, each one flat face whose two side joints
+ * stand on the ring's corners, so no stone ever bends round a curve and no corner cuts through a stone;
+ * each course is turned half a stone on the one under it (running bond), so the outline is very
+ * slightly many-sided, and where one course's corners stand past the next course's flats a small lip of
+ * its bed shows, as on a laid stone tower. A hollow ring (a parapet, a basin's wall) is laid the same
+ * way inside. Every face carries its stone layout with the joints on the corners and the courses on the
+ * castle's course lines; tops lie flat, their joints running in from the corners, their edges arrises.
+ * Doorways (`notches`) are cut straight back into the courses they pass through. The geometry is
+ * flat-shaded stone by stone; userData carries its plan for the geometry audit.
+ */
+export function laidDrum(o: DrumOpts): THREE.BufferGeometry {
+  const { r, y0, y1, n, seed } = o, rTop = o.rTop ?? r, rIn = o.rIn ?? 0, course = o.course ?? COURSE, turn = o.turn ?? 0, bond = o.bond ?? true;
+  const notches = o.notches ?? [], step = (2 * Math.PI) / n, L = new Laid(seed);
+  const rAt = (y: number) => r + ((rTop - r) * (y - y0)) / Math.max(1e-6, y1 - y0);
+  const odd = (c: number) => (bond && ((c % 2) + 2) % 2 === 1 ? 1 : 0);
+  const turnOf = (c: number) => turn + odd(c) * (step / 2);
+  const onLine = (y: number) => Math.abs(y / course - Math.round(y / course)) < 1e-3;
+  const ring = (rad: number, c: number): P2[] => Array.from({ length: n }, (_, i) => atBearing(turnOf(c) + i * step, rad));
+  // Where a notch cuts the plan: across its way through, and in front of the drum's centre.
+  const frame = (nt: DrumNotch, v: P2) => ({ lat: v[0] * Math.cos(nt.a) - v[1] * Math.sin(nt.a), along: v[0] * Math.sin(nt.a) + v[1] * Math.cos(nt.a) });
+  const inNotch = (nt: DrumNotch, v: P2) => {
+    const f = frame(nt, v);
+    return f.along > 0 && Math.abs(f.lat - nt.o) < nt.half;
+  };
+  const notchesAt = (ya: number, yb: number) => notches.filter((nt) => nt.y0 < yb - 1e-6 && nt.y1 > ya + 1e-6);
+
+  // The pieces of its height: split at the course lines and where a notch starts or stops.
+  const ys = [y0, y1];
+  for (let k = Math.ceil(y0 / course + 1e-6); k * course < y1 - 1e-6; k++) ys.push(k * course);
+  for (const nt of notches) for (const y of [nt.y0, nt.y1]) if (y > y0 + 1e-6 && y < y1 - 1e-6) ys.push(y);
+  const cuts = cleanBreaks(ys, 1e-4);
+
+  // A stone's face (mode 1): X whole on the corners once the shader's half-stone turn of the odd courses
+  // is undone, C the course coordinate; the piece's foot and head, off the course lines, are arrises.
+  const sideCut = (ya: number, yb: number, rad: number) => ({
+    l: 2 * rad * Math.sin(step / 2), h: course, mode: 1 as const,
+    cs: ya === y0 && !onLine(ya) ? ya / course : -1e3, ce: yb === y1 && !onLine(yb) ? yb / course : 1e3,
+  });
+  for (let s = 0; s + 1 < cuts.length; s++) {
+    const ya = cuts[s], yb = cuts[s + 1], c = Math.floor((ya + yb) / 2 / course), sh = odd(c) / 2;
+    const Ca = ya / course, Cb = yb / course, ra = rAt(ya), rb = rAt(yb), cut = sideCut(ya, yb, (ra + rb) / 2);
+    const fa = ring(ra, c), fb = ring(rb, c), here = notchesAt(ya, yb);
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      // The stretch of this stone's face the notches leave standing (parameters along it, 0..1).
+      let keep: [number, number][] = [[0, 1]];
+      for (const nt of here) {
+        const A = frame(nt, fa[i]), B = frame(nt, fa[j]);
+        // Where along the face it lies inside the notch: between its two sides, in front of the centre.
+        const span = (va: number, vb: number, lo: number, hi: number): [number, number] => {
+          if (Math.abs(vb - va) < 1e-9) return va > lo && va < hi ? [0, 1] : [1, 0];
+          const t0 = (lo - va) / (vb - va), t1 = (hi - va) / (vb - va);
+          return [Math.min(t0, t1), Math.max(t0, t1)];
+        };
+        const [l0, l1] = span(A.lat, B.lat, nt.o - nt.half, nt.o + nt.half), [a0, a1] = span(A.along, B.along, 0, Infinity);
+        const t0 = Math.max(0, l0, a0), t1 = Math.min(1, l1, a1);
+        if (t1 <= t0) continue;
+        keep = keep.flatMap(([u, v]) => [[u, Math.min(v, t0)], [Math.max(u, t1), v]] as [number, number][]).filter(([u, v]) => v - u > 1e-4);
+      }
+      for (const [u, v] of keep) {
+        const at = (p: P2[], t: number): P2 => [p[i][0] + (p[j][0] - p[i][0]) * t, p[i][1] + (p[j][1] - p[i][1]) * t];
+        const [a, b, d, e] = [at(fa, u), at(fa, v), at(fb, v), at(fb, u)];
+        L.quad([[a[0], ya, a[1], i + u - sh, Ca], [b[0], ya, b[1], i + v - sh, Ca], [d[0], yb, d[1], i + v - sh, Cb], [e[0], yb, e[1], i + u - sh, Cb]], cut);
+      }
+      if (rIn > 0) {
+        const qa = ring(rIn, c), q0 = qa[i], q1 = qa[j];
+        L.quad([[q1[0], ya, q1[1], i + 1 - sh, Ca], [q0[0], ya, q0[1], i - sh, Ca], [q0[0], yb, q0[1], i - sh, Cb], [q1[0], yb, q1[1], i + 1 - sh, Cb]], sideCut(ya, yb, rIn));
+      }
+    }
+    // A notch's back and sides, behind the doorway's surround.
+    for (const nt of here) {
+      const pt = (lat: number, along: number): P2 => [lat * Math.cos(nt.a) + along * Math.sin(nt.a), -lat * Math.sin(nt.a) + along * Math.cos(nt.a)];
+      const arc = Array.from({ length: 7 }, (_, k) => {
+        const lat = nt.o - nt.half + (2 * nt.half * k) / 6;
+        return pt(lat, Math.sqrt(Math.max(0, nt.back * nt.back - lat * lat)));
+      });
+      for (let k = 0; k < 6; k++) {
+        const [a, b] = [arc[k], arc[k + 1]];
+        L.quad([[a[0], ya, a[1], k / 6, Ca], [b[0], ya, b[1], (k + 1) / 6, Ca], [b[0], yb, b[1], (k + 1) / 6, Cb], [a[0], yb, a[1], k / 6, Cb]], { l: 2 * nt.half, h: course });
+      }
+      for (const sx of [-1, 1]) {
+        const lat = nt.o + sx * nt.half, face = Math.sqrt(Math.max(0, ra * ra - lat * lat)), back = Math.sqrt(Math.max(0, nt.back * nt.back - lat * lat));
+        const [p, q] = sx < 0 ? [pt(lat, face), pt(lat, back)] : [pt(lat, back), pt(lat, face)];
+        L.quad([[p[0], ya, p[1], 0, Ca], [q[0], ya, q[1], 1, Ca], [q[0], yb, q[1], 1, Cb], [p[0], yb, p[1], 0, Cb]], { l: face - back, h: course });
+      }
+    }
+  }
+
+  // The flat faces (mode 2): X whole on the corners of the course they belong to, C running out from the
+  // inner edge to the outer, both edges arrises.
+  const flat = (poly: P2[], y: number, c: number, up: boolean, rOut: number, rI: number) => {
+    const t0 = turnOf(c), w = Math.max(0.05, rOut - rI), cut = { l: 2 * rOut * Math.sin(step / 2), h: w, mode: 2 as const, cs: 0, ce: 0.999 };
+    const mid = Math.atan2(poly.reduce((s, v) => s + v[0], 0), poly.reduce((s, v) => s + v[1], 0));
+    const corner = (v: P2): LaidCorner => {
+      const b = Math.atan2(v[0], v[1]), th = mid + Math.atan2(Math.sin(b - mid), Math.cos(b - mid));
+      return [v[0], y, v[1], (th - t0) / step, (0.999 * (Math.hypot(v[0], v[1]) - rI)) / w];
+    };
+    for (let i = 1; i + 1 < poly.length; i++) {
+      const tri: [LaidCorner, LaidCorner, LaidCorner] = [corner(poly[0]), corner(poly[i]), corner(poly[i + 1])];
+      // (Wound to face up or down: in plan (x, z) a counter-clockwise turn faces down.)
+      const ccw = area2([poly[0], poly[i], poly[i + 1]]) > 0;
+      L.tri(ccw === up ? [tri[0], tri[2], tri[1]] : tri, cut);
+    }
+  };
+  /** A whole bed or top: the ring between its outer and inner corners (a solid drum's closed at its heart). */
+  const cap = (y: number, c: number, up: boolean) => {
+    const rad = rAt(y), ri = rIn > 0 ? rIn : 0.04 * rad, out = ring(rad, c), inn = ring(ri, c);
+    for (let i = 0; i < n; i++) flat([out[i], out[(i + 1) % n], inn[(i + 1) % n], inn[i]], y, c, up, rad, ri);
+    if (!(rIn > 0)) flat(inn, y, c, up, rad, 0);
+  };
+  const c0 = Math.floor((cuts[0] + cuts[1]) / 2 / course), c1 = Math.floor((cuts[cuts.length - 2] + cuts[cuts.length - 1]) / 2 / course);
+  cap(y0, c0, false);
+  cap(y1, c1, true);
+  // Between courses, the bed of each showing beyond the other (never inside a doorway's notch).
+  for (let k = Math.ceil(y0 / course + 1e-6); k * course < y1 - 1e-6; k++) {
+    const y = k * course, rad = rAt(y), lo = ring(rad, k - 1), hi = ring(rad, k);
+    const shows = (p: P2[]) => {
+      const m: P2 = [p.reduce((s, v) => s + v[0], 0) / p.length, p.reduce((s, v) => s + v[1], 0) / p.length];
+      return !notches.some((nt) => y >= nt.y0 - 1e-6 && y <= nt.y1 + 1e-6 && inNotch(nt, m));
+    };
+    for (const p of convexMinus(lo, hi)) if (shows(p)) flat(p, y, k - 1, true, rad, rIn);
+    for (const p of convexMinus(hi, lo)) if (shows(p)) flat(p, y, k, false, rad, rIn);
+    if (rIn > 0) {
+      const ilo = ring(rIn, k - 1), ihi = ring(rIn, k);
+      for (const p of convexMinus(ihi, ilo)) flat(p, y, k - 1, true, rad, rIn);
+      for (const p of convexMinus(ilo, ihi)) flat(p, y, k, false, rad, rIn);
+    }
+  }
+  const geo = L.build();
+  // (For the geometry audit: a drum round its own axis, `n` flat sides to a course.)
+  geo.userData.ring = [rIn, Math.max(r, rTop)];
+  geo.userData.drum = { r, rTop, sides: n };
+  if (notches.length) geo.userData.notched = true;
   return geo;
 }

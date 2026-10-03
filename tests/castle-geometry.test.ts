@@ -354,8 +354,8 @@ describe('castle geometry', () => {
       const drums = p.solids.filter((s) => s.r >= 1.5 && s.e[1] >= 1.5 && s.part.sides);
       if (!drums.length) continue;
       for (const s of p.solids) {
-        // (A door's leaf hangs square to the way through it, not on the drum's face.)
-        if (s.r || s.part.thin || s.part.fx || s.part.hollow || s.part.tag === 'door-leaf') continue;
+        // (A door's leaf and its boards hang square to the way through it, not on the drum's face.)
+        if (s.r || s.part.thin || s.part.fx || s.part.hollow || s.part.tag === 'door-leaf' || s.part.tag === 'door-board') continue;
         const n = [0, 1, 2].reduce((a, k) => (s.e[k] < s.e[a] ? k : a), 0), N = s.u[n];
         const wide = [0, 1, 2].filter((k) => k !== n).every((k) => s.e[k] >= 0.1);
         if (!wide || s.e[n] > 0.15 || Math.abs(N.y) > 0.3) continue;
@@ -366,17 +366,20 @@ describe('castle geometry', () => {
         rad.sub(new THREE.Vector3(d.c.x, 0, d.c.z)).normalize();
         if (Math.abs(rad.dot(N)) < 0.8) continue;
         if (d.part.round) {
-          // A round drum: the stone's back stands inside the curve it lies on (the drum, or a course
-          // round it at the stone's height) right out to its edges, so no gap opens behind it, and its
-          // face stands out of that curve (it is not sunk into it).
+          // A drum laid in rings of flat stones, each course turned half a stone on the next: the
+          // stone's back stands inside the round of the corners it lies on (the drum's, or a course's
+          // round it at the stone's height) right out to its edges, give or take the depth of a stone's
+          // flat face, so no gap opens behind it, and its face stands out of the flats (it is not sunk
+          // into the drum).
+          const sag = (q: Solid) => q.r * (1 - Math.cos(Math.PI / (q.part.sides ?? 64)));
           const h = new THREE.Vector3(N.x, 0, N.z).normalize(), off = new THREE.Vector3(s.c.x - d.c.x, 0, s.c.z - d.c.z);
           const across = [0, 1, 2].filter((k) => k !== n).reduce((a, k) => (Math.abs(s.u[k].y) < Math.abs(s.u[a].y) ? k : a));
           const along = off.dot(h), side = Math.abs(off.clone().addScaledVector(h, -along).length()) + s.e[across];
           const back = along - s.e[n], front = along + s.e[n];
-          const under = p.solids.filter((q) => q.r > 0 && q.r <= back + 0.06 && Math.hypot(q.c.x - d.c.x, q.c.z - d.c.z) < 0.1 && s.c.y > q.c.y - q.e[1] && s.c.y < q.c.y + q.e[1]);
-          const R = Math.max(d.r, ...under.map((q) => q.r)), curve = Math.sqrt(Math.max(0, R * R - side * side));
+          const under = p.solids.filter((q) => q.r > 0 && q.r - sag(q) <= back + 0.06 && Math.hypot(q.c.x - d.c.x, q.c.z - d.c.z) < 0.1 && s.c.y > q.c.y - q.e[1] && s.c.y < q.c.y + q.e[1]);
+          const top = [d, ...under].reduce((a, q) => (q.r > a.r ? q : a)), R = top.r, curve = Math.sqrt(Math.max(0, R * R - side * side));
           if (back > curve + 0.05) bad.push(`${p.name}: a flat ${s.part.color.toString(16)} stone at ${fmt(s.c)} stands ${(back - curve).toFixed(2)} off the drum's curve at its edge`);
-          else if (front < R - 0.02) bad.push(`${p.name}: a flat ${s.part.color.toString(16)} stone at ${fmt(s.c)} is sunk ${(R - front).toFixed(2)} into the drum`);
+          else if (front < R - sag(top) - 0.02) bad.push(`${p.name}: a flat ${s.part.color.toString(16)} stone at ${fmt(s.c)} is sunk ${(R - sag(top) - front).toFixed(2)} into the drum`);
           continue;
         }
         // The facet under it, in the drum's own turn: its middle's bearing, and the stone's facing.
