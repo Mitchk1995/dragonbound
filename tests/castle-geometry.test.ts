@@ -668,14 +668,15 @@ describe('castle geometry', () => {
     for (const p of P) {
       const ss = p.solids.filter((s) => !s.part.thin && !s.part.fx);
       // A string course: a long band of the dressed stone one course high (round a drum, a ring of it).
-      const bands = ss.filter((s) => s.part.color === DRESS && Math.abs(s.hi.y - s.lo.y - COURSE) < 0.02 && (s.r >= 1.5 || Math.max(s.hi.x - s.lo.x, s.hi.z - s.lo.z) >= 2));
+      // (A window's lintel is no string course: it spans its own opening.)
+      const bands = ss.filter((s) => s.part.color === DRESS && s.part.tag !== 'lintel' && Math.abs(s.hi.y - s.lo.y - COURSE) < 0.02 && (s.r >= 1.5 || Math.max(s.hi.x - s.lo.x, s.hi.z - s.lo.z) >= 2));
       // Its foot and head on the course lines counted up from the foot the piece stands on.
       const foot = p.obj.getWorldPosition(new THREE.Vector3()).y;
       for (const b of bands) if (!onCourse(b.lo.y - foot) || !onCourse(b.hi.y - foot)) bad.push(`${p.name}: a string course at ${fmt(b.c)} lies off the course lines (${(b.lo.y - foot).toFixed(2)} to ${(b.hi.y - foot).toFixed(2)} over its foot)`);
       // A window's head (the top of its glass) and the ring over it stand well under the next course.
       for (const g of p.solids.filter((s) => s.part.tag === 'glass')) for (const b of bands.filter((q) => !q.r)) {
         const over = Math.min(b.hi.x, g.hi.x) - Math.max(b.lo.x, g.lo.x) > 0 && Math.min(b.hi.z, g.hi.z) - Math.max(b.lo.z, g.lo.z) > -0.6;
-        if (over && b.lo.y > g.hi.y - 0.05 && b.lo.y - g.hi.y < 0.5) bad.push(`${p.name}: a string course at ${fmt(b.c)} runs ${(b.lo.y - g.hi.y).toFixed(2)} over a window's head at ${fmt(g.c)}`);
+        if (over && b.lo.y > g.hi.y - 0.05 && b.lo.y - g.hi.y < 0.5 - 1e-3) bad.push(`${p.name}: a string course at ${fmt(b.c)} runs ${(b.lo.y - g.hi.y).toFixed(2)} over a window's head at ${fmt(g.c)}`);
       }
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);

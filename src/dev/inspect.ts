@@ -116,6 +116,9 @@ export async function runInspect(g: Game, suites: string) {
     const baileyAngles = suites.split(',').find((s) => s.startsWith('bailey-angles:'))?.slice(14).split('+');
     if (want('bailey') || rockOnly || baileyOnly || baileyAngles)
       report.bailey = await (await import('./castleInspect')).baileySuite(g, shot, rockOnly, baileyOnly ?? baileyAngles, !!baileyAngles);
+    // `cams:name@ex_ey_ez_lx_ly_lz_span+…`: free cameras over the keep (see camSuite).
+    const camArg = suites.split(',').find((s) => s.startsWith('cams:'));
+    if (camArg) report.cams = await (await import('./castleInspect')).camSuite(g, shot, camArg.slice(5));
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     if (suites.split(',').includes('memory')) report.memory = await (await import('./memoryCheck')).memoryCheck(g);
     if (want('effects')) await effectsSuite(g, shot);
@@ -193,7 +196,7 @@ function lumStats(g: Game): LumStats {
  * - gpuMs: GPU time of the whole render (EXT_disjoint_timer_query_webgl2), the real render cost.
  * Wall-clock with a readPixels sync is NOT used: it quantises to the display's vsync period.
  */
-export async function perf(g: Game, n = 60): Promise<PerfStats> {
+export async function perf(g: Game, n = 60, pose?: () => void): Promise<PerfStats> {
   const gl = g.renderer.getContext() as WebGL2RenderingContext;
   const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
   const cpu: number[] = [];
@@ -206,6 +209,7 @@ export async function perf(g: Game, n = 60): Promise<PerfStats> {
     const q = ext ? gl.createQuery() : null;
     if (q && ext) gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
     g.update(0, 1 / 60);
+    pose?.();
     g.draw();
     if (q && ext) {
       gl.endQuery(ext.TIME_ELAPSED_EXT);

@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { chamferBox } from '../src/render/blocks';
-import { bondPhases, cleanBreaks, COURSE, courseBand, drumStones, laidDrum, laidRun, masonGeometry, STONE } from '../src/render/masonry';
+import { bondPhases, cleanBreaks, COURSE, courseBand, drumStones, laidDrum, laidRun, masonGeometry, STONE, WHOLE_STONE, type MasonGrid } from '../src/render/masonry';
 import { KERB_W, kerbStones, type LaidKerb } from '../src/world/kerbStones';
-import { archStones, ASHLAR, ASHLAR_B, buildProp, dressedArch } from '../src/world/props';
+import { archStones, ASHLAR, ASHLAR_B, buildProp, dressedArch, DRESS } from '../src/world/props';
+import { buildBuilding, FLOOR_STONE } from '../src/world/buildingModel';
+import { RANGE_SPECS } from '../src/world/castle/rangeSpecs';
 
 /** The stone layout of every vertex: [stone coordinate, course coordinate, mode, the face's ends]. */
 const layout = (geo: THREE.BufferGeometry) => {
   const a = geo.getAttribute('aMason'), k = geo.getAttribute('aMasonK'), f = geo.getAttribute('aMasonF'), p = geo.getAttribute('position'), n = geo.getAttribute('normal');
   return Array.from({ length: a.count }, (_, i) => ({
-    X: a.getX(i), C: a.getY(i), l: a.getZ(i), h: a.getW(i), mode: k.getX(i), xs: f.getX(i), xe: f.getY(i),
+    X: a.getX(i), C: a.getY(i), l: a.getZ(i), h: a.getW(i), mode: k.getX(i), xs: f.getX(i), xe: f.getY(i), cs: f.getZ(i), ce: f.getW(i),
     p: new THREE.Vector3().fromBufferAttribute(p, i), n: new THREE.Vector3().fromBufferAttribute(n, i),
   }));
 };
@@ -210,6 +212,101 @@ describe('masonry laid as a mason lays it', () => {
       if (hi > ys + 1e-6) continue;
       for (const y of [lo, hi]) if (y > 1e-6 && Math.abs(y - ys) > 1e-6) expect(Math.abs(frac((y + 0.3) / COURSE + 1e-6) - 1e-6)).toBeLessThan(1e-3);
       expect(hi - lo).toBeGreaterThan(COURSE / 2 - 1e-6);
+    }
+  });
+});
+
+describe('the castle buildings laid on one block grid', () => {
+  // Every castle building as the game builds it, its stone faces in its own space (the owner, October 3:
+  // "the top doesnt line up with the side", courses broken across corners, jambs, buttresses and piers).
+  const built = RANGE_SPECS.map((b) => {
+    const p = buildBuilding(b);
+    p.obj.updateMatrixWorld(true);
+    const inv = p.obj.matrixWorld.clone().invert(), tris: { v: ReturnType<typeof layout>; m: THREE.Matrix4 }[] = [];
+    p.obj.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || !o.geometry.getAttribute('aMason')) return;
+      const hex = (o.material as THREE.MeshStandardMaterial).color.getHex();
+      if (![ASHLAR_B, DRESS, FLOOR_STONE].includes(hex)) return;
+      const v = layout(o.geometry), m = inv.clone().multiply(o.matrixWorld);
+      for (let t = 0; t < v.length; t += 3) tris.push({ v: v.slice(t, t + 3).map((q) => ({ ...q, p: q.p.clone().applyMatrix4(m) })), m });
+    });
+    return { b, grid: p.obj.userData.masonGrid as MasonGrid, tris };
+  });
+  /** A stone laid whole (a merlon, a quoin, a lintel), not in courses. */
+  const whole = (tri: ReturnType<typeof layout>) => tri[0].cs === WHOLE_STONE[0] && tri[0].ce === WHOLE_STONE[1];
+  const isWhole = (v: number) => Math.abs(v - Math.round(v)) < 1e-3;
+
+  it('lays every course of every face, proud blocks and bands among them, on the one set of course lines', () => {
+    let checked = 0;
+    for (const { b, tris } of built) for (const { v } of tris) {
+      if (v[0].mode !== 1 || Math.abs(v[0].h - COURSE) > 1e-4 || whole(v)) continue;
+      // The course coordinate is the height in courses over the building's floor, on every part.
+      for (const q of v) expect(q.C * COURSE, `${b.id} at (${q.p.x.toFixed(2)}, ${q.p.y.toFixed(2)}, ${q.p.z.toFixed(2)})`).toBeCloseTo(q.p.y, 3);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(2000);
+  });
+
+  it('runs the joints of every long face on the grid, so faces in one plane and bands proud of them share them', () => {
+    let checked = 0;
+    for (const { b, grid, tris } of built) for (const { v } of tris) {
+      // (Coursed faces: a coping laid down a gable's rake takes its own stones.)
+      if (v[0].mode !== 1 || whole(v) || Math.abs(v[0].h - COURSE) > 1e-4) continue;
+      const n = v[0].n, alongX = Math.abs(n.z) > 0.99, alongZ = Math.abs(n.x) > 0.99;
+      if (!alongX && !alongZ) continue;
+      const span = Math.max(...v.map((q) => (alongX ? q.p.x : q.p.z))) - Math.min(...v.map((q) => (alongX ? q.p.x : q.p.z)));
+      if (span < 1.6) continue;
+      // The stone coordinate is the place along the face on the building's grid, the same whichever way
+      // the face looks, so a joint falls at one place on every face and band of that run.
+      for (const q of v) {
+        const at = alongX ? (q.p.x - grid.ox) / grid.l : (q.p.z - grid.oz) / grid.l + 0.5;
+        expect(q.l, b.id).toBeCloseTo(grid.l, 4);
+        expect(isWhole(q.X - at) || isWhole(q.X + at - (alongX ? 0 : 1)), `${b.id}: a face at (${q.p.x.toFixed(2)}, ${q.p.y.toFixed(2)}, ${q.p.z.toFixed(2)}) is off the grid`).toBe(true);
+      }
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(300);
+  });
+
+  it('lays a wall\'s top in through-stones on its top course\'s joints, and every floor, dais and step on one grid', () => {
+    let tops = 0, flags = 0;
+    for (const { b, grid, tris } of built) for (const { v } of tris) {
+      if (v[0].mode !== 2 || v[0].n.y < 0.99 || whole(v)) continue;
+      const y = v[0].p.y, flagged = Math.abs(v[0].h - 0.6) < 1e-4;
+      for (const q of v) {
+        if (flagged) {
+          // (A floor: stones along X on the grid's lines, rows across it.)
+          expect(isWhole(q.X - (q.p.x - grid.ox) / grid.l), `${b.id}: a floor at (${q.p.x.toFixed(2)}, ${y.toFixed(2)}, ${q.p.z.toFixed(2)})`).toBe(true);
+          flags++;
+          continue;
+        }
+        // A wall's top: its joints where its top course's are, on either axis (that course's half-stone turn and all).
+        const par = Math.floor(y / COURSE - 1e-3) % 2 ? 0.5 : 0, ax = (q.p.x - grid.ox) / grid.l + par, az = -(q.p.z - grid.oz) / grid.l + 0.5 + par;
+        expect(isWhole(q.X - ax) || isWhole(q.X - az), `${b.id}: a wall top at (${q.p.x.toFixed(2)}, ${y.toFixed(2)}, ${q.p.z.toFixed(2)})`).toBe(true);
+        tops++;
+      }
+    }
+    expect(tops).toBeGreaterThan(200);
+    expect(flags).toBeGreaterThan(50);
+  });
+
+  it('turns every outer corner on a quoin: long and short by turns, never a sliver of a stone', () => {
+    // (A building whole stones long and deep, less a tenth, as the plan sets them out: a building of any
+    // other size would end its faces on slivers here.)
+    for (const { b, grid } of built) {
+      const x0 = 0.5 - 0.45, x1 = b.w - 0.5 + 0.45, z0 = 0.5 - 0.45, z1 = b.d - 0.5 + 0.45;
+      for (const par of [0, 0.5]) {
+        // The piece from each end of each face to the first joint into it (in metres).
+        const piece = (a: number) => {
+          const f = a + par - Math.floor(a + par + 1e-9);
+          return f < 1e-6 ? grid.l : f * grid.l;
+        };
+        const pieces = [
+          piece((x0 - grid.ox) / grid.l) === grid.l ? grid.l : grid.l - piece((x0 - grid.ox) / grid.l), piece((x1 - grid.ox) / grid.l),
+          piece((z0 - grid.oz) / grid.l + 0.5) === grid.l ? grid.l : grid.l - piece((z0 - grid.oz) / grid.l + 0.5), piece((z1 - grid.oz) / grid.l + 0.5),
+        ];
+        for (const s of pieces) expect(s, `${b.id}: a corner stone ${s.toFixed(2)} long`).toBeGreaterThan(0.3);
+      }
     }
   });
 });

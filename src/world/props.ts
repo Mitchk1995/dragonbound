@@ -6,7 +6,7 @@ import { ModelKit, PAL, type V3 } from '../render/kit';
 import { hasModel, makeModel } from '../render/registry';
 import { applyFinish, studioEnv } from '../render/env';
 import { applyPaint, type PaintKind } from '../render/paint';
-import { bondPhases, cleanBreaks, COURSE, Laid, laidDrum, masonGeometry, STONE as STONE_LEN, type DrumOpts, type LaidCorner, type MasonOpts } from '../render/masonry';
+import { bondPhases, cleanBreaks, COURSE, Laid, laidDrum, masonGeometry, STONE as STONE_LEN, type DrumOpts, type GridDir, type LaidCorner, type MasonGrid, type MasonOpts } from '../render/masonry';
 import { addPatch } from '../render/surface';
 import { chamferBox, hash01, octagon, prism, rockBlock, slabBlock, taper, wedge } from '../render/blocks';
 import { makePortal, type PortalSpec } from './portalFx';
@@ -53,7 +53,7 @@ export const PAVE = 0x8c8780;
 /** The spires: deep slate-navy (the castle's second blue, between the grey dressings and the royal livery). */
 export const SLATE_BLUE = 0x34466a;
 /** The castle buildings' flat roofs: lead in the spires' slate-navy, laid in a subtle two-tone diamond chequer. */
-export const ROOF_BLUE = 0x34466a, ROOF_BLUE_L = 0x3c4f74, ROOF_ROLL = 0x4a5a7c;
+export const ROOF_BLUE = 0x35476b, ROOF_BLUE_L = 0x3c4f74, ROOF_ROLL = 0x4a5a7c;
 /** Gilding laid on stone and slate (bands, friezes, fillets): matt gold leaf, not polished metal. */
 export const GILT = 0xd6a646;
 /** The lord's livery: royal blue cloth (field and shade) charged and edged in gold (PAL.gold). */
@@ -95,7 +95,8 @@ paintAs('masonry', [...SAND, ...SOOT]);
 paintAs('ashlar', [ASHLAR, ASHLAR_L, ASHLAR_W, ASHLAR_B]);
 paintAs('masonry', [KERB, INLAY, DECK, PAVE]);
 paintAs('shingle', [SLATE_BLUE]);
-paintAs('masonry', [ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL]);
+// (Lead is sheet metal, never laid as stones.)
+paintAs('soft', [ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL]);
 paintAs('soft', [GILT]);
 paintAs('soft', [HERALD_BLUE, HERALD_BLUE_D]);
 paintAs('rock', BRICK_SOOT);
@@ -130,13 +131,11 @@ export function cb(k: ModelKit, p: Obj, size: V3, pos: V3, color: number, rot?: 
   return k.mesh(p, chamferBox(size[0], size[1], size[2], c), color, pos, rot, em, int);
 }
 
-/** The castle's deep base course: one course a metre high, laid in long weathered blocks. */
+/** The castle's base course: two courses of its walling's own stone, standing a hand proud round every foot. */
 export const BASE_COURSE = 1.0;
-const BASE_STONE = 2.0;
-/** Mark a part as laid in the deep base course (the castle's one other block size: see masonry.ts). */
-export function deep<T extends THREE.Object3D>(m: T): T {
-  m.userData.course = BASE_COURSE;
-  m.userData.stone = BASE_STONE;
+/** Mark a part as cut from one stone (a lintel): painted whole, its mortar only round its edges. */
+export function oneStone<T extends THREE.Object3D>(m: T): T {
+  m.userData.oneStone = true;
   return m;
 }
 
@@ -3203,6 +3202,30 @@ function masonLayout(g: THREE.Object3D) {
   // into the walling).
   const bands = stone.filter((p) => p.box.max.y - p.box.min.y <= 0.8 && Math.max(p.box.max.x - p.box.min.x, p.box.max.z - p.box.min.z) >= 2);
   const of = new Map<THREE.Mesh, (typeof parts)[number]>(parts.map((p) => [p.mesh, p]));
+  // A prop with its own block grid (a castle building): every face of its stone in one plane is laid as
+  // one face, from end to end of the stretch the coplanar faces make together (each plane's stretches
+  // found once). A stretch shorter than a stone and a half (a pier's front, a reveal) is laid from its
+  // own ends instead.
+  const grid = g.userData.masonGrid as MasonGrid | undefined;
+  const planes = new Map<string, [number, number][]>();
+  const gridReach = (dir: GridDir, plane: number, lo: number, hi: number): [number, number] | null => {
+    const key = `${dir}:${Math.round(plane * 50)}`;
+    let runs = planes.get(key);
+    if (!runs) {
+      const along = dir === 'pz' || dir === 'mz', ax = along ? 'z' : 'x', run = along ? 'x' : 'z', far = dir === 'pz' || dir === 'px';
+      const spans = stone.filter((q) => q.square && Math.abs((far ? q.box.max[ax] : q.box.min[ax]) - plane) < 0.012).map((q) => [q.box.min[run], q.box.max[run]] as [number, number]).sort((s, t) => s[0] - t[0]);
+      runs = [];
+      for (const s of spans) {
+        const last = runs[runs.length - 1];
+        if (last && s[0] <= last[1] + 0.05) last[1] = Math.max(last[1], s[1]);
+        else runs.push([s[0], s[1]]);
+      }
+      planes.set(key, runs);
+    }
+    const r = runs.find(([a, e]) => a <= hi + 0.05 && e >= lo - 0.05) ?? [lo, hi];
+    const reach: [number, number] = [Math.min(r[0], lo), Math.max(r[1], hi)];
+    return reach[1] - reach[0] >= 1.5 * STONE_LEN - 0.01 ? reach : null;
+  };
   return (mesh: THREE.Mesh): MasonOpts | null => {
     const p = of.get(mesh);
     if (!p?.mason) return null;
@@ -3255,8 +3278,12 @@ function masonLayout(g: THREE.Object3D) {
     const face = named ?? (p.square ? { x0, x1, z0, z1 } : undefined);
     const c = b.getCenter(new THREE.Vector3());
     // (A part no bigger than one stone, a merlon, a quoin, a voussoir, is laid as one stone.)
-    const single = !named && Math.max(dx, dz) <= STONE_LEN * 1.3 && b.max.y - b.min.y <= 0.8;
-    const opts = { single, face, course, stone: stoneLen, m: inv.clone().multiply(mesh.matrixWorld), breaks: cleanBreaks(ys.filter((y) => y >= foot - 1e-6)), seed: Math.floor((face ? hash01(x0, x1, z0 + z1, p.color) : hash01(c.x, c.y, c.z)) * 97) };
+    const single = !!mesh.userData.oneStone || (!named && Math.max(dx, dz) <= STONE_LEN * 1.3 && b.max.y - b.min.y <= 0.8);
+    // (On a prop with its own block grid, every course runs on from the foot at one height: its bands
+    // lie on the course lines, so none is fitted to them.)
+    const breaks = grid ? [foot] : cleanBreaks(ys.filter((y) => y >= foot - 1e-6));
+    const opts: MasonOpts = { single, face, course, stone: stoneLen, m: inv.clone().multiply(mesh.matrixWorld), breaks, seed: Math.floor((face ? hash01(x0, x1, z0 + z1, p.color) : hash01(c.x, c.y, c.z)) * 97) };
+    if (grid && p.square) opts.grid = { g: grid, at: gridReach, foot };
     if (PART_AUDIT.on) (g.userData.courses ??= []).push({ color: p.color, box: b.clone(), breaks: opts.breaks, course: course ?? COURSE, single, laid: !!mesh.geometry.getAttribute('aMason') || !!mesh.geometry.getAttribute('aLay') } satisfies CourseRecord);
     return opts;
   };

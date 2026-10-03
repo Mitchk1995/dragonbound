@@ -18,6 +18,14 @@ import * as THREE from 'three';
 /** The course height and stone length (metres): one standard block for every wall and tower. */
 export const COURSE = 0.5;
 export const STONE = 1.0;
+/**
+ * A stone laid whole (a merlon, a quoin, a lintel) names its foot and head arrises out beyond it, a
+ * course under and over: they change nothing in the shader (its own edges stay joints), and they mark it
+ * for the audits as one stone, not a course.
+ */
+export const WHOLE_STONE: [number, number] = [-1, 2];
+/** The width of a row of flags on a broad top laid on a prop's grid (a floor, a dais). */
+const FLAG_W = 0.6;
 
 /**
  * The band of courses that height y falls in, for a schedule of breaks: the course coordinate at
@@ -120,6 +128,43 @@ export interface MasonOpts {
    * walling round an arch) share it, so the bond runs on across them without a seam.
    */
   face?: { x0: number; x1: number; z0: number; z1: number };
+  /**
+   * The prop's own block grid (a castle building's: see MasonGrid), shared by every part standing square
+   * in it: the faces it lays (`at` names each face's reach, or null where the face is laid by its own
+   * ends) and its tops.
+   */
+  grid?: { g: MasonGrid; at: (dir: GridDir, plane: number, lo: number, hi: number) => [number, number] | null; foot: number };
+}
+
+/** A face of a part standing square in its prop: toward +Z, -Z, +X or -X. */
+export type GridDir = 'pz' | 'mz' | 'px' | 'mx';
+
+/**
+ * One block grid for a whole prop (a castle building): every face toward ±Z has its joints at
+ * x = ox + k * l (and halfway between on the odd courses), every face toward ±X at z = oz + (k + ½) * l
+ * (the other way about), so the joints of every face in one plane, of the bands and courses standing
+ * proud of it, and of a wall's two faces fall on the same lines and the bond runs on unbroken across
+ * them; a wall's top is laid in through-stones on its top course's joints; and at a corner of the
+ * grid's rectangle (a whole number of stones less a tenth either way, as a building's is) the stones
+ * turning it are long and short by turns, a quoin. Broad tops (floors, platforms) are flagged on one
+ * grid, so the floor, a dais and its steps all line up.
+ */
+export interface MasonGrid {
+  ox: number;
+  oz: number;
+  l: number;
+}
+
+/**
+ * The grid coordinate of a point on a face of a part square in its prop (prop space): the stone
+ * coordinate along the face (whole on the joints of the even courses), and the arrises of a reach
+ * [lo, hi] along it.
+ */
+export function gridAlong(g: MasonGrid, dir: GridDir, x: number, z: number) {
+  if (dir === 'pz') return (x - g.ox) / g.l;
+  if (dir === 'mz') return -(x - g.ox) / g.l;
+  if (dir === 'px') return -(z - g.oz) / g.l + 0.5;
+  return (z - g.oz) / g.l + 0.5;
 }
 
 /**
@@ -164,6 +209,14 @@ export function masonGeometry(src: THREE.BufferGeometry, o: MasonOpts): THREE.Bu
   const longX = wx >= wz, wl = longX ? wx : wz, ws = longX ? wz : wx;
   const rows = Math.max(1, Math.round(ws / (o.course ?? COURSE * 1.2))), rowW = ws / rows, ntop = Math.max(1, Math.round(wl / stone)), ltop = wl / ntop;
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  // On the prop's block grid (square in it): the part's bounds in the prop's space. (A wall top's
+  // through-stones are turned half a stone where the course under it is, as that course's own joints.)
+  const G = square && !o.single && !layA ? o.grid : undefined;
+  const pb = bb.clone().applyMatrix4(o.m), pwx = pb.max.x - pb.min.x, pwz = pb.max.z - pb.min.z;
+  // (A wall's top: the face along it is on the grid, and the wall no thicker than a through-stone.)
+  const topAlong: GridDir | null = !G ? null : Math.min(pwx, pwz) > 1.4 ? null : pwx >= pwz ? 'pz' : 'px';
+  const topReach = G && topAlong ? G.at(topAlong, topAlong === 'pz' ? pb.max.z : pb.max.x, topAlong === 'pz' ? pb.min.x : pb.min.z, topAlong === 'pz' ? pb.max.x : pb.max.z) : null;
+  const tq = new THREE.Vector3();
   for (let t = 0; t < n; t += 3) {
     a.fromArray(P, t * 3);
     b.fromArray(P, t * 3 + 3);
@@ -174,11 +227,60 @@ export function masonGeometry(src: THREE.BufferGeometry, o: MasonOpts): THREE.Bu
     const top = Math.abs(fn.y) >= Math.max(Math.abs(fn.x), Math.abs(fn.z));
     // The band of courses this piece lies in (each piece lies in one: upright parts are cut at the breaks).
     const band = courseBand(breaks, toY((a.y + b.y + c.y) / 3), course), hc = 1 / band.k;
+    // A side face on the grid: which way it faces in the prop, and its reach along its plane (null:
+    // laid from its own ends).
+    let gDir: GridDir | null = null, gReach: [number, number] | null = null, topPar = 0;
+    if (G && top) topPar = Math.floor((toY((a.y + b.y + c.y) / 3) - G.foot) / course - 1e-3) % 2 ? 0.5 : 0;
+    if (G && !top) {
+      const qn = pn.copy(fn).applyMatrix3(rot);
+      gDir = Math.abs(qn.z) >= Math.abs(qn.x) ? (qn.z > 0 ? 'pz' : 'mz') : qn.x > 0 ? 'px' : 'mx';
+      const along = gDir === 'pz' || gDir === 'mz';
+      let lo = Infinity, hi = -Infinity, plane = 0;
+      for (const v of [a, b, c]) {
+        tq.copy(v).applyMatrix4(o.m);
+        lo = Math.min(lo, along ? tq.x : tq.z);
+        hi = Math.max(hi, along ? tq.x : tq.z);
+        plane += (along ? tq.z : tq.x) / 3;
+      }
+      gReach = G.at(gDir, plane, lo, hi);
+    }
     for (let i = 0; i < 3; i++) {
       const v = [a, b, c][i], j = t + i;
       const cc = band.c0 + (toY(v.y) - band.a) * band.k;
-      let X: number, C = cc, l: number, h = hc, mode: number, xs = 0, xe = 0;
-      if (layA && layU) {
+      let X: number, C = cc, l: number, h = hc, mode: number, xs = 0, xe = 0, cs = 0, ce = 0;
+      if (G && top && topReach) {
+        // A wall's top: through-stones on the joints of its top course, its long edges arrises.
+        mode = 2;
+        tq.copy(v).applyMatrix4(o.m);
+        const gx = topAlong === 'pz';
+        X = gridAlong(G.g, topAlong!, tq.x, tq.z) + topPar;
+        const e0 = gridAlong(G.g, topAlong!, gx ? topReach[0] : pb.max.x, gx ? pb.max.z : topReach[0]) + topPar, e1 = gridAlong(G.g, topAlong!, gx ? topReach[1] : pb.max.x, gx ? pb.max.z : topReach[1]) + topPar;
+        [xs, xe] = [Math.min(e0, e1), Math.max(e0, e1)];
+        l = G.g.l;
+        h = gx ? pwz : pwx;
+        C = 0.001 + (0.998 * (gx ? tq.z - pb.min.z : tq.x - pb.min.x)) / h;
+        cs = 0;
+        ce = 1;
+      } else if (G && top) {
+        // A broad top (a floor, a platform, a step): flagged on the prop's one grid, along X, its edges arrises.
+        mode = 2;
+        tq.copy(v).applyMatrix4(o.m);
+        const fw = FLAG_W;
+        X = (tq.x - G.g.ox) / G.g.l;
+        C = (tq.z - G.g.oz) / fw;
+        l = G.g.l;
+        h = fw;
+        [xs, xe] = [(pb.min.x - G.g.ox) / G.g.l, (pb.max.x - G.g.ox) / G.g.l];
+        [cs, ce] = [(pb.min.z - G.g.oz) / fw, (pb.max.z - G.g.oz) / fw];
+      } else if (gDir && gReach) {
+        // A side face on the grid: its joints on the grid's lines, its arrises where its plane ends.
+        mode = 1;
+        tq.copy(v).applyMatrix4(o.m);
+        X = gridAlong(G!.g, gDir, tq.x, tq.z);
+        const along = gDir === 'pz' || gDir === 'mz', e0 = gridAlong(G!.g, gDir, along ? gReach[0] : 0, along ? 0 : gReach[0]), e1 = gridAlong(G!.g, gDir, along ? gReach[1] : 0, along ? 0 : gReach[1]);
+        [xs, xe] = [Math.min(e0, e1), Math.max(e0, e1)];
+        l = G!.g.l;
+      } else if (layA && layU) {
         const s0 = layA.getX(j), t0 = layA.getY(j), q0 = layA.getZ(j), ls = layU.stone ?? stone;
         const along = layU.len / Math.max(1, Math.round(layU.len / ls)), nc = Math.max(1, Math.round(layU.h / course)), rowsA = Math.max(1, Math.round(layU.w / (layU.row ?? COURSE * 1.2)));
         mode = top ? 2 : 1;
@@ -195,8 +297,10 @@ export function masonGeometry(src: THREE.BufferGeometry, o: MasonOpts): THREE.Bu
         }
       } else if (o.single) {
         // Both coordinates run 0.01 to 0.99 across the stone's faces, so no joint falls inside it.
+        // (Its foot and head named as arrises beyond it, WHOLE_STONE, which mark it laid whole.)
         const span = (lo: number, hi: number, v2: number) => 0.01 + (0.98 * (v2 - lo)) / Math.max(1e-4, hi - lo);
         mode = top ? 2 : 1;
+        [cs, ce] = WHOLE_STONE;
         C = span(bb.min.y, bb.max.y, v.y);
         h = bb.max.y - bb.min.y;
         if (top) {
@@ -236,7 +340,7 @@ export function masonGeometry(src: THREE.BufferGeometry, o: MasonOpts): THREE.Bu
       }
       A.set([X, C, l, h], j * 4);
       K.set([mode, o.seed], j * 2);
-      FA.set([xs, xe, 0, 0], j * 4);
+      FA.set([xs, xe, cs, ce], j * 4);
     }
   }
   const out = new THREE.BufferGeometry();

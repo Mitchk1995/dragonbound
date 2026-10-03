@@ -69,7 +69,7 @@ const KITCHEN = spec({
   ],
 }, {
   // Small square lights set high, over the low rooms' ceiling, lighting the kitchen's open volume.
-  windows: [win('s', 'square', 2.6, SILL + 5.0, 1.0, 1.4), win('s', 'square', 7.4, SILL + 5.0, 1.0, 1.4)],
+  windows: [win('s', 'square', 2.6, SILL + 5.0, 1.0, 1.5 - SILL), win('s', 'square', 7.4, SILL + 5.0, 1.0, 1.5 - SILL)],
   fill: [{ side: 'n', steps: FILL }, { side: 'w', steps: FILL }],
   ceiling: { rect: [1, 8, 9, 12], y: 3.4 },
   partitionTop: 3.4,
@@ -176,7 +176,7 @@ const SOLAR = spec({
   },
 }, {
   // A mullioned day-room light, and over the door the oriel on its corbels lighting the lord's chamber.
-  windows: [win('s', 'square', 3.0, 1.2, 1.6, 2.4), win('s', 'oriel', 7, 5.5, 2.6, 1.0)],
+  windows: [win('s', 'square', 3.0, ON + 1.0, 1.6, 2.5 - ON), win('s', 'oriel', 7, 5.5, 2.6, 1.0)],
   fill: [{ side: 'n', steps: FILL }, { side: 'e', steps: FILL }],
 });
 
@@ -215,8 +215,8 @@ const STABLES = spec({
   // middle stall, a small light in the tack room either side and two high in the feed bay.
   windows: [
     ...STALLS.flatMap((u) => [win('n', 'stall', u, 0, 1.3, 2.5), win('s', 'stall', u, 0, 1.3, 2.5)]),
-    win('n', 'loft', 10, 3.05, 1.2, 1.15),
-    ...(['n', 's'] as Side[]).flatMap((s) => [win(s, 'square', 2.5, 1.5, 0.8, 1.0), win(s, 'slit', 17.5, 2.4, 0.5, 1.4)]),
+    win('n', 'loft', 10, ON + 3.0, 1.2, 1.0 - ON),
+    ...(['n', 's'] as Side[]).flatMap((s) => [win(s, 'square', 2.5, ON + 1.5, 0.8, 1.0 - ON), win(s, 'slit', 17.5, ON + 2.5, 0.5, 1.0 - ON)]),
   ],
   loft: { rect: [1, 1, 15.45, 9], y: 2.9 },
   partitionTop: 2.9,
@@ -259,8 +259,8 @@ const BARRACKS = spec({
     ...[2.5, 7.4, 14.6, 18.4].map((u) => win('n', 'shuttered', u, ON + 1.0, 1.0, 1.5 - ON)),
     ...[2.5, 8.6, 13.4, 18.4].map((u) => win('s', 'shuttered', u, ON + 1.0, 1.0, 1.5 - ON)),
     // (The north row over the windows either side of the armoury's door, the south row along the mess.)
-    ...[2.5, 7.4, 14.6, 18.4].map((u) => win('n', 'slit', u, ON + 3.0, 0.45, 0.9)),
-    ...[2.5, 8.6, 11, 13.4, 18.4].map((u) => win('s', 'slit', u, ON + 3.0, 0.45, 0.9)),
+    ...[2.5, 7.4, 14.6, 18.4].map((u) => win('n', 'slit', u, ON + 3.0, 0.45, 1.0 - ON)),
+    ...[2.5, 8.6, 11, 13.4, 18.4].map((u) => win('s', 'slit', u, ON + 3.0, 0.45, 1.0 - ON)),
   ],
   loft: { rect: [5.55, 1, 20, 9], y: 2.9 },
   partitionTop: 2.9,

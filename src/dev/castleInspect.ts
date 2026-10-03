@@ -82,7 +82,7 @@ export async function castleSuite(g: Game, shot: (name: string) => Promise<void>
  * follow the layout. With `angles` (`bailey-angles:door+bridge`) each named view is also shot from three orbits round the same
  * focus: the far side (`-opp`), low at the hero's eye height (`-low`) and close up (`-close`).
  */
-export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false, only?: string[], angles = false) {
+export async function baileySuite(g: Game, shot: (name: string) => Promise<void>, rockOnly = false, only?: string[], angles = false, cams: { name: string; v: number[] }[] = []) {
   g.travel('keep', true);
   await new Promise((r) => setTimeout(r, 400));
   document.body.classList.add('inspect-clean');
@@ -161,7 +161,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     const fog = g.scene.fog as THREE.Fog, sc = g.sun.shadow.camera;
     const keep = { near: fog.near, far: fog.far, l: sc.left, r: sc.right, t: sc.top, b: sc.bottom, f: sc.far };
     g.player.obj.visible = false;
-    g.debug.hold = () => {
+    const pose = () => {
       fog.near = 400;
       fog.far = 900;
       Object.assign(sc, { left: -span, bottom: -span, right: span, top: span, far: 60 + span * 3 });
@@ -173,10 +173,17 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
       g.camera.position.set(eye[0], eye[1], eye[2]);
       g.camera.lookAt(look[0], look[1], look[2]);
       OCCLUDE.uOccOn.value = 0;
+    };
+    g.debug.hold = () => {
+      pose();
       g.draw();
       return true;
     };
-    try { await shot(`bailey-${name}`); }
+    try {
+      // (The whole castle's frame cost, from the overview.)
+      if (name === 'overview') out[`perf-${name}`] = await perf(g, 40, pose);
+      await shot(`bailey-${name}`);
+    }
     finally {
       g.debug.hold = null;
       Object.assign(fog, { near: keep.near, far: keep.far });
@@ -193,6 +200,13 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     return out;
   };
 
+  // (Free cameras named on the command line: see camSuite.)
+  // (Three numbers: the hero standing at x, z, seen through the game's own camera at that zoom.)
+  for (const { name, v } of cams) {
+    if (v.length === 3) await play(`cam-${name}`, v[0], v[1], v[2]);
+    else await view(`cam-${name}`, [v[0], y0 + v[1], v[2]], [v[3], y0 + v[4], v[5]], v[6] ?? 16);
+  }
+  if (cams.length) return finish();
   const K = P.keep, kx = (K[0] + K[2]) / 2;
   // The castle rock from below (`bailey:rock` captures only these): its south face over the farm
   // and the pool under the fall, the stair up its south-east corner from the court, the west face
@@ -285,4 +299,17 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   // Frame cost in a meadow outside the castle, for comparison with the fountain's.
   await play('meadow', 56, 150, 1.0);
   return finish();
+}
+
+/**
+ * Dev-only free cameras over the keep (`npm run inspect -- cams:name@ex_ey_ez_lx_ly_lz_span+…`): each
+ * eye and focus in world x and z, their heights over the crown, the sun's shadows cast over `span`;
+ * or `name@x_z_zoom`, the hero standing at (x, z) through the game's own camera.
+ */
+export async function camSuite(g: Game, shot: (name: string) => Promise<void>, arg: string) {
+  const cams = arg.split('+').map((c) => {
+    const [name, v] = c.split('@');
+    return { name, v: v.split('_').map(Number) };
+  });
+  return baileySuite(g, shot, false, cams.map((c) => `cam-${c.name}`), false, cams);
 }

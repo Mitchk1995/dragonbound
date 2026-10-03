@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL } from '../render/kit';
 import { addPatch } from '../render/surface';
 import { hash01, octagon, prism, taper, wedge } from '../render/blocks';
@@ -8,11 +7,11 @@ import {
   type BuildingSpec, type Fit, type FlightSteps, type Floor, type Side, type Window,
 } from './building';
 import { CURTAIN_WALL } from '../data/castle';
-import { COURSE } from '../render/masonry';
+import { COURSE, STONE as STONE_LEN, type MasonGrid } from '../render/masonry';
 import { glazedWindow } from './castleProps/curtain';
 import { BACK_PARAPET, fleche, hangingLamp, lantern, LEAD, RIDGE as RIDGE_LEAD, roseRing, rosePlate, slateRoof, SLATES } from './castle/rangeParts';
 import {
-  archDressing, archInset, archPane, archRing, glassMat, roomMaterial, roomPlate, spread, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, deep, DRESS, frieze, pointedDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
+  archDressing, archInset, archPane, archRing, glassMat, roomMaterial, roomPlate, spread, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, DRESS, frieze, pointedDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, oneStone, PLASTER,
   GILT, LAMP_NAVY, PLOT_MARK, pointedArch, quoins, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
@@ -42,9 +41,12 @@ const OFF = 1e5;
 const WALL_T = 0.9;
 /** A castle door's dressed surround: how wide its ring of voussoirs is. */
 const DRESS_T = 0.48;
+/** How much further a long block of a square window's jamb reaches along the face than a short one. */
+const JAMB_LONG = 0.24;
 /** A shared keep door's square head, on a course line (its lintel is the course over it). */
 const GREAT_DOOR_H = 8 * COURSE;
-const FLOOR_STONE = 0x7e776c;
+/** The flags of the castle buildings' floors. */
+export const FLOOR_STONE = 0x7e776c;
 const PLANKS = [0x8a6440, 0x7a5636, 0x94704a];
 const SHUTTER = 0x3e5a58;
 /** Interior cloth (rugs, runners, cushions) stays crimson; the castle's exterior livery is blue (props.ts). */
@@ -245,7 +247,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   // from the same stone (a deep weathered base course, dressed courses and surrounds: props.ts); every
   // other building in the plain stone.
   const S = keep
-    ? { base: BASE, foot: ASHLAR_B, course: DRESS, line: DRESS, light: DRESS }
+    ? { base: ASHLAR_B, foot: ASHLAR_B, course: DRESS, line: DRESS, light: DRESS }
     : { base: STONE_DD, foot: STONE, course: STONE_L, line: STONE_D, light: STONE_L };
   const UPPER = timber ? PLASTER : keep ? ASHLAR_B : STONE;
   const CAP = timber ? TIMBER : STONE_D;
@@ -276,7 +278,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   /** Where on a side a window stands across a height band [y0, y1] (a course, a pilaster's stage): its span along the wall with its surround. */
   const winSpans = (side: Side, y0: number, y1: number): [number, number][] => castleWins(side).flatMap((o) => {
     // (A window whose sill sits on a course does not cross it.)
-    const a = o.kind === 'oriel' ? o.sill - 0.9 : o.kind === 'stall' ? 0 : o.sill + 0.01, e = o.sill + o.h + (o.kind === 'lancet' || o.kind === 'pair' ? 0.8 : 0.4), half = o.w / 2 + (o.kind === 'pair' ? 0.4 : 0.35);
+    // (A shuttered window's reach takes in its shutters standing open either side.)
+    const a = o.kind === 'oriel' ? o.sill - 0.9 : o.kind === 'stall' ? 0 : o.sill + 0.01, e = o.sill + o.h + (o.kind === 'lancet' || o.kind === 'pair' ? 0.8 : 0.4), half = o.kind === 'shuttered' ? o.w + 0.68 : o.w / 2 + (o.kind === 'pair' ? 0.4 : 0.35);
     return e > y0 && a < y1 ? [[o.u - half, o.u + half] as [number, number]] : [];
   });
   /** The walls the deep base course does not run along (shared, joined or backing onto the curtain). */
@@ -319,20 +322,36 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   }
   // Raised parts of the floor (a dais, a chancel): a platform of the floor's stone stepped up from
   // the floor round it in steps of no more than a riser, each a tread in from the one under it on
-  // the sides that face the open floor.
+  // the sides that face the open floor. Every step stands right down on the floor, and each lower step
+  // is only its tread showing round the one over it, a border of dressed stones laid along the step
+  // (so the platform's top and every tread are each one face of stone, never one flag over another).
+  // (Every top stands as far over its walking height as the floor's own flags do over the ground, so
+  // none lies in the plane of the ground raised under it.)
+  const FLAGS = 0.05;
   for (const { rect: [x0, z0, x1, z1], h } of b.raised ?? []) {
-    const n = Math.max(1, Math.ceil(h / 0.17 - 1e-6));
+    const n = Math.max(1, Math.ceil(h / 0.17 - 1e-6)), T = 0.32;
+    const ow = x0 > 1, oe = x1 < w - 1, on = z0 > 1, os = z1 < d - 1;
     for (let i = 0; i < n; i++) {
-      const out = 0.32 * (n - 1 - i), y0 = i ? (i * h) / n : 0.04, y1 = ((i + 1) * h) / n;
-      const ax = x0 > 1 ? x0 - out : x0, ex = x1 < w - 1 ? x1 + out : x1, az = z0 > 1 ? z0 - out : z0, ez = z1 < d - 1 ? z1 + out : z1;
-      cb(ik, ground, [ex - ax, y1 - y0, ez - az], [(ax + ex) / 2, (y0 + y1) / 2, (az + ez) / 2], i === n - 1 ? FLOOR_STONE : S.course, undefined, 0.02);
+      const out = T * (n - 1 - i), y1 = ((i + 1) * h) / n + FLAGS, y0 = 0.04;
+      const ax = ow ? x0 - out : x0, ex = oe ? x1 + out : x1, az = on ? z0 - out : z0, ez = os ? z1 + out : z1;
+      const step = (bx0: number, bx1: number, bz0: number, bz1: number, color: number) => cb(ik, ground, [bx1 - bx0, y1 - y0, bz1 - bz0], [(bx0 + bx1) / 2, (y0 + y1) / 2, (bz0 + bz1) / 2], color, undefined, 0.02);
+      if (i === n - 1) {
+        step(ax, ex, az, ez, FLOOR_STONE);
+        continue;
+      }
+      // The tread round the step over it: its sides (along Z) the whole depth, its ends between them.
+      if (ow) step(ax, ax + T, az, ez, S.course);
+      if (oe) step(ex - T, ex, az, ez, S.course);
+      const sx0 = ow ? ax + T : ax, sx1 = oe ? ex - T : ex;
+      if (on) step(sx0, sx1, az, az + T, S.course);
+      if (os) step(sx0, sx1, ez - T, ez, S.course);
     }
   }
   // Thresholds: a pale stone sill through every doorway, a step beyond it.
   for (const dr of b.doors) {
     const W = wallFrame(b, dr.side), uc = dr.at + dr.w / 2;
     W.box(ik, floorG, dr.w + 0.2, 0.1, 1.0, uc, 0.05, 0, S.course, 0, 0.02);
-    if (!shared.has(dr.side) && !joinedTo.has(dr.side)) W.box(ik, floorG, dr.w + 0.6, 0.1, 0.74, uc, 0.05, 0.85, keep ? BASE : STONE_D, 0, 0.03);
+    if (!shared.has(dr.side) && !joinedTo.has(dr.side)) W.box(ik, floorG, dr.w + 0.6, 0.1, 0.74, uc, 0.05, 0.85, S.base, 0, 0.03);
   }
 
   // ─── Walls ────────────────────────────────────────────────────────────────
@@ -361,7 +380,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     const L = sideLen(b, side);
     // The north and south walls take the corners (over a lower neighbour's wall, only above its top).
     const ow = ns ? over('w') : undefined, oe = ns ? over('e') : undefined;
-    const lo = ns ? (ow !== undefined ? 1 : 0) : 1, hi = ns ? (oe !== undefined ? L - 1 : L) : L - 1;
+    // (Square with the side walls' outer faces at a free corner; into the neighbour's wall at a shared one.)
+    const end0 = shared.has('w') || joinedTo.has('w') ? 0 : 0.5 - WALL_T / 2, end1 = shared.has('e') || joinedTo.has('e') ? L : L - 0.5 + WALL_T / 2;
+    const lo = ns ? (ow !== undefined ? 1 : end0) : 1, hi = ns ? (oe !== undefined ? L - 1 : end1) : L - 1;
     const runs = wallRuns(b, side).map(([a, e]) => [Math.max(lo, a), Math.min(hi, e)] as [number, number]).filter(([a, e]) => e > a);
     for (const [h0, c] of [[ow, 0.5], [oe, L - 0.5]] as [number | undefined, number][]) if (h0 !== undefined) piece(1, h0, wallH, WALL_T, c, 0, UPPER, 0);
     const wins = b.windows.filter((wi) => wi.side === side).map((wi) => ({ wi, ...winDims(wi) }));
@@ -602,10 +623,12 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // (Not under a timber roof open to the hall; a loft's beams carry its boards.)
       if (!fade && !look?.roof) {
         // (The beams along the east and west walls stop against the north and south walls' beams.)
-        const bl = ns ? hi - lo : hi - lo - 0.3;
+        // (The beams along the north and south walls run into the side walls to their middles, never out
+        // through their outer faces.)
+        const b0 = ns ? Math.max(lo, 0.5) : lo, b1 = ns ? Math.min(hi, L - 0.5) : hi, bl = ns ? b1 - b0 : hi - lo - 0.3;
         // (A hair under the course that carries the parapet where the floor is the roof's, never in its plane.)
         const by = look?.loft?.y ?? storeyH;
-        W.box(k, built, bl, 0.3, 0.2, (lo + hi) / 2, by - 0.36, -(face + 0.1), TIMBER, 0, 0.02);
+        W.box(k, built, bl, 0.3, 0.2, (b0 + b1) / 2, by - 0.36, -(face + 0.1), TIMBER, 0, 0.02);
         for (let t = lo + 0.8; t < hi - 0.5; t += 1.4) W.box(k, built, 0.26, 0.26, 0.24, t, by - 0.66, -(face + 0.12), ASHLAR_L, 0, 0.03);
       }
     }
@@ -617,8 +640,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   if (keep) {
     // (Broken where a stall's half-door opens right down to the floor.)
     const stalls = (look?.windows ?? []).filter((o) => o.kind === 'stall').map((o) => ({ side: o.side, span: [o.u - o.w / 2 - 0.36, o.u + o.w / 2 + 0.36] as [number, number] }));
-    const base = footBand(k, built, b, 0, BASE_COURSE, 0.3, S.base, 0.05, stalls);
-    if (base) deep(base);
+    // (And at the buttresses, which stand on the ground through it.)
+    const props = (look?.buttresses ?? []).map((u) => ({ side: 's' as Side, span: [u - 0.55, u + 0.55] as [number, number] }));
+    footBand(k, built, b, 0, BASE_COURSE, 0.3, S.base, 0.05, [...stalls, ...props]);
   }
   // Stone corners: quoins in alternating courses (the camera-side pair lift with the wall).
   if (!timber && !keep) {
@@ -734,7 +758,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     // (A window standing across the upper floor's cut on the camera side goes with the walls over the
     // cut, whose shader cuts it there, so from the upper floor it is cut with the wall round it.)
     const across = fade && o.sill < upCut && o.sill + o.h > upCut;
-    const [kk, pp]: [ModelKit, Obj] = across ? [fk, lifted] : at(fade, Math.max(0, o.sill - 0.2)), f = W.frame(pp, o.u, face);
+    // (One whose opening stands over the ground floor's cut goes with the walls over the cut, sill and
+    // all, so none of its surround stands up out of the cut wall.)
+    const [kk, pp]: [ModelKit, Obj] = across ? [fk, lifted] : at(fade, o.sill >= CUT_H - 0.05 ? Math.max(CUT_H, o.sill) : Math.max(0, o.sill - 0.2)), f = W.frame(pp, o.u, face);
     /** A pane of the castle's clear glass, set back in the reveal. */
     const pane = (x: number, y: number, z: number, pw: number, ph: number, alongZ = false) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(alongZ ? 0.03 : pw, ph, alongZ ? pw : 0.03), glassMat(kk));
@@ -742,18 +768,32 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       f.add(m);
       audit(m, 'glass');
     };
-    /** A square-headed opening's dressed surround: jambs, lintel and a sill standing out under it. */
+    /**
+     * A square-headed opening's dressed surround, laid on the walling's courses: up each jamb a dressed
+     * block to every course, long and short by turns as a quoin is (`t` and `t` + JAMB_LONG on the
+     * face), one lintel stone over the head up to the next course line, and a sill stone standing out
+     * under it.
+     */
     const surround = (t: number, hood: boolean) => {
-      const { w: ow, h: oh, sill } = o;
-      // (Their faces a hair inside the opening, never in the plane of the walling's cut ends.)
-      for (const s of [-1, 1]) cb(kk, f, [t + 0.02, oh, 0.24], [s * (ow / 2 + t / 2 - 0.01), sill + oh / 2, -0.06], DRESS, undefined, 0.02);
-      cb(kk, f, [ow + 2 * t, t + 0.06, 0.26], [0, sill + oh + (t + 0.04) / 2 - 0.01, -0.06], DRESS, undefined, 0.02);
+      const { w: ow, h: oh, sill } = o, head = sill + oh;
+      const lines = [sill];
+      for (let y = Math.ceil(sill / COURSE + 0.1) * COURSE; y < head - 0.05; y += COURSE) lines.push(y);
+      lines.push(head);
+      for (let i = 0; i + 1 < lines.length; i++) {
+        const y0 = lines[i], y1 = lines[i + 1], wide = t + (Math.floor(y0 / COURSE + 1e-6) % 2 ? JAMB_LONG : 0);
+        // (Their inner faces a hair inside the opening, never in the plane of the walling's cut ends.)
+        for (const s of [-1, 1]) cb(kk, f, [wide + 0.02, y1 - y0, 0.3], [s * (ow / 2 + wide / 2 - 0.01), (y0 + y1) / 2, -0.09], DRESS, undefined, 0.03);
+      }
+      const top = Math.ceil((head + 0.3) / COURSE - 1e-6) * COURSE, lw = ow + 2 * (t + JAMB_LONG);
+      // (Its soffit a hair down into the opening and its top a hair under the course line, never in the
+      // plane of the walling's over it or of an opening's floor standing on it.)
+      audit(oneStone(cb(kk, f, [lw, top - head + 0.008, 0.3], [0, (head + top) / 2 - 0.016, -0.09], DRESS, undefined, 0.03)), 'lintel');
       cb(kk, f, [ow + 2 * t + 0.12, 0.14, 0.34], [0, sill - 0.07, 0.05], DRESS, undefined, 0.02);
       if (!hood) return;
       // A drip-stone over it, its ends dropping a little either side.
-      const hy = sill + oh + t + 0.04 + 0.08, hw = ow / 2 + t + 0.12;
-      cb(kk, f, [2 * hw + 0.16, 0.16, 0.22], [0, hy + 0.08, 0.06], DRESS, undefined, 0.02);
-      for (const s of [-1, 1]) cb(kk, f, [0.16, 0.42, 0.22], [s * hw, hy - 0.13, 0.06], DRESS, undefined, 0.02);
+      const hw = lw / 2 + 0.1;
+      cb(kk, f, [2 * hw + 0.16, 0.16, 0.22], [0, top + 0.08, 0.06], DRESS, undefined, 0.02);
+      for (const s of [-1, 1]) cb(kk, f, [0.16, 0.42, 0.22], [s * hw, top - 0.13, 0.06], DRESS, undefined, 0.02);
     };
     switch (o.kind) {
       case 'lancet': {
@@ -782,7 +822,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         if (o.kind === 'shuttered') {
           // The shutters standing open flat against the wall either side: boarded oak, two iron straps.
           for (const s of [-1, 1]) {
-            const sx = s * (o.w / 2 + t + o.w / 4 + 0.04);
+            const sx = s * (o.w / 2 + t + JAMB_LONG + o.w / 4 + 0.04);
             for (let i = 0; i < 2; i++) cb(kk, f, [o.w / 4 - 0.01, o.h, 0.06], [sx + (i - 0.5) * (o.w / 4), o.sill + o.h / 2, 0.03], DOOR_STAIN[(i + (s > 0 ? 1 : 0)) % 3], undefined, 0.01);
             for (const y of [0.22, o.h - 0.22]) cb(kk, f, [o.w / 2 - 0.08, 0.06, 0.03], [sx, o.sill + y, 0.075], IRON, undefined, 0.005);
           }
@@ -1066,6 +1106,13 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   if (b.restore) buildRuin(k, ruin, b);
 
   // ─── Materials ────────────────────────────────────────────────────────────
+  // The castle's buildings are laid on one block grid fixed in the world (whole stones of STONE_LEN from
+  // a line a tenth in from every whole stone's length), so every face, band and top of a building and of its
+  // neighbours shares its joints; a building whole metres long turns each outer corner on a quoin.
+  if (keep) {
+    const wrap = (v: number) => v - Math.floor(v / STONE_LEN) * STONE_LEN;
+    g.userData.masonGrid = { ox: wrap(0.5 - WALL_T / 2 - b.x), oz: wrap(0.5 - WALL_T / 2 - b.z), l: STONE_LEN } satisfies MasonGrid;
+  }
   finishProp(g, [k, mk, fk, ik, uk]);
   for (const m of [...ik.mats, ...uk.mats]) m.userData.noOcclude = true;
   for (const m of [...mk.mats, ...uk.mats]) cutPatch(m, uMid);
@@ -1290,12 +1337,11 @@ function buildRuin(k: ModelKit, p: Obj, b: BuildingSpec) {
  * inside the walls' inner faces out `out` beyond their outer faces, mitred where two banded walls
  * meet, ending square on the line of a wall it shares or joins (that wall has no band: it stands
  * inside the range) or at the face of a wall built against the curtain (whose foot is the curtain's),
- * and broken at the doorways. Extruded and merged into one mesh.
+ * and broken at the doorways. Each stretch is its own stone part, laid along its own run.
  */
-function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, out: number, color: number, inset = 0, gaps: { side: Side; span: [number, number] }[] = []): THREE.Mesh | undefined {
+function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, out: number, color: number, inset = 0, gaps: { side: Side; span: [number, number] }[] = []) {
   const { w, d } = b, inner = new Set([...(b.shared ?? []), ...(b.joined ?? [])]), backs = new Set(b.backs ?? []), skip = new Set([...inner, ...backs]);
   const lo = -WALL_T / 2 - inset, hi = WALL_T / 2 + out;
-  const pieces: THREE.BufferGeometry[] = [];
   for (const side of ['n', 'e', 's', 'w'] as Side[]) {
     if (skip.has(side)) continue;
     const ns = side === 'n' || side === 's', L = ns ? w : d;
@@ -1328,18 +1374,13 @@ function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, 
       };
       const quad = [at(ia, lo), at(ie, lo), at(oe, hi), at(oa, hi)];
       const shape = new THREE.Shape(quad.map(([x, z]) => new THREE.Vector2(x, -z)));
-      pieces.push(new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false, curveSegments: 1 }).rotateX(-Math.PI / 2).translate(0, y0, 0));
+      // (Each stretch its own stone part, so its faces and its top are laid along its own run.)
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false, curveSegments: 1 }).rotateX(-Math.PI / 2).translate(0, y0, 0);
+      geo.computeVertexNormals();
+      // (For the geometry audit: its stretches, mitred edge to edge, are one band.)
+      k.mesh(p, geo, color, [0, 0, 0]).userData.audit = { band: 'foot' };
     }
   }
-  if (!pieces.length) return undefined;
-  const geo = mergeGeometries(pieces)!;
-  geo.computeVertexNormals();
-  // (For the geometry audit: the bounds of each stretch, not of the whole ring.)
-  geo.userData.boxes = pieces.map((pc) => {
-    pc.computeBoundingBox();
-    return [...pc.boundingBox!.min.toArray(), ...pc.boundingBox!.max.toArray()];
-  });
-  return k.mesh(p, geo, color, [0, 0, 0]);
 }
 
 /**
