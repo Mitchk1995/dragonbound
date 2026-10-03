@@ -215,7 +215,8 @@ describe('castle geometry', () => {
     for (const p of P) for (const g of p.solids.filter((s) => s.part.tag === 'glass')) {
       // The pane's face: its thinnest axis.
       const n = [0, 1, 2].reduce((a, k) => (g.e[k] < g.e[a] ? k : a), 0), N = g.u[n];
-      const solid = p.solids.filter((s) => s !== g && !s.part.thin && !s.part.hollow);
+      // (A drum notched for its windows, the keep's turrets' slit lights, is cut away round them.)
+      const solid = p.solids.filter((s) => s !== g && !s.part.thin && !s.part.hollow && !s.part.notched);
       const set = [-1, 1].some((sg) => solid.some((s) => contains(s, g.c.clone().addScaledVector(N, sg * (g.e[n] + 0.12)), 0.02)));
       if (!set && !solid.some((s) => overlap(s, g) > -0.03)) bad.push(`${p.name}: a window pane at ${fmt(g.c)} hangs in the air, in no wall`);
       // From at least one side the whole pane shows: no block in front of its middle or across it.
@@ -417,7 +418,9 @@ describe('castle geometry', () => {
       const foot = s.r
         ? Array.from({ length: 16 }, (_, i) => [s.c.x + Math.sin((i / 16) * Math.PI * 2) * s.r, s.c.z + Math.cos((i / 16) * Math.PI * 2) * s.r])
         : corners(s).filter((k) => k.y < s.c.y).map((k) => [k.x, k.z]);
-      const under = foot.filter(([x, z]) => S.ground(x, z) < s.lo.y - 0.6);
+      // (A course of a stepped plinth stands on the course under it, founded deeper: on its own masonry.)
+      const onOwn = (x: number, z: number) => p.solids.some((o) => o !== s && !o.part.thin && !o.part.hollow && o.lo.y < s.lo.y - 0.05 && contains(o, new THREE.Vector3(x, s.lo.y - 0.05, z), 0.02));
+      const under = foot.filter(([x, z]) => S.ground(x, z) < s.lo.y - 0.6 && !onOwn(x, z));
       if (under.length) bad.push(`${p.name}: its ${s.part.color.toString(16)} base at ${fmt(s.c)} hangs out over a drop at (${under[0][0].toFixed(1)}, ${under[0][1].toFixed(1)})`);
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 60).join('\n')).toEqual([]);
