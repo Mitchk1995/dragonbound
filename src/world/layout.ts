@@ -134,6 +134,11 @@ export interface ZoneLayout {
   pools?: { x: number; z: number; r: number }[];
   /** Stone kerbs edging paving where it meets a lawn (centre, turn and length), drawn as one mesh. */
   kerbs?: { x: number; z: number; rot: number; len: number }[];
+  /**
+   * Decks walked over the ground under them (a bridge's over the water it spans): inside `box`
+   * ([x0, z0, x1, z1]) units stand at `y`, whatever the ground under it.
+   */
+  decks?: { box: [number, number, number, number]; y: number }[];
 }
 
 export interface Strand {

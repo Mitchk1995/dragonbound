@@ -4,7 +4,8 @@ import { RESTORATION_BY_ID } from '../src/data/keep';
 import { CASTLE_PLAN, KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
 import { cellRole, fitBlocks, fitsOf, flightsOf, inRoom, partitionRuns, raisedAt, sideLen, stairDest, stairProblems, stairRect, stairSteps, wallCell, wallRuns, type BuildingSpec, type Floor, type Stair } from '../src/world/building';
-import { CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
+import { BRIDGE, CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
+import { climbFlights, flightGround, headOf, treadTop } from '../src/world/castle/approach';
 import { newSave } from '../src/save/save';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
 import { buildKeep } from '../src/world/castle/keepModel';
@@ -220,6 +221,48 @@ describe('Dragonspire Keep', () => {
       expect(a - c, `${st.id} at ${z}`).toBeGreaterThan(0);
       expect(a - c, `${st.id} at ${z}`).toBeLessThan(0.7);
     }
+  });
+  it('the climb is built in real steps: risers of 16 to 17 cm, no flight over 17, a comfortable going, the ground laid under every tread', () => {
+    for (const f of climbFlights()) {
+      expect(f.risers).toBeLessThanOrEqual(17);
+      expect(f.riser).toBeGreaterThanOrEqual(0.16);
+      expect(f.riser).toBeLessThanOrEqual(0.17);
+      // (Two risers and a tread make a pace: 60 to 65 cm.)
+      expect(2 * f.riser + f.tread).toBeGreaterThanOrEqual(0.6);
+      expect(2 * f.riser + f.tread).toBeLessThanOrEqual(0.65);
+      // The head's landing runs on past the last riser at least a tread deep, to the flight's end.
+      expect(f.run - headOf(f)).toBeGreaterThanOrEqual(f.tread);
+      // The ground under the flight runs straight from one cell edge to the next (the last edge at the
+      // head's level): it never stands through a tread, and the hero walking on it is never more than a
+      // riser and a half under the stone (most of the way less than a riser).
+      const edge = (j: number) => (j >= f.run ? f.y1 : flightGround(f, j));
+      for (let s = 0; s < f.run; s += 0.01) {
+        const j = Math.floor(s), ground = edge(j) + (edge(j + 1) - edge(j)) * (s - j), top = treadTop(f, s);
+        expect(ground, `${f.foot.x},${f.foot.z} at ${s.toFixed(2)}`).toBeLessThan(top - 0.005);
+        expect(top - ground, `${f.foot.x},${f.foot.z} at ${s.toFixed(2)}`).toBeLessThan(1.6 * f.riser);
+      }
+      // Its cells carry that ground, walkable.
+      for (let j = 0; j < f.run; j++) {
+        const x = Math.floor(f.foot.x + f.up.x * (j + 0.5)), z = Math.floor(f.foot.z + f.up.z * (j + 0.5)), i = z * L.w + x;
+        expect(L.cells[i]).toBe(Cell.Ground);
+        expect(L.level![i]).toBeCloseTo(flightGround(f, j), 5);
+      }
+    }
+  });
+  it('the bridge is walked at the crown\'s level over the moat, which runs on under its arches', () => {
+    const deck = L.decks?.find((d) => d.box[0] <= BRIDGE.x0 && d.box[2] >= BRIDGE.x1);
+    expect(deck?.y).toBe(CROWN_Y);
+    const [a0, a1] = [BRIDGE.arches[0][0], BRIDGE.arches[BRIDGE.arches.length - 1][1]];
+    for (let z = a0; z < a1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) {
+      const i = z * L.w + x;
+      expect(L.fluid[i], `${x},${z}`).toBeGreaterThan(0);
+    }
+    // The deck is walkable from the gate's passage to the terrace, the parapets' cells either side blocked.
+    for (let z = 100; z < BRIDGE.z1 + 1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(true);
+    for (let z = a0; z < a1; z++) for (const x of [BRIDGE.deck[0] - 1, BRIDGE.deck[1]]) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(false);
+    // (Its box covers the bridge alone: not the gate's passage nor the terrace's banners.)
+    expect(deck!.box[1]).toBeGreaterThanOrEqual(100.5);
+    expect(deck!.box[3]).toBeLessThanOrEqual(BRIDGE.z1);
   });
   it('a save made anywhere, the old castle included, loads with the hero on the walkable arrival dais', () => {
     // (Saves keep no position: every load enters the keep at its arrival dais.)

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ZONES } from '../src/data/zones';
 import { Cell, emptyLayout, Ground } from '../src/world/layout';
 import { buildTerrain } from '../src/world/terrain';
+import { buildWorldView } from '../src/world/worldView';
 import { CLIMB, TERRACE_STAIRS, TERRACE_Y } from '../src/world/castle/plan';
 
 /**
@@ -60,6 +61,16 @@ describe('walkable ground levels', () => {
     expect(box.max.y).toBeGreaterThan(4);
   });
 
+  it('stands units on a deck at its own level over whatever lies under it, and on the ground off it', () => {
+    const D = emptyLayout(12, 12);
+    D.cells.fill(Cell.Ground);
+    D.ground.fill(Ground.Grass);
+    D.level = new Float32Array(12 * 12);
+    D.decks = [{ box: [3, 3, 7, 7], y: 2.5 }];
+    const view = buildWorldView(D, theme, 3);
+    expect(view.floorAt(5, 5)).toBe(2.5);
+    expect(view.floorAt(9, 9)).toBeCloseTo(0, 5);
+  });
   it('leaves a zone without levels exactly as it was', () => {
     const flat = plateauMap();
     flat.level = undefined;

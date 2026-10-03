@@ -327,7 +327,7 @@ export interface WorldView {
   buildings: BuildingProp[];
   /** Terrain height at a world point (scenery and props stand on it). */
   heightAt(x: number, z: number): number;
-  /** Height of the walkable ground level at a world point (units, stations and buildings stand on it). */
+  /** Height of the walkable ground level at a world point, a deck's where one spans it (units, stations and buildings stand on it). */
   floorAt(x: number, z: number): number;
   /** Advance animated surfaces (water, lava). */
   tick(t: number): void;
@@ -1338,5 +1338,11 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     group.add(bp.obj);
     return bp;
   });
-  return { group, followers, props, buildings, heightAt, floorAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; debrisTick?.(t); } };
+  // (On a deck, units stand on its paving, not on the ground under it.)
+  const decks = layout.decks ?? [];
+  const walkAt = (x: number, z: number) => {
+    for (const d of decks) if (x > d.box[0] && x < d.box[2] && z > d.box[1] && z < d.box[3]) return d.y;
+    return floorAt(x, z);
+  };
+  return { group, followers, props, buildings, heightAt, floorAt: walkAt, tick: (t) => { terrain.tick(t); WIND.uWindT.value = t; debrisTick?.(t); } };
 }
