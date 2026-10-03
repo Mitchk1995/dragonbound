@@ -6,7 +6,7 @@ import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/pa
 import { patchKeys } from '../src/render/surface';
 import { ZONES } from '../src/data/zones';
 import { Cell, Ground } from '../src/world/layout';
-import { buildProp, PROP_KINDS, spread } from '../src/world/props';
+import { ASHLAR, buildProp, PROP_KINDS, spread } from '../src/world/props';
 
 const finite = (geo: THREE.BufferGeometry) => {
   for (const name of ['position', 'normal']) {
@@ -44,12 +44,16 @@ describe('world props', () => {
     }
     expect(spread(1, 1, 0.8)).toEqual([]);
   });
-  it('round towers paint their courses round the drum at one block size', () => {
+  it('round towers are laid in the dressed stone, flat-shaded stone by stone (never a smooth drum)', () => {
     const keys = new Set<string>();
+    let smooth = 0;
     buildProp('round_tower', { len: 3.2, v: 9 }).obj.traverse((o) => {
-      if (o instanceof THREE.Mesh) patchKeys(o.material as THREE.Material).forEach((k) => keys.add(k));
+      if (!(o instanceof THREE.Mesh)) return;
+      patchKeys(o.material as THREE.Material).forEach((k) => keys.add(k));
+      if (o.material instanceof THREE.MeshStandardMaterial && o.material.color.getHex() === ASHLAR && !o.material.flatShading) smooth++;
     });
-    expect([...keys]).toContain('paint:object:ashlar:wrap:fit');
+    expect([...keys]).toContain('paint:object:ashlar:fit');
+    expect(smooth).toBe(0);
   });
   it('every prop builds with finite geometry and no bumped materials', () => {
     for (const kind of [...PROP_KINDS, 'portal', 'rock_copper', 'rock_tin', 'rock_iron', 'rock_coal', 'rock_emberite']) {

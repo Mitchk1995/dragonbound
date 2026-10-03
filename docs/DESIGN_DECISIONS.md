@@ -32,6 +32,10 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   many-sided and no brick bends. And the stones must clearly stand out from the play camera: deeper joints and stronger
   shading, and real blocks standing proud of the wall wherever its outline shows the stones (tops, corners, arches,
   tower outlines), since painted depth cannot change an outline.
+  **Accepted October 3** after the second pass: one cream stone with deep joints and lit edges, towers laid in flat
+  stones, the trim cut from the same stone, and a real window kit (an opening through the wall, leaded glass you see
+  through with a cool tint, a lit room behind), which Mitchell liked. Further polish (bluer glass, crisper blocks) comes
+  with the castle-v4 build if needed.
 - **Trees: pick B, "Natural".** Redo the trees at true size, no longer blocky, as the woodcutting ladder in RuneScape's
   order: tree, oak, willow, maple, yew, magic. After seeing the first grown oak he chose the natural, realistic look
   ("i kinda like the realistic one") and dropped the cartoony and mixed versions planned for comparison. The rest of the

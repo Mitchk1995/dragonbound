@@ -8,7 +8,7 @@ import { hasModel, makeModel } from '../render/registry';
 import { applyFinish, studioEnv } from '../render/env';
 import { applyPaint, type PaintKind } from '../render/paint';
 import { KERB_W } from './kerbStones';
-import { cleanBreaks, courseSpans, fitCourses, masonGeometry, STONE as STONE_LEN, type MasonOpts } from '../render/masonry';
+import { bondPhases, cleanBreaks, COURSE, drumStones, Laid, laidDrum, laidRun, masonGeometry, STONE as STONE_LEN, type DrumOpts, type LaidCorner, type MasonOpts } from '../render/masonry';
 import { addPatch } from '../render/surface';
 import { chamferBox, hash01, octagon, prism, rockBlock, slabBlock, taper, wedge } from '../render/blocks';
 import { makePortal, type PortalSpec } from './portalFx';
@@ -33,16 +33,21 @@ export interface Prop {
 export const STONE = 0x8a8478, STONE_L = 0x969086, STONE_D = 0x6e685f, STONE_DD = 0x57524b;
 /**
  * Dragonspire Castle's own stone (docs/CASTLE_DESIGN.md, "Colour and materials"): cream limestone
- * for the masses (sunlit blocks paler, weathered courses darker), blue-grey dressings for the
- * continuous lines and frames (string courses, copings, corbels, hood moulds), darker blue-grey for
- * plinths, a grey deck for walks and platforms. The rest of the world keeps STONE.
+ * for every mass, its trim cut from the same stone (the owner's pick, October 3): the dressed stones
+ * of string courses, copings, arches, jambs and sills a shade paler (DRESS), the deep base courses a
+ * shade darker, weathered (BASE), and a grey deck for walks and platforms. Blue is kept for the slate
+ * of roofs and spires, the doors and the livery. The rest of the world keeps STONE.
  */
 export const ASHLAR = 0xc5b79b, ASHLAR_L = 0xd4c8b0, ASHLAR_W = 0xafa38a;
 /** The buildings' (and the keep's) ivory, a clear step paler than the honey curtain and towers. */
 export const ASHLAR_B = 0xefe3c8;
-export const TRIM = 0x6f7b8c, TRIM_D = 0x545e6c, TRIM_L = 0x8994a3, DECK = 0x8a8478;
-/** Setts paving the gate passage: the road's flagstone tone, a little darker; and flagstones laid as props. */
-const SETT = 0x878279, SETT_D = 0x7b766e, FLAG = 0x958f86, FLAG_D = 0x8a847b;
+export const DRESS = ASHLAR_L, BASE = ASHLAR_W, DECK = 0x8a8478;
+/** The dark slate inlaid in the wall towers' compass roses. */
+const INLAY = 0x545e6c;
+/** Kerbs and borders edging the castle's paving: the paving's own stone a shade darker. */
+export const KERB = 0x736d66;
+/** Flagstones laid as props (the round terrace's): the road's flagstone tone, and a little darker. */
+const FLAG = 0x958f86, FLAG_D = 0x8a847b;
 /** A road's flagstones laid as a prop (the climb's paving): the paved ground's own grey. */
 const PAVE = 0x8c8780;
 /** The spires: deep slate-navy (the castle's second blue, between the grey dressings and the royal livery). */
@@ -88,7 +93,7 @@ paintAs('wood', [WOOD, WOOD_D, WOOD_L, 0x7a5636, 0x94704a, 0x5a3a22, 0x3a2618, 0
 paintAs('shingle', [SLATE, 0x3e4450, 0x4a6a48, 0x4a4a78, 0x9a5438, 0x3e6a6a, 0x7a4a34]);
 paintAs('masonry', [...SAND, ...SOOT]);
 paintAs('ashlar', [ASHLAR, ASHLAR_L, ASHLAR_W, ASHLAR_B]);
-paintAs('masonry', [TRIM, TRIM_D, TRIM_L, DECK, PAVE]);
+paintAs('masonry', [KERB, INLAY, DECK, PAVE]);
 paintAs('shingle', [SLATE_BLUE]);
 paintAs('masonry', [ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL]);
 paintAs('soft', [GILT]);
@@ -128,15 +133,21 @@ export function cb(k: ModelKit, p: Obj, size: V3, pos: V3, color: number, rot?: 
   return k.mesh(p, chamferBox(size[0], size[1], size[2], c), color, pos, rot, em, int);
 }
 
-/**
- * Mark a drum's part (a cylinder or ring centred on its parent's origin) to be painted round its
- * axis, so its courses keep one block size all the way round. Off-centre drums are built in their own
- * group at their centre.
- */
-export function wrapped<T extends THREE.Object3D>(m: T): T {
-  m.userData.wrap = true;
+/** The castle's deep base course: one course a metre high, laid in long weathered blocks. */
+export const BASE_COURSE = 1.0;
+const BASE_STONE = 2.0;
+/** Mark a part as laid in the deep base course (the castle's one other block size: see masonry.ts). */
+export function deep<T extends THREE.Object3D>(m: T): T {
+  m.userData.course = BASE_COURSE;
+  m.userData.stone = BASE_STONE;
   return m;
 }
+
+/**
+ * Where a crown begins over a platform at height P: the course line at P (or the one just over it),
+ * so the course that carries the parapet ends on a course line and the parapet stands on it.
+ */
+export const crownFoot = (P: number) => COURSE * Math.ceil((P - 0.2) / COURSE - 1e-6);
 
 /**
  * Points spread evenly along a run `L` long (centred on 0) about `step` apart, the first and last
@@ -873,45 +884,20 @@ function fallingWater(w: number, h: number, time: { value: number }, seed: numbe
 }
 
 /**
- * A ring of stone from radius rIn to rOut and `h` high (base on y = 0), turned as one lathe of its
- * square section: a basin's wall or its coping, with no joint round it.
- */
-const basinCache = new Map<string, THREE.BufferGeometry>();
-function basinRing(rIn: number, rOut: number, h: number) {
-  const key = `${rIn},${rOut},${h}`;
-  let g = basinCache.get(key);
-  if (!g) {
-    const pts = [[rIn, 0], [rOut, 0], [rOut, h], [rIn, h], [rIn, 0]].map(([r, y]) => new THREE.Vector2(r, y));
-    g = toCreasedNormals(new THREE.LatheGeometry(pts, 64), Math.PI / 4);
-    g.userData.ring = [rIn, rOut];
-    basinCache.set(key, g);
-  }
-  return g;
-}
-
-/**
  * A band `w` wide and `h` high along a polyline in plan (points (x, z), closed into a loop when
  * `closed`): one piece per stretch, each mitred to its neighbours so they meet edge to edge, extruded
  * up from y = 0 and merged into one shape (`bevel` rounds its top edges). The audit sees each stretch
  * as its own box along it.
  */
 export function mitredBand(pts: THREE.Vector2[], closed: boolean, w: number, h: number, bevel = 0) {
-  const pieces = mitredPieces(pts, closed, w, h, bevel, 0);
+  const pieces = mitredPieces(pts, closed, w, h, bevel);
   const geo = mergeGeometries(pieces)!;
   geo.computeVertexNormals();
   geo.userData.boxes = pieces.flatMap((p) => p.userData.boxes);
   return geo;
 }
 
-/**
- * A band as mitredBand, cut into separate stones: each stretch of it into whole stones as near
- * `stone` long as fit (the joints square across it), each stone its own geometry.
- */
-export function mitredStones(pts: THREE.Vector2[], closed: boolean, w: number, h: number, stone: number) {
-  return mitredPieces(pts, closed, w, h, 0, stone);
-}
-
-function mitredPieces(pts: THREE.Vector2[], closed: boolean, w: number, h: number, bevel: number, stone: number) {
+function mitredPieces(pts: THREE.Vector2[], closed: boolean, w: number, h: number, bevel: number) {
   const n = pts.length, hw = w / 2;
   const dir = (i: number) => pts[(i + 1) % n].clone().sub(pts[i]).normalize();
   const left = (d: THREE.Vector2) => new THREE.Vector2(-d.y, d.x);
@@ -926,21 +912,70 @@ function mitredPieces(pts: THREE.Vector2[], closed: boolean, w: number, h: numbe
   for (let i = 0; i < (closed ? n : n - 1); i++) {
     const j = (i + 1) % n, a = pts[i], b = pts[j], ma = mitre(i), mb = mitre(j);
     const outA = a.clone().addScaledVector(ma, hw), outB = b.clone().addScaledVector(mb, hw), inA = a.clone().addScaledVector(ma, -hw), inB = b.clone().addScaledVector(mb, -hw);
-    const cuts = stone > 0 ? Math.max(1, Math.round(a.distanceTo(b) / stone)) : 1;
-    for (let c = 0; c < cuts; c++) {
-      const t0 = c / cuts, t1 = (c + 1) / cuts;
-      const quad = [outA.clone().lerp(outB, t0), outA.clone().lerp(outB, t1), inA.clone().lerp(inB, t1), inA.clone().lerp(inB, t0)];
-      const shape = new THREE.Shape(quad.map((p) => new THREE.Vector2(p.x, -p.y)));
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: h - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.6, bevelOffset: -bevel * 0.6, bevelSegments: 1, curveSegments: 1 });
-      geo.rotateX(-Math.PI / 2);
-      if (bevel > 0) geo.translate(0, bevel, 0);
-      for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
-      const p0 = a.clone().lerp(b, t0), p1 = a.clone().lerp(b, t1), d = p1.clone().sub(p0);
-      geo.userData.boxes = [{ c: [(p0.x + p1.x) / 2, h / 2, (p0.y + p1.y) / 2], h: [d.length() / 2, h / 2, hw], ry: Math.atan2(-d.y, d.x) }];
-      pieces.push(geo);
-    }
+    const shape = new THREE.Shape([outA, outB, inB, inA].map((p) => new THREE.Vector2(p.x, -p.y)));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: h - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.6, bevelOffset: -bevel * 0.6, bevelSegments: 1, curveSegments: 1 });
+    geo.rotateX(-Math.PI / 2);
+    if (bevel > 0) geo.translate(0, bevel, 0);
+    for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+    const d = b.clone().sub(a);
+    geo.userData.boxes = [{ c: [(a.x + b.x) / 2, h / 2, (a.y + b.y) / 2], h: [d.length() / 2, h / 2, hw], ry: Math.atan2(-d.y, d.x) }];
+    pieces.push(geo);
   }
   return pieces;
+}
+
+/**
+ * A band `w` wide and `h` high along a polyline in plan (points (x, z), its ends open), mitred at every
+ * bend like mitredBand and extruded up from y = 0, as one piece that lays its own stones (masonry.ts,
+ * Laid): each run between sharp turns cut into whole stones as near `stone` long as fit, the joints
+ * square across it and on the mitre where it turns sharply, the top's long edges, the sides' top edges
+ * and its two ends arrises, so it reads as one kerb of dressed stones, never a row of pieces. The audit
+ * sees each stretch as its own box along it.
+ */
+export function laidBand(pts: THREE.Vector2[], w: number, h: number, stone: number, seed: number) {
+  const n = pts.length, hw = w / 2;
+  const dir = (i: number) => pts[i + 1].clone().sub(pts[i]).normalize();
+  const left = (d: THREE.Vector2) => new THREE.Vector2(-d.y, d.x);
+  const mitre = (i: number) => {
+    if (i === 0) return left(dir(0));
+    if (i === n - 1) return left(dir(n - 2));
+    const m = left(dir(i - 1)).add(left(dir(i))).normalize();
+    return m.divideScalar(Math.max(0.35, m.dot(left(dir(i)))));
+  };
+  // The stone coordinate at each point: whole at both ends of every run between sharp turns.
+  const X = [0];
+  for (let a = 0; a < n - 1;) {
+    let b = a + 1;
+    while (b < n - 1 && dir(b - 1).dot(dir(b)) > Math.cos(Math.PI / 6)) b++;
+    let len = 0;
+    for (let i = a; i < b; i++) len += pts[i].distanceTo(pts[i + 1]);
+    const k = Math.max(1, Math.round(len / stone));
+    for (let i = a, acc = 0; i < b; i++) {
+      acc += pts[i].distanceTo(pts[i + 1]);
+      X[i + 1] = X[a] + (k * acc) / len;
+    }
+    a = b;
+  }
+  const L = new Laid(seed), boxes: { c: number[]; h: number[]; ry: number }[] = [];
+  const at = (q: THREE.Vector2, y: number, Xv: number, C: number): LaidCorner => [q.x, y, q.y, Xv, C];
+  for (let i = 0; i < n - 1; i++) {
+    const a = pts[i], b = pts[i + 1], ma = mitre(i), mb = mitre(i + 1), out = left(dir(i));
+    const oa = a.clone().addScaledVector(ma, hw), ob = b.clone().addScaledVector(mb, hw), ia = a.clone().addScaledVector(ma, -hw), ib = b.clone().addScaledVector(mb, -hw);
+    const l = a.distanceTo(b) / Math.max(1e-6, X[i + 1] - X[i]);
+    laidFace(L, [at(ia, h, X[i], 0), at(ib, h, X[i + 1], 0), at(ob, h, X[i + 1], 1), at(oa, h, X[i], 1)], [0, 1, 0], { l, h: w, mode: 2, cs: 0, ce: 1 });
+    laidFace(L, [at(oa, 0, X[i], 0), at(ob, 0, X[i + 1], 0), at(ob, h, X[i + 1], 1), at(oa, h, X[i], 1)], [out.x, 0, out.y], { l, h, cs: -1, ce: 1 });
+    laidFace(L, [at(ia, 0, X[i], 0), at(ib, 0, X[i + 1], 0), at(ib, h, X[i + 1], 1), at(ia, h, X[i], 1)], [-out.x, 0, -out.y], { l, h, cs: -1, ce: 1 });
+    const d = b.clone().sub(a);
+    boxes.push({ c: [(a.x + b.x) / 2, h / 2, (a.y + b.y) / 2], h: [d.length() / 2, h / 2, hw], ry: Math.atan2(-d.y, d.x) });
+  }
+  // Its two ends, square across it.
+  for (const [i, j] of [[0, 1], [n - 1, n - 2]]) {
+    const m = mitre(i), o = pts[i].clone().addScaledVector(m, hw), u = pts[i].clone().addScaledVector(m, -hw), away = pts[i].clone().sub(pts[j]).normalize();
+    laidFace(L, [at(u, 0, 0, 0), at(o, 0, 1, 0), at(o, h, 1, 1), at(u, h, 0, 1)], [away.x, 0, away.y], { l: w, h, xs: 0, xe: 1, cs: -1, ce: 1 });
+  }
+  const geo = L.build();
+  geo.userData.boxes = boxes;
+  return geo;
 }
 
 /**
@@ -1171,35 +1206,64 @@ function sentinelDragon(k: ModelKit, g: THREE.Object3D): THREE.Vector3 {
 }
 
 /**
- * The top of a round tower of radius r centred at (x, z) whose platform is at height P: a string
- * course, a corbel course, a solid parapet ring standing out over it, and merlons on every other of
- * its N faces.
+ * A drum of stone laid in rings of flat stones round the axis at (x, z) of its group (masonry.ts,
+ * laidDrum), in the colour given: a tower's shaft, a course standing proud round it, a parapet ring.
+ */
+export function drum(k: ModelKit, g: THREE.Object3D, o: Omit<DrumOpts, 'seed'>, color: number, x = 0, z = 0) {
+  return k.mesh(g, laidDrum({ ...o, seed: Math.floor(hash01(o.r, o.y0, o.n, color) * 97) }), color, [x, 0, z]);
+}
+
+/**
+ * A drum's deep battered base course (the castle's one other block size, a metre high), leaning in
+ * from radius `foot` to `head`: as many stones as the drum of radius r rising from it, turned half a
+ * stone on its first course.
+ */
+function drumFoot(k: ModelKit, g: THREE.Object3D, r: number, foot: number, head: number, x = 0, z = 0) {
+  const n = drumStones(r);
+  drum(k, g, { r: foot, rTop: head, y0: 0, y1: BASE_COURSE, n, course: BASE_COURSE, turn: Math.PI / n }, BASE, x, z);
+}
+
+/**
+ * One course of the dressed stone standing `out` proud of a drum of radius r from the course line y:
+ * the drum's own course at that height, its stones a little larger, so the bond runs on through it.
+ */
+function drumCourse(k: ModelKit, g: THREE.Object3D, r: number, out: number, y: number, x = 0, z = 0) {
+  drum(k, g, { r: r + out, y0: y, y1: y + COURSE, n: drumStones(r) }, DRESS, x, z);
+}
+
+/**
+ * The top of a round tower of radius r centred at (x, z) whose platform is at height P, all in the
+ * castle's one stone: the course that carries the parapet, stepped out from the drum and ending on a
+ * course line at the platform (crownFoot), the parapet ring standing flush on it two courses high, one
+ * continuous coping, and merlons over every other of its N bays. Each is a ring of N flat stones (so a
+ * merlon stands square on a stone of the coping), every course turned half a stone on the one under it.
  */
 function crown(k: ModelKit, g: THREE.Object3D, x: number, z: number, r: number, P: number, N: number, rose = true) {
-  wrapped(k.cyl(g, r + 0.12, r + 0.12, 0.22, [x, P - 1.1, z], TRIM, undefined, N));
-  for (let i = 0; i < N; i++) {
+  const top = crownFoot(P);
+  drum(k, g, { r: r + 0.3, y0: top - COURSE, y1: top, n: N }, DRESS, x, z);
+  drum(k, g, { r: r + 0.3, rIn: r - 0.2, y0: top, y1: top + 2 * COURSE, n: N }, ASHLAR, x, z);
+  // One continuous coping round the parapet's top under the merlons (never a cap per merlon), its joints
+  // between the bays, so each merlon stands on one of its stones.
+  drum(k, g, { r: r + 0.36, rIn: r - 0.26, y0: top + 2 * COURSE, y1: top + 2 * COURSE + 0.12, n: N, bond: false }, DRESS, x, z);
+  for (let i = 0; i < N; i += 2) {
     const a = ((i + 0.5) / N) * Math.PI * 2, c = 2 * (r + 0.25) * Math.sin(Math.PI / N);
-    cb(k, g, [c * 0.42, 0.5, 0.42], [x + Math.sin(a) * (r + 0.12), P - 0.3, z + Math.cos(a) * (r + 0.12)], TRIM, [0, a, 0], 0.03);
-    cb(k, g, [c + 0.04, 1.0, 0.5], [x + Math.sin(a) * (r + 0.05), P + 0.5, z + Math.cos(a) * (r + 0.05)], ASHLAR, [0, a, 0], 0.03);
-    if (i % 2 === 0) cb(k, g, [c * 0.82, 0.75, 0.54], [x + Math.sin(a) * (r + 0.05), P + 1.37, z + Math.cos(a) * (r + 0.05)], hash01(i, r) > 0.7 ? ASHLAR_L : ASHLAR, [0, a, 0], 0.05);
+    cb(k, g, [c * 0.82, 0.62, 0.54], [x + Math.sin(a) * (r + 0.05), top + 2 * COURSE + 0.43, z + Math.cos(a) * (r + 0.05)], hash01(i, r) > 0.7 ? ASHLAR_L : ASHLAR, [0, a, 0], 0.05);
   }
-  // One continuous coping round the parapet's top under the merlons (never a cap per merlon).
-  k.mesh(g, ringBand(r - 0.24, r + 0.4, 0.12, N), TRIM, [x, P + 0.96, z]);
   k.cyl(g, r - 0.2, r - 0.2, 0.1, [x, P + 0.05, z], rose ? ASHLAR_W : DECK, undefined, N);
   if (!rose) return;
   // The platform paved as a compass rose inlaid in the castle's own stone: a cream ring round a honey
-  // field, a star of eight points (two squares turned against each other) laid in the dark slate of
-  // the plinths and outlined by a thin gold inlay (each square laid on a slightly larger one of
-  // gilt, so the gold shows only round the star's outline), a cream heart, and a thin gold ring
-  // round the slate plinth at its centre (where a flagpole stands).
+  // field, a star of eight points (two squares turned against each other) laid in dark slate and
+  // outlined by a thin gold inlay (each square laid on a slightly larger one of gilt, so the gold
+  // shows only round the star's outline), a cream heart, and a thin gold ring round the slate plinth
+  // at its centre (where a flagpole stands).
   const rr = r - 0.2, sq = rr * 0.98;
   k.mesh(g, ringBand(rr * 0.74, rr * 0.86, 0.03, N), ASHLAR_L, [x, P + 0.1, z]);
   k.cyl(g, rr * 0.74, rr * 0.74, 0.03, [x, P + 0.112, z], ASHLAR, undefined, N);
   for (const a of [0, Math.PI / 4]) k.box(g, [sq + 0.12, 0.03, sq + 0.12], [x, P + 0.122, z], GILT, [0, a, 0]);
-  for (const a of [0, Math.PI / 4]) k.box(g, [sq, 0.03, sq], [x, P + 0.135, z], TRIM_D, [0, a, 0]);
+  for (const a of [0, Math.PI / 4]) k.box(g, [sq, 0.03, sq], [x, P + 0.135, z], INLAY, [0, a, 0]);
   k.cyl(g, rr * 0.36, rr * 0.36, 0.03, [x, P + 0.15, z], ASHLAR_L, undefined, N);
   k.mesh(g, ringBand(0.5, 0.6, 0.03, 16), GILT, [x, P + 0.17, z]);
-  k.cyl(g, 0.42, 0.48, 0.16, [x, P + 0.2, z], TRIM_D, undefined, 10);
+  k.cyl(g, 0.42, 0.48, 0.16, [x, P + 0.2, z], INLAY, undefined, 10);
 }
 
 /**
@@ -1236,45 +1300,16 @@ function cutRound(geo: THREE.BufferGeometry, R: number, o = 0) {
  */
 const walkDoor = () => ({ L: DOORS.single.w + 0.6, top: DOORS.single.h + 0.5, back: 0.34, out: 0.05 });
 /**
- * A drum's shaft of radius r with N sides between heights y0 and y1, its wall cut away where
- * doorways onto the wall walk open in it (`doors`: the bearings of their middles, sill at `sill`):
- * through each doorway's height the shaft is notched back to make room for the surround, so the
- * doorway stands in the drum's face instead of on it. Above and below, the plain drum.
+ * A drum's shaft of radius r between heights y0 and y1, laid in rings of flat stones, its wall cut away
+ * where doorways onto the wall walk open in it (`doors`: the bearings of their middles and their
+ * offsets, sill at `sill`): through each doorway's height the courses are notched straight back along
+ * the way through it to a shallow arc behind its surround (the surround is cut the same way: see
+ * cutRound), so the doorway stands in the drum's face instead of on it.
  */
-function drumShaft(k: ModelKit, g: THREE.Object3D, r: number, y0: number, y1: number, N: number, color: number, doors: [number, number][], sill: number) {
-  const cyl = (a: number, b: number) => wrapped(k.cyl(g, r, r, b - a, [0, (a + b) / 2, 0], color, undefined, N));
-  if (!doors.length) return void cyl(y0, y1);
-  const top = sill + walkDoor().top, step = (Math.PI * 2) / N, inR = r - walkDoor().back + 0.04, half = walkDoor().L / 2 - 0.035;
-  cyl(y0, sill);
-  cyl(top, y1);
-  // The notched band in plan: round the drum's sides (its corners where a kit cylinder's are), in
-  // at each doorway straight back along the way through it to a shallow arc behind its surround,
-  // round that and straight out again (the surround is cut the same way: see cutRound).
-  const edge = (t: number) => (r * Math.cos(Math.PI / N)) / Math.cos((((t % step) + step) % step) - step / 2);
-  const at = (t: number, rr: number) => new THREE.Vector2(Math.sin(t) * rr, -Math.cos(t) * rr);
-  /** The bearing of the point `x` across from a doorway's line (on bearing `a`) where it meets the drum's face. */
-  const onFace = (a: number, x: number) => {
-    let t = a + Math.asin(x / r);
-    for (let i = 0; i < 4; i++) t = a + Math.asin(x / edge(t));
-    return t;
-  };
-  const gaps = doors.map(([a, o]) => ({ a, o, s: onFace(a, o - half), e: onFace(a, o + half) })).sort((p, q) => p.s - q.s);
-  const pts: THREE.Vector2[] = [];
-  for (let i = 0; i < gaps.length; i++) {
-    const { a, o, s: s0, e: e0 } = gaps[i], s1 = gaps[(i + 1) % gaps.length].s + (i + 1 === gaps.length ? Math.PI * 2 : 0);
-    // (At each notch's mouth: on the drum's face, straight in to the arc, round it and out again.)
-    const i0 = a + Math.asin((o - half) / inR), i1 = a + Math.asin((o + half) / inR);
-    pts.push(at(s0, edge(s0)));
-    for (let j = 0; j <= 6; j++) pts.push(at(i0 + ((i1 - i0) * j) / 6, inR));
-    pts.push(at(e0, edge(e0)));
-    for (let c = Math.ceil(e0 / step + 1e-6); c * step < s1 - 1e-6; c++) pts.push(at(c * step, r));
-  }
-  const shape = new THREE.Shape(pts);
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: top - sill, bevelEnabled: false, curveSegments: 1 }).rotateX(-Math.PI / 2);
-  // (For the geometry audit: the whole drum, marked as notched where its doorways open.)
-  geo.userData.ring = [0, r];
-  geo.userData.notched = true;
-  wrapped(k.mesh(g, geo, color, [0, sill, 0]));
+function drumShaft(k: ModelKit, g: THREE.Object3D, r: number, y0: number, y1: number, color: number, doors: [number, number][], sill: number) {
+  const wd = walkDoor();
+  const notches = doors.map(([a, o]) => ({ a, o, half: wd.L / 2 - 0.035, back: r - wd.back + 0.04, y0: sill, y1: sill + wd.top }));
+  drum(k, g, { r, y0, y1, n: drumStones(r), notches }, color);
 }
 
 /**
@@ -1287,7 +1322,7 @@ function drumShaft(k: ModelKit, g: THREE.Object3D, r: number, y0: number, y1: nu
  * stands out over the battered plinth and rises to the first band.
  */
 export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number, o: number, y: number, foot = 0) {
-  const { w: W, h } = DOORS.single, rise = Math.min(W * 0.866, h * 0.62), { ys } = pointedArch(W, h, 8, rise);
+  const { w: W, h } = DOORS.single, rise = Math.min(W * 0.866, h * 0.62);
   const wd = walkDoor(), L = foot ? W + 0.6 : wd.L, top = foot ? 3.9 - y : wd.top, back = foot ? 0.08 : wd.back, deep = foot ? 0.62 : wd.out;
   const R = r + (deep - back) / 2, dep = deep + back;
   // (The doorway faces straight down the walk that comes to it, its middle on the walk's middle: the
@@ -1314,22 +1349,18 @@ export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number
     ];
     k.mesh(f, geo, ASHLAR_L, [0, y, 0]);
   }
-  // The hood: a band following the arch a little out from the opening, proud of the surround's face.
+  // The ring of dressed voussoirs round the arch and down its jambs, laid on the surround's face and
+  // bent to the drum's curve with it.
   {
-    const band = (ww: number, hh: number) => pointedArch(ww, hh, 12, rise + (hh - h)).arc;
-    const outer = band(W + 0.5, h + 0.25), inner = band(W + 0.26, h + 0.13), sh = new THREE.Shape();
-    sh.moveTo(outer[0][0], outer[0][1]);
-    for (const [x, yy] of outer) sh.lineTo(x, yy);
-    for (let i = outer.length - 2; i >= 0; i--) sh.lineTo(-outer[i][0], outer[i][1]);
-    for (const [x, yy] of inner) sh.lineTo(-x, yy);
-    for (let i = inner.length - 2; i >= 0; i--) sh.lineTo(inner[i][0], inner[i][1]);
-    sh.closePath();
-    const geo = cutRound(new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, -0.05), r + deep + 0.04, o);
-    geo.userData.hollow = true;
-    k.mesh(f, geo, TRIM, [0, y, 0]);
-    for (const sx of [-1, 1]) {
-      const x = o + sx * (W / 2 + 0.19), rr = r + deep + 0.06;
-      cb(k, f, [0.2, 0.2, 0.14], [x, y + ys - 0.02, Math.sqrt(rr * rr - x * x)], TRIM, [0, Math.asin(x / rr), 0], 0.02);
+    const Rf = r + deep;
+    for (const st of dressedArch({ w: W, h, rise, t: 0.24, p: 0.06, dep: 0.02, n: 3, kw: 0.3, foot: 0, grid: y, seed: Math.floor(hash01(r, a, y) * 97) })) {
+      const flat = st.geo.userData.boxes as number[][], geo = cutRound(st.geo, Rf, o);
+      // (For the geometry audit: each stone's bounds bent round with it.)
+      geo.userData.boxes = flat.map(([x0, y0, z0, x1, y1, z1]) => {
+        const xc = (x0 + x1) / 2 + o, rad = Rf + (z0 + z1) / 2;
+        return { c: [xc, (y0 + y1) / 2, Math.sqrt(rad * rad - xc * xc)], h: [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], ry: Math.asin(xc / rad) };
+      });
+      k.mesh(f, geo, DRESS, [0, y, 0]);
     }
   }
   // The leaf stands square across the way at the back of the reveal: on the plinth's face at a drum's
@@ -1339,7 +1370,7 @@ export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number
   // The threshold across the opening, from under the leaf out over the face, a step proud of the
   // walk's deck that runs in to it.
   const rt = r + deep + 0.1, t0 = foot ? r : zLeaf - 0.05, t1 = Math.sqrt(rt * rt - o * o);
-  cb(k, f, [W + 0.02, 0.1, t1 - t0], [o, sill - 0.05, (t0 + t1) / 2], ASHLAR_L, undefined, 0.02);
+  cb(k, f, [W + 0.02, 0.1, t1 - t0], [o, sill - 0.05, (t0 + t1) / 2], DRESS, undefined, 0.02);
   const d = new THREE.Group();
   d.position.set(o, sill, zLeaf);
   f.add(d);
@@ -1347,17 +1378,14 @@ export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number
 }
 
 /**
- * The castle's single door on a face at z (facing +Z), its sill at (x, y): pale dressed jambs and
- * voussoirs round its pointed head, a blue-grey hood with label stops, a threshold, and the one blue
- * leaf set in the reveal behind them.
+ * The castle's single door on a face at z (facing +Z), its sill at (x, y): a dressed ring of the
+ * castle's stone round its pointed head and down its jambs, a threshold, and the one blue leaf set in
+ * the reveal behind them.
  */
 export function singleDoor(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number) {
-  const { w: W, h } = DOORS.single, rise = Math.min(W * 0.866, h * 0.62), { ys } = pointedArch(W, h, 8, rise);
-  for (const sx of [-1, 1]) cb(k, g, [0.24, ys, 0.1], [x + sx * (W / 2 + 0.12), y + ys / 2, z + 0.03], ASHLAR_L, undefined, 0.02);
-  archRing(k, g, x, y, z - 0.02, W, h, ASHLAR_L, { n: 4, t: 0.24, p: 0.1, out: 0, key: ASHLAR_L, rise });
-  archRing(k, g, x, y, z, W + 0.6, h + 0.32, TRIM, { n: 4, t: 0.12, p: 0.12, out: 0, rise: rise + 0.3 });
-  for (const sx of [-1, 1]) cb(k, g, [0.18, 0.22, 0.16], [x + sx * (W / 2 + 0.42), y + ys - 0.08, z + 0.08], TRIM, undefined, 0.02);
-  cb(k, g, [W + 0.3, 0.1, 0.5], [x, y - 0.05, z + 0.1], ASHLAR_L, undefined, 0.02);
+  const { w: W, h } = DOORS.single, rise = Math.min(W * 0.866, h * 0.62);
+  archRing(k, g, x, y, z, W, h, { n: 4, t: 0.3, p: 0.08, dep: 0.02, rise, jamb: true });
+  cb(k, g, [W + 0.3, 0.1, 0.5], [x, y - 0.05, z + 0.1], DRESS, undefined, 0.02);
   // (The leaf stands on the face it is set in, inside the reveal its jambs and voussoirs make.)
   const d = new THREE.Group();
   d.position.set(x, y, z + 0.03);
@@ -1366,13 +1394,17 @@ export function singleDoor(k: ModelKit, g: THREE.Object3D, x: number, y: number,
 }
 
 /**
- * A round tower of radius r (the round_tower and corner_tower props): a battered plinth, a drum rising
- * a full storey or more over the wall walk (+7) to its platform at H + 1.4, blue-grey bands level with
- * the curtain's string courses and a broad one under the corbels, and on top a corbelled parapet ring
- * with merlons. A plain tower's platform is paved as a compass rose; a corner tower (or a stair
- * tower, `spire`) carries a gilt frieze and a spire instead. `walks`: where the curtain's wall walks
- * come to it ([bearing, offset] pairs), a doorway onto each; `door`: the bearing of a door at its foot;
- * `out`: the bearing it faces out from the castle, its arrow loops in two rows round that side.
+ * A round tower of radius r (the round_tower and corner_tower props), laid in rings of flat stones as
+ * a stone tower is (see drum): a deep, battered base course, a drum rising a full storey or more over
+ * the wall walk (+7) to its platform at H + 1.4, a string course and the course under the wall walk
+ * level with the curtain's (CURTAIN_COURSES), a band under the crown, and the crown (a parapet ring on
+ * a course stepped out from the drum, merlons), all in the castle's one stone on the course lines. Each
+ * course that stands proud is the drum's own course at that height, the same stones a little larger,
+ * so the bond runs on through it. A plain tower's platform is paved as a compass rose; a corner tower
+ * (or a stair tower, `spire`) carries a gilt frieze for its band and a spire. `walks`: where the
+ * curtain's wall walks come to it ([bearing, offset] pairs), a doorway onto each; `door`: the bearing
+ * of a door at its foot; `out`: the bearing it faces out from the castle, its arrow loops in two rows
+ * round that side.
  */
 export interface TowerOpts {
   walks?: [number, number][];
@@ -1381,27 +1413,19 @@ export interface TowerOpts {
   spire?: boolean;
 }
 function drumTower(k: ModelKit, g: THREE.Object3D, r: number, H: number, corner: boolean, opt: TowerOpts = {}) {
-  const N = 20, P = H + 1.4, spired = corner || !!opt.spire;
-  // Plinth, its slate course and the weathered course above it at the curtain's own heights, and
-  // bands level with the curtain's string courses (3.6, 5.6 and the wall walk's at 6.92), so every
-  // line runs on round the drums without a step.
-  wrapped(k.cyl(g, r + 0.15, r + 0.5, 1.1, [0, 0.55, 0], TRIM_D, undefined, N));
-  drumShaft(k, g, r, 1.1, P, N, ASHLAR, opt.walks ?? [], DOORS.walk.y);
-  wrapped(k.cyl(g, r + 0.03, r + 0.03, 0.5, [0, 1.5, 0], ASHLAR_W, undefined, N));
-  for (const y of [3.6, 5.6, 6.92]) wrapped(k.cyl(g, r + 0.1, r + 0.1, y === 3.6 ? 0.3 : 0.22, [0, y, 0], TRIM, undefined, N));
-  // (The weathering course lies on the plinth's top, a lip proud of it, never out over its batter.)
-  wrapped(k.cyl(g, r + 0.1, r + 0.21, 0.22, [0, 1.15, 0], TRIM, undefined, N));
-  if (spired) drumFrieze(k, g, 0, 0, r, P - 1.75, N);
-  else wrapped(k.cyl(g, r + 0.08, r + 0.08, 0.5, [0, P - 1.7, 0], TRIM, undefined, N));
+  const N = 20, P = H + 1.4, spired = corner || !!opt.spire, top = crownFoot(P);
+  drumFoot(k, g, r, r + 0.5, r + 0.15);
+  drumShaft(k, g, r, BASE_COURSE, P, ASHLAR, opt.walks ?? [], DOORS.walk.y);
+  for (const y of CURTAIN_COURSES) drumCourse(k, g, r, 0.06, y);
+  if (spired) drumFrieze(k, g, 0, 0, r, top - 1.5 * COURSE, N);
+  else drumCourse(k, g, r, 0.06, top - 2 * COURSE);
   crown(k, g, 0, 0, r, P, N, !spired);
   for (const [a, o] of opt.walks ?? []) drumDoorway(k, g, r, a, o, DOORS.walk.y);
   if (opt.door !== undefined) drumDoorway(k, g, r, opt.door, 0, 0, 0.5);
   // Arrow loops: three to a row across the outward side, evenly spaced, one row in each storey (between
-  // the bands), none where a wall or a doorway meets the drum.
+  // the courses), none where a wall or a doorway meets the drum.
   if (opt.out !== undefined) {
     const busy = [...(opt.walks ?? []).map(([a]) => a), ...(opt.door !== undefined ? [opt.door] : [])];
-    const ap = r * Math.cos(Math.PI / N);
-    // (Each on the middle of a facet, so its flat surround lies on the drum's face.)
     const step = (Math.PI * 2) / N;
     for (const da of [-0.95, 0, 0.95]) {
       const a = (Math.round((opt.out + da) / step - 0.5) + 0.5) * step;
@@ -1409,19 +1433,19 @@ function drumTower(k: ModelKit, g: THREE.Object3D, r: number, H: number, corner:
       const f = new THREE.Group();
       f.rotation.y = a;
       g.add(f);
-      for (const y of [4.6, 8.9]) arrowLoop(k, f, 0, y, ap);
+      for (const y of LOOP_ROWS) arrowLoop(k, f, 0, y, r);
     }
   }
   if (spired) spire(k, g, 0, P + 0.9, 0, r + 0.1, r * 1.75, N, 1, 1.5);
 }
 
 /**
- * A blue-slate spire whose foot (radius r) stands at y over (x, z), `h` tall, on a blue-grey eave:
+ * A blue-slate spire whose foot (radius r) stands at y over (x, z), `h` tall, on a stone eave:
  * two thin gilt bands round it (at the foot and two thirds up), a gilt ball-and-spike finial on the
  * point and, when `pennant` is ±1, a small house pennant on the spike flying that way along X.
  */
 export function spire(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, r: number, h: number, N: number, pennant = 0, size = 1) {
-  k.cyl(g, r + 0.12, r + 0.12, 0.16, [x, y + 0.08, z], TRIM, undefined, N);
+  k.cyl(g, r + 0.12, r + 0.12, 0.16, [x, y + 0.08, z], DRESS, undefined, N);
   const y0 = y + 0.16;
   k.cone(g, r, h, [x, y0 + h / 2, z], SLATE_BLUE, undefined, N);
   for (const f of [0.04, 0.64]) {
@@ -1438,20 +1462,26 @@ export function spire(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: n
   }
 }
 
-/** A gilt frieze one course high on a face (along local X, facing +Z): a blue-grey band, a row of gold diamonds on it. */
+/** A gilt frieze one course high on a face (along local X, facing +Z), centred at y: a course of dressed stone, a row of gold diamonds on it. */
 export function frieze(k: ModelKit, g: THREE.Object3D, len: number, x: number, y: number, z: number) {
-  cb(k, g, [len, 0.38, 0.16], [x, y, z], TRIM, undefined, 0.02);
-  for (let u = -len / 2 + 0.32; u <= len / 2 - 0.3; u += 0.56) k.box(g, [0.2, 0.2, 0.05], [x + u, y, z + 0.09], GILT, [0, 0, Math.PI / 4]);
+  cb(k, g, [len, COURSE, 0.16], [x, y, z], DRESS, undefined, 0.02);
+  for (let u = -len / 2 + 0.4; u <= len / 2 - 0.38; u += 0.8) k.box(g, [0.2, 0.2, 0.05], [x + u, y, z + 0.09], GILT, [0, 0, Math.PI / 4]);
 }
 
-/** The same gilt frieze round a drum of radius r centred at (x, z), at height y. */
+/**
+ * The same gilt frieze round a drum of radius r centred at (x, z), its course centred at height y: the
+ * drum's own course standing proud, the diamonds evenly round it.
+ */
 export function drumFrieze(k: ModelKit, g: THREE.Object3D, x: number, z: number, r: number, y: number, N: number) {
-  wrapped(k.cyl(g, r + 0.1, r + 0.1, 0.38, [x, y, z], TRIM, undefined, N));
-  // (The diamonds lie flat on the band's faces, the same number on each, never across a crease.)
-  const step = (Math.PI * 2) / N, fw = 2 * (r + 0.1) * Math.sin(Math.PI / N), m = Math.max(1, Math.round(fw / 0.58)), ap = (r + 0.1) * Math.cos(Math.PI / N) + 0.02;
-  for (let i = 0; i < N; i++) for (let j = 0; j < m; j++) {
-    const a = (i + 0.5) * step, t = (j + 0.5 - m / 2) * (fw / m);
-    k.box(g, [0.2, 0.2, 0.05], [x + Math.sin(a) * ap + Math.cos(a) * t, y, z + Math.cos(a) * ap - Math.sin(a) * t], GILT, [0, a, Math.PI / 4]);
+  const n = drumStones(r), y0 = y - COURSE / 2, step = (Math.PI * 2) / n, R = r + 0.1;
+  drum(k, g, { r: R, y0, y1: y0 + COURSE, n }, DRESS, x, z);
+  // (Each diamond laid flat on the stone it falls on, two to each of its N bays: the course is turned
+  // half a stone on an odd course line, as laidDrum turns it.)
+  const t0 = (Math.round(y0 / COURSE) % 2) * (step / 2), m = 2 * N;
+  for (let i = 0; i < m; i++) {
+    const a = ((i + 0.5) / m) * Math.PI * 2, f = t0 + (Math.floor((a - t0) / step) + 0.5) * step;
+    const d = (R * Math.cos(step / 2)) / Math.cos(a - f);
+    k.box(g, [0.2, 0.2, 0.05], [x + Math.sin(a) * d + Math.sin(f) * 0.025, y, z + Math.cos(a) * d + Math.cos(f) * 0.025], GILT, [0, f, Math.PI / 4]);
   }
 }
 
@@ -1492,53 +1522,23 @@ function clothPoint(w: number, h: number, d: number) {
 }
 
 /**
- * The glass's own sheen, a repeating texture laid on a pane (about three units across): clear glass
- * with the faintest cool tint, almost wholly see-through, and one soft broad sheen of the sky's light
- * running across it on the diagonal, where it shows a little paler, as polished glass catches the light.
+ * The castle's window glass: clear panes with a cool tint, plainly see-through to the dim room (or
+ * recess) behind (the tint a dark cool grey, so it cools and deepens what shows through it rather than
+ * lying over it as a lit film); polished, so the sky's light sheens across a pane only at a glancing
+ * look (a reflection that grows with the angle, as real glass does), never a painted streak. One
+ * material per kit, so a building's cut takes it with its walls; it casts no shadow.
  */
-let sheenTex: THREE.DataTexture | null = null;
-export function glassSheen() {
-  if (sheenTex) return sheenTex;
-  const N = 64, data = new Uint8Array(N * N * 4), tint = new THREE.Color(0xc4dcf4), pale = new THREE.Color(0xf4faff), c = new THREE.Color();
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const t = (((x + y) / N) % 1 + 1) % 1, band = (m: number, w: number) => Math.max(0, 1 - Math.abs(t - m) / w);
-    const streak = band(0.4, 0.3) ** 2;
-    c.copy(tint).lerp(pale, streak);
-    const i = (y * N + x) * 4;
-    data[i] = Math.round(c.r * 255);
-    data[i + 1] = Math.round(c.g * 255);
-    data[i + 2] = Math.round(c.b * 255);
-    data[i + 3] = Math.round(255 * (0.18 + 0.16 * streak));
-  }
-  sheenTex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
-  sheenTex.wrapS = sheenTex.wrapT = THREE.RepeatWrapping;
-  // (One tile spans about three units, so a window shows one soft sheen, never stripes.)
-  sheenTex.repeat.set(0.34, 0.34);
-  sheenTex.magFilter = THREE.LinearFilter;
-  sheenTex.minFilter = THREE.LinearMipmapLinearFilter;
-  sheenTex.generateMipmaps = true;
-  sheenTex.colorSpace = THREE.SRGBColorSpace;
-  sheenTex.needsUpdate = true;
-  return sheenTex;
-}
-
-/**
- * The castle's window glass: clear panes with a slight cool tint and a soft sheen of the sky's light
- * across them (glassSheen), polished so the sky glances off them at a slant, plainly see-through to
- * the room (or the dim recess) behind. One material per kit, so a building's cut takes it with its
- * walls; it casts no shadow.
- */
-export function windowGlass(opacity = 0.45) {
+export function windowGlass() {
   const m = new THREE.MeshStandardMaterial({
-    map: glassSheen(), transparent: true, opacity, depthWrite: false, roughness: 0.05, metalness: 0.0,
-    envMap: studioEnv(), envMapIntensity: 1.2, flatShading: true,
+    color: 0x24363e, transparent: true, opacity: 0.2, depthWrite: false, roughness: 0.04, metalness: 0.0,
+    envMap: studioEnv(), envMapIntensity: 1.6, flatShading: true,
   });
-  // (Like real glass it grows more reflective, less see-through, toward a glancing view: clear face
-  // on, a faint sky over it at a slant.)
+  // (Clear face on, the sky over it at a slant: the pane grows more reflective and less see-through
+  // the more glancing the look.)
   addPatch(m, { key: 'glass-fresnel', apply: (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{
-      float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 4.0);
-      diffuseColor.a = clamp(diffuseColor.a + fres * 0.45, 0.0, 1.0);
+      float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 5.0);
+      diffuseColor.a = clamp(diffuseColor.a + fres * 0.6, 0.0, 1.0);
     }
     #include <opaque_fragment>`);
   } });
@@ -1558,60 +1558,27 @@ export function glassMat(k: ModelKit) {
   return m;
 }
 /**
- * The room seen through a window, painted on a plate behind the glass as a chamber drawn in depth: its
- * far wall of warm plaster lit by a candle sconce either side, a blue tapestry edged in gold hanging
- * between them, side walls falling into shade toward the window, a board floor with a crimson rug
- * running back to the far wall and dark beams overhead. So a window reads as clear glass onto a room,
- * never as a blind panel. Unlit rooms show the same chamber in cool shadow.
+ * The room seen through a window, painted on a plate a little behind the glass: dim and warm, the light
+ * of a hearth or a candle pooled low in its middle and falling away into shadow toward the frame, the
+ * far wall a touch lighter where it catches the glow. No walls or floor are drawn in it (a chamber
+ * drawn in depth reads as a corridor through the glass). Unlit rooms show the same dim depth, cooler.
  */
 let roomTex: THREE.DataTexture | null = null;
 function roomGlow() {
   if (roomTex) return roomTex;
-  const W = 64, H = 128, data = new Uint8Array(W * H * 4), c = new THREE.Color();
-  const plaster = new THREE.Color(0xc89e72), side = new THREE.Color(0x9a7654), floor = new THREE.Color(0x6a4a32), rug = new THREE.Color(0xa0322c);
-  const beam = new THREE.Color(0x3e2e20), ceil = new THREE.Color(0x7a5a42), blue = new THREE.Color(0x2c4a8c), gold = new THREE.Color(0xd2a64a), warm = new THREE.Color(0xffd08a);
-  // The far wall's size as a share of the opening, and the room's vanishing point.
-  const S = 0.56, cu = 0.5, cv = 0.56;
+  const W = 32, H = 64, data = new Uint8Array(W * H * 4), c = new THREE.Color(), s = { r: 0, g: 0, b: 0 };
+  const dark = new THREE.Color(0x1c140f), wall = new THREE.Color(0x4e3a29), warm = new THREE.Color(0xc4874c);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const u = (x + 0.5) / W, v = (y + 0.5) / H, du = u - cu, dv = v - cv;
-    const tu = Math.abs(du) / 0.5, tv = dv < 0 ? -dv / cv : dv / (1 - cv), t = Math.max(tu, tv);
-    if (t <= S) {
-      // The far wall, in its own coordinates (0..1 across and up).
-      const bu = (du + S * 0.5) / S, wv = (dv + S * cv) / S, wu = Math.abs(bu - 0.5);
-      c.copy(plaster).multiplyScalar(0.82 + 0.18 * (1 - wu * 2));
-      // The tapestry: gold edge, blue field, the gold diamond.
-      if (wu < 0.2 && wv > 0.28 && wv < 0.86) {
-        const edge = Math.min(0.2 - wu, wv - 0.28, 0.86 - wv) < 0.035;
-        const diamond = Math.abs(bu - 0.5) / 0.09 + Math.abs(wv - 0.58) / 0.12 < 1;
-        c.copy(edge || diamond ? gold : blue);
-      }
-      // The sconces' light pooled on the wall either side.
-      for (const su of [0.12, 0.88]) {
-        const d = Math.hypot((bu - su) * 1.4, wv - 0.56);
-        c.lerp(warm, 0.75 * Math.max(0, 1 - d / 0.22) ** 2);
-        if (d < 0.035) c.copy(warm);
-      }
-    } else {
-      // Which face of the room the point lies on, and how far out toward the window (0 at the far wall).
-      const depth = (t - S) / (1 - S);
-      if (tu >= tv) c.copy(side);
-      else if (dv < 0) {
-        // The floor: boards running back to the far wall, the rug down the middle.
-        const lat = du / Math.max(1e-3, -dv / cv);
-        c.copy(Math.abs(lat) < 0.2 ? rug : floor);
-        if (Math.abs(lat) >= 0.2 && Math.abs(((lat * 6) % 1 + 1) % 1 - 0.5) > 0.44) c.multiplyScalar(0.7);
-      } else {
-        // The ceiling: beams across it.
-        const along = Math.log(t / S) * 9;
-        c.copy(((along % 1) + 1) % 1 < 0.45 ? beam : ceil);
-      }
-      // Into shade toward the window, away from the candles.
-      c.multiplyScalar(1 - 0.32 * depth);
-    }
+    const u = (x + 0.5) / W, v = (y + 0.5) / H;
+    // (The glow broad and low, the wall a little lit all across, shading off toward the frame and up.)
+    const glow = Math.exp(-(((u - 0.5) / 0.45) ** 2 + ((v - 0.3) / 0.4) ** 2)), frame = Math.min(1, Math.min(u, 1 - u) * 5);
+    c.copy(dark).lerp(wall, (0.35 + 0.5 * frame) * (1 - 0.45 * v)).lerp(warm, 0.5 * glow);
+    // (Written in sRGB, the space the texture is read in.)
+    c.getRGB(s, THREE.SRGBColorSpace);
     const i = (y * W + x) * 4;
-    data[i] = Math.round(Math.min(1, c.r) * 255);
-    data[i + 1] = Math.round(Math.min(1, c.g) * 255);
-    data[i + 2] = Math.round(Math.min(1, c.b) * 255);
+    data[i] = Math.round(s.r * 255);
+    data[i + 1] = Math.round(s.g * 255);
+    data[i + 2] = Math.round(s.b * 255);
     data[i + 3] = 255;
   }
   roomTex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat);
@@ -1857,19 +1824,6 @@ export function archPane(w: number, h: number, dep: number) {
   return g;
 }
 
-/** A flat piece cut to an outline in the XY plane, from z0 to z1. */
-function plate(pts: [number, number][], z0: number, z1: number) {
-  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))), { depth: z1 - z0, bevelEnabled: false, curveSegments: 1 }).translate(0, 0, z0);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-/** Mark a mesh as one dressed stone: painted whole, no joints across it (masonry.ts). */
-export function stone<T extends THREE.Object3D>(m: T): T {
-  m.userData.single = true;
-  return m;
-}
-
 /**
  * The stones of a pointed arch (`w` wide, apex `h` above the sill at y = 0, centred on x = 0, the
  * arch rising `rise` over its springing) laid between `r0` and `r1` out from the opening's edge, as
@@ -1897,69 +1851,112 @@ export function archStones(w: number, h: number, rise: number | undefined, r0: n
   return out;
 }
 
-/**
- * Stones laid round a pointed arch (`w` wide, apex `h` above the sill, sill at y0, centred on x), on a
- * face at z (facing +Z): voussoirs `t` deep standing proud `p` of the face, `n` to each side, cut on
- * radial joints, closing on a keystone (in `key`'s colour when given); `out` sets them out from the
- * opening's edge. A `band` is one continuous moulding round the arch instead of separate stones.
- */
-export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, z: number, w: number, h: number, color: number, opt: { n?: number; t?: number; p?: number; out?: number; key?: number; rise?: number; band?: boolean } = {}) {
-  const { n = 5, t = 0.26, p = 0.14, out = 0 } = opt;
-  if (opt.band) {
-    // One outline: up the right-hand arc's outer edge, over the apex, down the left and back inside.
-    const { ys, c, R } = pointedArch(w, h, 2, opt.rise), apex = (d: number) => Math.atan2(Math.sqrt(Math.max(0, (R + d) ** 2 - c * c)), c);
-    const arc = (d: number, k2 = 16) => Array.from({ length: k2 + 1 }, (_, i) => [-c + (R + d) * Math.cos((apex(d) * i) / k2), ys + (R + d) * Math.sin((apex(d) * i) / k2)] as [number, number]);
-    const o = arc(out + t), inn = arc(out);
-    const pts: [number, number][] = [...o, ...o.slice(0, -1).reverse().map(([px, py]) => [-px, py] as [number, number]), ...inn.map(([px, py]) => [-px, py] as [number, number]), ...inn.slice(0, -1).reverse()];
-    return void stone(k.mesh(g, plate(pts, 0, p), color, [x, y0, z]));
-  }
-  for (const s of archStones(w, h, opt.rise, out, out + t, n, opt.key !== undefined ? 0.34 : t * 1.2)) stone(k.mesh(g, plate(s.pts, 0, p), s.place === 0 && opt.key !== undefined ? opt.key : color, [x, y0, z]));
+/** Add a laid quad turned so its face looks along `toward` (corners in either order round it). */
+function laidFace(L: Laid, c: [LaidCorner, LaidCorner, LaidCorner, LaidCorner], toward: [number, number, number], cut: Parameters<Laid['quad']>[1]) {
+  const [a, b, d] = [c[0], c[1], c[2]];
+  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = d[0] - a[0], vy = d[1] - a[1], vz = d[2] - a[2];
+  const n = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+  L.quad(n[0] * toward[0] + n[1] * toward[1] + n[2] * toward[2] >= 0 ? c : [c[0], c[3], c[2], c[1]], cut);
 }
 
 /**
- * The dressed surround of a pointed opening `w` wide, its apex `h` over the sill at y = 0, centred on
- * x = 0 in a face at z = 0 (facing +Z): one ring of stones `t` wide round the arch and down both
- * jambs to `foot`, the stones in two tones alternating all the way round from the keystone (pale) to
- * the foot, every one flush in one plane `p` proud of the face and `dep` deep into the reveal, and a
- * blue-grey moulding `hood` wide close round the outside of the ring from foot to foot, one
- * unbroken line. Returns the pieces (outline geometry, colour and the height of its foot), so a
- * caller that splits its walls by height can place each piece in its own band.
+ * The dressed ring of a pointed opening, in a face at z = 0 facing +Z, as stones that each lay their own
+ * joints (masonry.ts, Laid): the opening `w` wide with its apex `h` over the sill at y = 0, centred on
+ * x = 0, its arch rising `rise` over the springing; the ring `t` wide all round, `out` beyond the
+ * opening's edge (inside it when negative), standing `p` proud of the face and running `dep` back into
+ * the reveal, all one stone. Its `n` voussoirs a side are cut on the arch's radial joints (archStones),
+ * closing on a keystone `kw` wide; with `foot` it runs on down both jambs as stones bedded on the
+ * walling's course lines (`grid`: how far over the line the courses are counted from the sill stands),
+ * none under a quarter course. The face's inner edge and the reveal's front edge are arrises. Each stone
+ * comes with the height of its foot, and its bounds for the geometry audit, so a caller that splits its
+ * walls by height can set each stone in its own band.
  */
-export function archDressing(w: number, h: number, rise: number, opt: { foot: number; t?: number; p?: number; dep?: number; hood?: number; tones?: [number, number]; hoodColor?: number; inset?: number }) {
+export function dressedArch(o: { w: number; h: number; rise?: number; t: number; p: number; dep: number; out?: number; n: number; kw?: number; foot?: number; grid?: number; seed?: number }) {
+  const { w, h, t, p, dep, out = 0, n, kw = 0.4, grid = 0, seed = 0 } = o;
+  const { ys } = pointedArch(w, h, 2, o.rise), x0 = w / 2 + out, x1 = x0 + t;
+  const stones: { geo: THREE.BufferGeometry; y: number }[] = [];
+  const length = (q: [number, number][]) => q.slice(1).reduce((a, v, i) => a + Math.hypot(v[0] - q[i][0], v[1] - q[i][1]), 0);
+  let X = 0;
+  /** One stone from its inner and outer edges, both in the ring's own order (up the left, down the right). */
+  const lay = (inner: [number, number][], outer: [number, number][]) => {
+    const L = new Laid(seed), k = inner.length - 1, len = (length(inner) + length(outer)) / 2;
+    const Xs = inner.map((_, i) => X + i / k);
+    for (let i = 0; i < k; i++) {
+      const a = inner[i], b = inner[i + 1], c = outer[i + 1], d = outer[i];
+      // The face; the reveal under the stone, toward the opening; and its edge standing proud of the wall.
+      laidFace(L, [[a[0], a[1], p, Xs[i], 0], [b[0], b[1], p, Xs[i + 1], 0], [c[0], c[1], p, Xs[i + 1], 1], [d[0], d[1], p, Xs[i], 1]], [0, 0, 1], { l: len, h: t, mode: 2, cs: 0, ce: 2 });
+      laidFace(L, [[a[0], a[1], p, Xs[i], 1], [b[0], b[1], p, Xs[i + 1], 1], [b[0], b[1], -dep, Xs[i + 1], 0], [a[0], a[1], -dep, Xs[i], 0]], [a[0] - d[0], a[1] - d[1], 0], { l: len, h: p + dep, mode: 2, cs: -1, ce: 1 });
+      laidFace(L, [[d[0], d[1], 0, Xs[i], 0], [c[0], c[1], 0, Xs[i + 1], 0], [c[0], c[1], p, Xs[i + 1], 1], [d[0], d[1], p, Xs[i], 1]], [d[0] - a[0], d[1] - a[1], 0], { l: len, h: p, mode: 2, cs: -1, ce: 1 });
+    }
+    const geo = L.build(), all = [...inner, ...outer];
+    // (For the geometry audit: the stone's own bounds, never the opening it frames.)
+    geo.userData.boxes = [[Math.min(...all.map((q) => q[0])), Math.min(...all.map((q) => q[1])), -dep, Math.max(...all.map((q) => q[0])), Math.max(...all.map((q) => q[1])), p]];
+    stones.push({ geo, y: Math.min(...all.map((q) => q[1])) });
+    X += 1;
+  };
+  // The jambs' beds: on the course lines between the foot and the springing, a quarter course clear of both.
+  const beds: number[] = [];
+  if (o.foot !== undefined) {
+    beds.push(o.foot);
+    for (let k = Math.ceil((o.foot + grid) / COURSE); k * COURSE - grid < ys; k++) {
+      const y = k * COURSE - grid;
+      if (y > o.foot + COURSE / 2 - 1e-6 && y < ys - COURSE / 2 + 1e-6) beds.push(y);
+    }
+    beds.push(ys);
+  }
+  for (let i = 0; i + 1 < beds.length; i++) lay([[-x0, beds[i]], [-x0, beds[i + 1]]], [[-x1, beds[i]], [-x1, beds[i + 1]]]);
+  const ring = archStones(w, h, o.rise, out, out + t, n, kw), half = (q: [number, number][]) => q.length / 2;
+  // Up the left side from the springing, the keystone, and down the right side to the springing.
+  for (const st of ring.filter((q) => q.place > 0 && q.pts[0][0] < 0).sort((a, b) => b.place - a.place)) {
+    const m = half(st.pts);
+    lay(st.pts.slice(m).reverse(), st.pts.slice(0, m));
+  }
+  const key = ring.find((q) => q.place === 0)!, km = half(key.pts);
+  lay(key.pts.slice(0, km).reverse(), key.pts.slice(km));
+  for (const st of ring.filter((q) => q.place > 0 && q.pts[0][0] > 0).sort((a, b) => a.place - b.place)) {
+    const m = half(st.pts);
+    lay(st.pts.slice(0, m).reverse(), st.pts.slice(m));
+  }
+  for (let i = beds.length - 1; i > 0; i--) lay([[x0, beds[i]], [x0, beds[i - 1]]], [[x1, beds[i]], [x1, beds[i - 1]]]);
+  return stones;
+}
+
+/**
+ * The dressed ring round a pointed arch (`w` wide, apex `h` above the sill, sill at y0, centred on x)
+ * on a face at z (facing +Z), in the castle's dressed stone: voussoirs `t` wide standing `p` proud of
+ * the face, `n` to each side, cut on radial joints and closing on a keystone, `out` beyond the opening's
+ * edge, running `dep` back into the reveal; with `jamb` it carries on down both jambs to the sill, laid
+ * on the walling's courses (see dressedArch).
+ */
+export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, z: number, w: number, h: number, opt: { n?: number; t?: number; p?: number; dep?: number; out?: number; rise?: number; jamb?: boolean } = {}) {
+  const { n = 5, t = 0.26, p = 0.14, dep = 0.06, out = 0 } = opt;
+  for (const st of dressedArch({ w, h, rise: opt.rise, t, p, dep, out, n, kw: t * 1.3, foot: opt.jamb ? 0 : undefined, grid: y0, seed: Math.floor(hash01(x, y0, z) * 97) })) k.mesh(g, st.geo, DRESS, [x, y0, z]);
+}
+
+/**
+ * The dressed surround of a pointed doorway `w` wide, its apex `h` over the sill at y = 0, centred on
+ * x = 0 in a face at z = 0 (facing +Z): one ring of the castle's dressed stone `t` wide round the arch
+ * and down both jambs to `foot` (see dressedArch), flush in one plane `p` proud of the face and `dep`
+ * deep into the reveal. Returns the stones (each a geometry with the height of its foot), so a caller
+ * that splits its walls by height can place each stone in its own band.
+ */
+export function archDressing(w: number, h: number, rise: number, opt: { foot: number; t?: number; p?: number; dep?: number; inset?: number; grid?: number }) {
   // (`inset`: the surround's inner face stands that far inside the opening, so it never lies in one
   // plane with the end of a wall cut to the opening behind it.)
-  const { foot, t = 0.34, p = 0.08, dep = 0.3, hood = 0.14, tones = [ASHLAR_L, TRIM], hoodColor = TRIM, inset = 0 } = opt;
-  const { ys, c, R } = pointedArch(w, h, 2, rise), hw = w / 2;
-  const arcLen = R * Math.atan2(Math.sqrt(Math.max(0, (R + t / 2) ** 2 - c * c)), c);
-  const n = Math.max(2, Math.round((arcLen - 0.2) / 0.38));
-  const pieces: { geo: THREE.BufferGeometry; color: number; y: number }[] = [];
-  for (const s of archStones(w, h, rise, -inset, t, n, 0.4)) pieces.push({ geo: plate(s.pts, -dep, p), color: tones[s.place % 2], y: Math.min(...s.pts.map(([, y]) => y)) });
-  // The jambs, in courses from the springing down to the foot, carrying on the ring's alternation.
-  const ys2 = fitCourses(foot, ys, 0.45).reverse();
-  for (let i = 0; i + 1 < ys2.length; i++) {
-    const y1 = ys2[i], y0 = ys2[i + 1], tone = tones[(n + 1 + i) % 2];
-    for (const sx of [-1, 1]) {
-      const a = sx * (hw - inset), b = sx * (hw + t);
-      pieces.push({ geo: plate(sx > 0 ? [[a, y0], [b, y0], [b, y1], [a, y1]] : [[b, y0], [a, y0], [a, y1], [b, y1]], -dep, p), color: tone, y: y0 });
-    }
-  }
-  // The moulding: out round the arch and straight down both jambs, in one piece.
-  const apex = (d: number) => Math.atan2(Math.sqrt(Math.max(0, (R + d) ** 2 - c * c)), c);
-  const arc = (d: number) => Array.from({ length: 17 }, (_, i) => [-c + (R + d) * Math.cos((apex(d) * i) / 16), ys + (R + d) * Math.sin((apex(d) * i) / 16)] as [number, number]);
-  const o = arc(t + hood), inn = arc(t), flip = (q: [number, number]) => [-q[0], q[1]] as [number, number];
-  const outline: [number, number][] = [[hw + t, foot], [hw + t + hood, foot], ...o, ...o.slice(0, -1).reverse().map(flip), [-(hw + t + hood), foot], [-(hw + t), foot], ...inn.map(flip), ...inn.slice(0, -1).reverse()];
-  pieces.push({ geo: plate(outline, -dep, p + 0.05), color: hoodColor, y: foot });
-  return pieces;
+  const { foot, t = 0.48, p = 0.08, dep = 0.3, inset = 0, grid = 0 } = opt;
+  const { c, R } = pointedArch(w, h, 2, rise);
+  // Voussoirs about 0.42 along the ring's middle, a keystone a little broader.
+  const arcLen = (R + t / 2) * Math.atan2(Math.sqrt(Math.max(0, (R + t / 2) ** 2 - c * c)), c);
+  const n = Math.max(2, Math.round((arcLen - 0.25) / 0.42));
+  return dressedArch({ w, h, rise, t, p, dep, out: -inset, n, kw: 0.46, foot, grid, seed: Math.floor(hash01(w, h, t) * 97) });
 }
 
 /**
- * A tall pointed lancet on a face at z (facing +Z), its sill at y: the opening sunk into a dressed
- * surround (jambs to the springing, voussoirs round the head) in pale ashlar, one clear pane of glass
- * over the dim room behind it (a faint warm glow when lit), a blue-grey hood mould following the arch
- * with its label stops, and a projecting sill.
+ * A tall pointed lancet on a face at z (facing +Z), its sill at y: the opening framed by a dressed ring
+ * of the castle's stone (jambs to the springing on the walling's courses, voussoirs round the head),
+ * clear glass over the dim room behind it, and a projecting sill.
  */
 export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, lit = true, dress = 1) {
-  const { ys } = pointedArch(w, h);
   // The room behind the glass, then the pane in front of it, both inside the surround's reveal.
   const room = new THREE.Mesh(roomPlate(w, h), roomMat(k, lit));
   room.name = 'room';
@@ -1969,21 +1966,15 @@ export function lancet(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: 
   pane.name = 'glass';
   pane.position.set(x, y, z + 0.07);
   g.add(pane);
-  // The jambs and the ring one width all round, cut on radial joints and closing on a keystone, flush
-  // in one plane; the hood one moulding close round the ring, on label stops at the springing.
-  // (`dress` narrows the surround, so on a slender drum it all lies on one facet.)
-  const jt = 0.2 * dress, ht = 0.12 * dress;
-  for (const sx of [-1, 1]) cb(k, g, [jt, ys + 0.02, 0.24], [x + sx * (w / 2 + jt / 2), y + ys / 2, z - 0.02], ASHLAR_L, undefined, 0.02);
-  archRing(k, g, x, y, z - 0.14, w, h, ASHLAR_L, { n: 4, t: jt, p: 0.24, out: 0 });
-  archRing(k, g, x, y, z - 0.04, w, h, TRIM, { n: 4, t: ht, p: 0.16, out: jt });
-  for (const sx of [-1, 1]) cb(k, g, [jt, 0.22, 0.2], [x + sx * (w / 2 + jt + ht / 2), y + ys - 0.08, z + 0.06], TRIM, undefined, 0.02);
-  cb(k, g, [w + 0.5, 0.14, 0.32], [x, y - 0.07, z + 0.06], ASHLAR_L, undefined, 0.02);
+  // (`dress` narrows the surround, so on a slender drum it hugs the curve.)
+  archRing(k, g, x, y, z, w, h, { n: 3, t: 0.3 * dress, p: 0.1, dep: 0.14, jamb: true });
+  cb(k, g, [w + 0.5, 0.14, 0.32], [x, y - 0.07, z + 0.06], DRESS, undefined, 0.02);
 }
 
 /**
  * A round window (an oculus) of radius `r` on a face at z (facing +Z), centred at (x, y): a ring of
- * pale dressed stone round it with a keystone at each quarter, a blue-grey moulding round that, and
- * one clear pane over the lit room behind.
+ * the castle's dressed stone round it with a keystone at each quarter, and one clear pane over the lit
+ * room behind.
  */
 export function oculus(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, r: number) {
   const n = 16, t = 0.18, ro = r + t;
@@ -1994,12 +1985,11 @@ export function oculus(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: 
     geo.userData.boxes = [[-b, a, 0, b, b, d], [-b, -b, 0, b, -a, d], [-b, -a, 0, -a, a, d], [a, -a, 0, b, a, d]];
     return geo;
   };
-  // (Only just proud of the face, and all of it within one face of a drum.)
-  k.mesh(g, ring(r, ro, 0.1), ASHLAR_L, [x, y, z - 0.02]);
-  k.mesh(g, ring(ro, ro + 0.1, 0.12), TRIM, [x, y, z - 0.02]);
+  // (Only just proud of the face, and hugging a drum's curve.)
+  k.mesh(g, ring(r, ro, 0.1), DRESS, [x, y, z - 0.02]);
   for (let i = 0; i < 4; i++) {
     const a = (i * Math.PI) / 2;
-    cb(k, g, [0.2, t + 0.06, 0.12], [x + Math.sin(a) * (r + t / 2), y + Math.cos(a) * (r + t / 2), z + 0.05], ASHLAR_L, [0, 0, -a], 0.02);
+    cb(k, g, [0.2, t + 0.06, 0.12], [x + Math.sin(a) * (r + t / 2), y + Math.cos(a) * (r + t / 2), z + 0.05], DRESS, [0, 0, -a], 0.02);
   }
   const room = new THREE.Mesh(new THREE.CircleGeometry(r, n), roomMat(k, true));
   room.name = 'room';
@@ -2011,13 +2001,281 @@ export function oculus(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: 
   g.add(pane);
 }
 
+// ─── The glazing kit ─────────────────────────────────────────────────────────
+
 /**
- * The castle's lamp post: a stepped slate base, a navy-lacquered post with a gold collar, a lantern
+ * The castle's window glass (the owner, October 3: see-through glass with a cool blue tint): two thin
+ * sheets in one opening. The first filters what lies behind it, each colour multiplied by the glass's
+ * cool blue as tinted glass does, so the room shows through it clear and cooled, never hazed over.
+ */
+const GLASS_TINT = new THREE.Color().setRGB(0.62, 0.8, 0.96, THREE.LinearSRGBColorSpace);
+const tintMats = new WeakMap<ModelKit, THREE.MeshBasicMaterial>();
+function glassTint(k: ModelKit) {
+  let m = tintMats.get(k);
+  if (!m) {
+    m = new THREE.MeshBasicMaterial({
+      color: GLASS_TINT, transparent: true, depthWrite: false, fog: false, toneMapped: false,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor,
+    });
+    m.userData.decal = true;
+    tintMats.set(k, m);
+  }
+  return m;
+}
+
+/**
+ * The glass's face, over the tint: it gives back only what glass gives back. A faint blue body, the
+ * sky's sheen growing at a glancing look (where less of the room shows through, as on real glass), and
+ * the leading: diamond quarries a quarter of a metre across in thin lead cames, with an iron saddle bar
+ * every three quarters of a metre up.
+ */
+const faceMats = new WeakMap<ModelKit, THREE.MeshStandardMaterial>();
+function glassFace(k: ModelKit) {
+  let m = faceMats.get(k);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      color: 0x000000, roughness: 0.06, metalness: 0, envMap: studioEnv(), envMapIntensity: 0.4,
+      transparent: true, depthWrite: false, premultipliedAlpha: false,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    });
+    addPatch(m, { key: 'glass-face', apply: (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vPane;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPane = position.xy;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vPane;')
+        .replace('#include <opaque_fragment>', `{
+          // (The cames' and bars' distances in metres, antialiased over the pixel.)
+          vec2 q = vec2(vPane.x / 0.25, vPane.y / 0.4);
+          float came = (0.5 - max(abs(fract(q.x + q.y) - 0.5), abs(fract(q.x - q.y) - 0.5))) / length(vec2(4.0, 2.5));
+          float bar = abs(fract(vPane.y / 0.75 + 0.5) - 0.5) * 0.75, fw = max(fwidth(vPane.x), fwidth(vPane.y));
+          float lead = max(1.0 - smoothstep(0.007, 0.007 + fw, came), 1.0 - smoothstep(0.012, 0.012 + fw, bar));
+          float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 5.0);
+          outgoingLight = mix(outgoingLight + vec3(0.006, 0.016, 0.04), vec3(0.03, 0.03, 0.035) + outgoingLight * 0.4, lead);
+          diffuseColor.a = max(lead, fres * 0.85);
+        }
+        #include <opaque_fragment>`);
+    } });
+    m.userData.cloth = true;
+    m.userData.decal = true;
+    m.userData.baseEmissive = new THREE.Color(0);
+    m.userData.baseIntensity = 1;
+    faceMats.set(k, m);
+    k.mats.push(m);
+  }
+  return m;
+}
+
+/** The lit room behind a glazed window: its light is laid into its colours (see litRoom). */
+const roomBoxMats = new WeakMap<ModelKit, THREE.MeshBasicMaterial>();
+function roomBoxMat(k: ModelKit) {
+  let m = roomBoxMats.get(k);
+  if (!m) {
+    m = new THREE.MeshBasicMaterial({ vertexColors: true });
+    m.userData.decal = true;
+    roomBoxMats.set(k, m);
+  }
+  return m;
+}
+
+/** A glazed window's room: `w` wide and `d` deep behind its wall, its floor `floor` under the sill and its ceiling `ceil` over the opening's apex. */
+export interface WindowRoom {
+  w: number;
+  d: number;
+  floor: number;
+  ceil: number;
+}
+
+/**
+ * The room seen through a glazed window (see glazedWindow), built in the window's frame (x across, y
+ * up from the sill, z out of the wall's face, the wall `T` thick, the opening `h` high): a plastered
+ * chamber behind the wall, a boarded floor and a dark ceiling, a crimson tapestry hung on its back wall
+ * over a trestle table with a lit candle on it, a rug under the table and a chest against one wall.
+ * Its light is laid into it as it is built: every surface lit warm by the candle and falling off with
+ * the distance, a little cool daylight from the window on what faces it, the corners dim, so it needs
+ * no light of its own in the scene.
+ */
+function litRoom(h: number, T: number, r: WindowRoom) {
+  const P: number[] = [], Cl: number[] = [];
+  const x0 = -r.w / 2, x1 = r.w / 2, y0 = -r.floor, y1 = h + r.ceil, z0 = -T - r.d, z1 = -T;
+  const tz = z0 + Math.min(0.5, r.d * 0.4), flame = new THREE.Vector3(0.18, y0 + 0.96, tz);
+  type C3 = [number, number, number];
+  const pv = new THREE.Vector3(), nv = new THREE.Vector3(), lv = new THREE.Vector3();
+  /** A surface's light at a point: the candle's warmth, the window's cool daylight, a dim fill. */
+  const lit = (p: THREE.Vector3, n: THREE.Vector3, a: C3): C3 => {
+    const d = lv.subVectors(flame, p).length(), warm = (3.0 * Math.max(0, n.dot(lv) / Math.max(1e-4, d))) / (1 + (d / 0.7) ** 2);
+    const day = (Math.max(0, n.z) * 0.12) / (1 + (z1 - p.z) ** 2);
+    return [a[0] * (0.04 + warm + day * 0.8), a[1] * (0.035 + warm * 0.6 + day * 0.9), a[2] * (0.04 + warm * 0.28 + day)];
+  };
+  /** A flat face from corner `a` along `u` and `v` (its front where u × v points), cut into cells about a fifth of a metre across so its light falls off smoothly; `glow` lights itself. */
+  const face = (a: C3, u: C3, v: C3, col: C3, glow = false) => {
+    const lu = Math.hypot(...u), lv2 = Math.hypot(...v), nu = Math.max(1, Math.ceil(lu / 0.2)), nw = Math.max(1, Math.ceil(lv2 / 0.2));
+    nv.set(u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]).normalize();
+    const at = (i: number, j: number): C3 => [a[0] + (u[0] * i) / nu + (v[0] * j) / nw, a[1] + (u[1] * i) / nu + (v[1] * j) / nw, a[2] + (u[2] * i) / nu + (v[2] * j) / nw];
+    for (let i = 0; i < nu; i++) for (let j = 0; j < nw; j++) {
+      const q = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+      for (const t of [0, 1, 2, 0, 2, 3]) {
+        P.push(...q[t]);
+        Cl.push(...(glow ? col : lit(pv.set(...q[t]), nv, col)));
+      }
+    }
+  };
+  /** A box from `lo` to `hi`, every face out. */
+  const box = (lo: C3, hi: C3, col: C3, glow = false) => {
+    const [ax, ay, az] = lo, [bx, by, bz] = hi, dx = bx - ax, dy = by - ay, dz = bz - az;
+    face([ax, ay, bz], [dx, 0, 0], [0, dy, 0], col, glow);
+    face([bx, ay, az], [-dx, 0, 0], [0, dy, 0], col, glow);
+    face([bx, ay, bz], [0, 0, -dz], [0, dy, 0], col, glow);
+    face([ax, ay, az], [0, 0, dz], [0, dy, 0], col, glow);
+    face([ax, by, bz], [dx, 0, 0], [0, 0, -dz], col, glow);
+    face([ax, ay, az], [dx, 0, 0], [0, 0, dz], col, glow);
+  };
+  const PLASTER_IN: C3 = [0.5, 0.43, 0.33], OAK: C3 = [0.22, 0.13, 0.07], CRIMSON: C3 = [0.34, 0.045, 0.04], GOLD: C3 = [0.62, 0.42, 0.12];
+  // The chamber: back wall, side walls, ceiling, and a floor of boards running back from the window.
+  face([x0, y0, z0], [r.w, 0, 0], [0, y1 - y0, 0], PLASTER_IN);
+  face([x0, y0, z1], [0, 0, z0 - z1], [0, y1 - y0, 0], PLASTER_IN);
+  face([x1, y0, z0], [0, 0, z1 - z0], [0, y1 - y0, 0], PLASTER_IN);
+  face([x0, y1, z0], [r.w, 0, 0], [0, 0, z1 - z0], [0.09, 0.06, 0.04]);
+  const boards = Math.max(1, Math.round(r.w / 0.22));
+  for (let i = 0; i < boards; i++) {
+    const tone = 0.85 + 0.3 * hash01(i, r.w);
+    face([x0 + (i * r.w) / boards, y0, z1], [r.w / boards, 0, 0], [0, 0, z0 - z1], [OAK[0] * tone, OAK[1] * tone, OAK[2] * tone]);
+  }
+  // The tapestry on the back wall on its rod: a gold border round a crimson field and a gold lozenge.
+  const ty = y0 + 1.0, tw = Math.min(1.1, r.w * 0.45), th = Math.min(1.45, y1 - ty - 0.25);
+  box([-tw / 2, ty, z0], [tw / 2, ty + th, z0 + 0.02], GOLD);
+  box([-tw / 2 + 0.07, ty + 0.07, z0 + 0.02], [tw / 2 - 0.07, ty + th - 0.07, z0 + 0.035], CRIMSON);
+  box([-0.12, ty + th / 2 - 0.16, z0 + 0.035], [0.12, ty + th / 2 + 0.16, z0 + 0.045], GOLD);
+  box([-tw / 2 - 0.08, ty + th, z0], [tw / 2 + 0.08, ty + th + 0.05, z0 + 0.06], [0.12, 0.07, 0.04]);
+  // The rug, the trestle table on it, and the candle in its holder (its flame lights the room).
+  box([-0.75, y0, tz - 0.42], [0.75, y0 + 0.012, tz + 0.48], GOLD);
+  box([-0.68, y0, tz - 0.35], [0.68, y0 + 0.018, tz + 0.41], CRIMSON);
+  box([-0.55, y0 + 0.72, tz - 0.26], [0.55, y0 + 0.78, tz + 0.26], OAK);
+  for (const sx of [-1, 1]) box([sx * 0.42 - 0.04, y0, tz - 0.2], [sx * 0.42 + 0.04, y0 + 0.72, tz + 0.2], OAK);
+  box([flame.x - 0.05, y0 + 0.78, tz - 0.05], [flame.x + 0.05, y0 + 0.8, tz + 0.05], GOLD);
+  box([flame.x - 0.025, y0 + 0.8, tz - 0.025], [flame.x + 0.025, y0 + 0.93, tz + 0.025], [0.9, 0.82, 0.62], true);
+  box([flame.x - 0.016, y0 + 0.93, tz - 0.016], [flame.x + 0.016, y0 + 1.0, tz + 0.016], [3.2, 2.1, 0.8], true);
+  // A chest against the left wall.
+  box([x0, y0, z0 + 0.15], [x0 + 0.42, y0 + 0.46, z0 + 0.8], [0.18, 0.1, 0.05]);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(Cl, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** A box in a prop's space. */
+export interface Span {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  z0: number;
+  z1: number;
+}
+
+/** A glazed window: the opening `w` wide, its pointed head's apex `h` over the sill, through a wall `T` thick built in the stone `stone`; `room` behind it where the building has no room of its own there. */
+export interface WindowSpec {
+  w: number;
+  h: number;
+  T: number;
+  stone: number;
+  room?: WindowRoom;
+}
+
+/**
+ * The castle's window, built as a real window (the owner, October 3: "windows to be windows, see
+ * through, blue tint"; every earlier pass painted a room on a plate, which read as a niche or a
+ * corridor): a real opening through the wall's whole thickness, so its reveal shows how thick the wall
+ * is, framed by a dressed ring of the castle's stone round its pointed head and down its jambs on the
+ * walling's courses, with a projecting sill; set back in the reveal, the leaded glass with its cool blue
+ * tint (glassTint, glassFace); and behind it, where the building has no room of its own there, a small
+ * lit chamber (litRoom), so what shows through the glass is real depth seen in parallax. Built on a face
+ * at z (facing +Z), its sill at (x, y). The opening's head is filled with the wall's stone down to the
+ * arch; the caller lays its walling round the opening and the chamber's cavity, both returned as boxes
+ * in its space (see `carved`).
+ */
+export function glazedWindow(k: ModelKit, g: THREE.Object3D, x: number, y: number, z: number, o: WindowSpec) {
+  const { w, h, T } = o;
+  k.mesh(g, spandrels(w, h, T), o.stone, [x, y, z - T / 2]);
+  archRing(k, g, x, y, z, w, h, { n: 3, t: 0.3, p: 0.1, dep: 0.14, jamb: true });
+  // The sill stone runs in under the glass, a hair proud of the reveal's floor behind it.
+  cb(k, g, [w + 0.5, 0.14, 0.43], [x, y - 0.07, z + 0.005], DRESS, undefined, 0.02);
+  // The glass set back in the reveal behind the ring: the tint, and over it the face.
+  for (const [mat, order, back] of [[glassTint(k), 1, 0.2], [glassFace(k), 2, 0.197]] as const) {
+    const pane = new THREE.Mesh(archPane(w, h, 0.004), mat);
+    pane.name = 'glass';
+    pane.renderOrder = order;
+    pane.position.set(x, y, z - back);
+    g.add(pane);
+  }
+  const hole: Span = { x0: x - w / 2, x1: x + w / 2, y0: y - 0.006, y1: y + h, z0: z - T, z1: z + 0.01 };
+  if (!o.room) return { hole, cavity: null };
+  const r = o.room, room = new THREE.Mesh(litRoom(h, T, r), roomBoxMat(k));
+  room.name = 'room';
+  room.position.set(x, y, z);
+  g.add(room);
+  // (The cavity a hair larger than the chamber all round, so their faces never lie in one plane.)
+  const cavity: Span = { x0: x - r.w / 2 - 0.01, x1: x + r.w / 2 + 0.01, y0: y - r.floor - 0.01, y1: y + h + r.ceil + 0.01, z0: z - T - r.d - 0.01, z1: z - T };
+  return { hole, cavity };
+}
+
+/**
+ * A block of walling `size` big, centred at `pos`, with `voids` left open in it (a glazed window's
+ * opening and the chamber behind it), built as the boxes that fill it round them. Every box is laid as
+ * part of the block's whole face (masonLayout reads `face`), so the courses and the bond run on round
+ * the opening unbroken, and the boxes meet each other square.
+ */
+export function carved(k: ModelKit, g: THREE.Object3D, size: V3, pos: V3, color: number, voids: (Span | null)[]) {
+  type B = [number, number, number, number, number, number];
+  const lo = [0, 1, 2].map((i) => pos[i] - size[i] / 2), hi = [0, 1, 2].map((i) => pos[i] + size[i] / 2);
+  /** A box less a void: the slabs under and over it, then beside it, then before and behind it. */
+  const minus = (b: B, v: Span): B[] => {
+    const [x0, y0, z0, x1, y1, z1] = b;
+    if (v.x0 >= x1 || v.x1 <= x0 || v.y0 >= y1 || v.y1 <= y0 || v.z0 >= z1 || v.z1 <= z0) return [b];
+    const vx0 = Math.max(x0, v.x0), vx1 = Math.min(x1, v.x1), vy0 = Math.max(y0, v.y0), vy1 = Math.min(y1, v.y1), vz0 = Math.max(z0, v.z0), vz1 = Math.min(z1, v.z1);
+    const out: B[] = [[x0, y0, z0, x1, vy0, z1], [x0, vy1, z0, x1, y1, z1], [x0, vy0, z0, vx0, vy1, z1], [vx1, vy0, z0, x1, vy1, z1], [vx0, vy0, z0, vx1, vy1, vz0], [vx0, vy0, vz1, vx1, vy1, z1]];
+    return out.filter((q) => q[3] - q[0] > 1e-4 && q[4] - q[1] > 1e-4 && q[5] - q[2] > 1e-4);
+  };
+  let boxes: B[] = [[lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]]];
+  for (const v of voids) if (v) boxes = boxes.flatMap((b) => minus(b, v));
+  const face = { x0: lo[0], x1: hi[0], z0: lo[2], z1: hi[2] };
+  for (const [x0, y0, z0, x1, y1, z1] of boxes) k.box(g, [x1 - x0, y1 - y0, z1 - z0], [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], color).userData.face = face;
+}
+
+/**
+ * Quoins standing proud at a block of walling's outside corners (the owner, October 3: where a wall's
+ * outline shows its stones, they are real stones). The block's whole face is `b` in its prop's space
+ * (as masonLayout lays it); at each corner in `corners` ([±1, ±1]: toward ±X and ±Z), every course
+ * between y0 and y1 (less the bands in `skip`) gets the stone that turns it in the walling's own bond,
+ * long on one face and short on the other by turns, as a real chamfered block standing a few
+ * centimetres proud of both faces, so the corner's outline shows each stone.
+ */
+export function quoins(k: ModelKit, g: THREE.Object3D, b: { x0: number; x1: number; z0: number; z1: number }, corners: [number, number][], y0: number, y1: number, color: number, skip: [number, number][] = []) {
+  const half = (w: number) => Math.max(1, Math.round((2 * w) / STONE_LEN)) / 2, PROUD = 0.03;
+  const nx = half(b.x1 - b.x0), nz = half(b.z1 - b.z0), lx = (b.x1 - b.x0) / nx, lz = (b.z1 - b.z0) / nz, ph = bondPhases(nx, nz);
+  // How long the stone is from a face's end back to its last joint, or from its start to its first.
+  const ends = (s: number) => s - Math.floor(s - 1e-6), starts = (s: number) => Math.ceil(s + 1e-6) - s;
+  for (let row = Math.round(y0 / COURSE); (row + 1) * COURSE <= y1 + 1e-6; row++) {
+    const ya = row * COURSE, par = row % 2 ? 0.5 : 0;
+    if (skip.some(([a, e]) => ya < e - 1e-6 && ya + COURSE > a + 1e-6)) continue;
+    for (const [sx, sz] of corners) {
+      // (The faces toward ±Z run their stones along X, those toward ±X along Z: see masonGeometry.)
+      const sX = sz > 0 ? (sx > 0 ? ends(ph.pz + nx + par) : starts(ph.pz + par)) : sx > 0 ? starts(ph.mz + par) : ends(ph.mz + nx + par);
+      const sZ = sx > 0 ? (sz > 0 ? starts(ph.px + par) : ends(ph.px + nz + par)) : sz > 0 ? ends(ph.mx + nz + par) : starts(ph.mx + par);
+      const ax = sX * lx + PROUD, az = sZ * lz + PROUD, cx = sx > 0 ? b.x1 : b.x0, cz = sz > 0 ? b.z1 : b.z0;
+      cb(k, g, [ax, COURSE, az], [cx + sx * (PROUD - ax / 2), ya + COURSE / 2, cz + sz * (PROUD - az / 2)], color, undefined, 0.03);
+    }
+  }
+}
+
+/**
+ * The castle's lamp post: a stepped stone base, a navy-lacquered post with a gold collar, a lantern
  * of warm glass in a navy cage under a little hipped hood, a gold ball finial on top.
  */
 function royalLamp(k: ModelKit, g: THREE.Object3D) {
-  cb(k, g, [0.46, 0.22, 0.46], [0, 0.11, 0], TRIM_D, undefined, 0.05);
-  cb(k, g, [0.32, 0.2, 0.32], [0, 0.3, 0], TRIM, undefined, 0.04);
+  cb(k, g, [0.46, 0.22, 0.46], [0, 0.11, 0], BASE, undefined, 0.05);
+  cb(k, g, [0.32, 0.2, 0.32], [0, 0.3, 0], DRESS, undefined, 0.04);
   k.cyl(g, 0.06, 0.08, 2.2, [0, 1.5, 0], LAMP_NAVY, undefined, 8);
   k.cyl(g, 0.1, 0.1, 0.08, [0, 2.42, 0], PAL.gold, undefined, 8);
   cb(k, g, [0.42, 0.06, 0.42], [0, 2.49, 0], LAMP_NAVY, undefined, 0.02);
@@ -2260,77 +2518,91 @@ export function archedWall(L: number, H: number, P: number, h: number, rise: num
  * head over the gate with the lord's crest on its inner face, `lanterns` hangs a lantern either side
  * of the arch on the faces listed (-1 outer, 1 inner).
  */
+/**
+ * The feet of the curtain's string course and of the course under its wall walk: on both its faces,
+ * round every tower and across its gates, so the lines run on unbroken (each one course of the
+ * castle's dressed stone, on the course lines).
+ */
+export const CURTAIN_COURSES = [3.5, 6.5];
+/** The heights of a tower's two rows of arrow loops, one in each storey between its courses. */
+const LOOP_ROWS = [5.25, 9.0];
+/**
+ * The feet of the courses that run round the castle's buildings and the great door's pavilions: the
+ * floor line (BUILDING_FLOOR_LINE) and the course under the hall's parapet, so where a pavilion stands
+ * against the hall its lines run on into the hall's.
+ */
+export const BUILDING_FLOOR_LINE = 5.0;
+const PAVILION_COURSES = [BUILDING_FLOOR_LINE, 8.5];
+
+/** Mark a part as paving: laid on its top in the castle paving's own rows (a third of a metre deep) of stones two thirds long. */
+export function paved<T extends THREE.Object3D>(m: T): T {
+  m.userData.course = 1 / 3;
+  m.userData.stone = 2 / 3;
+  return m;
+}
+
+/**
+ * The curtain's crown along local X (outer face toward -Z), `L` long, its inner side `LL` long centred
+ * on `uc` (it runs on into a tower's drum): on the outer face a course standing a hand proud under the
+ * parapet and the parapet flush on it; on the inner face the parapet carried out over the bailey on two
+ * courses stepping out from the wall (a corbelled crown cut from the same stone, no corbel blocks); the
+ * walk's deck between them, a coping on each parapet and merlons spread evenly along both, `clear` in
+ * from the ends. All in the castle's stone on the course lines over the wall's top.
+ */
+function curtainCrown(k: ModelKit, g: THREE.Object3D, L: number, LL: number, uc: number, clear: number) {
+  const { T, H } = CURTAIN_WALL, fi = T / 2 + 0.85, cp = H + COURSE;
+  k.box(g, [L, 0.06, fi - 0.56 + 0.52], [0, H + 0.03, (fi - 0.56 - 0.52) / 2], DECK);
+  cb(k, g, [L, COURSE, 0.2], [0, H - COURSE / 2, -T / 2 + 0.02], DRESS, undefined, 0.02);
+  cb(k, g, [L, COURSE, 0.68], [0, H + COURSE / 2, -T / 2 + 0.26], ASHLAR, undefined, 0.03);
+  cb(k, g, [L, 0.12, 0.8], [0, cp + 0.06, -T / 2 + 0.26], DRESS, undefined, 0.02);
+  cb(k, g, [LL, COURSE, 0.52], [uc, H - 1.5 * COURSE, T / 2 + 0.16], DRESS, undefined, 0.02);
+  cb(k, g, [LL, COURSE, fi - T / 2 + 0.1], [uc, H - COURSE / 2, (fi + T / 2 - 0.1) / 2], DRESS, undefined, 0.02);
+  cb(k, g, [LL, COURSE, 0.56], [uc, H + COURSE / 2, fi - 0.28], ASHLAR, undefined, 0.03);
+  cb(k, g, [LL, 0.12, 0.66], [uc, cp + 0.06, fi - 0.28], DRESS, undefined, 0.02);
+  for (const u of spread(L, 1.4, clear)) {
+    const c = hash01(u, T) > 0.7 ? ASHLAR_L : ASHLAR;
+    cb(k, g, [0.72, 0.6, 0.6], [u, cp + 0.42, -T / 2 + 0.3], c, undefined, 0.05);
+    cb(k, g, [0.72, 0.56, 0.54], [u, cp + 0.4, fi - 0.28], c, undefined, 0.05);
+  }
+}
+
 function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: number; steps?: boolean; lanterns?: number[] }) {
   // (The leaves stand to the lintel at the springing, under the tympanum: a gate's leaves tower over
   // the hero.)
   const cls = P >= 3 ? 'wide_gate' : 'narrow_gate', L = P + 2.4, T = 2.2, H = 7, S = DOORS[cls].h + 0.1, rise = P >= 3 ? 1.9 : 1.25, apex = S + rise;
-  // The curtain's own foot runs on round the gate's sides at its own heights: the slate plinth, its
-  // blue-grey weathering course and the pale course over it, so the wall meets its gate with no step.
-  // (Neither ends in the plane of the opening's side or of the other, so no faces flicker there: the
-  // plinth runs a hair into the passage, the course stops a hair short.)
-  for (const sx of [-1, 1]) {
-    const m = sx * (P / 2 + (L - P) / 4);
-    cb(k, g, [(L - P) / 2 + 0.02, 1.1, T + 0.5], [m, 0.55, 0], TRIM_D, undefined, 0.06);
-    cb(k, g, [(L - P) / 2 - 0.04, 0.22, T + 0.62], [m + sx * 0.02, 1.15, 0], TRIM, undefined, 0.03);
-  }
+  // The curtain's own deep base course runs on round the gate's sides, so the wall meets its gate with
+  // no step. (It runs a hair into the passage, so its end never lies in the plane of the opening's side.)
+  for (const sx of [-1, 1]) deep(cb(k, g, [(L - P) / 2 + 0.02, BASE_COURSE, T + 0.5], [sx * (P / 2 + (L - P) / 4), BASE_COURSE / 2, 0], BASE, undefined, 0.06));
   // The gate's wall in one piece: the curtain's full height, the pointed arch cut through it.
   k.mesh(g, archedWall(L, H, P, apex, rise, T), ASHLAR, [0, 0, 0]);
-  for (const sx of [-1, 1]) cb(k, g, [(L - P) / 2 - 0.36, 0.5, T + 0.04], [sx * (P / 2 + 0.36 + (L - P - 0.72) / 4), 1.5, 0], ASHLAR_W, undefined, 0.02);
-  // The curtain's string courses run on across the gate on both faces (at 3.6 broken by the arch's
-  // hood, at 5.6 over it), so the lines never step where the wall meets its gate.
-  // (The upper course too stops either side of the hood where the hood rises through it.)
-  const hood = P / 2 + 0.75;
-  for (const sx of [-1, 1]) cb(k, g, [L / 2 - hood, 0.3, T + 0.18], [sx * (hood + (L / 2 - hood) / 2), 3.6, 0], TRIM, undefined, 0.03);
-  {
-    const hoodArc = pointedArch(P + 1.0, apex + 0.55, 24, rise + 0.55).arc, yb = 5.6 - 0.11 - 0.2;
-    const over = hoodArc.filter(([, y]) => y >= yb).reduce((m, [x]) => Math.max(m, x), -1);
-    const gap = over < 0 ? 0 : over + 0.3;
-    if (!gap) cb(k, g, [L, 0.22, T + 0.14], [0, 5.6, 0], TRIM, undefined, 0.02);
-    else for (const sx of [-1, 1]) cb(k, g, [L / 2 - gap, 0.22, T + 0.14], [sx * (gap + (L / 2 - gap) / 2), 5.6, 0], TRIM, undefined, 0.02);
-  }
+  // The ring of dressed voussoirs round the arch and down its jambs on both faces, its stones bedded on
+  // the walling's courses; the curtain's string course runs on across the gate, stopping against it.
+  const ring = { w: P, h: apex, rise, t: 0.54, p: 0.06, dep: 0.3, out: -0.02, n: 5, kw: 0.6, foot: 0 };
+  const { ys, c, R } = pointedArch(P, apex, 2, rise), y0 = CURTAIN_COURSES[0];
+  const ringX = (y: number) => (y <= ys ? P / 2 + 0.52 : -c + Math.sqrt(Math.max(0, (R + 0.52) ** 2 - (y - ys) ** 2)));
+  const gap = Math.max(ringX(y0), ringX(y0 + COURSE)) + 0.04;
+  for (const sx of [-1, 1]) cb(k, g, [L / 2 - gap, COURSE, T + 0.12], [sx * (gap + (L / 2 - gap) / 2), y0 + COURSE / 2, 0], DRESS, undefined, 0.03);
   for (const e of [-1, 1]) {
     const f = new THREE.Group();
     f.rotation.y = e > 0 ? 0 : Math.PI;
     g.add(f);
     const z = T / 2;
-    // (The jambs and ring lie almost flush in the wall face round the deep opening, the hood only a
-    // little prouder, so from above the doorway reads as a dark recess in the wall, not a hoop.)
-    for (const sx of [-1, 1]) cb(k, f, [0.34, S, 0.06], [sx * (P / 2 + 0.17), S / 2, z + 0.03], ASHLAR_L, undefined, 0.02);
-    archRing(k, f, 0, 0, z, P, apex, ASHLAR_L, { n: 5, t: 0.4, p: 0.05, out: 0, key: ASHLAR_L, rise });
-    archRing(k, f, 0, 0, z, P + 1.0, apex + 0.55, TRIM, { n: 5, t: 0.14, p: 0.1, out: 0, rise: rise + 0.55 });
-    for (const sx of [-1, 1]) cb(k, f, [0.2, 0.3, 0.14], [sx * (P / 2 + 0.55), S + 0.02, z + 0.07], TRIM, undefined, 0.02);
-    // The arch's head closed over a square opening, as at the gatehouse: a slim blue-grey lintel
-    // across at the springing and over it a tympanum of the surround's pale dressed stone, both set
+    for (const st of dressedArch({ ...ring, seed: e + 2 })) k.mesh(f, st.geo, DRESS, [0, 0, z]);
+    // The arch's head closed over a square opening, as at the gatehouse: a lintel across at the
+    // springing (its top on a course line) and over it a tympanum, both of the dressed stone and set
     // back in the reveal (so from above they never read as a slab across the way), the leaves filling
     // the opening below and the arch framing the whole doorway.
-    cb(k, f, [P + 0.06, 0.3, 0.14], [0, S + 0.1, z - 0.17], TRIM, undefined, 0.02);
-    k.mesh(f, archTympanum(P, apex, 0.12, rise), ASHLAR_L, [0, 0, z - 0.3]);
+    const lt = Math.ceil((S + 0.3) / COURSE - 1e-6) * COURSE;
+    cb(k, f, [P + 0.06, lt - S + 0.05, 0.14], [0, (S - 0.05 + lt) / 2, z - 0.17], DRESS, undefined, 0.02);
+    k.mesh(f, archTympanum(P, apex, 0.12, rise), DRESS, [0, 0, z - 0.3]);
     if (opt.lanterns?.includes(e)) for (const sx of [-1, 1]) wallLamp(k, f, sx * (P / 2 + 0.95), S - 0.6, z);
   }
-  // The wall walk carried over the gate exactly as along the curtain: the outer parapet, its
-  // coping and merlons, the parapet band under it, and the inner parapet corbelled out over the face.
-  {
-    const fi = T / 2 + 0.85;
-    k.box(g, [L, 0.06, fi - 0.56 + 0.52], [0, H + 0.03, (fi - 0.56 - 0.52) / 2], DECK);
-    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], ASHLAR, undefined, 0.03);
-    cb(k, g, [L, 0.12, 0.72], [0, H + 0.78, -T / 2 + 0.3], TRIM, undefined, 0.02);
-    cb(k, g, [L, 0.5, 0.2], [0, H - 0.25, -T / 2 - 0.06], TRIM, undefined, 0.02);
-    for (const u of spread(L, 1.4, 0.45)) {
-      cb(k, g, [0.36, 0.34, 0.85], [u, H - 0.36, T / 2 + 0.425], TRIM, undefined, 0.02);
-      cb(k, g, [0.32, 0.34, 0.5], [u, H - 0.68, T / 2 + 0.25], TRIM, undefined, 0.02);
-    }
-    cb(k, g, [L, 0.24, fi - T / 2 + 0.2], [0, H - 0.07, (fi + T / 2 - 0.2) / 2], TRIM, undefined, 0.02);
-    cb(k, g, [L, 0.75, 0.56], [0, H + 0.42, fi - 0.29], ASHLAR, undefined, 0.03);
-    cb(k, g, [L, 0.12, 0.66], [0, H + 0.84, fi - 0.29], TRIM, undefined, 0.02);
-    for (const u of spread(L, 1.4, 0.8)) {
-      cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], ASHLAR, undefined, 0.05);
-      cb(k, g, [0.72, 0.56, 0.54], [u, H + 1.18, fi - 0.29], ASHLAR, undefined, 0.05);
-    }
-  }
+  // The wall walk carried over the gate exactly as along the curtain.
+  curtainCrown(k, g, L, L, 0, 0.8);
   // The leaves: the lord's blue planks, a pair hung in the passage just inside the arch on the face
   // the gate is approached from (`door`: -1 outer, 1 inner), each as wide as half the opening, swung
   // half open into the passage, so from either side the gate reads as a pair of doors standing open
-  // in its opening. The passage is lined in the darker dressing, a deep reveal.
+  // in its opening. The passage is lined in the weathered stone, a deep reveal.
   if (opt.door) {
     const e = opt.door, lw = DOORS[cls].w, open = 0.95;
     for (const sx of [-1, 1]) {
@@ -2340,10 +2612,11 @@ function gateway(k: ModelKit, g: THREE.Object3D, P: number, opt: { door?: number
       g.add(leaf);
       royalLeaf(k, leaf, lw, S - 0.1, cls);
     }
-    for (const sx of [-1, 1]) cb(k, g, [0.06, S - 0.05, T - 0.1], [sx * (P / 2 - 0.03), (S - 0.05) / 2, 0], TRIM_D, undefined, 0.01);
+    for (const sx of [-1, 1]) cb(k, g, [0.06, S - 0.05, T - 0.1], [sx * (P / 2 - 0.03), (S - 0.05) / 2, 0], BASE, undefined, 0.01);
   }
-  if (opt.steps) for (let i = 0; i < 2; i++) cb(k, g, [P + 0.9 - i * 0.3, 0.16, 0.5], [0, 0.08 + i * 0.12, -T / 2 - 0.55 + i * 0.25], i ? ASHLAR_L : ASHLAR_W, undefined, 0.02);
-  k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], TRIM_D);
+  if (opt.steps) for (let i = 0; i < 2; i++) cb(k, g, [P + 0.9 - i * 0.3, 0.16, 0.5], [0, 0.08 + i * 0.12, -T / 2 - 0.55 + i * 0.25], i ? DRESS : BASE, undefined, 0.02);
+  // The passage floor: the castle's paving carried through the gate.
+  paved(k.box(g, [P - 0.1, 0.04, T], [0, 0.02, 0], PAVE));
 }
 
 /** The layer a pool's mirror draws (the fountain's own dragon, rock and jets). */
@@ -2723,45 +2996,13 @@ const BUILDERS: Record<string, Builder> = {
     // 4 / 8 a small gate (postern or ward gate) at that end (no banner crowds the gate).
     const L = lenOf(arg) ?? 10, { T, H } = CURTAIN_WALL, ends = vOf(arg);
     const e0 = ends & 1 ? 0.7 : 0, e1 = ends & 2 ? 0.7 : 0, LL = L + e0 + e1, uc = (e1 - e0) / 2;
-    // Cream ashlar on a blue-grey plinth, a weathered course above it; blue-grey string courses run
-    // on round the towers' bands, and one continuous coping lies under the merlons.
-    // (Broad bands, so the two tones still read from the high camera and from out over the island.)
-    cb(k, g, [L, 1.1, T + 0.5], [0, 0.55, 0], TRIM_D, undefined, 0.06);
-    cb(k, g, [L, 0.22, T + 0.62], [0, 1.15, 0], TRIM, undefined, 0.03);
-    cb(k, g, [L, H - 1.1, T], [0, 1.1 + (H - 1.1) / 2, 0], ASHLAR, undefined, 0.04);
-    cb(k, g, [L, 0.5, T + 0.04], [0, 1.5, 0], ASHLAR_W, undefined, 0.02);
-    cb(k, g, [L, 0.3, T + 0.18], [0, 3.6, 0], TRIM, undefined, 0.03);
-    cb(k, g, [L, 0.22, T + 0.14], [0, 5.6, 0], TRIM, undefined, 0.02);
-    // The parapet band on the outer face, under the wall walk.
-    cb(k, g, [L, 0.5, 0.2], [0, H - 0.25, -T / 2 - 0.06], TRIM, undefined, 0.02);
-    // The wall walk between its two crenellated parapets: the outer one flush with the outer face,
-    // the inner one corbelled out over the bailey as a true machicolation (a row of corbels carrying
-    // a blue-grey course, the parapet standing on it flush with the corbels' fronts), both under one
-    // continuous coping with merlons and open embrasures at the same rhythm, so from the yards the
-    // wall reads with the same corbelled, crenellated crown as its towers. At a tower the inner
-    // parapet, its course and corbel table run on into the drum.
-    // (The machicolation stands well out, 0.85 over the bailey, so from the yards and the wall walk
-    // the parapet plainly rides on its corbels; one profile on every run, the same height everywhere,
-    // its string course meeting the towers' band at the wall walk.)
-    const fi = T / 2 + 0.85;
-    k.box(g, [L, 0.06, fi - 0.56 + 0.52], [0, H + 0.03, (fi - 0.56 - 0.52) / 2], DECK);
-    cb(k, g, [L, 0.75, 0.6], [0, H + 0.37, -T / 2 + 0.3], ASHLAR, undefined, 0.03);
-    cb(k, g, [L, 0.12, 0.72], [0, H + 0.78, -T / 2 + 0.3], TRIM, undefined, 0.02);
-    // Corbels and merlons are spread evenly along the run, the end ones the same distance in from
-    // each end, so where the run dies into a tower's drum none stands half sunk in the stone.
-    for (const u of spread(L, 1.4, ends & 3 ? 0.75 : 0.45)) {
-      cb(k, g, [0.36, 0.34, 0.85], [u, H - 0.36, T / 2 + 0.425], TRIM, undefined, 0.02);
-      cb(k, g, [0.32, 0.34, 0.5], [u, H - 0.68, T / 2 + 0.25], TRIM, undefined, 0.02);
-    }
-    cb(k, g, [LL, 0.24, fi - T / 2 + 0.2], [uc, H - 0.07, (fi + T / 2 - 0.2) / 2], TRIM, undefined, 0.02);
-    cb(k, g, [LL, 0.75, 0.56], [uc, H + 0.42, fi - 0.29], ASHLAR, undefined, 0.03);
-    cb(k, g, [LL, 0.12, 0.66], [uc, H + 0.84, fi - 0.29], TRIM, undefined, 0.02);
+    // Cream ashlar on a deep base course of the same stone, a string course of its dressed stone on
+    // both faces level with the towers' (CURTAIN_COURSES), and the crown that carries the wall walk.
+    deep(cb(k, g, [L, BASE_COURSE, T + 0.5], [0, BASE_COURSE / 2, 0], BASE, undefined, 0.06));
+    cb(k, g, [L, H - BASE_COURSE, T], [0, BASE_COURSE + (H - BASE_COURSE) / 2, 0], ASHLAR, undefined, 0.04);
+    cb(k, g, [L, COURSE, T + 0.12], [0, CURTAIN_COURSES[0] + COURSE / 2, 0], DRESS, undefined, 0.03);
     // (Where the walk runs into a tower, the last merlons stand well clear of its doorway.)
-    for (const u of spread(L, 1.4, ends & 3 ? 1.35 : 0.8)) {
-      const c = hash01(u, T) > 0.7 ? ASHLAR_L : ASHLAR;
-      cb(k, g, [0.72, 0.6, 0.6], [u, H + 1.05, -T / 2 + 0.3], c, undefined, 0.05);
-      cb(k, g, [0.72, 0.56, 0.54], [u, H + 1.18, fi - 0.29], c, undefined, 0.05);
-    }
+    curtainCrown(k, g, L, LL, uc, ends & 3 ? 1.35 : 0.8);
     // The lord's banner on the outer face, all one size: one centred on every run between towers,
     // two at even spacing on a long run, so every face carries the same navy-and-gold rhythm as the
     // south front; beside a small gate the banner stands a little clear of its lanterns, and a short
@@ -2779,9 +3020,9 @@ const BUILDERS: Record<string, Builder> = {
     }
   },
   /**
-   * A round wall tower, radius `len`: a battered plinth, a drum rising a full storey over the wall
-   * walk (+7) to its platform, and on top a corbelled parapet ring all round with ten evenly spaced
-   * merlons. `v` (9 or 10) sets how tall: the platform stands at v + 1.4.
+   * A round wall tower, radius `len`: a deep battered base course, a drum rising a full storey over
+   * the wall walk (+7) to its platform, and on top a parapet ring on a course stepped out from the drum,
+   * with ten evenly spaced merlons. `v` sets how tall: the platform stands at v + 1.4.
    */
   round_tower: (k, g, arg) => drumTower(k, g, lenOf(arg) ?? 3.2, vOf(arg) || 9, false, arg?.opt),
   /**
@@ -2817,18 +3058,16 @@ const BUILDERS: Record<string, Builder> = {
     // banded in gold and flying the gate's pennant from its finial, so the skyline steps up at the
     // gate as it does at the corners and the keep.
     const o = (arg?.opt ?? {}) as { cx?: number; R?: number };
-    const P = lenOf(arg) ?? 4, R = o.R ?? 2.6, H = 13, cx = o.cx ?? 6.0, T = 2.2, D = T + 0.8, GH = 10.6, N = 20;
+    const P = lenOf(arg) ?? 4, R = o.R ?? 2.6, H = 13, cx = o.cx ?? 6.0, T = 2.2, D = T + 0.8, GH = 10.5, N = 20;
     for (const sx of [-1, 1]) {
-      // (Each drum in its own group at its centre, so its stone is painted round its own axis.)
+      // (Each drum in its own group at its centre, its rings of stone laid round its own axis.)
       const dg = new THREE.Group();
       dg.position.set(sx * cx, 0, 0);
       g.add(dg);
-      wrapped(k.cyl(dg, R + 0.2, R + 0.55, 1.1, [0, 0.55, 0], TRIM_D, undefined, N));
-      drumShaft(k, dg, R, 1.1, H, N, ASHLAR, [[(sx * Math.PI) / 2, -sx * DOORS.walk.off]], DOORS.walk.y);
-      wrapped(k.cyl(dg, R + 0.03, R + 0.03, 0.5, [0, 1.5, 0], ASHLAR_W, undefined, N));
-      wrapped(k.cyl(dg, R + 0.12, R + 0.26, 0.22, [0, 1.15, 0], TRIM, undefined, N));
-      for (const y of [3.6, 5.6, 6.92]) wrapped(k.cyl(dg, R + 0.1, R + 0.1, y === 3.6 ? 0.3 : 0.22, [0, y, 0], TRIM, undefined, N));
-      drumFrieze(k, dg, 0, 0, R, H - 1.75, N);
+      drumFoot(k, dg, R, R + 0.55, R + 0.2);
+      drumShaft(k, dg, R, BASE_COURSE, H, ASHLAR, [[(sx * Math.PI) / 2, -sx * DOORS.walk.off]], DOORS.walk.y);
+      for (const y of CURTAIN_COURSES) drumCourse(k, dg, R, 0.06, y);
+      drumFrieze(k, dg, 0, 0, R, crownFoot(H) - 1.5 * COURSE, N);
       crown(k, dg, 0, 0, R, H, N, false);
       spire(k, dg, 0, H + 0.9, 0, R + 0.1, R * 1.75, N, sx, 1.6);
       // The wall walk comes in from the curtain beyond it (local +X on the right drum) to a doorway.
@@ -2837,12 +3076,12 @@ const BUILDERS: Record<string, Builder> = {
       const f = new THREE.Group();
       f.rotation.y = (Math.round((Math.PI + sx * 0.5) / ((Math.PI * 2) / N) - 0.5) + 0.5) * ((Math.PI * 2) / N);
       dg.add(f);
-      for (const y of [4.6, 8.9]) arrowLoop(k, f, 0, y, R * Math.cos(Math.PI / N));
+      for (const y of LOOP_ROWS) arrowLoop(k, f, 0, y, R);
     }
     // The gatehouse block in one piece, its passage cut through it as a pointed (two-centred) arch:
     // as wide as the drums' centres up to the wall walk, then rising between the drums to its parapet.
     const spring = 3.6, ra = P * 0.8, off = ra - P / 2, apex = spring + Math.sqrt(ra * ra - off * off);
-    const zc = 0.2, bw = cx - R + 0.45, WW = 7.9, tA = Math.acos(off / ra);
+    const zc = 0.2, bw = cx - R + 0.45, WW = 8.0, tA = Math.acos(off / ra);
     const half = (y: number) => Math.max(0, Math.sqrt(Math.max(0, ra * ra - (y - spring) ** 2)) - off);
     {
       const s = new THREE.Shape();
@@ -2863,14 +3102,14 @@ const BUILDERS: Record<string, Builder> = {
       geo.userData.boxes = [[-cx, 0, zc - D / 2, -P / 2, WW, zc + D / 2], [P / 2, 0, zc - D / 2, cx, WW, zc + D / 2], [-P / 2, apex, zc - D / 2, P / 2, WW, zc + D / 2], [-bw, WW, zc - D / 2, bw, GH, zc + D / 2]];
       k.mesh(g, geo, ASHLAR, [0, 0, 0]);
     }
-    for (const sx of [-1, 1]) cb(k, g, [cx - P / 2 - 0.3, 0.6, D + 0.12], [sx * (P / 2 + 0.3 + (cx - P / 2 - 0.3) / 2), 0.3, zc], TRIM_D, undefined, 0.03);
-    // The ceremonial arch, the great door's twin: on both faces a deep ring of voussoirs alternating
-    // pale ashlar and blue-grey (0.6 deep, flush on one radius just proud of the face), springing
-    // from moulded blue-grey imposts on pale jambs set flush in the same plane, a blue-grey hood
-    // mould lying on the ring and ending on the imposts, and a big pale keystone. Outside, over the
-    // opening, a tympanum of the ring's pale stone carries the lord's gilt diamond on a blue-grey lintel, the
-    // raised portcullis set back behind it with only its spikes showing; the keystone bears the
-    // shield.
+    // (The deep base course runs a hair into the passage, so the jambs stand on it all across.)
+    for (const sx of [-1, 1]) deep(cb(k, g, [cx - P / 2 + 0.02, BASE_COURSE, D + 0.12], [sx * (P / 2 - 0.01 + (cx - P / 2 + 0.02) / 2), BASE_COURSE / 2, zc], BASE, undefined, 0.03));
+    // The ceremonial arch, the great door's twin, all in the castle's dressed stone: on both faces a
+    // deep ring of voussoirs (0.6 deep, flush on one radius just proud of the face, every other one a
+    // hair prouder), springing from moulded imposts on jambs set flush in the same plane, and a big
+    // keystone. Outside, over the opening, a tympanum of the same stone carries the lord's gilt diamond
+    // on a slim lintel, the raised portcullis set back behind it with only its spikes showing; the
+    // keystone bears the shield.
     const NV = 9, VD = 0.6, VP = 0.16;
     for (const e of [-1, 1]) {
       const fz = zc + e * (D / 2), pz0 = fz + e * (VP / 2 - 0.01);
@@ -2881,25 +3120,24 @@ const BUILDERS: Record<string, Builder> = {
         };
         for (let i = 0; i < NV; i++) {
           const t = (tA * (i + 0.5)) / NV, rr = ra + VD / 2;
-          // (The blue-grey stones a little prouder, so at the joints no two faces lie in one plane.)
-          put(rr, t, [VD, (rr * tA) / NV + 0.02, i % 2 ? VP + 0.03 : VP], pz0, i % 2 ? TRIM : ASHLAR_L);
+          // (Every other stone a hair prouder, so at the joints the stones read one by one.)
+          put(rr, t, [VD, (rr * tA) / NV + 0.02, i % 2 ? VP + 0.03 : VP], pz0, DRESS);
         }
-        for (let i = 0; i < 10; i++) {
-          const t = (tA * (i + 0.5)) / 10, rr = ra + VD + 0.1;
-          put(rr, t, [0.2, (rr * tA) / 10 + 0.04, VP + 0.12], fz + e * ((VP + 0.12) / 2 - 0.01), TRIM);
-        }
-        // The impost (a moulded blue-grey block the ring and the hood spring from) on the pale jamb.
-        cb(k, g, [VD + 0.4, 0.26, VP + 0.14], [sx * (P / 2 + VD / 2 + 0.15), spring - 0.13, fz + e * ((VP + 0.14) / 2 - 0.01)], TRIM, undefined, 0.02);
-        cb(k, g, [VD, spring - 0.86, VP], [sx * (P / 2 + VD / 2), 0.6 + (spring - 0.86) / 2, pz0], ASHLAR_L, undefined, 0.02);
+        // The impost (a moulded block the ring springs from) on the jamb, the jamb from the base course up.
+        cb(k, g, [VD + 0.4, 0.26, VP + 0.14], [sx * (P / 2 + VD / 2 + 0.15), spring - 0.13, fz + e * ((VP + 0.14) / 2 - 0.01)], DRESS, undefined, 0.02);
+        cb(k, g, [VD, spring - 0.26 - BASE_COURSE, VP], [sx * (P / 2 + VD / 2), BASE_COURSE + (spring - 0.26 - BASE_COURSE) / 2, pz0], DRESS, undefined, 0.02);
       }
-      cb(k, g, [0.62, 0.9, VP + 0.1], [0, apex + 0.36, fz + e * ((VP + 0.1) / 2 - 0.01)], ASHLAR_L, undefined, 0.03);
+      // (One stone: no taller than a course and a half.)
+      cb(k, g, [0.62, 0.8, VP + 0.1], [0, apex + 0.31, fz + e * ((VP + 0.1) / 2 - 0.01)], DRESS, undefined, 0.03);
     }
     {
       const kz = zc - D / 2 - VP - 0.06;
       cb(k, g, [0.4, 0.34, 0.05], [0, apex + 0.42, kz], HERALD_BLUE, undefined, 0.01);
       k.box(g, [0.15, 0.15, 0.03], [0, apex + 0.42, kz - 0.03], PAL.gold, [0, 0, Math.PI / 4]);
-      // The tympanum over the opening outside, set a little back in the arch.
-      const s0 = new THREE.Shape(), y0 = 0.34, n = 10;
+      // The tympanum over the opening outside, set a little back in the arch, on its lintel (whose top
+      // lies on a course line).
+      const lt = Math.ceil((spring + 0.3) / COURSE) * COURSE;
+      const s0 = new THREE.Shape(), y0 = lt - spring, n = 10;
       const x0 = Math.sqrt(ra * ra - y0 * y0) - off;
       s0.moveTo(x0, y0);
       for (let i = 1; i <= n; i++) {
@@ -2912,9 +3150,9 @@ const BUILDERS: Record<string, Builder> = {
       }
       s0.lineTo(-x0, y0);
       const tz = zc - D / 2 + 0.24;
-      k.mesh(g, new THREE.ExtrudeGeometry(s0, { depth: 0.12, bevelEnabled: false }), ASHLAR_L, [0, spring, tz - 0.06]);
+      k.mesh(g, new THREE.ExtrudeGeometry(s0, { depth: 0.12, bevelEnabled: false }), DRESS, [0, spring, tz - 0.06]);
       k.box(g, [0.9, 0.9, 0.04], [0, spring + (y0 + apex - spring) / 2 - 0.1, tz - 0.08], PAL.gold, [0, 0, Math.PI / 4]);
-      cb(k, g, [P + 0.04, 0.36, 0.34], [0, spring + 0.17, tz], TRIM, undefined, 0.02);
+      cb(k, g, [P + 0.04, lt - spring + 0.01, 0.34], [0, (spring - 0.01 + lt) / 2, tz], DRESS, undefined, 0.02);
     }
     // The portcullis, raised behind the tympanum: its grid filling the arch head, only the spiked
     // foot showing under the lintel outside.
@@ -2929,39 +3167,38 @@ const BUILDERS: Record<string, Builder> = {
       const hw = half(y) + 0.12;
       if (hw > 0.3) k.box(g, [hw * 2, 0.09, 0.12], [0, y, pz], IRON);
     }
-    // Machicolations along the outer face, then the parapet all round the block's top.
-    for (let u = -bw + 0.45; u <= bw - 0.4; u += 0.95) cb(k, g, [0.34, 0.55, 0.5], [u, GH - 0.3, zc - D / 2 - 0.2], TRIM, undefined, 0.03);
-    cb(k, g, [2 * bw, 1.0, 0.6], [0, GH + 0.5, zc - D / 2 - 0.15], ASHLAR, undefined, 0.03);
-    cb(k, g, [2 * bw, 1.0, 0.5], [0, GH + 0.5, zc + D / 2 - 0.25], ASHLAR, undefined, 0.03);
+    // Along the outer face the gilt frieze and over it the course that carries the parapet, standing
+    // out from the face; then the parapet all round the block's top, two courses high, and its coping.
+    frieze(k, g, 2 * bw + 0.1, 0, GH - 1.5 * COURSE, zc - D / 2 - 0.02);
+    cb(k, g, [2 * bw + 0.1, COURSE, 0.4], [0, GH - COURSE / 2, zc - D / 2 - 0.1], DRESS, undefined, 0.02);
+    cb(k, g, [2 * bw, 2 * COURSE, 0.6], [0, GH + COURSE, zc - D / 2], ASHLAR, undefined, 0.03);
+    cb(k, g, [2 * bw, 2 * COURSE, 0.5], [0, GH + COURSE, zc + D / 2 - 0.25], ASHLAR, undefined, 0.03);
     // (Its sides run between the front and back stretches, not through them.)
-    for (const sx of [-1, 1]) cb(k, g, [0.5, 1.0, D - 0.65], [sx * (bw - 0.25), GH + 0.5, zc - 0.175], ASHLAR, undefined, 0.03);
-    cb(k, g, [2 * bw + 0.1, 0.14, 0.74], [0, GH + 1.06, zc - D / 2 - 0.15], TRIM, undefined, 0.02);
-    frieze(k, g, 2 * bw + 0.1, 0, GH - 0.85, zc - D / 2 - 0.12);
-    cb(k, g, [2 * bw + 0.1, 0.14, 0.64], [0, GH + 1.06, zc + D / 2 - 0.25], TRIM, undefined, 0.02);
+    for (const sx of [-1, 1]) cb(k, g, [0.5, 2 * COURSE, D - 0.8], [sx * (bw - 0.25), GH + COURSE, zc - 0.1], ASHLAR, undefined, 0.03);
+    cb(k, g, [2 * bw + 0.1, 0.14, 0.74], [0, GH + 2 * COURSE + 0.07, zc - D / 2], DRESS, undefined, 0.02);
+    cb(k, g, [2 * bw + 0.1, 0.14, 0.64], [0, GH + 2 * COURSE + 0.07, zc + D / 2 - 0.25], DRESS, undefined, 0.02);
     // The roof deck stands nearly flush with the parapet, so the block reads as one solid mass.
     cb(k, g, [2 * bw - 0.5, 0.7, D - 0.7], [0, GH + 0.35, zc], DECK, undefined, 0.02);
     for (let i = 0; i < 4; i++) {
       const u = -bw + 0.5 + (i * (2 * bw - 1.0)) / 3;
-      cb(k, g, [0.8, 0.75, 0.62], [u, GH + 1.5, zc - D / 2 - 0.15], ASHLAR, undefined, 0.04);
-      cb(k, g, [0.8, 0.75, 0.52], [u, GH + 1.5, zc + D / 2 - 0.25], ASHLAR, undefined, 0.04);
+      cb(k, g, [0.8, 0.75, 0.62], [u, GH + 2 * COURSE + 0.515, zc - D / 2], ASHLAR, undefined, 0.04);
+      cb(k, g, [0.8, 0.75, 0.52], [u, GH + 2 * COURSE + 0.515, zc + D / 2 - 0.25], ASHLAR, undefined, 0.04);
     }
     // The lord's banner over the arch on the outer face (facing out, -Z): the middle of the gate
     // front's five flags.
     {
       const out = new THREE.Group();
-      // (Hung just under the machicolations from a rod on the frieze, its tail well clear of the arch.)
-      out.position.set(0, 0, zc - D / 2 - 0.27);
+      // (Hung from a rod against the frieze, under the course that carries the parapet, its tail well
+      // clear of the arch.)
+      out.position.set(0, 0, zc - D / 2 - 0.19);
       out.rotation.y = Math.PI;
       g.add(out);
-      livery(k, out, 0, GH - 0.68, 0, 1.2, 1.36);
+      livery(k, out, 0, GH - COURSE - 0.08, 0, 1.2, 1.2);
     }
-    // The passage floor: the road's paving carried through in setts a little darker than the
-    // flagstones, a pale threshold stone across each end.
-    k.box(g, [P - 0.1, 0.04, D], [0, 0.02, zc], SETT_D);
-    for (let r = 0, z = zc - D / 2 + 0.45; z < zc + D / 2 - 0.4; z += 0.42, r++) {
-      for (let x = -P / 2 + 0.2 + (r % 2) * 0.2; x < P / 2 - 0.2; x += 0.44) cb(k, g, [Math.min(0.4, P / 2 - 0.05 - x), 0.06, 0.38], [x + 0.2, 0.04, z], (r + Math.round(x * 3)) % 3 ? SETT : SETT_D, undefined, 0.03);
-    }
-    for (const e of [-1, 1]) cb(k, g, [P - 0.05, 0.08, 0.36], [0, 0.04, zc + e * (D / 2 - 0.18)], ASHLAR_L, undefined, 0.03);
+    // The passage floor: the castle's paving laid on through the gate, a dressed threshold stone across
+    // each end.
+    paved(k.box(g, [P - 0.1, 0.04, D - 0.72], [0, 0.02, zc], PAVE));
+    for (const e of [-1, 1]) cb(k, g, [P - 0.05, 0.08, 0.36], [0, 0.04, zc + e * (D / 2 - 0.18)], DRESS, undefined, 0.03);
   },
   /**
    * The donjon: the great round tower at the castle's high corner (radius `len`, `v` tall), a
@@ -2971,20 +3208,22 @@ const BUILDERS: Record<string, Builder> = {
    * the cour and the bower (never into the range it stands against), one kind to each storey.
    */
   donjon: (k, g, arg) => {
-    const r = lenOf(arg) ?? 7, H = vOf(arg) || 13, N = 24;
-    wrapped(k.cyl(g, r + 0.25, r + 0.55, 1.2, [0, 0.6, 0], TRIM_D, undefined, N));
-    wrapped(k.cyl(g, r, r, H - 1.2, [0, 1.2 + (H - 1.2) / 2, 0], ASHLAR, undefined, N));
-    wrapped(k.cyl(g, r + 0.03, r + 0.03, 0.5, [0, 1.45, 0], ASHLAR_W, undefined, N));
-    for (const y of [5, 9]) wrapped(k.cyl(g, r + 0.12, r + 0.12, 0.26, [0, y, 0], TRIM, undefined, N));
-    wrapped(k.cyl(g, r + 0.45, r + 0.2, 0.5, [0, H + 0.25, 0], TRIM, undefined, N));
-    k.cyl(g, r - 0.4, r - 0.4, 0.1, [0, H + 0.45, 0], DECK, undefined, N);
-    for (let i = 0; i < N; i++) {
+    const r = lenOf(arg) ?? 7, H = vOf(arg) || 13, N = 24, M = 2 * N;
+    // Laid in rings of flat stones, all in the castle's one stone on the course lines: the deep battered
+    // base course, the drum, a course at each floor, and the crown (a course corbelled out from the drum
+    // carrying the parapet ring two courses high, its coping and the merlons, the crown's stones two to
+    // each of its bays, a merlon centred on a stone of the coping).
+    drumFoot(k, g, r, r + 0.55, r + 0.25);
+    drum(k, g, { r, y0: BASE_COURSE, y1: H, n: drumStones(r) }, ASHLAR);
+    for (const y of [5, 9]) drumCourse(k, g, r, 0.06, y);
+    drum(k, g, { r: r + 0.2, rTop: r + 0.45, y0: H, y1: H + COURSE, n: M }, DRESS);
+    k.cyl(g, r - 0.4, r - 0.4, 0.1, [0, H + 0.45, 0], DECK, undefined, M);
+    drum(k, g, { r: r + 0.45, rIn: r - 0.25, y0: H + COURSE, y1: H + 3 * COURSE, n: M }, ASHLAR);
+    drum(k, g, { r: r + 0.51, rIn: r - 0.31, y0: H + 3 * COURSE, y1: H + 3 * COURSE + 0.12, n: M, bond: false, turn: Math.PI / M }, DRESS);
+    for (let i = 0; i < N; i += 2) {
       const a = (i / N) * Math.PI * 2, c = 2 * (r + 0.2) * Math.sin(Math.PI / N) + 0.05;
-      const x = Math.sin(a) * (r + 0.05), z = Math.cos(a) * (r + 0.05);
-      cb(k, g, [c, 0.8, 0.6], [x, H + 0.9, z], ASHLAR, [0, a, 0], 0.03);
-      if (i % 2 === 0) cb(k, g, [c * 0.8, 0.7, 0.62], [x, H + 1.65, z], hash01(i, r) > 0.7 ? ASHLAR_L : ASHLAR, [0, a, 0], 0.05);
+      cb(k, g, [c * 0.8, 0.7, 0.62], [Math.sin(a) * (r + 0.1), H + 3 * COURSE + 0.47, Math.cos(a) * (r + 0.1)], hash01(i, r) > 0.7 ? ASHLAR_L : ASHLAR, [0, a, 0], 0.05);
     }
-    k.mesh(g, ringBand(r - 0.28, r + 0.45, 0.12, N), TRIM, [0, H + 1.24, 0]);
     // The spire, standing inside the merlon ring on its eave: royal blue slate banded in gold, four
     // gabled lucarnes with lit windows round it a fifth of the way up, a great gilt orb and spike at
     // its point, and the lord's banner on a pole above.
@@ -3001,14 +3240,14 @@ const BUILDERS: Record<string, Builder> = {
       // at its foot, the cone falling back 0.64 for every unit up): a cream front with its lancet,
       // its cheeks running back into the cone, and a steep slate roof gabled at the front and hipped
       // behind, its slopes running down back into the cone (never a long level ridge standing out of
-      // it), so the whole dormer is bedded in the roof; a cream tympanum in the gable, a blue-grey
+      // it), so the whole dormer is bedded in the roof; a cream tympanum in the gable, a dressed stone
       // eave and a gilt finial on the gable's point.
       const zf = 0.38, back = -0.5 - 3.0 * slope, ez = zf + 0.08;
       cb(k, d, [1.5, 1.95, zf - back], [0, 0.375, (zf + back) / 2], ASHLAR_B, undefined, 0.04);
       const roofPts = [[0.83, 1.345, ez], [-0.83, 1.345, ez], [0, 2.795, ez], [0.83, 1.345, -1.3], [-0.83, 1.345, -1.3], [0, 1.6, -1.8]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
       k.mesh(d, new ConvexGeometry(roofPts), SLATE_BLUE, [0, 0, 0]);
       k.mesh(d, wedge(0.1, 1.2, 1.36), ASHLAR_B, [0, 1.96, zf + 0.03], [0, Math.PI / 2, 0]);
-      cb(k, d, [1.7, 0.12, 0.22], [0, 1.36, zf + 0.02], TRIM, undefined, 0.02);
+      cb(k, d, [1.7, 0.12, 0.22], [0, 1.36, zf + 0.02], DRESS, undefined, 0.02);
       lancet(k, d, 0, 0.0, zf, 0.5, 0.85, true);
       k.mesh(d, new THREE.OctahedronGeometry(0.15, 0), PAL.gold, [0, 2.98, zf + 0.08]);
       cb(k, d, [0.05, 0.34, 0.05], [0, 2.78, zf + 0.08], PAL.gold, undefined, 0.01);
@@ -3019,10 +3258,10 @@ const BUILDERS: Record<string, Builder> = {
     // range against its east side or the grove behind), each centred in its storey between the
     // bands and each storey its own kind, as a keep is lit: cross loops in the guarded ground floor,
     // a tall lancet lighting the hall floor, and a round window high in the lord's chamber.
-    const ap = r * Math.cos(Math.PI / N), step = (Math.PI * 2) / N;
+    const step = (Math.PI * 2) / N;
     for (const col of [-1, -4, -7]) {
       const a = (col + 0.5) * step, face = new THREE.Group();
-      face.position.set(Math.sin(a) * ap, 0, Math.cos(a) * ap);
+      face.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
       face.rotation.y = a;
       g.add(face);
       arrowLoop(k, face, 0, 3.35, 0);
@@ -3197,19 +3436,19 @@ const BUILDERS: Record<string, Builder> = {
     return { obj: g, tick: flame(k, g, 0, 0.92, 0.65, 0.55) };
   },
   /**
-   * A low stone parapet along local X (`arg` = length): a solid breast wall and its coping on a
-   * blue-grey coping line, standing straight on the rock's lip (no built footing under it: the rock
-   * masses rise to meet the road; worldView).
+   * A low stone parapet along local X (`arg` = length): a solid breast wall on a weathered base
+   * course under a dressed coping, all the castle's stone, standing straight on the rock's lip (no
+   * built footing under it: the rock masses rise to meet the road; worldView).
    */
   parapet: (k, g, arg) => {
     const L = Math.max(2, arg ?? 6);
-    cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], TRIM, undefined, 0.04);
+    cb(k, g, [L + 0.2, 0.24, 0.9], [0, 0.12, 0], BASE, undefined, 0.04);
     cb(k, g, [L, 0.62, 0.62], [0, 0.55, 0], ASHLAR, undefined, 0.04);
-    cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], TRIM, undefined, 0.03);
+    cb(k, g, [L + 0.12, 0.14, 0.78], [0, 0.93, 0], DRESS, undefined, 0.03);
   },
   /**
    * An open balustrade along local X, `len` long (its outer face toward +Z like the parapet's): a
-   * blue-grey plinth running down into the rock, turned balusters of pale stone, a blue-grey handrail.
+   * plinth running down into the rock, turned balusters of pale stone, a dressed handrail.
    */
   balustrade: (k, g, arg) => {
     // Open: slender pale balusters well apart under a narrow slate rail, so the drop and the sky show
@@ -3217,14 +3456,14 @@ const BUILDERS: Record<string, Builder> = {
     // (A narrow plinth and rail, so from above the pale balusters and the gaps between them show.)
     const L = Math.max(1, lenOf(arg) ?? 4);
     k.mesh(g, taper(L + 0.1, 1.0, L + 0.1, 0.34, 2.4, 0, -0.33), ASHLAR_W, [0, -1.2, 0.33]);
-    cb(k, g, [L + 0.1, 0.16, 0.34], [0, 0.08, 0], TRIM, undefined, 0.03);
+    cb(k, g, [L + 0.1, 0.16, 0.34], [0, 0.08, 0], DRESS, undefined, 0.03);
     const n = Math.max(2, Math.round(L / 0.42));
     for (let i = 0; i < n; i++) {
       const u = -L / 2 + (L * (i + 0.5)) / n;
       k.cyl(g, 0.07, 0.1, 0.66, [u, 0.49, 0], ASHLAR_L, undefined, 8);
       k.mesh(g, new THREE.IcosahedronGeometry(0.13, 0), ASHLAR_L, [u, 0.4, 0]);
     }
-    cb(k, g, [L + 0.12, 0.1, 0.18], [0, 0.87, 0], TRIM, undefined, 0.02);
+    cb(k, g, [L + 0.12, 0.1, 0.18], [0, 0.87, 0], DRESS, undefined, 0.02);
   },
   /**
    * A low dressed wall kerbing one side of a sloping road, one continuous piece from its foot to its
@@ -3237,20 +3476,23 @@ const BUILDERS: Record<string, Builder> = {
   /**
    * The paving of a sloping road laid as one surface along `opt.pts` ([x, z] relative to the prop,
    * which stands at height 0), `opt.w` wide, its top at `opt.ys` at each point: flagstones running
-   * edge to edge between the walls that kerb it, no step or jag anywhere along it. With `opt.sill`
-   * its head is finished with a threshold: a course of dressed blue-grey stones laid square across
-   * the road over the joint with the paving beyond, a hair proud of both.
+   * edge to edge between the walls that kerb it, no step or jag anywhere along it, laid in the castle
+   * paving's own stones (paved). With `opt.sill` its head is finished with a threshold: a course of
+   * dressed stones laid square across the road over the joint with the paving beyond, a hair proud of
+   * both.
    */
   ramp_paving: (k, g, arg) => {
     const o = (arg?.opt ?? {}) as { pts?: number[][]; ys?: number[]; w?: number; sill?: number };
     const pts = (o.pts ?? [[-2, 0], [2, 0]]).map(([x, z]) => new THREE.Vector2(x, z)), ys = o.ys ?? pts.map(() => 0), w = o.w ?? 4;
-    k.mesh(g, slopedBand(pts, ys.map((y) => y - 0.4), ys, w), PAVE, [0, 0, 0]);
+    const band = slopedBand(pts, ys.map((y) => y - 0.4), ys, w);
+    Object.assign(band.userData.lay, { stone: 2 / 3, row: 1 / 3 });
+    k.mesh(g, band, PAVE, [0, 0, 0]);
     if (o.sill) {
       const end = pts[pts.length - 1], d = end.clone().sub(pts[pts.length - 2]).normalize(), across = new THREE.Vector2(-d.y, d.x), top = ys[ys.length - 1] + 0.03;
       const n = Math.max(2, Math.round(w / 0.9)), sw = w / n;
       for (let i = 0; i < n; i++) {
         const c = end.clone().addScaledVector(across, -w / 2 + sw * (i + 0.5));
-        cb(k, g, [sw, 0.3, 0.6], [c.x, top - 0.15, c.y], TRIM_L, [0, Math.atan2(-across.y, across.x), 0], 0.03);
+        cb(k, g, [sw, 0.3, 0.6], [c.x, top - 0.15, c.y], DRESS, [0, Math.atan2(-across.y, across.x), 0], 0.03);
       }
     }
   },
@@ -3261,28 +3503,28 @@ const BUILDERS: Record<string, Builder> = {
     // the bank it holds back meets its top.)
     const tops = o.tops ?? ys.map((y) => y + 0.76);
     const at = (dy: number) => ys.map((y) => y + dy), top = (dy: number) => tops.map((y) => y + dy);
-    // (Its blue-grey foot runs straight down into the ground under it, never out to one side, so
+    // (Its weathered foot runs straight down into the ground under it, never out to one side, so
     // nothing of it shows through the rock beside the road.)
-    k.mesh(g, slopedBand(pts, at(-5.0), at(0.4), 0.62), TRIM_D, [0, 0, 0]);
+    k.mesh(g, slopedBand(pts, at(-5.0), at(0.4), 0.62), BASE, [0, 0, 0]);
     k.mesh(g, slopedBand(pts, at(0.38), top(-0.1), 0.48), ASHLAR, [0, 0, 0]);
-    k.mesh(g, slopedBand(pts, top(-0.12), tops, 0.6), TRIM, [0, 0, 0]);
+    k.mesh(g, slopedBand(pts, top(-0.12), tops, 0.6), DRESS, [0, 0, 0]);
   },
   /**
-   * A pier closing the end of a parapet run: a square shaft of the castle's cream on a blue-grey
-   * base, a moulded blue-grey cap and a low pyramid of stone on top.
+   * A pier closing the end of a parapet run: a square shaft of the castle's cream on a weathered
+   * base, a moulded dressed cap and a low pyramid of stone on top.
    */
   parapet_pier: (k, g, arg) => {
     // `v`: 0 a low stone pyramid on top, 1 a small urn with a gilt cap, 2 a lantern.
     const v = vOf(arg), z = 0;
     // (Its base course at the parapet's own height, standing on the ground: nothing of it hangs
     // below, down a cliff face.)
-    cb(k, g, [1.2, 0.24, 1.2], [0, 0.12, z], TRIM, undefined, 0.03);
+    cb(k, g, [1.2, 0.24, 1.2], [0, 0.12, z], BASE, undefined, 0.03);
     cb(k, g, [0.95, 1.0, 0.95], [0, 0.72, z], ASHLAR, undefined, 0.04);
-    cb(k, g, [1.15, 0.16, 1.15], [0, 1.26, z], TRIM, undefined, 0.03);
+    cb(k, g, [1.15, 0.16, 1.15], [0, 1.26, z], DRESS, undefined, 0.03);
     if (v === 1) {
       k.mesh(g, taper(0.26, 0.26, 0.4, 0.4, 0.14), ASHLAR_L, [0, 1.41, z]);
       k.mesh(g, taper(0.4, 0.4, 0.7, 0.7, 0.42), ASHLAR_L, [0, 1.69, z]);
-      cb(k, g, [0.76, 0.08, 0.76], [0, 1.94, z], TRIM, undefined, 0.02);
+      cb(k, g, [0.76, 0.08, 0.76], [0, 1.94, z], DRESS, undefined, 0.02);
       ball(k, g, 0.3, [0, 2.12, z], 0x4a7a34);
       k.mesh(g, new THREE.OctahedronGeometry(0.1, 1), PAL.gold, [0, 2.48, z]);
     } else if (v === 2) {
@@ -3294,13 +3536,14 @@ const BUILDERS: Record<string, Builder> = {
     } else k.mesh(g, taper(0.95, 0.95, 0.12, 0.12, 0.42), ASHLAR_L, [0, 1.55, z]);
   },
   /**
-   * A kerb along local X, `len` long: a chamfered blue-grey slab 0.5 wide standing 0.05 proud of the
-   * paving, edging a walk. `v` 1: an inlay band instead, paler and flush, laid across a walk.
+   * A kerb along local X, `len` long: one border of stones 0.5 wide standing 0.05 proud of the paving,
+   * edging a walk, the paving's stone a shade darker. `v` 1: an inlay band instead, of the castle's
+   * dressed stone and flush, laid across a walk.
    */
   kerb: (k, g, arg) => {
     const L = Math.max(0.5, lenOf(arg) ?? 4), inlay = vOf(arg) === 1;
-    if (inlay) cb(k, g, [L, 0.1, 0.6], [0, -0.03, 0], TRIM_L, undefined, 0.02);
-    else cb(k, g, [L, 0.12, 0.5], [0, -0.01, 0], TRIM_D, undefined, 0.03);
+    if (inlay) k.mesh(g, laidRun(L, 0.6, 0.1, Math.max(1, Math.round(L / 0.9)), 11), DRESS, [0, -0.03, 0]);
+    else k.mesh(g, laidRun(L, 0.5, 0.12, Math.max(1, Math.round(L / (2 * KERB_W))), 13), KERB, [0, -0.01, 0]);
   },
   /**
    * The kerbs round a round plaza, radius `len`: in each quarter one continuous kerb (like a walk's,
@@ -3323,15 +3566,15 @@ const BUILDERS: Record<string, Builder> = {
         new THREE.Vector2(sx * xc, sz * d1),
         new THREE.Vector2(sx * x1, sz * d1),
       ];
-      // (Laid in single stones as near square as fit, like the walks' kerbs; for the audit, each
-      // quarter's stones are one kerb.)
-      for (const geo of mitredStones(pts, false, KERB_W, 0.12, KERB_W)) stone(k.mesh(g, geo, TRIM_D, [0, -0.06, 0])).userData.audit = { band: sx * 2 + sz };
+      // (Laid in the walks' kerb stones, one continuous border round the curve; for the audit, each
+      // quarter's stretches are one kerb.)
+      k.mesh(g, laidBand(pts, KERB_W, 0.12, 2 * KERB_W, sx * 2 + sz + 5), KERB, [0, -0.06, 0]).userData.audit = { band: sx * 2 + sz };
     }
   },
   /**
    * A round paved terrace of radius `len` (its threshold toward +Z): flagstones laid radially in two
-   * rings round a round centre stone, flush on a dark bed, a blue-grey kerb all round broken only for a
-   * pale threshold stone where a path comes in.
+   * rings round a round centre stone, flush on a dark bed, a kerb all round broken only for a pale
+   * threshold stone where a path comes in.
    */
   round_terrace: (k, g, arg) => {
     const R = lenOf(arg) ?? 2.2, r0 = R * 0.3, r1 = R * 0.64, r2 = R - 0.3;
@@ -3351,7 +3594,7 @@ const BUILDERS: Record<string, Builder> = {
     const rk = R - 0.12;
     {
       const a0 = 0.32, kp = Array.from({ length: 41 }, (_, j) => a0 + ((Math.PI * 2 - 2 * a0) * j) / 40).map((t) => new THREE.Vector2(Math.sin(t) * rk, Math.cos(t) * rk));
-      k.mesh(g, mitredBand(kp, false, 0.3, 0.12), TRIM_D, [0, -0.06, 0]);
+      k.mesh(g, laidBand(kp, 0.3, 0.12, 0.6, 3), KERB, [0, -0.06, 0]);
     }
     cb(k, g, [1.3, 0.08, 0.42], [0, -0.04, rk], ASHLAR_L, undefined, 0.03);
   },
@@ -3369,9 +3612,9 @@ const BUILDERS: Record<string, Builder> = {
   wall_climber: (k, g, arg) => {
     const L = Math.max(1.5, lenOf(arg) ?? 4), rose = vOf(arg) === 1, R: number | undefined = typeof arg === 'object' ? arg?.bend : undefined;
     const top = rose ? 5.0 : 4.8, LEAF = rose ? CLIMBER_ROSE_LEAF : CLIMBER_IVY, seed = Math.round(L * 10) + (rose ? 7 : 0);
-    // On a straight wall the climber's foot stands clear of the plinth's courses; above them the
-    // sheet steps back to lie on the wall face itself.
-    const hug = (y: number) => (R || y < 1.35 ? 0 : -0.2);
+    // On a straight wall the climber's foot stands clear of the deep base course; above it the sheet
+    // steps back to lie on the wall face itself.
+    const hug = (y: number) => (R || y < BASE_COURSE ? 0 : -0.2);
     /** How far the face falls back at u along it (round a drum). */
     const sag = (u: number) => (R ? R - Math.sqrt(Math.max(0, R * R - u * u)) : 0);
     const turn = (u: number) => Math.asin(Math.max(-1, Math.min(1, u / (R ?? 1e9))));
@@ -3502,7 +3745,7 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [0.95, 0.7, 0.95], [0, 0.35, 0], STONE_L, undefined, 0.05);
     if (standard) {
       // A clipped standard: a tall clean stem through a smaller clipped ball to a round head.
-      cb(k, g, [1.05, 0.12, 1.05], [0, 0.72, 0], TRIM, undefined, 0.03);
+      cb(k, g, [1.05, 0.12, 1.05], [0, 0.72, 0], DRESS, undefined, 0.03);
       k.box(g, [0.75, 0.05, 0.75], [0, 0.76, 0], 0x3a2a1e);
       cb(k, g, [0.14, 2.2, 0.14], [0, 1.85, 0], WOOD_D, undefined, 0.02);
       k.mesh(g, new THREE.IcosahedronGeometry(0.42, 1), 0x4a7a34, [0, 1.45, 0]).scale.set(1, 0.85, 1);
@@ -3528,20 +3771,23 @@ const BUILDERS: Record<string, Builder> = {
    */
   dragon_fountain: (k, g) => {
     const RO = 5.6, RI = 4.9, H = 0.75, WY = 0.8, S = 2.35, time = { value: 0 };
-    k.cyl(g, 6.1, 6.1, 0.2, [0, 0.1, 0], STONE_D, undefined, 48);
-    // The basin's wall and its coping, each turned as one ring (a lathe of its section round the
-    // pool), so the stone runs round with no joint.
-    wrapped(k.mesh(g, basinRing(RI, RO, H), STONE, [0, 0.2, 0]));
-    wrapped(k.mesh(g, basinRing(RI - 0.1, RO + 0.1, 0.14), STONE_L, [0, 0.2 + H, 0]));
+    // The plinth step, the basin's wall and its coping, each one course laid round the pool in flat
+    // stones (a basin's wall is no more bent than a tower's), the coping's joints over the wall's.
+    const basin = new THREE.Group(), n = drumStones(RO);
+    basin.position.y = 0.2;
+    g.add(basin);
+    drum(k, g, { r: 6.1, y0: 0, y1: 0.2, n: drumStones(6.1), course: 0.2 }, STONE_D);
+    drum(k, basin, { r: RO, rIn: RI, y0: 0, y1: H, n, course: H }, STONE);
+    drum(k, basin, { r: RO + 0.1, rIn: RI - 0.1, y0: H, y1: H + 0.14, n, course: H, turn: Math.PI / n, bond: false }, STONE_L);
     // The basin floor, dark under the water so the pool has depth.
     k.cyl(g, RI, RI, 0.1, [0, 0.15, 0], 0x1a2e30, undefined, 48);
     // The dragon's pedestal, carved in the castle's own stone: an octagonal drum of cream ashlar
     // rising out of the water from a blue-grey plinth, a gilt inscription band round it and a
     // moulded blue-grey coping under the dragon's feet.
-    k.cyl(g, 2.75, 2.95, 1.0, [0, 0.5, 0], TRIM_D, [0, Math.PI / 8, 0], 8);
+    k.cyl(g, 2.75, 2.95, 1.0, [0, 0.5, 0], BASE, [0, Math.PI / 8, 0], 8);
     k.cyl(g, 2.45, 2.45, 0.5, [0, 1.25, 0], ASHLAR, [0, Math.PI / 8, 0], 8);
     k.cyl(g, 2.47, 2.47, 0.14, [0, 1.12, 0], GILT, [0, Math.PI / 8, 0], 8);
-    k.cyl(g, 2.7, 2.62, 0.16, [0, 1.56, 0], TRIM, [0, Math.PI / 8, 0], 8);
+    k.cyl(g, 2.7, 2.62, 0.16, [0, 1.56, 0], DRESS, [0, Math.PI / 8, 0], 8);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2, rr = 2.45 * Math.cos(Math.PI / 8) + 0.02;
       k.box(g, [0.16, 0.16, 0.04], [Math.sin(a) * rr, 1.12, Math.cos(a) * rr], PAL.gold, [0, a, Math.PI / 4]);
@@ -3613,40 +3859,42 @@ const BUILDERS: Record<string, Builder> = {
   /**
    * One of the two pavilions framing the great door, standing forward of the hall's facade (its back
    * at -Z runs into the hall's wall): a square tower 4 wide rising a storey above the hall's parapet,
-   * a lancet on each storey of its front, string courses level with the hall's, quoined corners and a
-   * corbelled, crenellated top. Its twin across the axis is identical, so the door stands between two
-   * equal masses.
+   * a lancet on each storey of its front, string courses level with the hall's, quoins standing proud
+   * at its front corners and a crenellated crown on a course stepped out from its walls. Its twin
+   * across the axis is identical, so the door stands between two equal masses.
    */
   pavilion: (k, g, arg) => {
     // (Its back stands inside the hall's front wall, short of the wall's inner face.)
-    const W = lenOf(arg) ?? 4, D0 = -0.9, D1 = 2.1, H = 13.6, d = D1 - D0, zc = (D0 + D1) / 2;
-    cb(k, g, [W + 0.6, 0.62, d + 0.3], [0, 0.31, zc + 0.15], TRIM_D, undefined, 0.05);
-    cb(k, g, [W + 0.3, 0.34, d + 0.15], [0, 0.79, zc + 0.08], TRIM, undefined, 0.04);
-    // The walling's courses run whole between the base courses, the two string courses and the
-    // coping, and the quoins are laid course for course with it.
-    const breaks = [0, 0.62, 0.96, 4.88, 5.12, 8.88, 9.12, H + 0.83];
-    cb(k, g, [W, H - 0.62, d], [0, 0.62 + (H - 0.62) / 2, zc], ASHLAR_B, undefined, 0.04).userData.courses = breaks;
-    // (The string courses stand prouder than the quoins, so they run on round the corners over them.)
-    for (const y of [5.0, 9.0]) cb(k, g, [W + 0.3, 0.24, d + 0.15], [0, y, zc + 0.075], TRIM, undefined, 0.03);
-    // Quoins in the two blue-greys (never cream against dark, which reads as piano keys from above),
-    // long and short by turns, one to a course, stopping under each string course and starting again
-    // over it.
-    let qi = 0;
-    for (const [a, e] of [[0.96, 4.88], [5.12, 8.88], [9.12, H - 1.2]]) for (const [y0, y1] of courseSpans(breaks, a, e)) {
-      for (const sx of [-1, 1]) cb(k, g, qi % 2 ? [0.62, y1 - y0 - 0.04, 0.44] : [0.44, y1 - y0 - 0.04, 0.62], [sx * (W / 2 - 0.2), (y0 + y1) / 2, D1 - (qi % 2 ? 0.2 : 0.29)], qi % 2 ? TRIM_L : TRIM, undefined, 0.03);
-      qi++;
-    }
+    const W = lenOf(arg) ?? 4, D0 = -0.9, D1 = 2.1, H = 13.6, d = D1 - D0, zc = (D0 + D1) / 2, cf = crownFoot(H);
+    // The deep base course, the walling, and string courses level with the hall's (the floor line and
+    // the course under its parapet), all on the course lines, so its courses run on into the hall's
+    // front; its front corners turn on quoins standing proud.
+    deep(cb(k, g, [W + 0.6, BASE_COURSE, d + 0.3], [0, BASE_COURSE / 2, zc + 0.15], BASE, undefined, 0.05));
     // Lancets on the two upper storeys (the ground floor is left blank behind the champion that
-    // stands before it), each sill clear over its string course and its hood well under the next.
-    for (const y of [5.75, 9.75]) lancet(k, g, 0, y, D1, 0.82, 2.4);
-    // Corbels, the parapet standing out on them, its coping, merlons, and the leads behind.
-    for (const u of spread(W, 0.8, 0.4)) cb(k, g, [0.34, 0.42, 0.5], [u, H - 0.24, D1 + 0.14], TRIM, undefined, 0.03);
-    for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(k, g, [0.5, 0.42, 0.34], [sx * (W / 2 + 0.14), H - 0.24, D0 + 0.8 + i * 0.9], TRIM, undefined, 0.03);
-    cb(k, g, [W + 0.6, 0.85, d + 0.4], [0, H + 0.42, zc + 0.2], ASHLAR_B, undefined, 0.04);
-    cb(k, g, [W + 0.7, 0.14, d + 0.5], [0, H + 0.9, zc + 0.2], TRIM, undefined, 0.03);
-    k.box(g, [W - 0.4, 0.06, d - 0.4], [0, H + 0.98, zc], DECK);
-    for (const u of spread(W, 1.45, 0.55)) cb(k, g, [0.78, 0.72, 0.5], [u, H + 1.33, D1 + 0.15], Math.abs(u) < 0.1 ? ASHLAR_L : ASHLAR_B, undefined, 0.04);
-    for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) cb(k, g, [0.5, 0.72, 0.72], [sx * (W / 2 + 0.02), H + 1.33, D0 + 0.6 + i * 1.5], ASHLAR_B, undefined, 0.04);
+    // stands before it), each sill clear over its string course and its head well under the next. The
+    // lower one a real window (the castle's glazing kit, glazedWindow): its opening through the front
+    // wall and a small lit chamber behind it on the floor line's course, the walling and that course
+    // laid round both.
+    // (The chamber's floor on the floor line, its ceiling a hair under the next course; the cavity's
+    // floor and ceiling a hair off the course lines, so no two faces meet in one plane there.)
+    const sill = 5.75, wh = 2.2, [floorY, ceilY] = PAVILION_COURSES;
+    const win = glazedWindow(k, g, 0, sill, D1, { w: 0.82, h: wh, T: 0.6, stone: ASHLAR_B, room: { w: 2.6, d: 1.39, floor: sill - floorY, ceil: ceilY - 0.02 - sill - wh } });
+    carved(k, g, [W, cf - COURSE - BASE_COURSE, d], [0, (BASE_COURSE + cf - COURSE) / 2, zc], ASHLAR_B, [win.hole, win.cavity]);
+    // The string courses stand proud of the front and sides, their backs just inside the walling's; the
+    // lower one cut back round the chamber, its cut faces just inside the walling round the cavity.
+    const cav = win.cavity!, inset = { ...cav, x0: cav.x0 - 0.005, x1: cav.x1 + 0.005, z0: cav.z0 - 0.005, z1: cav.z1 + 0.005 };
+    carved(k, g, [W + 0.12, COURSE, d + 0.03], [0, floorY + COURSE / 2, zc + 0.045], DRESS, [inset]);
+    cb(k, g, [W + 0.12, COURSE, d + 0.03], [0, ceilY + COURSE / 2, zc + 0.045], DRESS, undefined, 0.03);
+    lancet(k, g, 0, 9.75, D1, 0.82, 2.2);
+    quoins(k, g, { x0: -W / 2, x1: W / 2, z0: D0, z1: D1 }, [[-1, 1], [1, 1]], BASE_COURSE, cf - COURSE, ASHLAR_B, PAVILION_COURSES.map((y): [number, number] => [y, y + COURSE]));
+    // The course that carries the crown, stepped out from the walls, the crown standing flush on it two
+    // courses high under its coping, the leads on it and merlons round its edge.
+    cb(k, g, [W + 0.6, COURSE, d + 0.4], [0, cf - COURSE / 2, zc + 0.2], DRESS, undefined, 0.03);
+    cb(k, g, [W + 0.6, 2 * COURSE, d + 0.4], [0, cf + COURSE, zc + 0.2], ASHLAR_B, undefined, 0.04);
+    cb(k, g, [W + 0.7, 0.14, d + 0.5], [0, cf + 2 * COURSE + 0.07, zc + 0.2], DRESS, undefined, 0.03);
+    k.box(g, [W - 0.4, 0.06, d - 0.4], [0, cf + 2 * COURSE + 0.15, zc], DECK);
+    for (const u of spread(W, 1.45, 0.55)) cb(k, g, [0.78, 0.72, 0.5], [u, cf + 2 * COURSE + 0.5, D1 + 0.15], Math.abs(u) < 0.1 ? ASHLAR_L : ASHLAR_B, undefined, 0.04);
+    for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) cb(k, g, [0.5, 0.72, 0.72], [sx * (W / 2 + 0.02), cf + 2 * COURSE + 0.5, D0 + 0.6 + i * 1.5], ASHLAR_B, undefined, 0.04);
   },
   /**
    * A gate through a stretch of full-height curtain (the ward's gates in the inner curtain), the
@@ -3665,32 +3913,28 @@ const BUILDERS: Record<string, Builder> = {
   /**
    * The round stair turret east of the great door (radius `len`, its platform at `v` + 1.4): the
    * donjon's answer across the axis, so the door is framed by two round masses. Built in the
-   * donjon's own language (a battered blue-grey plinth, cream ashlar, blue-grey bands at the
-   * donjon's heights, slits climbing with the stair, two lancets toward the court), a gilt
-   * frieze and corbelled crown, and a blue-slate spire a stage lower than the door tower's.
+   * donjon's own language (a deep battered base course, cream ashlar, courses at the donjon's
+   * heights, slits climbing with the stair, two lancets toward the court), a gilt frieze and the
+   * towers' crown, and a blue-slate spire a stage lower than the door tower's.
    */
   door_turret: (k, g, arg) => {
     const r = lenOf(arg) ?? 2.1, H = vOf(arg) || 11, N = 16, P = H + 1.4;
-    wrapped(k.cyl(g, r + 0.15, r + 0.5, 1.1, [0, 0.55, 0], TRIM_D, undefined, N));
-    wrapped(k.cyl(g, r, r, P - 1.1, [0, 1.1 + (P - 1.1) / 2, 0], ASHLAR, undefined, N));
-    wrapped(k.cyl(g, r + 0.03, r + 0.03, 0.5, [0, 1.45, 0], ASHLAR_W, undefined, N));
-    for (const y of [5, 9]) wrapped(k.cyl(g, r + 0.12, r + 0.12, 0.26, [0, y, 0], TRIM, undefined, N));
-    // (The weathering course lies on the plinth's top, a lip proud of it, never out over its batter.)
-    wrapped(k.cyl(g, r + 0.1, r + 0.21, 0.22, [0, 1.15, 0], TRIM, undefined, N));
-    drumFrieze(k, g, 0, 0, r, P - 1.75, N);
+    drumFoot(k, g, r, r + 0.5, r + 0.15);
+    drum(k, g, { r, y0: BASE_COURSE, y1: P, n: drumStones(r) }, ASHLAR);
+    for (const y of [5, 9]) drumCourse(k, g, r, 0.06, y);
+    drumFrieze(k, g, 0, 0, r, crownFoot(P) - 1.5 * COURSE, N);
     crown(k, g, 0, 0, r, P, N, false);
     spire(k, g, 0, P + 0.9, 0, r + 0.1, r * 2.3, N, 1, 1.1);
-    const ap = r * Math.cos(Math.PI / N), step = (Math.PI * 2) / N;
-    // (Between the bands, never crossed by one.)
-    // (On the middle of a facet, so its flat stones lie on the drum's face.)
+    const step = (Math.PI * 2) / N;
+    // (Between the courses, never crossed by one.)
     for (const y of [2.3, 6.2]) {
       const face = new THREE.Group();
-      face.position.set(Math.sin(step / 2) * ap, 0, Math.cos(step / 2) * ap);
+      face.position.set(Math.sin(step / 2) * r, 0, Math.cos(step / 2) * r);
       face.rotation.y = step / 2;
       g.add(face);
       lancet(k, face, 0, y, 0.02, 0.44, 1.9, true, 0.5);
     }
-    for (const [a, y] of [[2.5, 3.0], [3.5, 5.8], [4.5, 8.6], [-2.5, 3.6], [-3.5, 7.2]]) {
+    for (const [a, y] of [[2.5, 3.0], [3.5, 6.2], [4.5, 8.4], [-2.5, 3.6], [-3.5, 7.2]]) {
       const t = a * step;
       k.box(g, [0.16, 0.9, 0.1], [Math.sin(t) * (r + 0.02), y, Math.cos(t) * (r + 0.02)], DARK, [0, t, 0]);
     }
@@ -3706,13 +3950,14 @@ const BUILDERS: Record<string, Builder> = {
     cb(k, g, [W, H, 0.5], [0, H / 2, -D / 2 + 0.25], ASHLAR, undefined, 0.04);
     for (const sx of [-1, 1]) cb(k, g, [0.5, H, D - 0.5], [sx * (W / 2 - 0.25), H / 2, 0.25], ASHLAR, undefined, 0.04);
     for (const sx of [-1, 1]) cb(k, g, [0.5, H, 0.5], [sx * 1.15, H / 2, D / 2 - 0.25], ASHLAR, undefined, 0.04);
-    cb(k, g, [W + 0.3, 0.34, D + 0.3], [0, H + 0.12, 0.05], TRIM, undefined, 0.03);
-    cb(k, g, [W + 0.4, 0.5, 0.36], [0, H + 0.5, D / 2 + 0.05], ASHLAR, undefined, 0.03);
-    for (const sx of [-1, 1]) cb(k, g, [0.36, 0.5, D - 0.03], [sx * (W / 2 + 0.02), H + 0.5, -0.115], ASHLAR, undefined, 0.03);
+    // The flat stone roof one course of the dressed stone, the parapet a course over it, its merlons.
+    cb(k, g, [W + 0.3, COURSE, D + 0.3], [0, H + COURSE / 2, 0.05], DRESS, undefined, 0.03);
+    cb(k, g, [W + 0.4, COURSE, 0.36], [0, H + 1.5 * COURSE, D / 2 + 0.05], ASHLAR, undefined, 0.03);
+    for (const sx of [-1, 1]) cb(k, g, [0.36, COURSE, D - 0.03], [sx * (W / 2 + 0.02), H + 1.5 * COURSE, -0.115], ASHLAR, undefined, 0.03);
     // Merlons at one even spacing round the whole parapet (along its front and back along both
     // returns), so it reads as one crenellated top, never a stub with a lone merlon.
-    for (let i = 0; i < 6; i++) cb(k, g, [0.6, 0.5, 0.4], [-W / 2 + 0.3 + (i * (W - 0.6)) / 5, H + 1.0, D / 2 + 0.05], ASHLAR, undefined, 0.04);
-    for (const sx of [-1, 1]) for (const z of [-D / 2 + 0.3, 0.05]) cb(k, g, [0.4, 0.5, 0.6], [sx * (W / 2 + 0.02), H + 1.0, z], ASHLAR, undefined, 0.04);
+    for (let i = 0; i < 6; i++) cb(k, g, [0.6, 0.5, 0.4], [-W / 2 + 0.3 + (i * (W - 0.6)) / 5, H + 2.5 * COURSE, D / 2 + 0.05], ASHLAR, undefined, 0.04);
+    for (const sx of [-1, 1]) for (const z of [-D / 2 + 0.3, 0.05]) cb(k, g, [0.4, 0.5, 0.6], [sx * (W / 2 + 0.02), H + 2.5 * COURSE, z], ASHLAR, undefined, 0.04);
     for (const sx of [-1, 1]) cb(k, g, [W - 0.8, 0.22, 0.12], [0, sx > 0 ? 0.9 : 0.12, -D / 2 + 0.56], WOOD_D, undefined, 0.02);
     // The hay rack: slats leaning out from the back wall over a manger, hay heaped in it.
     for (let i = 0; i < 12; i++) cb(k, g, [0.06, 1.0, 0.06], [-W / 2 + 0.9 + (i * (W - 1.8)) / 11, 1.6, -D / 2 + 0.75], WOOD, [0.35, 0, 0], 0.01);
@@ -3903,7 +4148,7 @@ const BUILDERS: Record<string, Builder> = {
     const y0 = potted ? 0.62 : 0;
     if (potted) {
       cb(k, g, [1.5, 0.55, 1.5], [0, 0.28, 0], ASHLAR_L, undefined, 0.05);
-      cb(k, g, [1.62, 0.12, 1.62], [0, 0.58, 0], TRIM, undefined, 0.03);
+      cb(k, g, [1.62, 0.12, 1.62], [0, 0.58, 0], DRESS, undefined, 0.03);
       k.box(g, [1.25, 0.05, 1.25], [0, 0.6, 0], 0x3a2a1e);
     }
     // (The trunk runs on up into the crown, so the head sits on it.)
@@ -3953,12 +4198,12 @@ const BUILDERS: Record<string, Builder> = {
   urn: (k, g) => {
     // In the castle's stone: a blue-grey plinth, a cream pedestal and bowl, blue-grey mouldings; a
     // clipped box ball standing in the bowl (like the cour's topiary), a ring of flowers round it.
-    cb(k, g, [1.0, 0.18, 1.0], [0, 0.09, 0], TRIM_D, undefined, 0.03);
+    cb(k, g, [1.0, 0.18, 1.0], [0, 0.09, 0], BASE, undefined, 0.03);
     cb(k, g, [0.78, 0.7, 0.78], [0, 0.53, 0], ASHLAR, undefined, 0.04);
-    cb(k, g, [0.92, 0.12, 0.92], [0, 0.94, 0], TRIM, undefined, 0.03);
+    cb(k, g, [0.92, 0.12, 0.92], [0, 0.94, 0], DRESS, undefined, 0.03);
     k.mesh(g, taper(0.32, 0.32, 0.5, 0.5, 0.18), ASHLAR_L, [0, 1.09, 0]);
     k.mesh(g, taper(0.5, 0.5, 1.0, 1.0, 0.62), ASHLAR_L, [0, 1.49, 0]);
-    cb(k, g, [1.08, 0.12, 1.08], [0, 1.84, 0], TRIM, undefined, 0.03);
+    cb(k, g, [1.08, 0.12, 1.08], [0, 1.84, 0], DRESS, undefined, 0.03);
     ball(k, g, 0.52, [0, 2.36, 0], 0x4a7a34);
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
@@ -4193,11 +4438,11 @@ const BUILDERS: Record<string, Builder> = {
   champion: (k, g) => {
     // Warm marble on a carved plinth in the castle's stone, the lord's blue and gold on his tabard.
     const S = MARBLE, SD = MARBLE_D, SL = MARBLE_L;
-    cb(k, g, [2.0, 0.45, 2.0], [0, 0.225, 0], TRIM_D, undefined, 0.06);
+    cb(k, g, [2.0, 0.45, 2.0], [0, 0.225, 0], BASE, undefined, 0.06);
     cb(k, g, [1.6, 0.9, 1.6], [0, 0.9, 0], ASHLAR, undefined, 0.06);
     cb(k, g, [0.9, 0.4, 0.05], [0, 0.9, 0.81], ASHLAR_L, undefined, 0.02);
     k.box(g, [0.24, 0.24, 0.04], [0, 0.9, 0.84], PAL.gold, [0, 0, Math.PI / 4]);
-    cb(k, g, [1.75, 0.14, 1.75], [0, 1.42, 0], TRIM, undefined, 0.03);
+    cb(k, g, [1.75, 0.14, 1.75], [0, 1.42, 0], DRESS, undefined, 0.03);
     const y = 1.49;
     // Legs, knee cops and sabatons.
     for (const s of [-1, 1]) {
@@ -5116,7 +5361,7 @@ export function mergeStatic(root: THREE.Object3D, lay?: (m: THREE.Mesh) => Mason
         m.updateMatrix();
         const mason = lay?.(m);
         let geo = mason ? masonGeometry(m.geometry, mason).applyMatrix4(m.matrix) : m.geometry.clone().applyMatrix4(m.matrix);
-        for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'aMason' && k !== 'aMasonK') geo.deleteAttribute(k);
+        for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'aMason' && k !== 'aMasonK' && k !== 'aMasonF') geo.deleteAttribute(k);
         if (geo.index) geo = geo.toNonIndexed();
         return geo;
       }));
@@ -5133,6 +5378,18 @@ export function mergeStatic(root: THREE.Object3D, lay?: (m: THREE.Mesh) => Mason
  * each block against the others (clipping, floating, doors and windows on their walls).
  */
 export const PART_AUDIT = { on: false };
+
+/** One dressed-stone part's stone layout (see masonLayout): its bounds and course breaks in the prop's space. */
+export interface CourseRecord {
+  color: number;
+  box: THREE.Box3;
+  breaks: number[];
+  /** Its course height (the deep base course is laid in its own). */
+  course: number;
+  /** Laid as one stone, or laying its own stones (voussoirs, kerbs, a band along a run): no courses. */
+  single: boolean;
+  laid: boolean;
+}
 
 /** One built part: its geometry's bounds in its own space, placed by `m` in the prop's space. */
 export interface Part {
@@ -5162,6 +5419,11 @@ export interface Part {
   fit: boolean;
   /** A cylinder's number of flat sides (a drum is a polygon: what stands on it stands on a facet). */
   sides?: number;
+  /**
+   * A drum laid in rings of flat stones, each course turned half a stone on the next (masonry.ts,
+   * laidDrum): no one facet runs up it, so what stands on it hugs the round of its corners.
+   */
+  round?: boolean;
   /** A true box (a block or a chamfered block): its bounds are its faces. */
   box?: boolean;
   /** A drum cut back where doorways open in it: the audit sees the whole drum, the doorways stand in it. */
@@ -5181,6 +5443,7 @@ function recordParts(g: THREE.Object3D) {
     if (!geo.boundingBox) geo.computeBoundingBox();
     const mat = Array.isArray(o.material) ? o.material[0] : o.material;
     const p = geo as THREE.CylinderGeometry, ring = geo.userData.ring as [number, number] | undefined;
+    const laid = geo.userData.drum as { r: number; rTop: number; sides: number } | undefined;
     const cyl = p.type === 'CylinderGeometry' || p.type === 'ConeGeometry' || !!ring;
     const fx = !(mat instanceof THREE.MeshStandardMaterial) || o.name === 'flame';
     // A shape whose bounds are not its body (an arch through a wall, a border round a bed) lists the
@@ -5193,11 +5456,11 @@ function recordParts(g: THREE.Object3D) {
       ...(Array.isArray(bx)
         ? { m: base.clone(), min: new THREE.Vector3(bx[0], bx[1], bx[2]), max: new THREE.Vector3(bx[3], bx[4], bx[5]) }
         : { m: base.clone().multiply(new THREE.Matrix4().makeRotationY(bx.ry).setPosition(bx.c[0], bx.c[1], bx.c[2])), min: new THREE.Vector3(-bx.h[0], -bx.h[1], -bx.h[2]), max: new THREE.Vector3(bx.h[0], bx.h[1], bx.h[2]) }),
-      r: ring ? ring[1] : cyl ? (p.parameters.radiusBottom ?? (p.parameters as unknown as { radius: number }).radius ?? 0) : 0,
-      rTop: ring ? ring[1] : cyl ? (p.parameters.radiusTop ?? 0) : 0, rIn: ring ? ring[0] : 0,
+      r: laid ? laid.r : ring ? ring[1] : cyl ? (p.parameters.radiusBottom ?? (p.parameters as unknown as { radius: number }).radius ?? 0) : 0,
+      rTop: laid ? laid.rTop : ring ? ring[1] : cyl ? (p.parameters.radiusTop ?? 0) : 0, rIn: ring ? ring[0] : 0,
       color: mat instanceof THREE.MeshStandardMaterial ? mat.color.getHex() : 0, tag: o.userData.part ?? (o.name === 'glass' || o.name === 'cloth' || o.name === 'room' ? o.name : undefined), info: o.userData.audit, fx,
       thin: !fx && (!!(mat as THREE.Material).transparent || o.name === 'glass' || o.name === 'cloth' || o.name === 'room'), hollow: !!geo.userData.hollow, mesh, fit,
-      sides: p.type === 'CylinderGeometry' ? p.parameters.radialSegments : undefined,
+      sides: p.type === 'CylinderGeometry' ? p.parameters.radialSegments : laid?.sides, round: !!laid,
       box: !geo.userData.boxes && (p.type === 'BoxGeometry' || !!geo.userData.box), notched: !!geo.userData.notched,
     });
   });
@@ -5213,9 +5476,11 @@ function paintKindOf(m: THREE.MeshStandardMaterial): PaintKind | null {
 
 /**
  * The stone layout of a finished prop's dressed stone (masonry.ts): for each part painted as masonry
- * or ashlar, its courses run from the prop's foot to its top, broken at every band that crosses it
- * (a string course, a plinth, a coping: any long, low part laid over it), so the courses fit whole
- * between the bands and every part of one face shares them.
+ * or ashlar, its courses run up from the prop's foot, broken at every band that crosses its faces (a
+ * string course, a plinth, a coping: any long, low part laid over it), so the courses fit whole
+ * between the bands, every part of one face shares them, and over the last band they run on at one
+ * course height. The castle lays all its bands on the course lines (masonry.ts), so its courses are
+ * one height everywhere and line up from piece to piece.
  */
 function masonLayout(g: THREE.Object3D) {
   g.updateMatrixWorld(true);
@@ -5232,23 +5497,41 @@ function masonLayout(g: THREE.Object3D) {
   });
   const stone = parts.filter((p) => p.mason);
   if (!stone.length) return () => null;
-  const foot = Math.min(...stone.map((p) => p.box.min.y)), top = Math.max(...stone.map((p) => p.box.max.y));
-  const bands = parts.filter((p) => p.box.max.y - p.box.min.y <= 0.8 && Math.max(p.box.max.x - p.box.min.x, p.box.max.z - p.box.min.z) >= 1.2);
+  // The courses count up from the ground the prop stands on (its origin), where its walling reaches it
+  // (a foundation sunk below it, a floor or a threshold laid a hair into it, moves no course), or from
+  // the walling's own foot where that stands clear above it.
+  const walling = stone.filter((p) => p.box.max.y - p.box.min.y >= 0.2);
+  const foot = Math.max(0, Math.min(...(walling.length ? walling : stone).map((p) => p.box.min.y)));
+  // A band is a long, low course of stone (a sill or a lintel is no course, and lays none of its own
+  // into the walling).
+  const bands = stone.filter((p) => p.box.max.y - p.box.min.y <= 0.8 && Math.max(p.box.max.x - p.box.min.x, p.box.max.z - p.box.min.z) >= 2);
   const of = new Map<THREE.Mesh, (typeof parts)[number]>(parts.map((p) => [p.mesh, p]));
   return (mesh: THREE.Mesh): MasonOpts | null => {
     const p = of.get(mesh);
     if (!p?.mason) return null;
     const b = p.box, dx = b.max.x - b.min.x, dz = b.max.z - b.min.z, alongX = dx >= dz;
-    // (A part whose builder laid its quoins to its courses names its own breaks.)
-    const own = mesh.userData.courses as number[] | undefined;
-    const ys = own ? [...own] : [foot, top];
+    // (Across its faces, and along them.)
+    const ax = alongX ? 'z' : 'x', run = alongX ? 'x' : 'z';
+    // (A part laid in the deliberate other size names its course height and stone length, and is
+    // laid in courses of its own: see `deep`.)
+    const course = mesh.userData.course as number | undefined, stoneLen = mesh.userData.stone as number | undefined;
+    const ys = course ? [foot, b.min.y, b.max.y] : [foot];
     // (A band is one course of its own: its foot and top lie on course lines, the same lines the
-    // walling behind it is laid to, so a course standing proud round a drum lines up with its stones.)
-    if (!own && b.max.y - b.min.y <= 0.8) ys.push(b.min.y, b.max.y);
-    if (!own) for (const q of bands) {
+    // walling behind it is laid to, so a course standing proud round a drum lines up with its stones.
+    // A strip of walling under or over an opening is no band: it lies flush on the walling of its own
+    // stone over or under it, in the courses of the wall it is part of.)
+    const strip = stone.some((q) => q !== p && q.color === p.color && Math.abs(q.box.min[ax] - b.min[ax]) < 0.03 && Math.abs(q.box.max[ax] - b.max[ax]) < 0.03 && (Math.abs(q.box.min.y - b.max.y) < 0.02 || Math.abs(q.box.max.y - b.min.y) < 0.02) && Math.min(q.box.max[run], b.max[run]) - Math.max(q.box.min[run], b.min[run]) > 0.05);
+    if (!course && b.max.y - b.min.y <= 0.8 && !strip) ys.push(b.min.y, b.max.y);
+    if (!course) for (const q of bands) {
       if (q === p || q.box.min.y <= b.min.y + 0.02 && q.box.max.y >= b.max.y - 0.02) continue;
       const qb = q.box;
       if (qb.max.x < b.min.x - 0.3 || qb.min.x > b.max.x + 0.3 || qb.max.z < b.min.z - 0.3 || qb.min.z > b.max.z + 0.3) continue;
+      // It crosses the part's face: it stands proud of it, against it. (A floor, a deck or a roof
+      // reaching in from it is no band on it, nor is the walling laid flush beside it.)
+      const outA = qb.max[ax] - b.max[ax], outB = b.min[ax] - qb.min[ax];
+      if (Math.max(outA, outB) < 0.03 || outA > 0.6 || outB > 0.6) continue;
+      // (A thin strip, a gutter's edge or a threshold, is no course, but for a coping laid on its top.)
+      if (qb.max.y - qb.min.y < 0.15 && Math.abs(qb.min.y - b.max.y) > 0.02) continue;
       const cover = alongX ? Math.min(qb.max.x, b.max.x) - Math.max(qb.min.x, b.min.x) : Math.min(qb.max.z, b.max.z) - Math.max(qb.min.z, b.min.z);
       if (cover < 0.7 * (alongX ? dx : dz)) continue;
       ys.push(qb.min.y, qb.max.y);
@@ -5269,12 +5552,16 @@ function masonLayout(g: THREE.Object3D) {
       }
       return [lo, hi];
     };
-    const [x0, x1] = reach('x'), [z0, z1] = reach('z');
-    const face = p.square && !mesh.userData.wrap ? { x0, x1, z0, z1 } : undefined;
+    // (A part cut from a mass round an opening names the mass's whole face: see `carved`.)
+    const named = mesh.userData.face as MasonOpts['face'];
+    const [x0, x1] = named ? [named.x0, named.x1] : reach('x'), [z0, z1] = named ? [named.z0, named.z1] : reach('z');
+    const face = named ?? (p.square ? { x0, x1, z0, z1 } : undefined);
     const c = b.getCenter(new THREE.Vector3());
     // (A part no bigger than one stone, a merlon, a quoin, a voussoir, is laid as one stone.)
-    const single = !!mesh.userData.single || (!mesh.userData.wrap && Math.max(dx, dz) <= STONE_LEN * 1.3 && b.max.y - b.min.y <= 0.8);
-    return { single, face, m: inv.clone().multiply(mesh.matrixWorld), wrap: !!mesh.userData.wrap, breaks: cleanBreaks(ys.filter((y) => y >= foot - 1e-6 && y <= top + 1e-6)), seed: Math.floor((face ? hash01(x0, x1, z0 + z1, p.color) : hash01(c.x, c.y, c.z)) * 97) };
+    const single = !named && Math.max(dx, dz) <= STONE_LEN * 1.3 && b.max.y - b.min.y <= 0.8;
+    const opts = { single, face, course, stone: stoneLen, m: inv.clone().multiply(mesh.matrixWorld), breaks: cleanBreaks(ys.filter((y) => y >= foot - 1e-6)), seed: Math.floor((face ? hash01(x0, x1, z0 + z1, p.color) : hash01(c.x, c.y, c.z)) * 97) };
+    if (PART_AUDIT.on) (g.userData.courses ??= []).push({ color: p.color, box: b.clone(), breaks: opts.breaks, course: course ?? COURSE, single, laid: !!mesh.geometry.getAttribute('aMason') || !!mesh.geometry.getAttribute('aLay') } satisfies CourseRecord);
+    return opts;
   };
 }
 
@@ -5284,20 +5571,8 @@ function masonLayout(g: THREE.Object3D) {
  */
 export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
   if (PART_AUDIT.on) recordParts(g);
-  // A drum's parts take their own copy of their material, painted round its axis (see `wrapped`).
-  const wrapMats = new Map<THREE.Material, THREE.MeshStandardMaterial>();
-  g.traverse((o) => {
-    if (!(o instanceof THREE.Mesh) || !o.userData.wrap || !(o.material instanceof THREE.MeshStandardMaterial)) return;
-    let w = wrapMats.get(o.material);
-    if (!w) {
-      w = o.material.clone();
-      w.userData = { ...o.material.userData, wrap: true };
-      wrapMats.set(o.material, w);
-    }
-    o.material = w;
-  });
   mergeStatic(g, masonLayout(g));
-  for (const m of [...kits.flatMap((k) => k.mats), ...wrapMats.values()]) {
+  for (const m of kits.flatMap((k) => k.mats)) {
     // Iron and gold fittings shine; coal and obsidian are glossy; grey masonry gets a gentle
     // stone detail (lined up in world space); everything else stays clean flat colour.
     const hex = m.color.getHex();
@@ -5332,7 +5607,7 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
       Object.assign(m, { roughness: 0.2, metalness: 0.25, envMap: studioEnv(), envMapIntensity: 1.1 });
       m.needsUpdate = true;
     } else if (m.emissive.getHex() === 0 || m.emissiveIntensity === 0) {
-      applyPaint(m, paintFor(hex), 'object', 1, !!m.userData.wrap);
+      applyPaint(m, paintFor(hex), 'object');
     }
   }
   g.traverse((o) => {

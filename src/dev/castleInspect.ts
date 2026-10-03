@@ -96,8 +96,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   const y0 = g.zone.groundY(P.fountain.x, P.fountain.z);
   const out: Record<string, unknown> = {};
 
-  /** The hero standing at (x, z), seen through the game's own camera at `zoom`. */
-  const play = async (name: string, x: number, z: number, zoom: number, measure = false) => {
+  /** The hero standing at (x, z), seen through the game's own camera at `zoom`, with its frame cost. */
+  const play = async (name: string, x: number, z: number, zoom: number) => {
     if (only && !only.includes(name)) return;
     const at = g.zone.nav.nearestWalkable(x, z)!;
     g.player.obj.visible = true;
@@ -106,7 +106,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     g.camPos.copy(g.player.pos);
     g.camZoom = zoom;
     g.update(0);
-    if (measure) out[`perf-${name}`] = await perf(g, 40);
+    out[`perf-${name}`] = await perf(g, 40);
     await shot(`bailey-${name}`);
     if (angles) {
       const look = g.player.pos.clone().setY(g.player.pos.y + 1.2);
@@ -213,8 +213,8 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('falls', [P.gate.x + 31, y0 - 5, P.gate.z + 30], [P.gate.x + 26.5, y0 - 6.5, P.gate.z + 12], 18);
   // The spring breaking out at the brink of the crown's west buttress and falling into the Veil.
   await view('falls-west', [4, y0 + 6, 92], [19.6, y0 - 4, 80.5], 24);
-  // The rock's foot through the gameplay camera, from the spring's landing (frame cost measured).
-  await play('rock-foot', P.gate.x + 21, P.gate.z + 17, 1.0, true);
+  // The rock's foot through the gameplay camera, from the spring's landing.
+  await play('rock-foot', P.gate.x + 21, P.gate.z + 17, 1.0);
   // The fields at the rock's foot, low across the plots and the meadow rolling between them.
   await view('farm', [P.gate.x + 14, 2.6, P.gate.z + 44], [P.gate.x + 4, 0.2, P.gate.z + 26], 20);
   if (rockOnly) return finish();
@@ -227,6 +227,10 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   // the north skyline from far out in the south-east, the roses on the curtain behind the bower and
   // the west wing's door onto the cour.
   await view('keep-front', [P.door.x, y0 + 9, 62], [P.door.x, y0 + 7, 40], 18);
+  // The west pavilion's lower window (the glazing kit) from a little to its side, the glass and the lit
+  // chamber behind it.
+  const pane = { x: P.door.x - 6.2, z: P.door.z + 2.1 };
+  await view('keep-window', [pane.x + 2.6, y0 + 7.6, pane.z + 5.4], [pane.x, y0 + 6.8, pane.z - 0.4], 8);
   await view('gatehouse-outer', [P.gate.x + 10, y0 + 6, P.gate.z + 22], [P.gate.x, y0 + 7, P.gate.z], 18);
   await view('gate-close', [P.gate.x + 14, y0 + 9, P.gate.z + 22], [P.gate.x, y0 + 6, P.gate.z - 1], 20);
   await view('tower-close', [43, y0 + 8, 76], [31, y0 + 7, 66], 14);
@@ -241,7 +245,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   }
   // Through the gameplay camera: inside the gate looking up the yard, the centrepiece, the great door.
   await play('entry', P.gate.x, P.gate.z - 4, 1.3);
-  await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.2, true);
+  await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.2);
   await play('door', P.door.x, P.door.z + 3.5, 1.0);
   // The fountain and its water up close, low down.
   await view('fountain-close', [P.fountain.x + 7.5, y0 + 4.2, P.fountain.z + 14.5], [P.fountain.x, y0 + 4.4, P.fountain.z + 0.5], 14);
@@ -273,6 +277,6 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('walk-kitchen', [120 - mid, walkY, 45], [120 - mid, walkY - 0.6, 36], 10);
   await view('walk-stables', [120 - mid, walkY, 95], [120 - mid, walkY - 0.6, 86], 10);
   // Frame cost in a meadow outside the castle, for comparison with the fountain's.
-  await play('meadow', 56, 132, 1.0, true);
+  await play('meadow', 56, 132, 1.0);
   return finish();
 }
