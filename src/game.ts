@@ -449,6 +449,7 @@ export class Game {
       this.zone.update(dt);
       this.glow.update(dt);
       this.particles.update(dt);
+      this.text.update(raw);
       this.ui.update(raw);
       return;
     }
