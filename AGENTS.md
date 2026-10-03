@@ -32,7 +32,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 ## Where things are
 
 - **The plan:** [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) holds agreed direction, working proposals and open decisions. Record every decision the owner makes there in the same session, whichever chat it came from; a decision that lives only in a chat is lost. Don't start new plan files. The README lists the other docs.
-- **Design images** (concepts, icons, mockups) are generated with Codex: any agent can run it headless with `codex exec -m gpt-5.6-sol -C D:\dragonbound-archive\codex --skip-git-repo-check -s workspace-write -i <reference> -` (prompt on stdin), asking it to use its image generation tool and save the PNG. Run it outside the repo: the dev server watches the repo and crashes on files Codex holds open. The owner reviews images in batches before anything goes into the game; concept sheets that models are built from live in `docs/concepts/`.
+- **Design images** (concepts, icons, mockups) are generated with Codex: any agent can run it headless with `codex exec -m gpt-6.1-sol -C D:\dragonbound-archive\codex --skip-git-repo-check -s workspace-write -i <reference> -` (prompt on stdin), asking it to use its image generation tool and save the PNG. Run it outside the repo: the dev server watches the repo and crashes on files Codex holds open. The owner reviews images in batches before anything goes into the game; concept sheets that models are built from live in `docs/concepts/`.
 - **Scratch output** (captures, logs, agent run files) goes in `inspect/`, which git ignores, or outside the repo. Large archives go in `D:\dragonbound-archive`.
 
 ## Finding context and checking work
@@ -59,5 +59,6 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - Pure logic (XP, drops, recipes, saves, pathing) is unit-tested in `tests/`.
 - Save format changes bump `SAVE_VERSION` and add a tested migration, so players never lose progress.
 - Art is code: every model is a Blender script in `tools/blender/`, and the `.glb` exports are committed. Textures are sourced, not hand-painted in code (owner, October 3): generated with Codex image generation in the game's painted style, or taken from free CC0 libraries (Poly Haven, ambientCG) and toned to match. Each is made tileable, checked repeating in the game, committed small, and listed with its source and licence. See [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
+- Always build on the newest stable version of every tool, library, engine feature and model, and use its newest way of doing things, not the legacy path (owner, October 3). At the start of a job, check the versions and current features it touches. Fall back to an older path only when the newest is broken or missing something, and then tell the owner plainly.
 - No placeholder text, TODO stubs or dead code on `main`.
 - Files are UTF-8 without a BOM; CI rejects BOMs and mojibake.
