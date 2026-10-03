@@ -7,7 +7,7 @@ import { studioEnv } from '../../render/env';
 import { COURSE, drumStones } from '../../render/masonry';
 import { addPatch } from '../../render/surface';
 import { chamferBox, hash01, taper } from '../../render/blocks';
-import { type Builder, archPane, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, BASE, BASE_COURSE, boardedLeaf, cb, CLIMBER_BLOOM, CLIMBER_IVY, CLIMBER_ROSE_LEAF, crownFoot, DARK, DECK, deep, DOORS, DRESS, dressedArch, drum, flag, frieze, GILT, glassMat, HERALD_BLUE, INLAY, IRON, LAMP_NAVY, lenOf, limb, livery, PAVE, pointedArch, pointedDoor, roomMat, spandrels, spire, spread, vOf, WOOD_D } from '../props';
+import { type Builder, archPane, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, BASE, BASE_COURSE, boardedLeaf, cb, CLIMBER_BLOOM, CLIMBER_IVY, CLIMBER_ROSE_LEAF, crownFoot, DARK, DECK, deep, DOORS, DRESS, dressedArch, drum, flag, GILT, glassMat, INLAY, IRON, LAMP_NAVY, lenOf, limb, livery, PAVE, pointedArch, pointedDoor, roomMat, spandrels, spire, spread, vOf, WOOD_D } from '../props';
 
 /** A climber's leaf card: a flat pointed leaf (a squashed octahedron), lying flat to the wall. */
 /** A climber's leaf: a small flat card (five-sided, so a sheet of them reads as foliage, not tiles). */
@@ -186,7 +186,7 @@ export function drumDoorway(k: ModelKit, g: THREE.Object3D, r: number, a: number
  * a course stepped out from the drum, merlons), all in the castle's one stone on the course lines. Each
  * course that stands proud is the drum's own course at that height, the same stones a little larger,
  * so the bond runs on through it. A plain tower's platform is paved as a compass rose; a corner tower
- * (or a stair tower, `spire`) carries a gilt frieze for its band and a spire. `walks`: where the
+ * (or a stair tower, `spire`) carries a plain band under its crown and a spire. `walks`: where the
  * curtain's wall walks come to it ([bearing, offset] pairs), a doorway onto each; `door`: the bearing
  * of a door at its foot; `out`: the bearing it faces out from the castle, its arrow loops in two rows
  * round that side.
@@ -203,7 +203,7 @@ function drumTower(k: ModelKit, g: THREE.Object3D, r: number, H: number, corner:
   drumFoot(k, g, r, r + 0.5, r + 0.15);
   drumShaft(k, g, r, BASE_COURSE, P, ASHLAR, opt.walks ?? [], DOORS.walk.y);
   for (const y of CURTAIN_COURSES) drumCourse(k, g, r, 0.06, y);
-  if (spired) drumFrieze(k, g, 0, 0, r, top - 1.5 * COURSE, N);
+  if (spired) drumBand(k, g, 0, 0, r, top - 1.5 * COURSE);
   else drumCourse(k, g, r, 0.06, top - 2 * COURSE);
   crown(k, g, 0, 0, r, P, N, !spired);
   for (const [a, o] of opt.walks ?? []) drumDoorway(k, g, r, a, o, DOORS.walk.y);
@@ -222,24 +222,29 @@ function drumTower(k: ModelKit, g: THREE.Object3D, r: number, H: number, corner:
       for (const y of LOOP_ROWS) arrowLoop(k, f, 0, y, r);
     }
   }
-  if (spired) spire(k, g, 0, P + 0.9, 0, r + 0.1, r * 1.75, N, 1, 1.5);
+  if (spired) {
+    spire(k, g, 0, P + 0.9, 0, r + 0.1, r * 1.75, N, 1, 1.5);
+    shadowless(g);
+  }
 }
 
 /**
- * The same gilt frieze round a drum of radius r centred at (x, z), its course centred at height y: the
- * drum's own course standing proud, the diamonds evenly round it.
+ * The flags flying high over the walls cast no shadow: seen from the play camera they fly above the
+ * top of the screen, and their shadows would cross the bailey from nothing in sight.
  */
-export function drumFrieze(k: ModelKit, g: THREE.Object3D, x: number, z: number, r: number, y: number, N: number) {
-  const n = drumStones(r), y0 = y - COURSE / 2, step = (Math.PI * 2) / n, R = r + 0.1;
-  drum(k, g, { r: R, y0, y1: y0 + COURSE, n }, DRESS, x, z);
-  // (Each diamond laid flat on the stone it falls on, two to each of its N bays: the course is turned
-  // half a stone on an odd course line, as laidDrum turns it.)
-  const t0 = (Math.round(y0 / COURSE) % 2) * (step / 2), m = 2 * N;
-  for (let i = 0; i < m; i++) {
-    const a = ((i + 0.5) / m) * Math.PI * 2, f = t0 + (Math.floor((a - t0) / step) + 0.5) * step;
-    const d = (R * Math.cos(step / 2)) / Math.cos(a - f);
-    k.box(g, [0.2, 0.2, 0.05], [x + Math.sin(a) * d + Math.sin(f) * 0.025, y, z + Math.cos(a) * d + Math.cos(f) * 0.025], GILT, [0, f, Math.PI / 4]);
-  }
+function shadowless(g: THREE.Object3D) {
+  g.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.name === 'cloth') (o.material as THREE.Material).userData.decal = true;
+  });
+}
+
+/**
+ * The band under a spired drum's crown, round a drum of radius r centred at (x, z), its course
+ * centred at height y: the drum's own course standing proud, plain (the gold diamond is kept for the
+ * banners and flags).
+ */
+export function drumBand(k: ModelKit, g: THREE.Object3D, x: number, z: number, r: number, y: number) {
+  drum(k, g, { r: r + 0.1, y0: y - COURSE / 2, y1: y + COURSE / 2, n: drumStones(r) }, DRESS, x, z);
 }
 
 /**
@@ -654,7 +659,7 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
    */
   round_tower: (k, g, arg) => drumTower(k, g, lenOf(arg) ?? 3.2, vOf(arg) || 9, false, arg?.opt),
   /**
-   * A corner tower of the curtain: a round tower a stage taller than the wall towers, a gilt frieze
+   * A corner tower of the curtain: a round tower a stage taller than the wall towers, a band of stone
    * under its parapet and a blue-slate spire with a gilt finial and a pennant standing inside its
    * merlon ring, so the corners step the skyline up round the walls (the wall towers stay flat).
    */
@@ -671,6 +676,7 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
     cb(k, g, [0.13, 5.6, 0.13], [0, P + 2.8, 0], LAMP_NAVY, undefined, 0.02);
     k.mesh(g, new THREE.OctahedronGeometry(0.14, 1), PAL.gold, [0, P + 5.7, 0]);
     flag(k, g, 0, P + 5.5, 0, 2.3, 1.4, dir);
+    shadowless(g);
   },
   /**
    * The outer gatehouse in the curtain: two drum towers (radius `opt.R`) standing on the curtain's line
@@ -696,12 +702,13 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       drumFoot(k, dg, R, R + 0.55, R + 0.2);
       drumShaft(k, dg, R, BASE_COURSE, H, ASHLAR, [[(sx * Math.PI) / 2, -sx * DOORS.walk.off]], DOORS.walk.y);
       for (const y of CURTAIN_COURSES) drumCourse(k, dg, R, 0.06, y);
-      drumFrieze(k, dg, 0, 0, R, crownFoot(H) - 1.5 * COURSE, N);
+      drumBand(k, dg, 0, 0, R, crownFoot(H) - 1.5 * COURSE);
       crown(k, dg, 0, 0, R, H, N);
       // (The pole rises well clear of the merlons, as on the wall towers, a gold ball on its top.)
       cb(k, dg, [0.13, 5.6, 0.13], [0, H + 2.8, 0], LAMP_NAVY, undefined, 0.02);
       k.mesh(dg, new THREE.OctahedronGeometry(0.14, 1), PAL.gold, [0, H + 5.7, 0]);
       flag(k, dg, 0, H + 5.5, 0, 2.3, 1.4, sx);
+      shadowless(dg);
       // The wall walk comes in from the curtain beyond it (local +X on the right drum) to a doorway.
       drumDoorway(k, dg, R, (sx * Math.PI) / 2, -sx * DOORS.walk.off, DOORS.walk.y);
       // Arrow loops on its outer face, two storeys, set square to the field outside.
@@ -739,9 +746,8 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
     // The ceremonial arch, the great door's twin, all in the castle's dressed stone: on both faces a
     // deep ring of voussoirs (0.6 deep, flush on one radius just proud of the face, every other one a
     // hair prouder), springing from moulded imposts on jambs set flush in the same plane, and a big
-    // keystone. Outside, over the opening, a tympanum of the same stone carries the lord's gilt diamond
-    // on a slim lintel, the raised portcullis set back behind it with only its spikes showing; the
-    // keystone bears the shield.
+    // keystone. Outside, over the opening, a plain tympanum of the same stone on a slim lintel, the
+    // raised portcullis set back behind it with only its spikes showing.
     const NV = 9, VD = 0.6, VP = 0.16;
     for (const e of [-1, 1]) {
       const fz = zc + e * (D / 2), pz0 = fz + e * (VP / 2 - 0.01);
@@ -763,9 +769,6 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       cb(k, g, [0.62, 0.8, VP + 0.1], [0, apex + 0.31, fz + e * ((VP + 0.1) / 2 - 0.01)], DRESS, undefined, 0.03);
     }
     {
-      const kz = zc - D / 2 - VP - 0.06;
-      cb(k, g, [0.4, 0.34, 0.05], [0, apex + 0.42, kz], HERALD_BLUE, undefined, 0.01);
-      k.box(g, [0.15, 0.15, 0.03], [0, apex + 0.42, kz - 0.03], PAL.gold, [0, 0, Math.PI / 4]);
       // The tympanum over the opening outside, set a little back in the arch, on its lintel (whose top
       // lies on a course line).
       const lt = Math.ceil((spring + 0.3) / COURSE) * COURSE;
@@ -783,7 +786,6 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       s0.lineTo(-x0, y0);
       const tz = zc - D / 2 + 0.24;
       k.mesh(g, new THREE.ExtrudeGeometry(s0, { depth: 0.12, bevelEnabled: false }), DRESS, [0, spring, tz - 0.06]);
-      k.box(g, [0.9, 0.9, 0.04], [0, spring + (y0 + apex - spring) / 2 - 0.1, tz - 0.08], PAL.gold, [0, 0, Math.PI / 4]);
       cb(k, g, [P + 0.04, lt - spring + 0.01, 0.34], [0, (spring - 0.01 + lt) / 2, tz], DRESS, undefined, 0.02);
     }
     // The portcullis, raised behind the tympanum: its grid filling the arch head, only the spiked
@@ -799,9 +801,10 @@ export const CURTAIN_PROPS: Record<string, Builder> = {
       const hw = half(y) + 0.12;
       if (hw > 0.3) k.box(g, [hw * 2, 0.09, 0.12], [0, y, pz], IRON);
     }
-    // Along the outer face the gilt frieze and over it the course that carries the parapet, standing
-    // out from the face; then the parapet all round the block's top, two courses high, and its coping.
-    frieze(k, g, 2 * bw + 0.1, 0, GH - 1.5 * COURSE, zc - D / 2 - 0.02);
+    // Along the outer face a band of dressed stone and over it the course that carries the parapet,
+    // standing out from the face; then the parapet all round the block's top, two courses high, and
+    // its coping.
+    cb(k, g, [2 * bw + 0.1, COURSE, 0.16], [0, GH - 1.5 * COURSE, zc - D / 2 - 0.02], DRESS, undefined, 0.02);
     cb(k, g, [2 * bw + 0.1, COURSE, 0.4], [0, GH - COURSE / 2, zc - D / 2 - 0.1], DRESS, undefined, 0.02);
     cb(k, g, [2 * bw, 2 * COURSE, 0.6], [0, GH + COURSE, zc - D / 2], ASHLAR, undefined, 0.03);
     cb(k, g, [2 * bw, 2 * COURSE, 0.5], [0, GH + COURSE, zc + D / 2 - 0.25], ASHLAR, undefined, 0.03);

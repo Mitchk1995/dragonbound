@@ -43,7 +43,9 @@ const JOINTS: { a: string[]; b: string[]; why: string; rule?: (a: Piece, b: Piec
   { a: ['fence'], b: ['gate_piers'], why: 'a fence runs into its gate pier' },
   { a: ['stream_stone'], b: ['stream_stone'], why: 'stones heaped together in the stream' },
   { a: ['moat_plinth', 'moat_plinth_run'], b: ['moat_plinth', 'moat_plinth_run', 'castle_bridge'], why: "the battered plinths of the curtain, its towers and the gate's drums are one footing in the moat, the bridge's abutment built against them" },
-  { a: ['ramp_wall'], b: ['moat_plinth'], why: "under the turf the terrace's retaining wall is founded beside a tower's plinth" },
+  { a: ['ramp_wall'], b: ['moat_plinth', 'moat_plinth_run'], why: "under the turf the terrace's retaining wall and the garden walls are founded beside the curtain's and the towers' plinths" },
+  { a: ['ramp_wall'], b: ['champion'], why: "the grand stair's cheek walls end in the champions' plinths" },
+  { a: ['ramp_wall'], b: ['garden_gate'], why: "a garden wall runs into its gate's pier" },
   { a: ['moat_plinth_run'], b: ['building'], why: "the north curtain's plinth runs into the keep's stepped plinth where the curtain meets its flanks" },
 ];
 
@@ -727,7 +729,7 @@ describe('castle geometry', () => {
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
   });
 
-  it('a low wall runs square into one face of its pier, its end buried in the pier', () => {
+  it("a low wall runs square into one face of its pier (a parapet's, a garden gate's or a champion's plinth), its end buried in it", () => {
     const bad: string[] = [];
     const Y = new THREE.Vector3(0, 1, 0);
     // Each run's ends: where it stops, the way it runs into the end, and its coping's half width.
@@ -746,18 +748,26 @@ describe('castle geometry', () => {
         ends.push({ name: `ramp_wall@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`, at: e, dir: [(e[0] - f[0]) / l, (e[1] - f[1]) / l], hw: (((sp.opt as { w?: number }).w ?? 0.62) - 0.02) / 2 });
       }
     }
-    for (const pier of P.filter((p) => p.kind === 'parapet_pier')) {
-      const c = pier.obj.getWorldPosition(new THREE.Vector3());
+    // The piers: the parapets' (a shaft 0.95 square), each garden gate's two (1.04 square, either side
+    // of its opening) and the champions' plinths (1.6 square), each with its piece and its middle in
+    // that piece's frame.
+    const piers = [
+      ...P.filter((p) => p.kind === 'parapet_pier').map((p) => ({ p, at: new THREE.Vector3(), half: 0.475 })),
+      ...P.filter((p) => p.kind === 'garden_gate').flatMap((p) => [-1, 1].map((sx) => ({ p, at: new THREE.Vector3(sx * ((p.spawn!.len ?? 3) / 2 + 0.52), 0, 0), half: 0.52 }))),
+      ...P.filter((p) => p.kind === 'champion').map((p) => ({ p, at: new THREE.Vector3(), half: 0.8 })),
+    ];
+    for (const { p: pier, at, half } of piers) {
+      const c = pier.obj.localToWorld(at.clone());
       for (const e of ends) {
-        if (Math.hypot(e.at[0] - c.x, e.at[1] - c.z) > 0.75) continue;
+        if (Math.hypot(e.at[0] - c.x, e.at[1] - c.z) > half + 0.3) continue;
         // In the pier's own frame: the wall's way in lies within 25° of a face's normal...
-        const d = local(pier, new THREE.Vector3(c.x + e.dir[0], c.y, c.z + e.dir[1]));
+        const d = local(pier, new THREE.Vector3(c.x + e.dir[0], c.y, c.z + e.dir[1])).sub(at);
         const off = Math.atan2(Math.min(Math.abs(d.x), Math.abs(d.z)), Math.max(Math.abs(d.x), Math.abs(d.z)));
         if (off > (25 * Math.PI) / 180) bad.push(`${e.name} runs into ${pier.name} ${((off * 180) / Math.PI).toFixed(0)}° off square, into its corner`);
-        // ...and both corners of its coping's end stand inside the pier's shaft (0.95 square).
+        // ...and both corners of its coping's end stand inside the pier's shaft.
         for (const sg of [-1, 1]) {
-          const q = local(pier, new THREE.Vector3(e.at[0] - e.dir[1] * e.hw * sg, c.y, e.at[1] + e.dir[0] * e.hw * sg));
-          if (Math.max(Math.abs(q.x), Math.abs(q.z)) > 0.475 + 0.03) bad.push(`${e.name} stops short of ${pier.name}'s face at (${(c.x + q.x).toFixed(1)}, ${(c.z + q.z).toFixed(1)})`);
+          const q = local(pier, new THREE.Vector3(e.at[0] - e.dir[1] * e.hw * sg, c.y, e.at[1] + e.dir[0] * e.hw * sg)).sub(at);
+          if (Math.max(Math.abs(q.x), Math.abs(q.z)) > half + 0.03) bad.push(`${e.name} stops short of ${pier.name}'s face at (${(c.x + q.x).toFixed(1)}, ${(c.z + q.z).toFixed(1)})`);
         }
       }
     }
