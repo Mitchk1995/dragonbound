@@ -8,6 +8,7 @@ import { buildLawn } from './lawn';
 import { buildProp, KERB, OCCLUDING_PROPS, type Prop } from './props';
 import { setWaterSky } from './water';
 import { buildBuilding, buildFitProp, type BuildingProp } from './buildingModel';
+import { buildKeep } from './castle/keepModel';
 import { addPatch, applyGrade, applyHeightShade, applySurface, type Grade } from '../render/surface';
 import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { laidRun } from '../render/masonry';
@@ -1331,7 +1332,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   // Buildings stand on the flat floor they stamped; their walls dissolve around the hero like
   // any other occluder.
   const buildings = (layout.buildings ?? []).map((b) => {
-    const bp = buildBuilding(b, floorAt(b.x + b.w / 2, b.z + b.d / 2));
+    // (The great keep has its own model.)
+    const bp = (b.id === 'keep' ? buildKeep : buildBuilding)(b, floorAt(b.x + b.w / 2, b.z + b.d / 2));
     occludeAll(bp.obj);
     group.add(bp.obj);
     return bp;

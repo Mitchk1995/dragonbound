@@ -8,7 +8,7 @@ import * as castleBailey from '../world/castle/bailey';
 import * as castleCurtain from '../world/castle/curtain';
 import * as castleGround from '../world/castle/ground';
 import { onCrown } from '../world/castle/ground';
-import { KEEP_SPEC } from '../world/castle/keepSpec';
+import { keepGround, KEEP_SPEC } from '../world/castle/keepSpec';
 import { AXIS, CROWN_Y, CURTAIN_CORNERS, FARM, FOUNTAIN, GATE, KEEP, mx, WATER, ZONES } from '../world/castle/plan';
 import { RANGE_SPECS } from '../world/castle/rangeSpecs';
 import { inPoly as inPolygon, Site } from '../world/castle/site';
@@ -510,6 +510,8 @@ export function buildKeep(seed: number): ZoneLayout {
 
   // ─── Buildings ─────────────────────────────────────────────────────────────
   for (const b of KEEP_BUILDINGS) G.building(b);
+  // (The keep's turrets and frontispiece stand on the terrace round it.)
+  keepGround(site);
   for (const b of KEEP_BUILDINGS) G.verge(b.x + b.w / 2, b.z + b.d / 2, Math.max(b.w, b.d) / 2 + 7);
   // (A raised part of a floor, a dais, raises the ground the hero stands on there.)
   for (const b of KEEP_BUILDINGS) for (const r of b.raised ?? []) site.cells([b.x + r.rect[0], b.z + r.rect[1], b.x + r.rect[2], b.z + r.rect[3]], (i) => (level[i] += r.h));

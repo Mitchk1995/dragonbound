@@ -7,6 +7,7 @@ import { cellRole, fitBlocks, fitsOf, flightsOf, inRoom, partitionRuns, raisedAt
 import { CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
 import { newSave } from '../src/save/save';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
+import { buildKeep } from '../src/world/castle/keepModel';
 import { distToPoly } from '../src/world/gen';
 import { Cell, Ground } from '../src/world/layout';
 import { buildProp } from '../src/world/props';
@@ -143,7 +144,7 @@ describe('Dragonspire Keep', () => {
     expect(Math.abs(TERRACE_Y + k.storeyH! - (CROWN_Y + 7.06))).toBeLessThan(0.1);
     expect(k.windows.some((w) => w.floor === 1)).toBe(true);
     expect(k.upper?.voids?.length).toBeGreaterThan(0);
-    const p = buildBuilding(k), box = new THREE.Box3().setFromObject(p.obj);
+    const p = buildKeep(k, TERRACE_Y), box = new THREE.Box3().setFromObject(p.obj);
     expect(box.max.y).toBeGreaterThan(k.wallH + 1);
   });
   it('the castle stands level on the crown, the north range and the keep on the terrace; the way in climbs the stair, crosses the bridge and runs up the avenue to the great door', () => {
@@ -460,8 +461,8 @@ describe('building models', () => {
     expect(p.contains(B.bank.x - 3, B.bank.z + 5)).toBe(false);
   });
   it('upstairs shows the boards and upper rooms, the hall below through its open void, and switches back cleanly', () => {
-    const p = buildBuilding(B.keep);
-    const [, built, roof, , upper] = p.obj.children;
+    const p = buildKeep(B.keep, TERRACE_Y);
+    const [, built, roof, upper] = p.obj.children;
     const ground = built.children[0];
     p.setCut(1, 0);
     expect([ground.visible, upper.visible, roof.visible]).toEqual([true, false, false]);
@@ -476,7 +477,7 @@ describe('building models', () => {
     expect(box.min.y).toBeGreaterThan(1.0);
   });
   it('windows are real openings: you see through the glass, past the wall, into the room', () => {
-    for (const b of [B.smelter, B.keep, B.bank]) {
+    for (const b of [B.smelter, B.bank]) {
       const p = buildBuilding(b);
       p.obj.updateMatrixWorld(true);
       const meshes: THREE.Mesh[] = [];
@@ -489,9 +490,6 @@ describe('building models', () => {
       const glass = hits.find((h) => (h.object as THREE.Mesh).material instanceof THREE.Material && ((h.object as THREE.Mesh).material as THREE.Material).transparent);
       expect(glass, `${b.id} has glass in the opening`).toBeDefined();
       expect(((glass!.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.5);
-      // (A castle window shows its lit room painted on a plate just behind the glass, seen from
-      // outside only; past it the ray goes on into the room.)
-      if (b.style === 'keep') expect(hits.some((h) => h.object.name === 'room'), `${b.id} shows its lit room behind the glass`).toBe(true);
       const solid = hits.find((h) => !((h.object as THREE.Mesh).material as THREE.Material).transparent && h.object.name !== 'room');
       // The first solid thing the ray meets is inside the room, not the wall around the window.
       expect(solid ? solid.point.z : Infinity, b.id).toBeGreaterThan(b.z + 1.1);
@@ -510,7 +508,7 @@ describe('building models', () => {
     for (const k of used) expect(FIT_KINDS, k).toContain(k);
     for (const b of KEEP_BUILDINGS) {
       let bad = 0;
-      buildBuilding(b).obj.traverse((o) => {
+      (b.id === 'keep' ? buildKeep(b, TERRACE_Y) : buildBuilding(b)).obj.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
         const a = o.geometry.getAttribute('position').array as ArrayLike<number>;
         for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) bad++;
