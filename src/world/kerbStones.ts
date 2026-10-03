@@ -6,12 +6,18 @@ export interface KerbRun {
   len: number;
 }
 
+/** A run of kerb as it is laid: `n` stones end to end, one continuous border. */
+export interface LaidKerb extends KerbRun {
+  n: number;
+}
+
 /**
- * How wide a kerb is, and the length its stones are cut to as near as fits (one by one: square): a
- * third of a cell, the paving's own row (see the ground's laid paving).
+ * How wide a kerb is: a third of a cell, the paving's own row (see the ground's laid paving), so the
+ * paving beside it starts on whole stones.
  */
 export const KERB_W = 1 / 3;
-const STONE = KERB_W;
+/** The length a kerb's stones are cut to as near as fits: the paving's own stone, two thirds of a cell. */
+const STONE = 2 * KERB_W;
 /**
  * How far a kerb's middle stands in from its cell edge on the harder side: laid flush on that side, it
  * takes the paving's first row exactly, so the paving beside it starts on whole stones, and the
@@ -20,12 +26,13 @@ const STONE = KERB_W;
 export const KERB_SET = KERB_W / 2;
 
 /**
- * A layout's kerb runs laid as single square header stones, the way a mason sets a kerb: each run
- * along its cell edge, KERB_SET toward the harder side, cut into whole stones; where two runs turn a
- * corner one square corner stone filling the angle, the two runs stopping against it (no gap and no
- * overlap); where a run meets the side of another (a T) it stops against that run's side.
+ * A layout's kerb runs laid the way a mason sets a kerb: each run along its cell edge, KERB_SET toward
+ * the harder side, one continuous border of whole stones (the paving's own length, as near as fits);
+ * where two runs turn a corner one square corner stone fills the angle, the two runs stopping against
+ * it (no gap and no overlap); where a run meets the side of another (a T) it stops against that run's
+ * side.
  */
-export function kerbStones(runs: KerbRun[]): KerbRun[] {
+export function kerbStones(runs: KerbRun[]): LaidKerb[] {
   const H = KERB_W / 2, near = H + 0.1;
   const seg = runs.map((r) => {
     const ux = Math.cos(r.rot), uz = -Math.sin(r.rot), alongX = Math.abs(ux) > 0.5;
@@ -54,16 +61,13 @@ export function kerbStones(runs: KerbRun[]): KerbRun[] {
       else q.b = Math.min(q.b, s.line - H);
     }
   }
-  const out: KerbRun[] = [];
+  const out: LaidKerb[] = [];
   for (const s of seg) {
-    const L = s.b - s.a;
+    const L = s.b - s.a, m = s.a + L / 2;
     if (L < 0.05) continue;
-    const n = Math.max(1, Math.round(L / STONE)), l = L / n;
-    for (let i = 0; i < n; i++) {
-      const m = s.a + l * (i + 0.5);
-      out.push(s.alongX ? { x: m, z: s.line, rot: 0, len: l } : { x: s.line, z: m, rot: Math.PI / 2, len: l });
-    }
+    const n = Math.max(1, Math.round(L / STONE));
+    out.push(s.alongX ? { x: m, z: s.line, rot: 0, len: L, n } : { x: s.line, z: m, rot: Math.PI / 2, len: L, n });
   }
-  for (const [x, z] of corners.values()) out.push({ x, z, rot: 0, len: KERB_W });
+  for (const [x, z] of corners.values()) out.push({ x, z, rot: 0, len: KERB_W, n: 1 });
   return out;
 }

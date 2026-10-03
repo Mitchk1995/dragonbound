@@ -644,15 +644,26 @@ const CAVE_RISERS = `
  * stone two thirds long, every other row's joints over the middle of the stones below. Every cell
  * edge falls on a row joint and on a whole or half stone, so wherever a paved area ends (a cell
  * edge) its stones end whole, and a kerb (a third wide, flush on the paving's side) takes its first row
- * exactly. Rounded, bevelled stones, a tone each, soft broad drift: as the painted paving.
+ * exactly. Rounded, bevelled stones, a tone each, soft broad drift: as the painted paving. Like the
+ * castle's dressed stone (paint.ts) each stone has real relief, gentler: paveGrad is the slope of its
+ * bevelled edge over the ground (MASON's bump, in world space: PAVE_BUMP) and paveJoint how much of
+ * the fragment is joint, both softened far off (`px`, metres to a pixel).
  */
 const PAVE_LAID = `
-        float paveLaid(vec2 p) {
+        vec2 paveGrad = vec2(0.0);
+        float paveJoint = 0.0;
+        float paveLaid(vec2 p, float px) {
           float rz = p.y * 3.0, r = floor(rz), fz = rz - r;
           float xo = p.x * 1.5 + (mod(r, 2.0) > 0.5 ? 0.5 : 0.0), b = floor(xo), fx = xo - b;
           float dx = min(fx, 1.0 - fx) / 1.5, dz = min(fz, 1.0 - fz) / 3.0, rc = 0.05;
+          vec2 sg = vec2(fx < 0.5 ? 1.0 : -1.0, fz < 0.5 ? 1.0 : -1.0);
+          vec2 dir = dx < dz ? vec2(sg.x, 0.0) : vec2(0.0, sg.y);
+          if (dx < rc && dz < rc) dir = normalize(vec2(rc - dx, rc - dz) + 1e-5) * sg;
           float d = (dx < rc && dz < rc) ? rc - length(vec2(rc - dx, rc - dz)) : min(dx, dz);
           d += (texture2D(uMixTex, p * 1.7).r - 0.5) * 0.012;
+          float tb = clamp((d - 0.014) / 0.035, 0.0, 1.0), near = 1.0 - smoothstep(0.02, 0.07, px);
+          paveGrad = dir * (2.0 * 0.011 * (1.0 - tb) / 0.035) * near;
+          paveJoint = (1.0 - smoothstep(0.014 - 0.5 * px, 0.014 + 0.5 * px, d)) * mix(0.5, 1.0, near);
           float h = fract(sin(dot(vec2(r, b), vec2(127.1, 311.7))) * 43758.5453);
           float tone = 0.54 + (h - 0.5) * 0.3 + (texture2D(uMixTex, p * 0.09).r - 0.5) * 0.1 + (texture2D(uMixTex, p * 0.6 + 0.3).r - 0.5) * 0.08;
           float face = tone - (1.0 - smoothstep(0.02, 0.07, d)) * 0.1 + (1.0 - smoothstep(0.0, 0.05, fz / 3.0)) * smoothstep(0.02, 0.04, d) * 0.06;
@@ -735,6 +746,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           w /= (w.x + w.y + w.z);
           // Top: the splatted atlas at two scales, blended by a slow noise mask.
           vec2 p = vSurfPos.xz;
+          ${laid ? '// (How many metres a pixel spans, taken before any branch.)\n          float pavePx = length(fwidth(p));' : ''}
           ${wet ? `// Under water the bed is seen through moving ripples: its pattern wobbles.
           float sub = smoothstep(uWaterY + 0.02, uWaterY - 0.12, vSurfPos.y);
           p += (vec2(texture2D(uMixTex, p * 0.21 + vec2(uTime * 0.03, 0.0)).r, texture2D(uMixTex, p * 0.17 + vec2(0.5, uTime * 0.025)).r) - 0.5) * 0.3 * sub;` : ''}
@@ -751,7 +763,7 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           }
           // Paving is laid square to the world and never cross-faded (two overlaid layouts read
           // as cracked mud): one unrotated sample with an 8-unit tile${laid ? ', or (laid) the designed bond' : ''}.
-          if (k.b > 0.001) t.b = ${laid ? 'paveLaid(p)' : 'texture2D(uGroundTex, p * (uSurfScale * 0.5)).b'};
+          if (k.b > 0.001) t.b = ${laid ? 'paveLaid(p, pavePx)' : 'texture2D(uGroundTex, p * (uSurfScale * 0.5)).b'};
           ${sharp ? `// Height blend: each ground type rises by its own pattern (grass clumps, pebbles,
           // paving stones stand proud of their joints); within a narrow band of the highest the
           // types mix, below it they drop out. Edges are crisp but follow the paint, never the grid.
@@ -788,13 +800,25 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
           }` : ''}`,
         );
       }
-      // Painterly: warm lights, cool darks.
+      // Painterly: warm lights, cool darks (and, laid, the paving's joints deep and dark).
       shader.fragmentShader = shader.fragmentShader.replace(
         'diffuseColor.rgb *= clamp(1.0 + (surfH - 0.5) * 2.0 * uSurfAlbedo, 0.0, 2.0);',
         `diffuseColor.rgb *= clamp(1.0 + (surfH - 0.5) * 2.0 * uSurfAlbedo, 0.0, 2.0);
         { float paintV = surfH; diffuseColor.rgb *= ${PAINT_TINT}; }
+        ${laid ? 'diffuseColor.rgb *= mix(1.0, 0.6, paveJoint * gK.z);' : ''}
         ${floorVariation(lava > 0 ? 'lair' : topShade < 1 ? 'mine' : null)}`,
       );
+      if (laid) {
+        // The paving stones' bevelled edges bend the normal where the ground lies flat.
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>
+          {
+            float paveK = smoothstep(0.97, 0.99, normalize(vSurfNrm).y) * gK.z;
+            normal = normalize(normal - mat3(viewMatrix) * vec3(paveGrad.x, 0.0, paveGrad.y) * paveK);
+          }`,
+        );
+      }
       // Rock, in order: the cliff colour on steep faces, the painted rock, cave risers, the climb
       // into darkness, and last the drowned bed's absorption (one block, so the order is explicit).
       shader.fragmentShader = shader.fragmentShader.replace(

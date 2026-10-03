@@ -327,6 +327,168 @@ export function paintAtlas(atlas: 0 | 1 | 2 | 3): THREE.DataTexture {
   return tex;
 }
 
+/** How many metres one tile of the stone relief spans (see stoneRelief). */
+const RELIEF_TILE = 1.6;
+/** The swell's slope per tile that maps to the relief texture's full range. */
+const RELIEF_SLOPE = 24;
+
+let reliefTex: THREE.DataTexture | null = null;
+/**
+ * The dressed stone's relief noise, one tile per RELIEF_TILE metres, sampled at a different offset on
+ * every stone: r a fine noise that bites chips out of the stone's bevelled edges; g the slow swell of
+ * a chiselled face and b, a its slope across and up (0.5 level), so one fetch gives the swell's slope.
+ */
+export function stoneRelief(): THREE.DataTexture {
+  if (reliefTex) return reliefTex;
+  const chip = fbm(711, 12, 3), swell = fbm(712, 3, 3), g = new Float32Array(SIZE * SIZE);
+  let lo = 1, hi = 0;
+  for (let i = 0; i < g.length; i++) {
+    g[i] = swell(i % SIZE, Math.floor(i / SIZE));
+    lo = Math.min(lo, g[i]);
+    hi = Math.max(hi, g[i]);
+  }
+  const at = (x: number, y: number) => (g[((y + SIZE) % SIZE) * SIZE + ((x + SIZE) % SIZE)] - lo) / (hi - lo);
+  const data = new Uint8Array(SIZE * SIZE * 4), c = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255);
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+    // (The slope per tile, scaled into 0..1: the shader undoes it with RELIEF_SLOPE.)
+    const dx = ((at(x + 1, y) - at(x - 1, y)) / 2) * SIZE, dy = ((at(x, y + 1) - at(x, y - 1)) / 2) * SIZE, i = (y * SIZE + x) * 4;
+    data[i] = c(chip(x, y));
+    data[i + 1] = c(at(x, y));
+    data[i + 2] = c(0.5 + dx / RELIEF_SLOPE);
+    data[i + 3] = c(0.5 + dy / RELIEF_SLOPE);
+  }
+  const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  tex.name = 'stoneRelief';
+  reliefTex = shareResource(tex);
+  return tex;
+}
+
+/**
+ * GLSL: dressed stone from a part's own layout (masonry.ts), hand-painted and with real relief (the
+ * owner's pick B). vMason = (stone coordinate along the face, course coordinate, stone length, course
+ * height), both coordinates whole on the joints; vMasonK = (mode, seed); vMasonF = the face's arrises: its
+ * ends in the stone coordinate and its foot and head in the course coordinate (each pair equal where it
+ * has none). Running bond: every other course's
+ * joints fall over the middle of the stones below; at a face's ends the quoins turn the corner, so an
+ * arris is bevelled like an edge but carries no joint (as is the arris of a band laid in one course:
+ * an arch's ring where it turns into the reveal, a kerb's top edge). Every stone is a chunky block, its
+ * depth plain from the play camera: a deep, dark, recessed joint a finger wide round it, a broad bevel
+ * cut deep whose width wanders and bites into chips, here and there a corner knocked off, a swelling
+ * chiselled face, a tone of its own and soft stains, and on side faces a strong light along its top
+ * edge and a shadow along its foot. The relief is a height
+ * field over the face: masonSample sets its slope (masonGrad, metres per metre along and up the face)
+ * and the normal is bent by it once the lighting normal exists (MASON_BUMP), so the bevels catch the
+ * sun. Far off, where a stone is only a few pixels across, the relief and the joints soften instead of
+ * shimmering.
+ */
+const MASON_GLSL = `
+          varying vec4 vMason;
+          varying vec2 vMasonK;
+          varying vec4 vMasonF;
+          uniform sampler2D uPaintStain;
+          uniform sampler2D uStoneRelief;
+          // Set by masonSample: the relief's slope, and how much of the fragment is joint.
+          vec2 masonGrad = vec2(0.0);
+          float masonJoint = 0.0;
+          float masonHash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+          }
+          // Where this fragment lies on its face, in metres along it and up it.
+          vec2 masonPlace() {
+            return vec2(vMason.x * vMason.z, vMason.y * vMason.w);
+          }
+          // p: the place on the face (masonPlace); px: how many metres one pixel spans there.
+          float masonSample(vec2 p, float px) {
+            float mode = vMasonK.x, l = vMason.z, h = vMason.w;
+            float X = p.x / l, C = p.y / h;
+            float r = floor(C + 1e-4), fy = C - r;
+            float xo = X + (mod(r, 2.0) > 0.5 ? 0.5 : 0.0);
+            float bi = floor(xo), fx = xo - bi;
+            // (Hashed from whole numbers only: an interpolated value would jitter the hash into streaks.)
+            vec2 id = vec2(r + floor(vMasonK.y + 0.5) * 13.0, bi);
+            float hs = masonHash(id), hs2 = masonHash(id + 17.31);
+            // Distances in metres to the stone's edges; a face's end (or its foot or head) inside the
+            // stone is an arris.
+            float faced = step(1e-3, vMasonF.y - vMasonF.x), headed = step(1e-3, vMasonF.w - vMasonF.z);
+            float al = mix(1e3, (X - vMasonF.x) * l, faced), ar = mix(1e3, (vMasonF.y - X) * l, faced);
+            float ab = mix(1e3, (C - vMasonF.z) * h, headed), at = mix(1e3, (vMasonF.w - C) * h, headed);
+            float dl = fx * l, dr = (1.0 - fx) * l, db = fy * h, dt = (1.0 - fy) * h;
+            bool qL = al < dl + 1e-3, qR = ar < dr + 1e-3, qB = ab < db + 1e-3, qT = at < dt + 1e-3;
+            // (A small stone, a paving stone or a kerb's, takes its joint and bevel smaller; a deep base
+            // course's larger.)
+            float sz = clamp(min(l, h) / 0.5, 0.55, 1.4), JW = 0.021 * clamp(sz, 0.7, 1.2);
+            float eL = qL ? al : dl - JW, eR = qR ? ar : dr - JW, eB = qB ? ab : db - JW, eT = qT ? at : dt - JW;
+            vec4 rel = texture2D(uStoneRelief, (p + vec2(hs, hs2) * 9.0) / ${RELIEF_TILE.toFixed(2)});
+            // A broad bevel cut deep, so every edge of the block turns to the light or away from it.
+            float chip = smoothstep(0.64, 0.86, rel.r);
+            float B = 0.07 * sz * (1.0 + 0.45 * chip) * mix(0.85, 1.15, hs2), D = 0.05 * sz * (1.0 + 0.4 * chip);
+            // The nearest edge and the way into the stone from it; the corners rounded off (a knocked
+            // corner here and there rounded further), so the stone reads as a dressed block.
+            float ex = min(eL, eR), ey = min(eB, eT);
+            vec2 cs = vec2(eL < eR ? 1.0 : -1.0, eB < eT ? 1.0 : -1.0);
+            float rc = B + step(0.78, masonHash(id + cs * 3.7)) * (0.04 + 0.06 * hs) * sz;
+            vec2 cq = vec2(rc - ex, rc - ey);
+            float e = ex < ey ? ex : ey;
+            vec2 dir = ex < ey ? vec2(cs.x, 0.0) : vec2(0.0, cs.y);
+            if (cq.x > 0.0 && cq.y > 0.0) {
+              e = rc - length(cq);
+              dir = normalize(cq) * cs;
+            }
+            // The joint (antialiased over the pixel), and the bevel rising from it onto the face.
+            masonJoint = 1.0 - smoothstep(-0.5 * px, 0.5 * px, e);
+            float t = clamp(e / B, 0.0, 1.0), bev = (1.0 - t) * (1.0 - t);
+            float slope = 2.0 * D * (1.0 - t) / B;
+            vec2 swell = (rel.ba - 0.5) * (${RELIEF_SLOPE.toFixed(1)} / ${RELIEF_TILE.toFixed(2)}) * 0.03;
+            // (Softened far off: no relief finer than the pixels, the joints a softer line.)
+            float near = 1.0 - smoothstep(0.6 * B, 1.8 * B, px);
+            // (The bevel's slope runs on down into the joint, so its edge never shows a flat, lit rim.)
+            masonGrad = (dir * slope + swell * (1.0 - bev)) * near;
+            masonJoint *= mix(0.6, 1.0, near);
+            float stain = texture2D(uPaintStain, p * 0.5).b;
+            float v = 0.47 + (hs - 0.5) * 0.26 + (0.5 - stain) * 0.32;
+            // The quoins dressed a shade paler; fresh stone where a chip bit in; the bevel darkening down
+            // into the recess, the face a touch lighter for standing out of it (paving the more gently).
+            v += (qL || qR) ? 0.05 : 0.0;
+            v += (0.04 * chip - (mode < 1.5 ? 0.1 : 0.05)) * bev + 0.03 * t;
+            if (mode < 1.5) {
+              // Side faces: a strong light along each stone's top edge and a shadow along its foot, as on a
+              // block standing out of its joints in the sun.
+              v += 0.26 * (1.0 - smoothstep(0.0, 1.5 * B, eT)) - 0.2 * (1.0 - smoothstep(0.0, 2.2 * B, eB));
+            }
+            return v;
+          }`;
+
+/**
+ * GLSL at main's top (in the colour pass): where the fragment lies on its stone face and how that
+ * place and the surface move across the screen, for the bump (MASON_BUMP) and the joints' softening.
+ */
+const MASON_PLACE = `
+          vec2 masonP = masonPlace();
+          vec2 masonDx = dFdx(masonP), masonDy = dFdy(masonP);
+          vec3 masonPx = dFdx(-vViewPosition), masonPy = dFdy(-vViewPosition);
+          float masonPix = max(length(masonDx), length(masonDy));`;
+
+/**
+ * GLSL after the lighting normal is set: bend it by the stone's relief (masonGrad, chained through the
+ * face coordinates to the screen and carried onto the surface as a surface gradient), so the bevels
+ * and the chiselled faces take the light.
+ */
+const MASON_BUMP = `
+          {
+            vec3 r1 = cross(masonPy, normal), r2 = cross(normal, masonPx);
+            float det = dot(masonPx, r1);
+            vec3 sg = (dot(masonGrad, masonDx) * r1 + dot(masonGrad, masonDy) * r2) / (abs(det) > 1e-14 ? det : 1e-14);
+            // (Seen almost edge-on the gradient grows unbounded: never let it tip the normal over.)
+            float sl = length(sg);
+            if (sl > 1.8) sg *= 1.8 / sl;
+            normal = normalize(normal - sg);
+          }`;
+
 /** GLSL: warm lights and cool darks, scaled by how strongly the paint applies. */
 export const PAINT_TINT = 'mix(vec3(1.0), mix(vec3(0.94, 0.97, 1.06), vec3(1.05, 1.01, 0.93), paintV), uPaintAmt * 1.6)';
 
@@ -334,49 +496,11 @@ export const PAINT_TINT = 'mix(vec3(1.0), mix(vec3(0.94, 0.97, 1.06), vec3(1.05,
 const ASHLAR_FOOT = 'diffuseColor.rgb *= mix(vec3(0.84, 0.83, 0.87), vec3(1.03), smoothstep(0.0, 5.0, vPaintPos.y));';
 
 /**
- * GLSL: dressed stone from a part's own layout (masonry.ts). vMason = (stone coordinate along the
- * face, course coordinate, stone length, course height), both coordinates whole on the joints;
- * vMasonK = (mode, seed). Running bond: every other course's joints fall over the middle of the
- * stones below. Painted mortar, a tone per stone, soft stains, a lighter top edge on each stone and a
- * soft shadow under it, as the painted masonry atlas.
- */
-const MASON_GLSL = `
-          varying vec4 vMason;
-          varying vec2 vMasonK;
-          uniform sampler2D uPaintStain;
-          float masonHash(vec2 p) {
-            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-          }
-          float masonSample() {
-            float mode = vMasonK.x;
-            float X = vMason.x, C = vMason.y, l = vMason.z, h = vMason.w;
-            // A drum: whole stones round its axis (x carries how many), a drum's top one ring of them.
-            if (mode > 2.5) X = (atan(vPaintPos.x, vPaintPos.z) / 6.2831853 + 0.5) * vMason.x;
-            if (mode > 3.5) C = 0.5;
-            float r = floor(C + 1e-4), fy = C - r;
-            float xo = X + (mod(r, 2.0) > 0.5 ? 0.5 : 0.0);
-            float bi = floor(xo), fx = xo - bi;
-            // Distances to the joints in metres, so mortar is one width on every stone.
-            float jx = min(fx, 1.0 - fx) * l, jy = min(fy, 1.0 - fy) * h;
-            float inside = smoothstep(0.011, 0.03, jx) * smoothstep(0.011, 0.03, jy);
-            float stain = texture2D(uPaintStain, vec2(X * l, C * h) * 0.5).b;
-            // (Hashed from whole numbers only: an interpolated value would jitter the hash into streaks.)
-            float v = 0.47 + (masonHash(vec2(r + floor(vMasonK.y + 0.5) * 13.0, bi)) - 0.5) * 0.24 + (0.5 - stain) * 0.6;
-            if (mode < 1.5 || (mode > 2.5 && mode < 3.5)) {
-              float up = fy * h;
-              v += 0.11 * smoothstep(h - 0.11, h - 0.04, up) - 0.07 * (1.0 - smoothstep(0.03, 0.11, up));
-            }
-            return 0.17 + (v - 0.17) * inside;
-          }`;
-
-/**
  * Paint a material. Top and bottom faces take (x, z); side faces take the distance along the face
  * itself (its horizontal tangent) and y, so the texture's V always runs up the side of a model and
- * its blocks keep one size on a face turned at any angle. `wrap` paints a drum (a round tower
- * centred on its model's origin): its side faces take the arc length round the axis instead, so the
- * courses run on round it at one block size with no seam between its facets.
+ * its blocks keep one size on a face turned at any angle.
  */
-export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceSpace = 'object', scaleMul = 1, wrap = false) {
+export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceSpace = 'object', scaleMul = 1) {
   if (!(mat instanceof THREE.MeshStandardMaterial)) return;
   // Every rock surface shares one richer painted rock (strata blocks, cracks, grain, drift).
   if (kind === 'rock') return applyRock(mat, space, scaleMul);
@@ -391,9 +515,9 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
   const ashlar = kind === 'ashlar';
   // Dressed stone laid by its parts' own stone layouts where they carry one (masonry.ts).
   const fit = kind === 'masonry' || kind === 'ashlar';
-  if (fit) Object.assign(uniforms, { uPaintStain: { value: paintAtlas(1) } });
+  if (fit) Object.assign(uniforms, { uPaintStain: { value: paintAtlas(1) }, uStoneRelief: { value: stoneRelief() } });
   addPatch(mat, {
-    key: `paint:${space}${ashlar ? ':ashlar' : ''}${wrap ? ':wrap' : ''}${fit ? ':fit' : ''}`,
+    key: `paint:${space}${ashlar ? ':ashlar' : ''}${fit ? ':fit' : ''}`,
     slot: 'surface',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
@@ -410,8 +534,8 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           }`
         : 'vPaintPos = transformed; vPaintNrm = objectNormal;';
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\nvarying vec3 vPaintPos;\nvarying vec3 vPaintNrm;${fit ? '\nattribute vec4 aMason;\nattribute vec2 aMasonK;\nvarying vec4 vMason;\nvarying vec2 vMasonK;' : ''}`)
-        .replace('#include <project_vertex>', `#include <project_vertex>\n${vert}${fit ? '\nvMason = aMason; vMasonK = aMasonK;' : ''}`);
+        .replace('#include <common>', `#include <common>\nvarying vec3 vPaintPos;\nvarying vec3 vPaintNrm;${fit ? '\nattribute vec4 aMason;\nattribute vec2 aMasonK;\nattribute vec4 aMasonF;\nvarying vec4 vMason;\nvarying vec2 vMasonK;\nvarying vec4 vMasonF;' : ''}`)
+        .replace('#include <project_vertex>', `#include <project_vertex>\n${vert}${fit ? '\nvMason = aMason; vMasonK = aMasonK; vMasonF = aMasonF;' : ''}`);
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
@@ -423,29 +547,28 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           uniform float uPaintScale;
           uniform float uPaintAmt;
           ${fit ? MASON_GLSL : ''}
-          float paintSample() {
-            ${fit ? 'if (vMasonK.x > 0.5) return masonSample();' : ''}
+          float paintSample(${fit ? 'vec2 masonP, float masonPix' : ''}) {
+            ${fit ? 'if (vMasonK.x > 0.5) return masonSample(masonP, masonPix);' : ''}
             vec3 n = abs(vPaintNrm);
             vec3 q = vPaintPos * uPaintScale;
             vec2 uv;
             if (n.y >= max(n.x, n.z)) uv = q.xz;
-            else {
-              ${wrap
-                ? 'uv = vec2(atan(vPaintPos.x, vPaintPos.z) * length(vPaintPos.xz) * uPaintScale, q.y);'
-                : 'uv = vec2(dot(q.xz, normalize(vec2(-vPaintNrm.z, vPaintNrm.x))), q.y);'}
-            }
+            else uv = vec2(dot(q.xz, normalize(vec2(-vPaintNrm.z, vPaintNrm.x))), q.y);
             return dot(texture2D(uPaintTex, uv), uPaintCh);
           }`,
         )
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
+          ${fit ? MASON_PLACE : ''}
           {
-            float paintV = paintSample();
+            float paintV = paintSample(${fit ? 'masonP, masonPix' : ''});
             diffuseColor.rgb *= clamp(1.0 + (paintV - 0.5) * 2.0 * uPaintAmt, 0.0, 2.0) * ${PAINT_TINT};
             ${ashlar ? ASHLAR_FOOT : ''}
+            ${fit ? '// The joints: deep and dark, cool in their shadow.\n            diffuseColor.rgb *= mix(vec3(1.0), vec3(0.24, 0.22, 0.27), masonJoint);' : ''}
           }`,
         );
+      if (fit) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${MASON_BUMP}`);
     },
   });
 }

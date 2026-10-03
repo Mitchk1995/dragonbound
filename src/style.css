@@ -103,7 +103,8 @@ svg { display: block; }
 
 /* ── Splash ───────────────────────────────────────────────────── */
 #splash { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; background: radial-gradient(circle, #2a1830, #08060c); transition: opacity 0.7s; z-index: 50; }
-#splash h1 { font-family: var(--serif); font-weight: 800; font-size: 64px; letter-spacing: 12px; margin: 0; color: var(--gold); text-shadow: 0 0 30px #ff6a1a88; }
+#splash h1 { margin: 0 0 6px; line-height: 0; }
+#splash h1 img { width: clamp(260px, 42vw, 640px); height: auto; aspect-ratio: 1344 / 256; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 30px rgba(255, 106, 26, 0.35)); }
 #splash p { color: var(--dim); }
 #splash.hide { opacity: 0; pointer-events: none; }
 
@@ -121,17 +122,16 @@ svg { display: block; }
     radial-gradient(ellipse at 62% 48%, transparent 48%, rgba(4, 2, 10, 0.6) 100%);
 }
 .title .logo { position: absolute; left: clamp(28px, 6vw, 110px); top: 15%; text-align: left; }
+.title { --logo-w: clamp(280px, 31vw, 600px); }
 .logo-main {
-  font-family: var(--serif); font-weight: 800; font-size: clamp(32px, 3.9vw, 66px); letter-spacing: 0.1em; white-space: nowrap; line-height: 1;
-  background: linear-gradient(#fff4d0, #e8b654 45%, #8a5a1a 75%, #e8b654);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 4px 0 #1a0e04) drop-shadow(0 0 22px rgba(255, 110, 30, 0.35));
+  display: block; width: var(--logo-w); height: auto; aspect-ratio: 1344 / 256; user-select: none;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 22px rgba(255, 110, 30, 0.3));
 }
 .logo-rule { display: flex; align-items: center; gap: 10px; color: var(--gold); font-size: 11px; margin: 14px 0 8px; }
 .logo-rule span { width: 150px; height: 1px; background: linear-gradient(90deg, var(--gold), transparent); }
 .logo-rule span:first-child { width: 36px; background: var(--gold); }
 .logo-sub { font-family: var(--serif); font-size: 16px; letter-spacing: 5px; color: #d8c8a8; text-shadow: 0 2px 4px #000; }
-.title .menu { position: absolute; left: clamp(28px, 6vw, 110px); top: calc(15% + clamp(32px, 3.9vw, 66px) + 112px); width: 320px; display: flex; flex-direction: column; gap: 2px; }
+.title .menu { position: absolute; left: clamp(28px, 6vw, 110px); top: calc(15% + var(--logo-w) * 0.1905 + 112px); width: 320px; display: flex; flex-direction: column; gap: 2px; }
 .mbtn {
   position: relative; text-align: left; padding: 9px 0 9px 22px; background: none; border: none; border-radius: 0;
   font-family: var(--serif); font-weight: 600; font-size: 20px; letter-spacing: 3px; color: #cfc2a6; text-shadow: 0 2px 4px #000;
@@ -182,6 +182,7 @@ svg { display: block; }
 }
 .plaque::before { left: 10px; }
 .plaque::after { right: 10px; }
+.zname .ptext { margin: 3px 0 5px; }
 .zoneline { position: relative; z-index: 0; display: flex; align-items: center; }
 .zone.plaque { overflow: hidden; transform-origin: 0 50%; }
 .zone .sheen { position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; background: linear-gradient(100deg, transparent, rgba(255, 240, 190, 0.55), transparent); transform: skewX(-18deg); opacity: 0; pointer-events: none; }
@@ -216,6 +217,7 @@ svg { display: block; }
 .target .tbar div { height: 100%; background: linear-gradient(#e0503a, #8a1a10); }
 .bossbar { display: none; position: absolute; top: 58px; left: 50%; transform: translateX(-50%); text-align: center; }
 .bossbar .bname { font-family: var(--serif); font-weight: 800; font-size: 22px; letter-spacing: 4px; color: #ff9a5a; text-shadow: 0 0 10px #ff4a0a, 0 2px 2px #000; }
+.bossbar .bname .ptext { filter: drop-shadow(0 2px 3px #000) drop-shadow(0 0 8px rgba(255, 90, 20, 0.55)); margin-bottom: 2px; }
 .bossbar .bbar { width: 540px; height: 18px; border: 3px solid #5a4a3a; }
 .bossbar .bfill { height: 100%; background: linear-gradient(#ff7a3a, #a0180a); transition: width 0.15s; }
 
@@ -724,6 +726,16 @@ svg { display: block; }
 .floater.hurt { color: #ff5a4a; font-size: 18px; }
 .floater.heal { color: #8aff8a; font-size: 16px; }
 .floater.gold { color: #ffd040; font-size: 16px; }
+/* Painted digits: one glyph sprite per character, positioned by worldText (paintedText.ts); no text shadow. */
+.floater.digits { text-shadow: none; pointer-events: none; }
+.floater.digits i { position: absolute; top: 0; background-repeat: no-repeat; image-rendering: auto; }
+/* Painted words (paintedText.ts): a baseline-aligned line of glyph sprites; the sprite hangs over its box by its soft
+   edge, and a character with no painted glyph (.pf) stays ordinary text in the same line. */
+.floater.painted { text-shadow: none; pointer-events: none; }
+.ptext { display: inline-flex; align-items: baseline; white-space: pre; pointer-events: none; font-family: var(--serif); font-weight: 700; line-height: 1; text-shadow: 0 1px 2px #000; }
+.ptext i { position: relative; display: block; flex: none; }
+.ptext b { position: absolute; background-repeat: no-repeat; image-rendering: auto; }
+.npcname { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.85)); }
 .ilabel { position: absolute; left: 0; top: 0; padding: 2px 8px; font-size: 13px; background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.12); border-radius: 3px; white-space: nowrap; pointer-events: auto; cursor: pointer; text-shadow: 0 1px 0 #000; }
 .ilabel:hover, .ilabel.hover { background: rgba(60,50,30,0.9); border-color: var(--gold); }
 .ilabel.r-normal { color: var(--r-normal); }

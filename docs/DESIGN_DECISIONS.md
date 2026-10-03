@@ -1,5 +1,5 @@
 # Dragonbound design decisions
-*October 2 2026*
+*October 3 2026*
 
 Dragonbound is a long-term action RPG with combat led by Diablo II, some Diablo IV influence, richer active skills, and OSRS-style gathering and progression. The immediate design target is a complete, cohesive levels 1–10 region that makes combat, mining, equipment, quests and exploration feel like one adventure.
 
@@ -9,13 +9,92 @@ This reference brings the agreed direction, working ideas and open choices toget
 
 **This is the single design plan.** Any agent (Claude or Codex) that hears a decision from Mitchell records it here, in the same session; decisions that only live in a chat get lost. Newer direct decisions take precedence over older text, so record what changed, in the section below or in place.
 
+## The new look and the great keep (October 3)
+
+Mitchell's fifth round of castle picture notes (38 notes, kept with their marked pictures in
+`D:\dragonbound-archive\notes\castle-round5`) came down to three things, and he picked from Codex paintings
+(`D:\dragonbound-archive\codex\castle-grand-options.png`, `stone-options.png`, `trees-options.png`):
+
+- **A grand castle: pick B, "Great keep".** The castle must be grand and epic, with the main building the clear star and
+  every other building smaller and lower; the castle may grow ("we can expand the area if needed"). A massive square keep
+  with four corner turrets rising high above the walls and a great hall joined to it; towers evenly and symmetrically
+  spaced; stables with a paddock where the horses have room; a moat round the walls that flows down to the river, with
+  walls on both sides of the approach where it runs along the ledge. Windows should be artistic and varied, never
+  copy-paste, and the glass clear with a cool tint you can see into. Today's donjon and the tower beside the main building go
+  or change. The painting is mood, not a blueprint: Mitchell asked for the layout to be scrutinised and designed with our
+  own taste ("usually they are kind of generic"). The plan comes first as a blueprint (castle v4) for his approval.
+- **Stone: pick B, "Hand-painted chunky".** One stone system for the whole castle instead of spot fixes: real depth
+  (bump-mapped joints and chipped, bevelled edges with a lit top edge), only a few block sizes laid in courses that line
+  up everywhere, and trim, kerbs and borders cut from the same stone rather than stuck-on blocks in another colour (his
+  note on the blue-grey quoins; the dark corbel blocks go too). After the first work-in-progress pictures he added two
+  things. Round towers are laid in flat stones, never a smooth cylinder ("brick buildings cant be fully round"): each
+  stone is one flat face with its joints on the facet edges, each course turned half a stone, so a tower is very slightly
+  many-sided and no brick bends. And the stones must clearly stand out from the play camera: deeper joints and stronger
+  shading, and real blocks standing proud of the wall wherever its outline shows the stones (tops, corners, arches,
+  tower outlines), since painted depth cannot change an outline.
+  **Accepted October 3** after the second pass: one cream stone with deep joints and lit edges, towers laid in flat
+  stones, the trim cut from the same stone, and a real window kit (an opening through the wall, leaded glass you see
+  through with a cool tint, a lit room behind), which Mitchell liked. Further polish (bluer glass, crisper blocks) comes
+  with the castle-v4 build if needed.
+- **Trees: pick B, "Natural".** Redo the trees at true size, no longer blocky, as the woodcutting ladder in RuneScape's
+  order: tree, oak, willow, maple, yew, magic. After seeing the first grown oak he chose the natural, realistic look
+  ("i kinda like the realistic one") and dropped the cartoony and mixed versions planned for comparison. The rest of the
+  ladder follows in the same style. Cartoony and blocky stay for the characters, enemies and NPCs, because that is what
+  Claude models well. Each species is grown from one recipe in three or four shapes, and every placed tree is turned
+  and sized a little differently. That way a wood never looks copy-pasted, yet an oak still reads as an oak at a glance,
+  which woodcutting needs (Claude's proposal, October 3; Mitchell had wondered whether they should all be the same).
+  Everything else should get a nice texture too, the crops and plants included.
+- **A more natural world, not photoreal** (October 3). Mitchell asked about going more realistic for the plants, water,
+  lighting and sky ("we dont need to go crazy right away, i do want it looking nice") and left the cohesion to Claude.
+  The direction is natural proportions, materials and light, still softly painted, so the blocky characters belong in
+  it, as they do in the LEGO games. Photoreal is out of reach with how we build, and it would make them look pasted in.
+  It comes in small steps, each shown to him as before-and-after pictures, starting once the stone and the trees land:
+  1. Light and sky: a warmer sun, softer shadows, a little haze in the distance, and a real sky with clouds.
+  2. Water: reflections, depth and foam on the moat, the falls and the streams.
+  3. Ground, grass, plants and crops, grown like the oak.
+- **Textures are sourced, not painted in code** (October 3). Mitchell: "why would you have to manually do it when you have codex for image gen and many free sources". Bark, stone, ground, grass, rock and leaves come from Codex image generation in the game's painted style or from free CC0 libraries (Poly Haven, ambientCG) toned to match, made tileable and checked in the game; code places them and adds depth and light. Characters keep their blocky painted look. First use: the oak's bark, after his note that the branches "look like bones".
+- **A big image batch while Codex lasts** (October 3). Mitchell's Codex subscription ends soon, so Claude generated a large library "even if we dont really need it later": about 110 textures (bark and leaves for every woodcutting tree, ground, rock, stone, wood, plants, crops, water, skies, the other zones' materials, effects and ground details), interface art, area concept paintings, and fresh concept sheets for the hero, NPCs and enemies. They live in `D:\dragonbound-archive\codex\tex` and `D:\dragonbound-archive\codex\concepts`, outside the game until a job puts one in. Item icons stay as they are, drawn from the 3D models (Mitchell agreed).
+- **Painted lettering, three alphabets** (October 3). Generated with Codex and picked by Mitchell: forged gold for place names and the zone plaque, NPC names over heads, the boss bar and text floaters ("+30 gold"); glowing pale blue for portal titles and other magic text; brown ink with a cream outline reserved for parchment panels (none yet, so shipped unused). Case is kept as written (portal titles stay capitals, as the plates always were). Dense UI text (inventory, tooltips, skills) is not converted until Mitchell has judged a small-size test. Marks outside the set fall back to the ordinary UI font.
+- **Characters, enemies and NPCs are not locked** (October 3): "we could improve the designs we have too". They stay blocky and modular; the concept sheets are fresh takes to improve on.
+- **Zones and levels are open** (October 3). Mitchell wants multi-level layouts with hills, cliffs and different heights, as modern ARPGs build them, possibly with procedural generation to make areas large enough; nothing is settled yet.
+- **Everything must make structural sense** (October 3): "it all has to make structural sense". His examples: the walled
+  climb up to the landing "doesnt make sense the way it is built" and should have stairs, and the ledge road needs a wall
+  on its other side too. He added that the insides of the buildings must work with their outsides, so the interiors are
+  no problem to design. Our reading of it: where the way climbs, real stairs (flights, landings, cheek walls, a parapet
+  over every drop) rather than a tilted ramp; every built terrace edge a retaining wall (natural rock edges stay rock);
+  every bridge on arches or piers; every door onto a floor at its own level; and rooms, floors, stairs and windows that
+  fit each building's outside, with the play camera working in every room. The castle-v4 blueprint was revised for this
+  and then approved (below).
+- **Characters stay blocky and modular, like Lego.** Mitchell knows complex organic shapes are Claude's weak spot when
+  built from pieces; trees are where we leave blocks behind, grown as one piece.
+- **Castle v4 must make structural sense (October 3, notes on the first v4 pictures).** The ramp up to the ledge becomes
+  stairs (a stone stair of four flights with level landings); the ledge road has a wall on both sides; the whole plan is
+  checked as a mason would build it. Every enterable building's inside must work with its outside, with a simple interior
+  plan for each (`docs/blueprints/castle-v4/castle-v4-interiors.png`).
+- **Castle v4 plan notes (October 3, pins on the plan).** The moat goes round the back too, so it rings all four sides
+  and the keep's back rises out of it; the ledge walk, the lookout and the rock round them are shaped naturally, with the
+  walls following and sitting on the natural rock (and the same for the landing and the crown's whole edge). Roofs: pick
+  B, steep blue slate roofs as in the painting on the great hall and the chapel; the kitchen and the solar stay flat
+  behind battlements so the keep stays the star.
+- **Castle v4 approved (October 3, on the decision page).** The revised plan (`docs/blueprints/castle-v4/`) is the plan
+  to build, superseding its open choices: slate roofs on the hall and the chapel only, the keep at 28 m (spires 44), one
+  waterfall to the stream under the gate terrace (today's west fall off the brink stays), the belvedere and the little west gate gone, today's gatehouse unchanged, the farm
+  moved 8 m south.
+- **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
+  no flag shadow from nowhere, the fountain dragon's front legs, more variety in the small garden trees, the sunken tree
+  and the grass seam by the landing.
+- **How we work now:** Mitchell now has a larger usage allowance, so parallel jobs (Claude's Workflow tool or several
+  agents) are used for implementation where they help, partitioned so they never edit the same code. He wants regular progress in pictures and an honest answer
+  when a style is or is not achievable. Visual work comes to him straight from the builder: no separate reviewer or
+  critic stage, he judges right away (to save usage).
+
 ## Foundation work (October 2)
 
 - Mitchell approved nonvisual foundation work, starting with faster launches, save protection and memory cleanup. The current phase has mostly been visual redesign; this work preserves the existing appearance and gameplay rules while supporting the coming mechanics phase.
 - Mitchell also approved improvements to context/file handling and agent development: keep guidance in `AGENTS.md` and this plan, make authoritative context easier to find, keep scratch output from disrupting the game, and provide one consistent, sequential check command. Appearance work continues separately in its own checkout.
 - Mitchell requested an independent reviewer followed by automatic merging and cleanup for this work and future work; this is now part of `AGENTS.md` rather than a reminder he needs to repeat.
 
-## Latest decisions (Round 5, October 1 evening)
+## Round 5 decisions (October 1 evening)
 
 Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9tn49GokkaidH3zQhe). They take precedence over anything older in this document; sections below that they change are marked.
 
@@ -65,12 +144,18 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 4. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
 
 Where things stand (October 3):
-- **Castle:** four rounds of Mitchell's picture notes are fixed and merged. He is reviewing the latest pictures on the review page, https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, where he pins notes; a fixed note is marked `status: done` and drops off the page.
+- **Castle:** after the fifth round of notes (see "The new look and the great keep" above), three jobs run side by side:
+  the stone finish on the castle as it stands (now reworked for flat-stone towers and stones that stand out), the
+  castle-v4 blueprint around the great keep (approved October 3), and the
+  woodcutting trees (the natural oak is done; the other five follow in its style). The review page,
+  https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins notes and picks options; a fixed note is
+  marked `status: done` and drops off the page. Now the blueprint is approved the castle is rebuilt to it; the new
+  trees then replace the forests and garden trees.
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
-  - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided.
-- **Characters** are next once the castle is approved. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
-- **Trees:** the grown oak is built as a preview tree style and waits for Mitchell's verdict from pictures (see "Trees" below); the game's forests still use the block trees.
+  - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided (the castle-v4 plan may move it anyway).
+- **Characters** come after the castle and stay blocky and modular. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
+- **Trees:** the grown oak and the common tree are built and approved with their bark (Mitchell, "looks good", October 3; see "Trees" below); the other four species follow, and the game's forests still use the block trees until they replace them.
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 
@@ -91,7 +176,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
 - **Items never cross their slot's rim:** every item picture fills the same share of its box.
 - **All bows lie the same way in their icons:** tilted like the Recurve (top tip to the upper right, string below), which Mitchell liked; the Worn Shortbow, Hunter's Bow and Emberstring icons were turned to match.
 - **Castle v2 stage 1 is built on the crown** (docs/CASTLE_DESIGN.md): the curtain with its seven towers, the outer and inner gatehouses, the postern, both wards and their yards, the residence range with its open hall and galleries, the kitchen, the west wing, barracks, stables and smithy. The donjon stands solid until stage 2 opens it with the west wing's upper floor; the wall walk is not playable yet.
-- **Castle v3, from Mitchell's second walk round (October 2):** one big bailey with no middle wall, clearly larger; the bronze dragon, much bigger, as the centrepiece fountain on the gate-to-great-door axis; designed, connected paths and gardens; full lawn grass, not tufts; realistic water. Then: the castle buildings should match the colourful gardens and look more royal (Claude chose cream stone with blue-grey trim and royal blue and gold livery); the castle rock must look like a natural mountain, not the same shape stacked.
+- **Castle v3, from Mitchell's second walk round (October 2):** one big bailey with no middle wall, clearly larger; the bronze dragon, much bigger, as the centrepiece fountain on the gate-to-great-door axis; designed, connected paths and gardens; full lawn grass, not tufts; realistic water. Then: the castle buildings should match the colourful gardens and look more royal (Claude chose cream stone with blue-grey trim and royal blue and gold livery; superseded October 3: the trim is now cut from the same stone); the castle rock must look like a natural mountain, not the same shape stacked.
 - **Castle look, from Mitchell's first walk round** (docs/CASTLE_DESIGN.md):
   - No house-style pitched roofs on castle buildings: every one has a flat roof behind a crenellated parapet.
   - Fewer, better windows: tall lancets, placed symmetrically.
@@ -107,15 +192,15 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - Realistic water in the fountain, the stream and the pond.
   - Built: the layout (curtain, towers, gatehouse, approach along the ledge, buildings, walks, gardens and yards), the full grass, the dragon fountain (the bronze dragon rearing on its rock, water pouring from its jaws, jets from the kerb) and the realistic water in its basin and the waterfall's pools.
 - **The castle's architecture made colourful and royal to match the gardens** (October 2; docs/CASTLE_DESIGN.md, "Colour and materials"). Mitchell found the yard beautiful with colour but the walls, towers and buildings one flat brown mass, and asked for the buildings to match its vibrance and look more royal ("do what you think would look good"). Decided and built:
-  - Cream limestone for every castle mass (curtain, towers, gatehouse, donjon, pavilions and the castle buildings), with blue-grey dressings: string courses, one continuous coping under the merlons, corbels, machicolations, hood moulds, quoins and plinths. Trim runs as continuous lines and frames, never as per-block dots.
+  - Cream limestone for every castle mass (curtain, towers, gatehouse, donjon, pavilions and the castle buildings), with blue-grey dressings: string courses, one continuous coping under the merlons, corbels, machicolations, hood moulds, quoins and plinths. Trim runs as continuous lines and frames, never as per-block dots. (Superseded October 3: the dressings, quoins and plinths are cut from the same cream stone and the corbel blocks go; see "The new look and the great keep".)
   - Blue and gold livery replaces red: royal blue banners and flags edged and charged in gold (swallowtails, the gold dragon diamond), the lord's crest on the ward gates, a deep blue tympanum over the great door, gilt fittings on the great doors and blue leaves on the postern and ward gates. The gate front flies five flags in a symmetric composition. Rugs, cushions and runners inside stay crimson.
   - Spires in a hierarchy (revised after the critique round, under Mitchell's "do what you think would look good"; the donjon-only spire left the skyline a row of identical drums): the donjon's great royal-blue spire, banded in gold with four lit lucarnes; a spire over the great door's tower on the castle's axis; the six corner towers a stage taller than the wall towers, each with a blue-slate spire, gold finial and pennant. The wall towers between them stay flat and crenellated, their platforms paved as compass roses.
   - Pitched roofs on castle buildings stay rejected.
   - The great door is framed by two round masses (October 2, critique round 4, under Mitchell's "do what you think would look good"): a slim round stair turret east of the door, in the donjon's language with a spire a stage lower than the door tower's, answers the donjon's drum on the west.
-  - Every castle window is a plain window: dark or softly lit glass in the lancet frame with its stone surround, no stained-glass patterns (Mitchell, October 2: "they shouldn't have random designs on them, it should be windows"). Ivy and climbing roses on ten chosen wall faces, mirrored where the plan is; dressed blue-grey kerbs wherever a lawn or gravel meets the paving; cooler paving and a dark blue-grey castle rock so the cream walls stand off both.
+  - Every castle window is a plain window: dark or softly lit glass in the lancet frame with its stone surround, no stained-glass patterns (Mitchell, October 2: "they shouldn't have random designs on them, it should be windows"). Ivy and climbing roses on ten chosen wall faces, mirrored where the plan is; dressed blue-grey kerbs wherever a lawn or gravel meets the paving; cooler paving and a dark blue-grey castle rock so the cream walls stand off both. (Superseded October 3: kerbs are cut from the same stone as the walls, and the glass is clear with a cool tint you can see into.)
   - Building roofs are designed surfaces seen from the play camera: blue lead in a two-tone diamond chequer inside a pale stone band and a gilt fillet, glazed lanterns with slate caps, roof gardens of box in planters on the two wings. The buildings take a paler cream than the curtain and towers; every curtain run carries the lord's banner on its outer face, and a gilt diamond frieze rings the gatehouse and corner towers.
   - The approach climbs to a level landing and turns through an outer gate (crenellated, portcullis, bartizans with spires, the lord's banner) onto the ledge road; the spring now breaks out of a mossy cleft in the rock and falls in two drops.
-  - The garden trees are built in the same leafy blocks as the island's trees, one foliage language everywhere.
+  - The garden trees are built in the same leafy blocks as the island's trees, one foliage language everywhere. (Superseded October 3: the island's trees are being redone as natural, realistic grown trees, Mitchell's pick after the first oak, and the garden trees follow that look.)
 - **Castle review notes from pictures, two rounds** (Mitchell, October 2; docs/CASTLE_DESIGN.md). Decided and built:
   - The fountain's dragon is pick A: a chunky, blocky bronze sentinel sitting upright like a guardian lion, wings folded, head high, thick block legs carrying it, gold horns, spines and claws, water pouring from its open jaws.
   - Seeing the hero behind walls is pick D: a soft-edged upright rounded-rectangle window round the hero, feathered into the wall, the rest of the wall solid (replacing the round cut-away).
@@ -123,11 +208,11 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - Doors fill their doorways: closed blue leaves under a lintel with a deep blue tympanum filling the arch above, the gate-close treatment, on every castle door and gate.
   - One cohesive banner and flag shape, each a single painted cloth: long banners with a deep swallowtail edged in gold, flags with a gold hoist and a forked fly.
   - Windows are real leaded glass that catches the sky, the mullion running the full light; the court wings have fewer, symmetric windows.
-  - The stone's blocks keep one size on every face and run round the drums without stretching.
+  - The stone's blocks keep one size on every face and run round the drums without stretching. (Refined October 3: a few block sizes, laid in courses that line up everywhere; drums are laid in flat stones, very slightly many-sided.)
   - Recognisable plants in the beds (tulips, rose bushes, lavender, delphiniums and daisies; cabbages, lettuces, carrots and leeks), blocky horses, a neater champion's helm comb, the training yard centred between matching towers, wider kitchen-garden lanes, the orchard bench clear of the tower, one continuous spring fall, and real lawn instead of loose grass tufts on the island.
 - **Castle review notes, third round: no clipping, nothing floating, things stitched into real shapes** (Mitchell, October 2). He found clipping and placement problems everywhere, "shapes placed together instead of stitched into a shape that makes sense". Decided and built (this supersedes the round-two door, window and mullion entries above):
   - Every tower meets the curtain's wall walk at a real doorway (a single blue door in a dressed frame); a stair tower with its own door replaces the square turret that clipped the north-east wall; the gatehouse's drums stand on the wall's line, each with its doorway; the ward gates carry the walk over them.
-  - Continuous things are one built shape: the fountain basin and coping are turned rings, box borders are one mitred outline per bed (no clumps), each building's plinth and base courses run as one band round its footprint, the climb's kerb walls and paving each run unbroken from the court to the landing, fence rails run post to post, each gate is one arched wall, arches close on one apex stone.
+  - Continuous things are one built shape: the fountain basin and coping are turned rings, box borders are one mitred outline per bed (no clumps), each building's plinth and base courses run as one band round its footprint, the climb's kerb walls and paving each run unbroken from the court to the landing (superseded October 3: the climb gets real stairs), fence rails run post to post, each gate is one arched wall, arches close on one apex stone.
   - Doors by purpose, one size each, all tall beside the hero (about 2.1): a building's door is a pair of pointed leaves 2 wide reaching 4 high; towers, the stair tower and the roof houses take one single pointed leaf 1.3 by 3; every leaf carries an iron ring at hand height (1.05); no gold straps. The kitchen garden's door is a single door.
   - Windows are clear glass tinted blue with one soft sheen of the sky over a dim room, no mullion.
   - Banners and flags are one blue all over. Arrow loops are framed cross loops, regular, on the towers' outer faces only; the curtain's faces stay plain between banners. The verge outside the walls is lawn like inside.
@@ -135,7 +220,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - The stables stand free on the stable court's axis, door in the middle between the two stalls, lanes either side, clear of the ward gate; the smithy is gone (owner-confirmed: smithing lives outside the castle walls). The landing's parapet meets the outer gate on its jamb, clear of the opening.
   - A geometry audit in the tests (tests/castle-geometry.test.ts) fails on any clipping not listed as a deliberate joint, anything floating, a door or window wrong for its wall or the hero, rock through a walk or the masonry, a building crowding a gate, a gap in a lawn's kerb, or two blocks of one stone overlapping face to face.
 - **Castle review notes, fourth round: intentional masonry and landscaping polish** (Mitchell, October 2). Decided:
-  - Masonry is laid as a mason would: courses line up with edges, openings and bands, with no sliced bricks at edges. Paving is laid out to fit its area. Kerbs and outer edges are single one-by-one header stones that turn every corner with no gaps. Two-tone dressings and the dark base course run unbroken to the ground. Bands clear the window heads and never cross a stone awkwardly.
+  - Masonry is laid as a mason would: courses line up with edges, openings and bands, with no sliced bricks at edges. Paving is laid out to fit its area. Kerbs and outer edges are single one-by-one header stones that turn every corner with no gaps. Two-tone dressings and the dark base course run unbroken to the ground (superseded October 3: no two-tone dressings; the base course is the same stone, a tone darker). Bands clear the window heads and never cross a stone awkwardly.
   - Doors are realistic wood: planks, grain and iron, stained in the blue livery rather than flat bright blue. The stone above a door is stone. Windows are very light and clearly see-through with only a slight blue tint.
   - Every door lines up with the path or wall walk that leads to it.
   - The landing's side gate is removed; the main gate is the only way in. Garden corners are filled in, no tower overlaps a garden edge, and kitchen beds start as dirt straight away with no slab or stray outline.
@@ -437,11 +522,11 @@ The revised sword, bow and staff set received approval, and corrected leather ar
 
 Preserve the liked portals and banquet-table appeal. The red-and-gold banners became blue and gold in the castle's colour pass (October 2), and crimson stays inside on the hall's cloth. The full castle redesign remains the controlling architectural direction. Consistent materials, foliage, landmarks and restrained placement of bright accents are possible tools for that work.
 
-The preferred tree option recorded as B is part of the existing visual reference. Exact regional style and layout still need to be judged in context. An isolated still cannot establish interaction, collision, travel pacing or combat feel.
+The block-tree prototype recorded as B (stepped canopies) was the earlier visual reference; the trees are being redone (October 3). Exact regional style and layout still need to be judged in context. An isolated still cannot establish interaction, collision, travel pacing or combat feel.
 
 ## Decisions still to make
 
-Answered in Round 5 (see "Latest decisions"): the meaning of levels 1–10 and region completion, the route and its length, the levels 1–2 area as the first concrete design, mine entrances and resets, flinch, dodge, rarity and reinforcement, early-item strength, starting gear (by class), core and optional content (main area plus rift dungeons), island and castle selection, doors and stations.
+Answered in Round 5 (see "Round 5 decisions"): the meaning of levels 1–10 and region completion, the route and its length, the levels 1–2 area as the first concrete design, mine entrances and resets, flinch, dodge, rarity and reinforcement, early-item strength, starting gear (by class), core and optional content (main area plus rift dungeons), island and castle selection, doors and stations.
 
 Still open:
 1. The class roster, each class's skill tree, the element system and how classes and elements mix.

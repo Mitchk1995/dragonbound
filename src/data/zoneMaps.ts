@@ -185,7 +185,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     // its front on the court's axis, an arched stall opening either side of it at equal distances
     // (half-doors, a horse looking out), the hay loft's door over the middle; hay, the trough and
     // straw along the north wall.
-    id: 'stables', style: 'keep', interior: 'keep', x: 105, z: 70, w: 12, d: 5, wallH: 6.9, roof: ROOF.terracotta,
+    id: 'stables', style: 'keep', interior: 'keep', x: 105, z: 70, w: 12, d: 5, wallH: 7.0, roof: ROOF.terracotta,
     doors: [{ side: 's', at: 5, w: 2 }],
     windows: [{ side: 's', at: 2.5, stall: true }, { side: 's', at: 9.5, stall: true }],
     fits: [
