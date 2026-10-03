@@ -713,10 +713,10 @@ export function growTree(sp: Species, seed: number): Skeleton {
   limbs.forEach((L, i) => {
     if (L.order < 1 || gone.has(i)) return;
     const len = lengthOf(L), tip = L.path[L.path.length - 1], mine = live.filter((q) => q.limb === i);
-    const ends = mine.filter((q) => q.s >= len - 1e-6), last = Math.max(...mine.filter((q) => q.s < len - 1e-6).map((q) => q.s));
+    const ends = mine.filter((q) => q.s >= len - 1e-6), sprung = mine.filter((q) => q.s < len - 1e-6).map((q) => q.s);
     // (A strand's cards are counted at its top: they are hung plumb from there later.)
-    if (!ends.length || live.some((q) => !ends.includes(q) && (q.hang?.drop ?? 0) === 0 && q.at.distanceTo(tip) < 1.2)) return;
-    const keep = Math.max(last + 0.35, ...limbs.filter((c) => c.parent === i).map((c) => c.at + 0.5));
+    if (!ends.length || !sprung.length || live.some((q) => !ends.includes(q) && (q.hang?.drop ?? 0) === 0 && q.at.distanceTo(tip) < 1.2)) return;
+    const keep = Math.max(Math.max(...sprung) + 0.35, ...limbs.filter((c) => c.parent === i).map((c) => c.at + 0.5));
     if (keep < len - 0.3) trim(L, keep, ends);
   });
   // And a branch whose few leaves stand off on their own, clear of the rest of the crown, is a stray
@@ -724,10 +724,10 @@ export function growTree(sp: Species, seed: number): Skeleton {
   limbs.forEach((L, i) => {
     if (L.order !== 2 || gone.has(i)) return;
     const mine = live.filter((q) => q.limb === i);
-    if (mine.length <= 8 && mine.every((q) => live.every((o) => o.limb === i || (o.hang?.drop ?? 0) > 0 || o.at.distanceTo(q.at) > 1))) gone.add(i);
+    if (mine.length <= 8 && mine.every((q) => live.every((o) => o.limb === i || gone.has(o.limb) || (o.hang?.drop ?? 0) > 0 || o.at.distanceTo(q.at) > 1))) gone.add(i);
   });
-  const sk = compact({ limbs, dead: gone }, hung, crown, roots, H, sp);
-  sk.dropped = placed.dead.size;
+  // (Only the branches that found no place count as dropped.)
+  const sk = compact({ limbs, dead: gone }, hung, crown, roots, H, sp, placed.dead.size);
   // Strands hang plumb from wherever their branch was set (planJoints may have turned it).
   for (const s of sk.sprays) {
     if (!s.hang) continue;
@@ -919,8 +919,8 @@ function trim(L: Limb, s: number, tipSprays: Spray[]) {
   }
 }
 
-/** Drop the limbs that found no place (and their leaves), renumbering the rest. */
-function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, roots: Root[], height: number, species: Species): Skeleton {
+/** Drop the limbs that found no place or were left off (and their leaves), renumbering the rest; `dropped` counts those that found no place. */
+function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, roots: Root[], height: number, species: Species, dropped: number): Skeleton {
   const map = new Map<number, number>();
   const kept = limbs.filter((_, i) => !dead.has(i));
   limbs.forEach((L, i) => !dead.has(i) && map.set(i, map.size));
@@ -932,7 +932,7 @@ function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: 
     crown,
     roots,
     height,
-    dropped: dead.size,
+    dropped,
   };
 }
 
@@ -954,7 +954,7 @@ const FOOT_TOP = 1.05;
 
 /** Arc length along the trunk where its tube starts, over its foot: under every hole a limb cuts in it. */
 function footTop(L: Limb, holes: Joint[]) {
-  return Math.min(arcAtHeight(L, FOOT_TOP), ...holes.map((j) => j.s - j.h - 0.12));
+  return Math.max(0, Math.min(arcAtHeight(L, FOOT_TOP), ...holes.map((j) => j.s - j.h - 0.12)));
 }
 
 /** A root ridge's half-width at height y (m): broader where it leaves the bark, so it swells out of the trunk rather than standing on it. */
@@ -969,6 +969,10 @@ const ridgeWidth = (root: Root, y: number) => root.width * (1 + 0.8 * clamp(y / 
  */
 function footLayout(roots: Root[], n: number, y: number, r: number) {
   const order = [...roots].sort((p, q) => mod2pi(p.a) - mod2pi(q.a)), k = order.length, TAU = Math.PI * 2;
+  if (!k) {
+    const even = Array.from({ length: n }, (_, j) => (j / n) * TAU);
+    return { angles: even, bark: even };
+  }
   const at = order.map((q) => mod2pi(q.a));
   const gapTo = (i: number) => (i + 1 < k ? at[i + 1] - at[i] : at[0] + TAU - at[i]);
   // (Each crest's place round the trunk: as wide as it can be without crowding its neighbours.)
@@ -1079,6 +1083,8 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
         return vertex(V.copy(P).addScaledVector(D, rr), lay.bark[j], bark, rr, s, 1, w);
       });
     });
+    // (A trunk whose tube starts at its very foot, a limb leaving it that low, has no foot rings.)
+    if (!foot.length) return;
     const n = foot[0].length;
     for (let k = 0; k < foot.length - 1; k++) {
       for (let j = 0; j < n; j++) {
