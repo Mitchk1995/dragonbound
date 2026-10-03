@@ -1,4 +1,4 @@
-﻿# Dragons
+# Dragons
 
 Part of the design plan; the index and the current direction are in [DESIGN_DECISIONS.md](../DESIGN_DECISIONS.md). The concept-sheet verdicts on the drakeling and Cinderwing are in [characters.md](characters.md) ("Concept sheets redone" and "Five character sheets approved and built"); the fountain's bronze dragon is a castle piece ([castle-rounds.md](castle-rounds.md)). Newer decisions take precedence over older ones. Record each new decision here, dated, in the same session it is made.
 
