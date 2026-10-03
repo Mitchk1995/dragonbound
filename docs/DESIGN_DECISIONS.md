@@ -48,6 +48,7 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   1. Light and sky: a warmer sun, softer shadows, a little haze in the distance, and a real sky with clouds.
   2. Water: reflections, depth and foam on the moat, the falls and the streams.
   3. Ground, grass, plants and crops, grown like the oak.
+- **Textures are sourced, not painted in code** (October 3). Mitchell: "why would you have to manually do it when you have codex for image gen and many free sources". Bark, stone, ground, grass, rock and leaves come from Codex image generation in the game's painted style or from free CC0 libraries (Poly Haven, ambientCG) toned to match, made tileable and checked in the game; code places them and adds depth and light. Characters keep their blocky painted look. First use: the oak's bark, after his note that the branches "look like bones".
 - **Everything must make structural sense** (October 3): "it all has to make structural sense". His examples: the walled
   climb up to the landing "doesnt make sense the way it is built" and should have stairs, and the ledge road needs a wall
   on its other side too. He added that the insides of the buildings must work with their outsides, so the interiors are
