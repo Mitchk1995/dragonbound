@@ -59,5 +59,6 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - Pure logic (XP, drops, recipes, saves, pathing) is unit-tested in `tests/`.
 - Save format changes bump `SAVE_VERSION` and add a tested migration, so players never lose progress.
 - Art is code: every model is a Blender script in `tools/blender/`, and the `.glb` exports are committed. Textures are sourced, not hand-painted in code (owner, October 3): generated with Codex image generation in the game's painted style, or taken from free CC0 libraries (Poly Haven, ambientCG) and toned to match. Each is made tileable, checked repeating in the game, committed small, and listed with its source and licence. See [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
+- Always build on the newest stable version of every tool, library, engine feature and model, and use its newest way of doing things, not the legacy path (owner, October 3). At the start of a job, check the versions and current features it touches. Fall back to an older path only when the newest is broken or missing something, and then tell the owner plainly.
 - No placeholder text, TODO stubs or dead code on `main`.
 - Files are UTF-8 without a BOM; CI rejects BOMs and mojibake.
