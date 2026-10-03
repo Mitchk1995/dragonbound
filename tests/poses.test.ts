@@ -262,6 +262,27 @@ describe('pose audit: dragons', () => {
           expect((head.y - body.y) / Math.max(0.01, head.z - body.z), 'neck rise per forward unit').toBeLessThan(0.6);
         }
       });
+      if (name !== 'whelp') {
+        it('flying: the two wings never cross over the back, all through the flap', () => {
+          const m = makeModel(name);
+          const rig = new Rig(m.root);
+          const s = { ...newAnimState(), fly: 1, speed: 3 };
+          const v = new THREE.Vector3();
+          for (let f = 0; f < 90; f++) {
+            rig.update(1 / 60, s);
+            m.root.updateMatrixWorld(true);
+            for (const [side, sign] of [['wingL', 1], ['wingR', -1]] as const) {
+              let inmost = Infinity;
+              m.root.getObjectByName(side)!.traverse((o) => {
+                if (!(o instanceof THREE.Mesh)) return;
+                const pos = o.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) inmost = Math.min(inmost, v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).x * sign);
+              });
+              expect(inmost, `${side} frame ${f}`).toBeGreaterThan(0);
+            }
+          }
+        });
+      }
     });
   }
 });
