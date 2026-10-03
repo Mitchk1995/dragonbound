@@ -1,0 +1,25 @@
+# The look: light, sky, water, textures and the engine
+
+Part of the design plan; the index and the current direction are in [DESIGN_DECISIONS.md](../DESIGN_DECISIONS.md). The style every visual job starts from is "The look" in [ART_CONTRACT.md](../ART_CONTRACT.md). The engine test and the round 6 castle notes are under "Engine choice comes first" in [castle.md](castle.md). Newer decisions take precedence over older ones. Record each new decision here, dated, in the same session it is made.
+
+## October 3
+
+- **A more natural world, not photoreal** (October 3). Mitchell asked about going more realistic for the plants, water,
+  lighting and sky ("we dont need to go crazy right away, i do want it looking nice") and left the cohesion to Claude.
+  The direction is natural proportions, materials and light, still softly painted, so the blocky characters belong in
+  it, as they do in the LEGO games. Photoreal is out of reach with how we build, and it would make them look pasted in.
+  It comes in small steps, each shown to him as before-and-after pictures, starting once the stone and the trees land:
+  1. Light and sky: a warmer sun, softer shadows, a little haze in the distance, and a real sky with clouds.
+  2. Water: reflections, depth and foam on the moat, the falls and the streams.
+  3. Ground, grass, plants and crops, grown like the oak.
+- **Textures are sourced, not painted in code** (October 3). Mitchell: "why would you have to manually do it when you have codex for image gen and many free sources". Bark, stone, ground, grass, rock and leaves come from Codex image generation in the game's painted style or from free CC0 libraries (Poly Haven, ambientCG) toned to match, made tileable and checked in the game; code places them and adds depth and light. Characters keep their blocky painted look. First use: the oak's bark, after his note that the branches "look like bones".
+- **A big image batch while Codex lasts** (October 3). Mitchell's Codex subscription ends soon, so Claude generated a large library "even if we dont really need it later": about 110 textures (bark and leaves for every woodcutting tree, ground, rock, stone, wood, plants, crops, water, skies, the other zones' materials, effects and ground details), interface art, area concept paintings, and fresh concept sheets for the hero, NPCs and enemies. They live in `D:\dragonbound-archive\codex\tex` and `D:\dragonbound-archive\codex\concepts`, outside the game until a job puts one in. Item icons stay as they are, drawn from the 3D models (Mitchell agreed).
+- **Surface maps: option B** (October 3): normal and roughness maps on stone, bark, wood and ground, made from the sourced colour textures. The sky-light-only version (C) was rejected because it washed out the shadows; real bounce light is the fix.
+- **Engine: stay in the browser (pick A, October 3).** A look test put today's castle in Godot 4.7 and Unreal 5.8 next to our game (test projects kept in `D:/dragonbound-archive/godot-test` and `unreal-test`). Mitchell found them "about the same sort of" and noted the other engines were not lit properly either, so the test could not decide it; he picked A and asked Claude's view. Claude's view: most of the gain is lighting three.js can do, and a port means rewriting all the game code. The fair test is a proper lighting pass in our game (warm sun, soft shadows across the whole view, bounce light, haze, a real sky), shown before and after; if it still looks flat, the engine question reopens. The lighting pass and the round 6 castle fixes start now.
+- **Always the newest tools, never the legacy path** (October 3). Mitchell found out the game was drawing with three.js's old WebGL renderer while WebGPU and its newer lighting were available, and ruled: "we should never do that with anything." From now on every tool, library, engine feature and model is the newest stable version used its newest way; an older path is a fallback only when the newest is broken or missing something, and the owner is told plainly. The rule is in `AGENTS.md`.
+
+## Visual continuity (October 1)
+
+Preserve the liked portals and banquet-table appeal. The red-and-gold banners became blue and gold in the castle's colour pass (October 2), and crimson stays inside on the hall's cloth. The full castle redesign remains the controlling architectural direction. Consistent materials, foliage, landmarks and restrained placement of bright accents are possible tools for that work.
+
+The block-tree prototype recorded as B (stepped canopies) was the earlier visual reference; the trees are being redone (October 3). Exact regional style and layout still need to be judged in context. An isolated still cannot establish interaction, collision, travel pacing or combat feel.
