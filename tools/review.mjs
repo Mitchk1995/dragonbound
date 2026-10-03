@@ -57,15 +57,13 @@ const run = (cmd, args, cwd, env = {}) => new Promise((resolve, reject) => {
   child.once('exit', (code) => resolve(code ?? 1));
 });
 
-/** The PNGs an inspect run in `dir` wrote after `since`, by capture name. */
+/** The PNGs an inspect run in `dir` wrote after `since`, by capture name, in the order it took them. */
 function captures(dir, since) {
-  const out = new Map();
-  if (!fs.existsSync(dir)) return out;
-  for (const f of fs.readdirSync(dir)) {
-    const p = path.join(dir, f);
-    if (f.endsWith('.png') && fs.statSync(p).mtimeMs >= since) out.set(f.slice(0, -4), p);
-  }
-  return out;
+  if (!fs.existsSync(dir)) return new Map();
+  const shots = fs.readdirSync(dir).filter((f) => f.endsWith('.png'))
+    .map((f) => ({ name: f.slice(0, -4), p: path.join(dir, f), t: fs.statSync(path.join(dir, f)).mtimeMs }))
+    .filter((s) => s.t >= since).sort((a, b) => a.t - b.t);
+  return new Map(shots.map((s) => [s.name, s.p]));
 }
 
 /** Runs the inspect suite in `checkout` (this one, or the exported base) and returns its captures. */
@@ -118,7 +116,8 @@ async function main() {
   const area = AREAS[opts.name];
   const suite = opts.suite || area?.suite;
   if (!suite) throw Error(`no area called ${opts.name}; use --suite=<inspect suite> or --list`);
-  const branch = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+  const git = (...a) => spawnSync('git', a, { cwd: root, encoding: 'utf8' }).stdout.trim();
+  const branch = git('rev-parse', '--abbrev-ref', 'HEAD') === 'HEAD' ? git('rev-parse', '--short', 'HEAD') : git('rev-parse', '--abbrev-ref', 'HEAD');
 
   const after = await capture(root, suite);
   let before;
@@ -137,7 +136,7 @@ async function main() {
       fs.rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
   }
-  const names = [...new Set([...(before?.keys() ?? []), ...after.keys()])].sort();
+  const names = [...new Set([...after.keys(), ...(before?.keys() ?? [])])];
   if (!names.length) throw Error(`the suite ${suite} made no captures`);
 
   const out = path.join(opts.out, opts.name);
@@ -154,6 +153,7 @@ async function main() {
   fs.writeFileSync(jobFile, JSON.stringify(job));
   const code = await run(require('electron'), [path.join(root, 'tools', 'review-sheet.cjs'), jobFile], root);
   fs.rmSync(jobFile, { force: true });
+  fs.rmSync(path.join(root, 'inspect', 'review-before'), { recursive: true, force: true });
   if (code) throw Error('could not build the sheets');
   for (const f of fs.readdirSync(out).sort()) if (f.endsWith('.jpg')) console.log(path.join(out, f));
 }
