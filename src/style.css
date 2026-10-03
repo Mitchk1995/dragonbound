@@ -104,7 +104,7 @@ svg { display: block; }
 /* ── Splash ───────────────────────────────────────────────────── */
 #splash { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; background: radial-gradient(circle, #2a1830, #08060c); transition: opacity 0.7s; z-index: 50; }
 #splash h1 { margin: 0 0 6px; line-height: 0; }
-#splash h1 img { width: clamp(260px, 42vw, 640px); height: auto; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 30px rgba(255, 106, 26, 0.35)); }
+#splash h1 img { width: clamp(260px, 42vw, 640px); height: auto; aspect-ratio: 1344 / 256; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 30px rgba(255, 106, 26, 0.35)); }
 #splash p { color: var(--dim); }
 #splash.hide { opacity: 0; pointer-events: none; }
 
@@ -124,7 +124,7 @@ svg { display: block; }
 .title .logo { position: absolute; left: clamp(28px, 6vw, 110px); top: 15%; text-align: left; }
 .title { --logo-w: clamp(280px, 31vw, 600px); }
 .logo-main {
-  display: block; width: var(--logo-w); height: auto; user-select: none;
+  display: block; width: var(--logo-w); height: auto; aspect-ratio: 1344 / 256; user-select: none;
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 22px rgba(255, 110, 30, 0.3));
 }
 .logo-rule { display: flex; align-items: center; gap: 10px; color: var(--gold); font-size: 11px; margin: 14px 0 8px; }
