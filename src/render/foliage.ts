@@ -7,9 +7,11 @@ import { addPatch } from './surface';
  * Grown trees' surfaces (treeGrowth.ts): painted leaf atlases, sourced bark, and the bark and leaf
  * materials that use them, both swaying in the wind.
  *
- * - Leaves: each leaf kind has its own atlas of nine painted sprays (oak: lobed leaves in rosettes
- *   at the ends of short shoots; oval: a common broadleaf's leaves set alternately along its
- *   shoots), painted at startup and alpha-cut. Each leaf takes its own tone between a deep
+ * - Leaves: each leaf kind has its own atlas of nine sprays, alpha-cut. The oak's and the common
+ *   tree's are painted at startup (oak: lobed leaves in rosettes at the ends of short shoots; oval: a
+ *   common broadleaf's leaves set alternately along its shoots); the willow's, maple's, yew's and
+ *   magic tree's are sourced (public/textures/leaves/, made by tools/bark_textures.py), each its
+ *   sourced spray turned and toned a little differently in every cell. Each leaf takes its own tone between a deep
  *   blue-green and a warm light green, is lit on one half of its midrib, darker at its stalk, with a
  *   pale midrib and a soft shadow on the leaves under it. The colours are multipliers (the instance
  *   colour gives the tree its green or gold), and the mipmaps keep the leaves' coverage, so a crown
@@ -30,8 +32,13 @@ const smooth = (a: number, b: number, x: number) => {
 
 // ─── Leaf atlases ───────────────────────────────────────────────────────────
 
-/** The leaf kinds: an oak's lobed leaves, and a common broadleaf's oval ones. */
-export type LeafKind = 'oak' | 'oval';
+/** Leaf kinds whose sprays are sourced (public/textures/leaves/): a willow's narrow hanging leaves, a maple's lobed ones, a yew's needles and the magic tree's glowing leaves. */
+export const SOURCED_LEAVES = ['willow', 'maple', 'yew', 'magic'] as const;
+export type SourcedLeaf = (typeof SOURCED_LEAVES)[number];
+
+/** The leaf kinds: an oak's lobed leaves and a common broadleaf's oval ones (painted), and the sourced ones. */
+export type PaintedLeaf = 'oak' | 'oval';
+export type LeafKind = PaintedLeaf | SourcedLeaf;
 
 /** Sprays in an atlas: a grid of SPRAY_CELLS × SPRAY_CELLS cells, one spray design in each. */
 export const SPRAY_CELLS = 3;
@@ -192,7 +199,7 @@ function ovalSpray(rng: Rng, C: number): SprayPaint {
   return { twigs, leaves: done() };
 }
 
-const LEAF_PAINT: Record<LeafKind, LeafPaint> = {
+const LEAF_PAINT: Record<PaintedLeaf, LeafPaint> = {
   oak: { outline: oakLeafHalfWidth, spray: oakSpray, seed: 9001, deep: [0.34, 0.45, 0.5], light: [0.98, 1.0, 0.64], twig: [0.5, 0.4, 0.34] },
   oval: { outline: ovalLeafHalfWidth, spray: ovalSpray, seed: 14001, deep: [0.38, 0.5, 0.48], light: [1.0, 1.0, 0.66], twig: [0.52, 0.44, 0.38] },
 };
@@ -201,7 +208,7 @@ const LEAF_PAINT: Record<LeafKind, LeafPaint> = {
  * Paint a leaf kind's atlas into premultiplied RGBA floats (LEAF_ATLAS², rows bottom-up): one spray
  * per cell, each from its own seed.
  */
-export function paintLeafAtlas(kind: LeafKind) {
+export function paintLeafAtlas(kind: PaintedLeaf) {
   const W = LEAF_ATLAS, img = new Float32Array(W * W * 4);
   const lp = LEAF_PAINT[kind];
   const over = (i: number, r: number, g: number, b: number, a: number) => {
@@ -367,13 +374,41 @@ export function coverageMips(img: Float32Array, size: number) {
 }
 
 const leafTex = new Map<LeafKind, THREE.DataTexture>();
+const leafImages = new Map<SourcedLeaf, ImageBitmap>();
 
-/** A leaf kind's painted atlas (built once, shared by every grown tree of that kind). */
+const isSourced = (kind: LeafKind): kind is SourcedLeaf => (SOURCED_LEAVES as readonly string[]).includes(kind);
+
+/** A sourced leaf atlas as premultiplied RGBA floats, rows bottom-up (as paintLeafAtlas). */
+function sourcedLeafAtlas(kind: SourcedLeaf) {
+  const bmp = leafImages.get(kind);
+  if (!bmp) throw new Error(`leaves ${kind} are not loaded (preloadTreeTextures)`);
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = LEAF_ATLAS;
+  const ctx = cv.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(bmp, 0, 0, LEAF_ATLAS, LEAF_ATLAS);
+  const px = ctx.getImageData(0, 0, LEAF_ATLAS, LEAF_ATLAS).data, W = LEAF_ATLAS;
+  const img = new Float32Array(W * W * 4);
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+    const i = ((W - 1 - y) * W + x) * 4, o = (y * W + x) * 4, a = px[i + 3] / 255;
+    img[o] = (px[i] / 255) * a;
+    img[o + 1] = (px[i + 1] / 255) * a;
+    img[o + 2] = (px[i + 2] / 255) * a;
+    img[o + 3] = a;
+  }
+  return img;
+}
+
+/**
+ * A leaf kind's atlas (built once, shared by every grown tree of that kind). A world built headless
+ * (the tests build one, with no images loaded and no canvas to read them through) gets an empty
+ * stand-in for a sourced atlas: it is never drawn there.
+ */
 export function leafAtlas(kind: LeafKind) {
   const made = leafTex.get(kind);
   if (made) return made;
-  const mips = coverageMips(paintLeafAtlas(kind), LEAF_ATLAS);
-  const tex = new THREE.DataTexture(mips[0].data, LEAF_ATLAS, LEAF_ATLAS, THREE.RGBAFormat);
+  const headless = typeof document === 'undefined' && isSourced(kind);
+  const mips = headless ? [{ data: new Uint8Array(4), width: 1, height: 1 }] : coverageMips(isSourced(kind) ? sourcedLeafAtlas(kind) : paintLeafAtlas(kind), LEAF_ATLAS);
+  const tex = new THREE.DataTexture(mips[0].data, mips[0].width, mips[0].height, THREE.RGBAFormat);
   tex.mipmaps = mips;
   tex.generateMipmaps = false;
   tex.magFilter = THREE.LinearFilter;
@@ -387,10 +422,14 @@ export function leafAtlas(kind: LeafKind) {
 
 // ─── Bark ───────────────────────────────────────────────────────────────────
 
-/** The bark kinds: an oak's deep furrows, and a common broadleaf's shallower ones. */
-export type BarkKind = 'oak' | 'tree';
+/**
+ * The bark kinds, one per grown kind: an oak's deep furrows, a common broadleaf's shallower ones, a
+ * willow's criss-crossing ridges, a maple's grey plates, a yew's red-brown flakes and the magic
+ * tree's pale ridges with glowing veins.
+ */
+export type BarkKind = 'oak' | 'tree' | 'willow' | 'maple' | 'yew' | 'magic';
 
-export const BARK_KINDS: BarkKind[] = ['oak', 'tree'];
+export const BARK_KINDS: BarkKind[] = ['oak', 'tree', 'willow', 'maple', 'yew', 'magic'];
 
 /** A bark's maps (public/textures/bark/, made by tools/bark_textures.py): its colour and its relief. */
 interface BarkMaps {
@@ -400,8 +439,8 @@ interface BarkMaps {
 
 const barkMaps = new Map<BarkKind, BarkMaps>();
 
-/** Load every bark's maps (at startup, before any tree is built). */
-export async function preloadBark() {
+/** Load every bark's maps and every sourced leaf atlas (at startup, before any tree is built). */
+export async function preloadTreeTextures() {
   const loader = new THREE.TextureLoader();
   const load = async (file: string, srgb: boolean) => {
     const tex = await loader.loadAsync(`./textures/bark/${file}.jpg`);
@@ -411,15 +450,23 @@ export async function preloadBark() {
     tex.name = `bark-${file}`;
     return shareResource(tex);
   };
-  await Promise.all(BARK_KINDS.map(async (kind) => {
-    const [map, normal] = await Promise.all([load(kind, true), load(`${kind}-normal`, false)]);
-    barkMaps.set(kind, { map, normal });
-  }));
+  const leaves = async (kind: SourcedLeaf) => {
+    const res = await fetch(`./textures/leaves/${kind}.webp`);
+    if (!res.ok) throw new Error(`leaves ${kind}: ${res.status}`);
+    leafImages.set(kind, await createImageBitmap(await res.blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }));
+  };
+  await Promise.all([
+    ...BARK_KINDS.map(async (kind) => {
+      const [map, normal] = await Promise.all([load(kind, true), load(`${kind}-normal`, false)]);
+      barkMaps.set(kind, { map, normal });
+    }),
+    ...SOURCED_LEAVES.map(leaves),
+  ]);
 }
 
 function barkFor(kind: BarkKind) {
   const maps = barkMaps.get(kind);
-  if (!maps) throw new Error(`bark ${kind} is not loaded (preloadBark)`);
+  if (!maps) throw new Error(`bark ${kind} is not loaded (preloadTreeTextures)`);
   return maps;
 }
 
@@ -454,6 +501,8 @@ export interface BarkLook {
   gain: number;
   /** Moss in the furrows on the limbs' upper sides and round the damp foot (linear colour). */
   moss: number[];
+  /** How brightly the bark's blue veins glow (the magic tree's; none when left out). */
+  glow?: number;
 }
 
 /**
@@ -472,18 +521,22 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
   mat.vertexColors = true;
   mat.roughness = 0.95;
   mat.color.setRGB(1, 1, 1);
-  const maps = barkFor(look.kind);
+  // (The maps are looked up when the material is first drawn, so a world can be built without them.)
   const uniforms = {
-    uBarkMap: { value: maps.map },
-    uBarkNormal: { value: maps.normal },
+    uBarkMap: { value: null as THREE.Texture | null },
+    uBarkNormal: { value: null as THREE.Texture | null },
     uBarkTile: { value: look.tile },
     uBarkRelief: { value: look.relief },
     uBarkGain: { value: look.gain },
     uBarkMoss: { value: new THREE.Vector3(look.moss[0], look.moss[1], look.moss[2]) },
+    uBarkGlow: { value: look.glow ?? 0 },
   };
   addPatch(mat, {
     key: 'grown-bark',
     apply(shader) {
+      const maps = barkFor(look.kind);
+      uniforms.uBarkMap.value = maps.map;
+      uniforms.uBarkNormal.value = maps.normal;
       Object.assign(shader.uniforms, uniforms, wind);
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>
@@ -517,6 +570,7 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
           uniform float uBarkRelief;
           uniform float uBarkGain;
           uniform vec3 uBarkMoss;
+          uniform float uBarkGlow;
           varying vec4 vBarkA;
           varying vec4 vBarkB;
           varying vec2 vBarkRV;
@@ -551,6 +605,13 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
             barkCol = mix(barkCol, uBarkMoss, moss * 0.55);
             diffuseColor.rgb *= barkCol * uBarkGain;
           }`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          {
+            // A glowing bark's veins: where it runs bluer than its grey.
+            vec3 barkRaw = texture2D(uBarkMap, barkUv).rgb;
+            float vein = smoothstep(0.03, 0.12, barkRaw.b - max(barkRaw.r, barkRaw.g));
+            totalEmissiveRadiance += vec3(0.35, 0.8, 1.0) * vein * uBarkGlow;
+          }`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           {
             // The relief along the wrap's own directions on the surface: round the limb (u) and up it (v).
@@ -577,7 +638,7 @@ const LEAF_GAIN = 1.3;
  * onto its twig instead of showing as a sliver; each card rides its twig in the wind and flutters
  * at its far edge.
  */
-export function grownLeaves(mat: THREE.MeshStandardMaterial, wind: WindClock, kind: LeafKind) {
+export function grownLeaves(mat: THREE.MeshStandardMaterial, wind: WindClock, kind: LeafKind, glow = 0) {
   mat.map = leafAtlas(kind);
   mat.alphaTest = 0.5;
   mat.side = THREE.DoubleSide;
@@ -588,7 +649,7 @@ export function grownLeaves(mat: THREE.MeshStandardMaterial, wind: WindClock, ki
   addPatch(mat, {
     key: 'grown-leaves',
     apply(shader) {
-      Object.assign(shader.uniforms, wind);
+      Object.assign(shader.uniforms, wind, { uLeafGlow: { value: glow } });
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>
           attribute vec4 aWind;
@@ -611,13 +672,16 @@ export function grownLeaves(mat: THREE.MeshStandardMaterial, wind: WindClock, ki
           }
           transformed += treeSway(aWind.xyz, aWind.w);
           transformed += objectNormal * sin(uWindT * 6.3 + dot(aWind.xyz, vec3(12.9, 7.3, 9.1))) * 0.05 * aFlutter * aWind.w;`);
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <normal_fragment_begin>',
-        `#include <normal_fragment_begin>
-        #ifdef DOUBLE_SIDED
-          normal *= faceDirection;
-        #endif`,
-      );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>
+          uniform float uLeafGlow;`)
+        .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+          #ifdef DOUBLE_SIDED
+            normal *= faceDirection;
+          #endif`)
+        // A glowing kind's leaves give off their own colour (the magic tree's teal).
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          totalEmissiveRadiance += diffuseColor.rgb * uLeafGlow;`);
     },
   });
 }

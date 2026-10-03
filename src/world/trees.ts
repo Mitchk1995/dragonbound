@@ -8,12 +8,17 @@ import { hash01 } from '../render/blocks';
 import { grownBark, grownLeaves, type BarkLook, type WindClock } from '../render/foliage';
 import type { PaintKind } from '../render/paint';
 import type { Grade } from '../render/surface';
-import { growTree, leafGeometry, OAK, TREE, woodGeometry, type Species } from './treeGrowth';
+import { growTree, leafGeometry, MAGIC, MAPLE, OAK, TREE, WILLOW, woodGeometry, YEW, type Species } from './treeGrowth';
 
 /**
  * Tree models for the world's instanced forests.
  *
- * - 'block' (the game's style): stepped block canopies. Each broadleaf is a crown of bevelled
+ * - 'natural' (the game's style): grown trees (treeGrowth.ts), true to size, each one continuous
+ *   grown trunk, roots and limbs under a crown of leaf sprays: the woodcutting ladder's six species
+ *   (GROWN), each in three or four shapes. A zone's woods (ZoneTheme.woods) say which species grow
+ *   in place of each of its tree kinds; dead ash, and any kind a zone gives no species, keeps its
+ *   block model, as do the bushes.
+ * - 'block': stepped block canopies. Each broadleaf is a crown of bevelled
  *   blocks of mixed proportions, tiers stepping in and shifting as they rise, a few small blocks
  *   stepping out at the edges and small tufts breaking the flat tops, every block tilted a little
  *   so the crown reads hand-built. Four distinct crowns (round, tall, broad twin-topped, lopsided)
@@ -21,12 +26,6 @@ import { growTree, leafGeometry, OAK, TREE, woodGeometry, type Species } from '.
  *   upward, each turned 45° from the one below, with a vertical brim (a lit ledge and a dark
  *   underside) under a sloping top.
  * - 'faceted': the earlier trees (icosahedron canopies, cone pines), kept as a fallback.
- * - 'natural': grown trees (treeGrowth.ts), true to size: the broadleaves are mature oaks, each one
- *   continuous grown trunk, roots and limbs under a crown of painted leaf sprays, in three seeded
- *   variants. Pines, dead ash and bushes keep their block models until grown kinds replace them.
- *
- * The grown kinds (GROWN) are the woodcutting ladder as it is built, rung by rung: so far the
- * common tree and the oak, each a species, its seeds and its look.
  *
  * Every block canopy carries a painted vertex shade under the painted leaf albedo: lighter top
  * faces, a lit lip on the upper bevels, each side face darkening toward its foot, dark undersides,
@@ -39,7 +38,7 @@ export type TreeStyle = 'block' | 'faceted' | 'natural';
 export const TREE_STYLES: TreeStyle[] = ['block', 'faceted', 'natural'];
 
 /** The style the world builds its forests with (the inspect harness may switch it before a zone is built). */
-export const TREE_STYLE: { value: TreeStyle } = { value: 'block' };
+export const TREE_STYLE: { value: TreeStyle } = { value: 'natural' };
 
 /** Turns the world's scenery material into a grown tree's own (wind: the world's wind clock). */
 export type GrownSetup = (mat: THREE.MeshStandardMaterial, wind: WindClock) => void;
@@ -54,6 +53,10 @@ export interface GrownLook {
   spacing: number;
   /** Its own leaf colours (as the world's palettes: three everyday tones, then two rarer ones). */
   palette: number[];
+  /** Its colours where its zone wears autumn (ZoneTheme.woods), if it turns. */
+  autumn?: number[];
+  /** It grows by water: far likelier near it, rarer away from it. */
+  waterside?: boolean;
 }
 
 export interface TreeSet {
@@ -69,8 +72,8 @@ export interface TreeSet {
   bushGrade: Grade;
   /** Canopies carry a painted vertex shade (multiplied with the instance colour). */
   shaded: boolean;
-  /** Kinds that are grown trees. */
-  grown: Partial<Record<TreeKind, GrownLook>>;
+  /** The zone's woods grow grown trees (GROWN) in place of its tree kinds (the 'natural' style). */
+  natural: boolean;
 }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -336,7 +339,7 @@ function facetedSet(): TreeSet {
     grade: { low: 0.62, from: 1.0, to: 2.7 },
     bushGrade: { low: 0.7, from: 0, to: 0.9 },
     shaded: false,
-    grown: {},
+    natural: false,
   };
 }
 
@@ -361,18 +364,22 @@ function blockSet(): TreeSet {
     grade: { low: 0.8, from: 1.1, to: 2.6 },
     bushGrade: { low: 0.85, from: 0, to: 0.7 },
     shaded: true,
-    grown: {},
+    natural: false,
   };
 }
 
-/** The grown kinds built so far: the woodcutting ladder's first two rungs. */
-export type GrownKind = 'tree' | 'oak';
-export const GROWN_KINDS: GrownKind[] = ['tree', 'oak'];
+/** The grown kinds: the woodcutting ladder, in its order. */
+export type GrownKind = 'tree' | 'oak' | 'willow' | 'maple' | 'yew' | 'magic';
+export const GROWN_KINDS: GrownKind[] = ['tree', 'oak', 'willow', 'maple', 'yew', 'magic'];
 
-/** A grown kind: the species it grows from, the seeds of its variants (each a different tree) and its look. */
+/**
+ * A grown kind: the species it grows from, its shapes (each a seed, and how that tree departs from
+ * the species: a leaning one, a tall narrow one, one forking low) and its look.
+ */
 interface Grown {
   species: Species;
   seeds: number[];
+  forms?: Partial<Species>[];
   look: GrownLook;
 }
 
@@ -380,6 +387,14 @@ interface Grown {
 const OAK_BARK: BarkLook = { kind: 'oak', tile: 1.1, relief: 1.2, gain: 1.6, moss: [0.12, 0.16, 0.06] };
 /** The common tree's bark: shallower, finer furrows in a smoother, lighter grey-brown. */
 const TREE_BARK: BarkLook = { kind: 'tree', tile: 0.8, relief: 1.0, gain: 1.6, moss: [0.13, 0.17, 0.07] };
+/** A willow's bark: deep ridges criss-crossing in long diamonds, grey-brown and mossy. */
+const WILLOW_BARK: BarkLook = { kind: 'willow', tile: 1.0, relief: 1.25, gain: 1.6, moss: [0.11, 0.15, 0.05] };
+/** A maple's bark: grey, in long shallow plates. */
+const MAPLE_BARK: BarkLook = { kind: 'maple', tile: 1.0, relief: 1.0, gain: 1.55, moss: [0.12, 0.15, 0.07] };
+/** A yew's bark: thin red-brown scales flaking off redder bark. */
+const YEW_BARK: BarkLook = { kind: 'yew', tile: 0.85, relief: 1.0, gain: 1.45, moss: [0.1, 0.12, 0.05] };
+/** The magic tree's bark: pale silver-blue flowing ridges, faintly glowing blue veins between them. */
+const MAGIC_BARK: BarkLook = { kind: 'magic', tile: 1.2, relief: 0.8, gain: 1.2, moss: [0.3, 0.36, 0.44], glow: 0.5 };
 
 export const GROWN: Record<GrownKind, Grown> = {
   // Fresh mid greens, now and then a yellower one or one turning gold.
@@ -392,18 +407,51 @@ export const GROWN: Record<GrownKind, Grown> = {
   oak: {
     species: OAK,
     seeds: [1, 2, 3],
-    look: { trunk: (m, w) => grownBark(m, w, OAK_BARK), canopy: (m, w) => grownLeaves(m, w, 'oak'), size: [0.9, 1.08], spacing: 7.5, palette: [0x557f41, 0x5b8643, 0x4c763d, 0x737f3d, 0xa88c45] },
+    look: { trunk: (m, w) => grownBark(m, w, OAK_BARK), canopy: (m, w) => grownLeaves(m, w, 'oak'), size: [0.9, 1.08], spacing: 7.5, palette: [0x557f41, 0x5b8643, 0x4c763d, 0x737f3d, 0xa88c45], autumn: [0x9a7a3a, 0xa8823c, 0x8a6a34, 0xb0603a, 0x6f7a3c] },
+  },
+  // Willows in light, silvery yellow-greens, by the water: a broad curtain, one leaning out, one
+  // forking low into several stems, one taller and narrower.
+  willow: {
+    species: WILLOW,
+    seeds: [72, 65, 89, 70],
+    forms: [{}, { lean: 1.3, spread: [10.8, 12.2] }, { fork: [1.4, 1.8], limbs: [5, 6] }, { height: [9.6, 10.4], spread: [8.6, 9.6], lean: 0.3 }],
+    look: { trunk: (m, w) => grownBark(m, w, WILLOW_BARK), canopy: (m, w) => grownLeaves(m, w, 'willow'), size: [0.92, 1.06], spacing: 8.5, palette: [0x86a04f, 0x8fa853, 0x7c9649, 0x9fa64c, 0xb2a64e], waterside: true },
+  },
+  // Maples in rich summer greens, now and then one turning red or orange; where the zone wears its
+  // autumn, all in reds, oranges and golds. A broad dome, an upright oval, one leaning, a wide spreader.
+  maple: {
+    species: MAPLE,
+    seeds: [31, 32, 33, 34],
+    forms: [{}, { height: [10.8, 11.6], spread: [7.6, 8.4], crownBase: 0.28 }, { lean: 0.9, limbs: [4, 5] }, { height: [9.4, 10.2], spread: [10.4, 11.2], rise: [0.42, 0.95] }],
+    look: { trunk: (m, w) => grownBark(m, w, MAPLE_BARK), canopy: (m, w) => grownLeaves(m, w, 'maple'), size: [0.92, 1.06], spacing: 7, palette: [0x5b8c3f, 0x63943f, 0x56843c, 0xa8563a, 0xb8843c], autumn: [0xb04e30, 0xc0702e, 0xa8402c, 0xc49a3c, 0x9a3a2c] },
+  },
+  // Yews in deep, dark blue-greens: a broad dome, a tall cone, a squat one splitting low into many stems.
+  yew: {
+    species: YEW,
+    seeds: [71, 70, 70],
+    forms: [{}, { taper: 0.65, height: [9.0, 9.8], spread: [6.6, 7.4] }, { fork: [1.2, 1.5], limbs: [7, 8], spread: [8.6, 9.6], height: [7.6, 8.4], taper: 0.1 }],
+    look: { trunk: (m, w) => grownBark(m, w, YEW_BARK), canopy: (m, w) => grownLeaves(m, w, 'yew'), size: [0.92, 1.06], spacing: 6.5, palette: [0x3c5e34, 0x426636, 0x375731, 0x4a6a38, 0x465f35] },
+  },
+  // Magic trees glowing teal: graceful and upright, one leaning, a wide vase, a tall slender one.
+  magic: {
+    species: MAGIC,
+    seeds: [63, 64, 65, 66],
+    forms: [{}, { lean: 1.1 }, { rise: [0.95, 1.3], spread: [9.2, 10.4], fill: [0.3, 0.5] }, { height: [11.4, 12.2], spread: [7.0, 7.8] }],
+    look: { trunk: (m, w) => grownBark(m, w, MAGIC_BARK), canopy: (m, w) => grownLeaves(m, w, 'magic', 0.32), size: [0.94, 1.06], spacing: 7.5, palette: [0x3aa88a, 0x42b294, 0x369c80, 0x4cbc9c, 0x5ab8b0] },
   },
 };
 
+/** The species one shape of a grown kind grows from: the kind's species with that shape's departures. */
+export const grownSpecies = (kind: GrownKind, v: number): Species => ({ ...GROWN[kind].species, ...GROWN[kind].forms?.[v] });
+
 const grownSets = new Map<GrownKind, { trunk: THREE.BufferGeometry[]; canopy: THREE.BufferGeometry[] }>();
 
-/** A grown kind's variants: each one's wood and its leaves (built once, shared). */
+/** A grown kind's shapes: each one's wood and its leaves (built once, shared). */
 export function grownTrees(kind: GrownKind) {
   let set = grownSets.get(kind);
   if (!set) {
-    const { species, seeds } = GROWN[kind];
-    const grown = seeds.map((seed) => growTree(species, seed));
+    const { seeds } = GROWN[kind];
+    const grown = seeds.map((seed, v) => growTree(grownSpecies(kind, v), seed));
     set = { trunk: grown.map(woodGeometry), canopy: grown.map((sk, i) => leafGeometry(sk, seeds[i])) };
     for (const g of [...set.trunk, ...set.canopy]) shareResource(g);
     grownSets.set(kind, set);
@@ -411,15 +459,34 @@ export function grownTrees(kind: GrownKind) {
   return set;
 }
 
+/** Which grown species stand in a zone in place of each of its tree kinds (weights), and which of them wear autumn there. */
+export interface Woods {
+  kinds: Partial<Record<TreeKind, Partial<Record<GrownKind, number>>>>;
+  autumn?: GrownKind[];
+}
+
+/** A zone's woods when its theme names none: broadleaves are oaks and common trees, conifers yews. */
+export const DEFAULT_WOODS: Woods = { kinds: { grove: { oak: 1, tree: 1 }, pine: { yew: 1 } } };
+
+/**
+ * The grown species of one tree from its kind's weights: `n` (0..1, a smooth noise, so species stand
+ * in groves) picks it. By water a waterside species is four times likelier, away from it a third as likely.
+ */
+export function pickGrown(weights: Partial<Record<GrownKind, number>>, n: number, wet: boolean): GrownKind | null {
+  const kinds = GROWN_KINDS.filter((k) => (weights[k] ?? 0) > 0);
+  if (!kinds.length) return null;
+  const w = kinds.map((k) => weights[k]! * (GROWN[k].look.waterside ? (wet ? 4 : 0.35) : 1));
+  let v = Math.min(0.999999, Math.max(0, n)) * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < kinds.length; i++) {
+    v -= w[i];
+    if (v < 0) return kinds[i];
+  }
+  return kinds[kinds.length - 1];
+}
+
 function naturalSet(): TreeSet {
-  const block = blockSet();
-  const oaks = grownTrees('oak');
-  return {
-    ...block,
-    trunk: { ...block.trunk, grove: oaks.trunk },
-    canopy: { ...block.canopy, grove: oaks.canopy },
-    grown: { grove: GROWN.oak.look },
-  };
+  // (The kinds no grown species stands in for keep the block models, shared with the block style.)
+  return { ...treeSet('block'), natural: true };
 }
 
 const sets = new Map<TreeStyle, TreeSet>();
@@ -438,34 +505,37 @@ export function treeSet(style: TreeStyle = TREE_STYLE.value): TreeSet {
 /** Triangles in one geometry. */
 export const triangles = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.getAttribute('position').count) / 3;
 
-/** Triangles per tree (its trunk and canopy, the heaviest variant) of every kind in a style. */
+/** Triangles per tree (its trunk and canopy, the heaviest variant) of every kind in a style (the natural style's grown trees: grownTriangles). */
 export function treeTriangles(style: TreeStyle): Record<TreeKind, number> {
   const s = treeSet(style);
   const per = (k: TreeKind) => Math.max(...s.canopy[k].map((c, v) => triangles(s.trunk[k][Math.min(v, s.trunk[k].length - 1)]) + triangles(c)));
   return { grove: per('grove'), pine: per('pine'), ash: per('ash') };
 }
 
+/** Triangles per tree of a grown kind (its trunk and canopy), each shape. */
+export function grownTriangles(kind: GrownKind) {
+  const set = grownTrees(kind);
+  return set.canopy.map((c, v) => triangles(set.trunk[v]) + triangles(c));
+}
+
 /**
- * Thin a wood for grown trees, which need far more room than block trees laid one to a cell: taken
- * in an order hashed from their positions (so no scan-line pattern), a grown tree stays only where
- * no grown tree already kept stands within its spacing; then every other tree, and every piece of
- * undergrowth, under a kept crown (within half that spacing) goes. Returns which stay.
+ * Thin a wood for grown trees, which need far more room than block trees laid one to a cell. The
+ * grown trees (those with a `spacing`, in metres) are taken in an order hashed from their positions
+ * (so no scan-line pattern), and one stays only where no grown tree already kept stands within its
+ * spacing or the kept one's, whichever is wider; then every other tree, and every piece of
+ * undergrowth, under a kept crown (within half its spacing) goes. Returns which stay.
  */
-export function thinWood(at: Record<TreeKind, { x: number; z: number }[]>, grown: Partial<Record<TreeKind, GrownLook>>, under: { x: number; z: number }[] = []) {
+export function thinWood(trees: { x: number; z: number; spacing?: number }[], under: { x: number; z: number }[] = []) {
   const kept: { x: number; z: number; r: number }[] = [];
-  const keep: Record<TreeKind, boolean[]> = { pine: at.pine.map(() => true), grove: at.grove.map(() => true), ash: at.ash.map(() => true) };
-  const kinds = Object.keys(keep) as TreeKind[];
-  for (const k of kinds) {
-    const look = grown[k];
-    if (!look) continue;
-    const order = at[k].map((_, i) => i).sort((a, b) => hash01(at[k][a].x, at[k][a].z, 7) - hash01(at[k][b].x, at[k][b].z, 7));
-    for (const i of order) {
-      const p = at[k][i];
-      keep[k][i] = kept.every((q) => Math.hypot(p.x - q.x, p.z - q.z) >= Math.max(look.spacing, q.r));
-      if (keep[k][i]) kept.push({ x: p.x, z: p.z, r: look.spacing });
-    }
+  const keep = trees.map(() => true);
+  const grown = trees.map((_, i) => i).filter((i) => trees[i].spacing !== undefined);
+  grown.sort((a, b) => hash01(trees[a].x, trees[a].z, 7) - hash01(trees[b].x, trees[b].z, 7));
+  for (const i of grown) {
+    const p = trees[i], r = p.spacing!;
+    keep[i] = kept.every((q) => Math.hypot(p.x - q.x, p.z - q.z) >= Math.max(r, q.r));
+    if (keep[i]) kept.push({ x: p.x, z: p.z, r });
   }
   const clear = (p: { x: number; z: number }) => kept.every((q) => Math.hypot(p.x - q.x, p.z - q.z) >= q.r * 0.5);
-  for (const k of kinds) if (!grown[k]) at[k].forEach((p, i) => (keep[k][i] = clear(p)));
+  trees.forEach((p, i) => p.spacing === undefined && (keep[i] = clear(p)));
   return { trees: keep, under: under.map(clear) };
 }
