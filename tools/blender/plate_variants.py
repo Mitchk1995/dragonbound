@@ -100,9 +100,9 @@ ARM_REST = {'armL': (0.47, 0.62, 0), 'armR': (-0.47, 0.62, 0)}
 
 # anim.ts rot() offsets. idle/walk: humanoid block; windup = swing a=0.4; slam a=0.5; cast a=0.5.
 POSES = {
-    'idle': {'armL': (0, 0, -0.08), 'armR': (0, 0, 0.08)},
-    'walk': {'armL': (-0.5, 0, -0.08), 'armR': (0.5, 0, 0.08), 'legL': (0.7, 0, 0), 'legR': (-0.7, 0, 0)},
-    'windup': {'armL': (0, 0, -0.08), 'armR': (-3.2, 0, 0.1)},
+    'idle': {'armL': (0, 0, 0.1), 'armR': (0, 0, -0.1)},
+    'walk': {'armL': (-0.5, 0, 0.1), 'armR': (0.5, 0, -0.1), 'legL': (0.7, 0, 0), 'legR': (-0.7, 0, 0)},
+    'windup': {'armL': (0, 0, 0.1), 'armR': (-3.2, 0, -0.1)},
     'slam': {'armL': (-3.0, 0, 0), 'armR': (-3.0, 0, 0)},
     'cast': {'armL': (-1.8, 0, 0), 'armR': (-2.2, 0, 0)},
 }
@@ -185,6 +185,7 @@ def pokes(samplers, tree, owner, label, occ=None, depth=0.1, clear=0.2):
     object excluded), i.e. something visibly poking out through the plate. Returns
     {'<what> > <plate>': (samples, max depth, example point in three.js world coords)}."""
     occ_t, occ_own = occ if occ else (tree, owner)
+    solids = _solids(list(dict.fromkeys(occ_own)))
     res = {}
     for o in samplers:
         for P, n in _samples(o):
@@ -192,12 +193,15 @@ def pokes(samplers, tree, owner, label, occ=None, depth=0.1, clear=0.2):
             if loc is None or nor.dot(-n) >= 0 or owner[idx] is o:
                 continue
             q, hidden = P + n * 0.002, False
-            # buried inside another mesh (nearest foreign surface faces away from the point)?
+            # buried inside another mesh (nearest foreign surface faces away from the point, or the point is inside
+            # one of the other closed parts, e.g. a forearm's end inside a sleeve block)?
             near = [(d_, l_, n_) for (l_, n_, i_, d_) in occ_t.find_nearest_range(P, 0.25) if occ_own[i_] is not o]
             if near:
                 d_, l_, n_ = min(near, key=lambda r: r[0])
                 if (P - l_).dot(n_) < -1e-4:
                     continue
+            if _inside_other(P, o, solids):
+                continue
             for _ in range(4):          # step past hits on the sample's own mesh
                 loc2, nor2, idx2, d2 = occ_t.ray_cast(q, n, clear)
                 if loc2 is None:
@@ -212,6 +216,28 @@ def pokes(samplers, tree, owner, label, occ=None, depth=0.1, clear=0.2):
             cnt, mx, ex = res.get(k, (0, 0.0, None))
             res[k] = (cnt + 1, round(max(mx, dist), 3), ex if ex and mx >= dist else to_three(P))
     return res
+
+
+def _solids(objs):
+    """Per-part BVH trees with world bounds, for point-inside tests (every part is a closed block or shell)."""
+    out = []
+    for o in objs:
+        mw = o.matrix_world
+        vs = [mw @ v.co for v in o.data.vertices]
+        lo = Vector((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs)))
+        hi = Vector((max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
+        out.append((o, lo, hi, BVHTree.FromPolygons(vs, [list(p.vertices) for p in o.data.polygons])))
+    return out
+
+
+def _inside_other(P, o, solids, eps=0.004):
+    for b, lo, hi, t in solids:
+        if b is o or not (lo.x <= P.x <= hi.x and lo.y <= P.y <= hi.y and lo.z <= P.z <= hi.z):
+            continue
+        loc, nor, _, dist = t.find_nearest(P)
+        if loc is not None and (P - loc).dot(nor) < 0 and dist > eps:
+            return True
+    return False
 
 
 def floating(armour, everything, near=0.015):
@@ -446,8 +472,8 @@ def closeup(vid, file_name, pose='idle', views=(dict(yaw=0, pitch=8), dict(yaw=4
 # cube full helm with a T visor; thumbless two-block gauntlets and sabatons. No lames, ridges, rivets or trim bands.
 
 def P_gloves(S):
-    for name in ('sock_handL', 'sock_gloveR'):
-        plate_gauntlet(S(name))
+    for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
+        plate_gauntlet(S(name), s)
 
 
 def P_boots(S):
@@ -521,13 +547,14 @@ def E_helm(S):
     great_helm(h, crest=CRIMSON, slit=SLIT_E)
     seam(h, (0.32, 0.016, 0.012), (0, 0.09, 0.315))                              # ember slit
     for s in (-1, 1):
-        chain(h, [(s * 0.25, 0.2, 0.02), (s * 0.36, 0.28, -0.1), (s * 0.41, 0.38, -0.27), (s * 0.38, 0.5, -0.45)],
+        # (kept within x 0.35, so a sword arm raised overhead passes outside them)
+        chain(h, [(s * 0.25, 0.2, 0.02), (s * 0.31, 0.29, -0.1), (s * 0.33, 0.39, -0.27), (s * 0.3, 0.51, -0.44)],
               ((0.11, 0.09), (0.09, 0.06), (0.06, 0.012)), HORN_E())
 
 
 def E_gloves(S):
-    for name in ('sock_handL', 'sock_gloveR'):
-        plate_gauntlet(S(name))
+    for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
+        plate_gauntlet(S(name), s)
 
 
 def E_boots(S):

@@ -80,8 +80,18 @@ from the owner's picks. A critic never proposes a different style.
 **Pipeline (owner's rule):** an image-generated concept (with examples of our art as reference) comes first, the 3D model
 is built from that image, then the icon is made from the model. **Every item model matches its approved image**
 (`public/icons/approved` until concepts replace them): same silhouette, parts and colours. A model is approved only
-from textured, in-game renders shown at the same angle as its image; flat previews don't count. Collars, cuffs and boot tops are open (`open_box`: closed walls round a dark sunk floor). Characters have no
-thumbs, so gloves and gauntlets are thumbless mitten blocks. Each bow and staff tier has its own model.
+from textured, in-game renders shown at the same angle as its image; flat previews don't count. Collars, cuffs and boot tops are open (`open_box`: closed walls round a dark sunk floor). Every hand of the hero's
+kind (hero, cultist, priest, goblin, town NPCs) is one solid fist, like a mitten, with the thumb across its front
+(`_common.fist`, fused into one part); held things run through it (a sword's grip front to back under the thumb, a
+staff upright through its front). Gloves and gauntlets are mitten blocks that cover it, thumb and all. Each bow and
+staff tier has its own model.
+
+**Arms never cut into bodies.** Arms hang against the sides of the body and swing past them: anim.ts turns the hanging
+arms a little out (`ARM_SPLAY`), and every character's arms sit just outside its torso, belt and robe. On the hero,
+body armour's sides stand at x ±0.38 and its sleeves start there (`gear.py` `ARM_IN`, `sleeve`); the tunic's own
+sleeves come off under body armour. `fitcheck.py` `arm_clip_all()` poses every character as the game does (idle, walk,
+each attack) and measures any arm cutting into the body; only the bow's draw arm (no elbow) and the goblin's club arm
+passing behind its ear are allowed.
 
 Mostly blocky and modular, not dogmatically: use organic shapes where they look better (e.g. bat wings, hair,
 trees, flames). Blocks are the default where scripted geometry shines (armour, helms, weapons, NPC/enemy bodies,
@@ -99,7 +109,7 @@ Never name an object ending in three digits.
 ### Hero base: `hero.glb` (`tools/blender/hero.py`)
 Height ~2.0. The starting outfit from the approved concept sheet (October 3): tunic `ROLE_cloth` with its collar and sleeve bands in `ROLE_clothDark` (the tunic's dye, darkened by the game), trousers `ROLE_cloth2`, belt, bracers and boots `ROLE_leather`, skin `ROLE_skin`; no armour slot, no weapon, no hair.
 
-The outfit's extra pieces sit under empties named `outfit_<slot>_*`, and the game hides them while gear fills that slot (`registry.ts` HeroDresser): `outfit_body_*` (collar, the skirt's split, strap, buckle, pouch, the single pauldron) under body armour, `outfit_gloves_*` (bracers) under gloves, `outfit_boots_*` (boots) under boots. The body, arms, hands and legs under them keep the earlier hero's sizes, so every gear piece fits unchanged; `fitcheck.py` `fit_all()` and `tests/character-art.test.ts` check every piece on the hero.
+The outfit's extra pieces sit under empties named `outfit_<slot>_*`, and the game hides them while gear fills that slot (`registry.ts` HeroDresser): `outfit_body_*` (collar, the skirt's split, strap, buckle, pouch, the single pauldron, the sleeves) under body armour, `outfit_gloves_*` (bracers) under gloves, `outfit_boots_*` (boots) under boots. The body, arms, hands and legs under them keep the earlier hero's sizes, so every gear piece fits unchanged; `fitcheck.py` `fit_all()` and `tests/character-art.test.ts` check every piece on the hero.
 
 Rig parts (pivots = empties at joints, children are meshes):
 `body` (hips pivot) → `head`, `armL` (+X side), `armR` (−X side); `legL` (+X), `legR` (−X) on the root.
@@ -172,5 +182,6 @@ the head the side lines run level, so the temples cannot come lower than the hai
 
 ### Enemies/NPCs/props
 Goblin Grunt, Kobold Slinger, Ember Cultist and Cinder Priest (`priest.glb`) are built in `minions.py` from their approved concept sheets (October 3).
+The cult staffs hang on a `sock_handR` empty in the fist (not `weapon`), so the cast keeps them upright in the raised hand.
 Rig names per `src/render/anim.ts` (humanoid: body/head/armL/armR/legL/legR/weapon; quadruped: legFL/legFR/legBL/legBR,
 neck1.., tail1.., wingL/wingR, jaw). Props are static; origin at ground centre.

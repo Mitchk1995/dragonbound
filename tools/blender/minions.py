@@ -73,7 +73,7 @@ def goblin():
     box(body, (0.17, 0.07, 0.12), (0.2, 0.05, 0.275), LEATHER_DK, rot=(0.15, 0, 0), bevel=0.015)
     box(body, (0.03, 0.06, 0.02), (0.2, 0.0, 0.33), IRON, bevel=0.006)
     # Bare barrel chest leaning forward, shoulders broader than the waist.
-    box(body, (0.64, 0.52, 0.44), (0, 0.36, 0.03), GOB, rot=(0.18, 0, 0), taper=(1.14, 1.05), bevel=0.07)
+    box(body, (0.64, 0.52, 0.44), (0, 0.36, 0.03), GOB, rot=(0.18, 0, 0), taper=(1.06, 1.05), bevel=0.07)
     box(body, (0.46, 0.18, 0.06), (0, 0.42, 0.26), GOB_DK, rot=(0.18, 0, 0), bevel=0.03)   # pecs
     # Strap from the right shoulder to the left hip, an iron ring on the chest; crossed straps and a red plate behind.
     box(body, (0.08, 0.72, 0.03), (0.0, 0.35, 0.27), LEATHER_DK, rot=(0.18, 0, 0.72), bevel=0.008)
@@ -95,8 +95,9 @@ def goblin():
         ear_wedge(head, s, (s * 0.27, 0.27, -0.03), 0.42, 0.13, 0.07, GOB, GOB_DK)
         box(head, (0.12, 0.085, 0.02), (s * 0.15, 0.27, 0.262), GOB_EYE, bevel=0)          # eyes under the brow
         beam(head, (s * 0.15, 0.03, 0.265), (s * 0.165, 0.15, 0.275), 0.055, BONE, d=0.04, w1=0.012, d1=0.012)  # tusks
-    # Arms: thick, a studded wrist band, big fists. Red hide pauldron on the left.
-    for name, x in (('armL', 0.41), ('armR', -0.41)):
+    # Arms: thick, a studded wrist band, big fists. Red hide pauldron on the left. The arms hang against the chest's
+    # sides and swing past them (fitcheck.py arm_clip_all).
+    for name, x in (('armL', 0.46), ('armR', -0.46)):
         s = 1 if x > 0 else -1
         a = pivot(body, name, (x, 0.54, 0.02))
         box(a, (0.24, 0.3, 0.27), (0, -0.14, 0), GOB, bevel=0.05)                         # upper arm
@@ -104,12 +105,12 @@ def goblin():
         box(a, (0.29, 0.1, 0.32), (0, -0.4, 0), LEATHER, bevel=0.02)                      # wrist band
         for z in (-0.08, 0.08):
             box(a, (0.012, 0.035, 0.035), (s * 0.15, -0.4, z), IRON, bevel=0.005)
-        box(a, (0.27, 0.22, 0.28), (0, -0.54, 0.01), GOB_DK, bevel=0.06)                  # fist
+        fist(a, (0, -0.55, 0.01), GOB_DK, s, size=(0.27, 0.23, 0.28), bevel=0.06)        # the club's haft through it
         if s > 0:
-            box(a, (0.38, 0.15, 0.4), (0.04, 0.04, 0), HIDE, rot=(0, 0, -0.32), bevel=0.035)    # pauldron
+            box(a, (0.32, 0.15, 0.4), (0.07, 0.04, 0), HIDE, rot=(0, 0, -0.32), bevel=0.035)    # pauldron
             box(a, (0.07, 0.22, 0.4), (0.175, -0.08, 0), HIDE, rot=(0, 0, -0.1), bevel=0.025)
             for z in (-0.1, 0.1):
-                box(a, (0.035, 0.035, 0.02), (0.07, 0.125, z), IRON, rot=(0, 0, -0.32), bevel=0.006)
+                box(a, (0.035, 0.035, 0.02), (0.1, 0.125, z), IRON, rot=(0, 0, -0.32), bevel=0.006)
                 box(a, (0.02, 0.035, 0.035), (0.212, -0.08, z), IRON, rot=(0, 0, -0.1), bevel=0.006)
         else:
             w = pivot(a, 'weapon', (0, -0.54, 0.04), (PI / 2, 0, 0))
@@ -124,9 +125,7 @@ def goblin():
                 tip_y = y + (0.18 if ang == 1.05 else 0.04)
                 r0, r1 = (0.06, 0.12) if ang == 1.05 else (0.13, 0.29)
                 beam(w, (d[0] * r0, y, d[2] * r0), (d[0] * r1, tip_y, d[2] * r1), 0.075, BONE, w1=0.014)
-    export('DB_goblin', 'goblin.glb')
-    preview_sheet('goblin.png', target=(0, 0.75, 0), dist=3.6)
-    remove_preview_rig()
+    return scene
 
 
 # ─── Kobold Slinger ──────────────────────────────────────────────────────────
@@ -195,7 +194,7 @@ def kobold():
         z = -0.02 - i * 0.1
         beam(head, (0, 0.36, z + 0.02), (0, 0.36 + hgt, z - 0.05), 0.035, SPINE, d=0.08, w1=0.01, d1=0.02)
     # Arms: stubby, a teal band at the wrist, clawed hands; teal pauldron with a bone spike on the left.
-    for name, x in (('armL', 0.3), ('armR', -0.3)):
+    for name, x in (('armL', 0.36), ('armR', -0.36)):   # against the body's sides, clear of the hip pouches
         s = 1 if x > 0 else -1
         a = pivot(body, name, (x, 0.38, 0.0))
         box(a, (0.18, 0.2, 0.2), (0, -0.09, 0), KOB, bevel=0.04)
@@ -217,9 +216,7 @@ def kobold():
             for dx in (-0.095, 0.095):
                 box(w, (0.035, 0.15, 0.1), (dx, 0.0, 0.235), K_LEATHER_DK, bevel=0.01)          # cradle sides
             box(w, (0.13, 0.13, 0.13), (0, 0.0, 0.215), STONE, rot=(0.4, 0.6, 0.3), bevel=0.035)
-    export('DB_kobold', 'kobold.glb')
-    preview_sheet('kobold.png', target=(0, 0.5, 0), dist=2.6)
-    remove_preview_rig()
+    return scene
 
 
 # ─── Ember Cultist and Cinder Priest ─────────────────────────────────────────
@@ -248,25 +245,26 @@ def hood_rows_fn(rows, arch):
     return fn, arch
 
 
-# The cultist's cowl (head space, y up from the neck): a wide mantle over the shoulders, round the face, the upper rows
-# moving forward so the hood drapes over the brow; the opening is a V under the chin, widest round the face, closing in
-# an arch well in front of it.
-CULT_HOOD = ((-0.2, 0.52, 0.37, -0.02, 9), (-0.05, 0.36, 0.32, -0.01, 18), (0.1, 0.3, 0.31, 0.02, 42),
-             (0.26, 0.29, 0.31, 0.05, 40), (0.38, 0.27, 0.3, 0.08, 28), (0.48, 0.23, 0.28, 0.1, 12),
-             (0.56, 0.17, 0.24, 0.12, 0), (0.61, 0.09, 0.15, 0.17, 0), (0.6, 0.0, 0.0, 0.26, 0))
+# The cultist's cowl (head space, y up from the neck): a mantle on the shoulders (inside the arms, which hang against
+# the robe's sides), round the face, then up well over the head: the upper rows move forward and the hood ends in a
+# peak above the brow that tips forward over the face, as in the concept (never pulled back off a bald crown). The
+# opening is a V under the chin, widest round the face, closing in a tall arch under the forward peak.
+CULT_HOOD = ((-0.2, 0.355, 0.33, -0.02, 9), (-0.05, 0.33, 0.31, -0.01, 18), (0.1, 0.3, 0.3, 0.02, 42),
+             (0.26, 0.29, 0.31, 0.05, 40), (0.4, 0.28, 0.31, 0.09, 30), (0.52, 0.26, 0.3, 0.12, 14),
+             (0.62, 0.22, 0.26, 0.14, 0), (0.72, 0.15, 0.2, 0.2, 0), (0.79, 0.08, 0.12, 0.26, 0), (0.82, 0.0, 0.0, 0.32, 0))
 # The priest's: the same cowl drawn up into a tall pointed hood.
-PRIEST_HOOD = ((-0.2, 0.56, 0.4, -0.02, 9), (-0.05, 0.38, 0.34, -0.01, 18), (0.1, 0.31, 0.32, 0.02, 42),
+PRIEST_HOOD = ((-0.2, 0.375, 0.36, -0.02, 9), (-0.05, 0.35, 0.33, -0.01, 18), (0.1, 0.31, 0.32, 0.02, 42),
                (0.26, 0.3, 0.32, 0.04, 40), (0.4, 0.28, 0.31, 0.06, 26), (0.52, 0.24, 0.28, 0.06, 0),
                (0.68, 0.17, 0.21, 0.04, 0), (0.86, 0.09, 0.12, 0.0, 0), (0.98, 0.0, 0.0, -0.03, 0))
 
 
-def cowl(head, rows, arch_v, inside=(0, 0.15, -0.02)):
+def cowl(head, rows, arch_v, inside=(0, 0.15, -0.02), shadow=0.46):
     """The hood shell, a lighter lip along the face opening, a dark void inside with two glowing eyes set back."""
     fn, _ = hood_rows_fn(rows, arch_v)
-    surf(head, fn, 12, 10, 0.035, ROBE_DK, inside=inside, bevel=0.01)
+    surf(head, fn, 12, 2 * len(rows) - 8, 0.035, ROBE_DK, inside=inside, bevel=0.01)
     for u0, u1 in ((0.0, 0.045), (0.955, 1.0)):
         surf(head, grow(sub(fn, u0, u1, 0.0, arch_v), 0.004, inside), 1, 7, 0.03, HOOD_EDGE, inside=inside)
-    box(head, (0.4, 0.46, 0.3), (0, 0.2, 0.03), 'black', taper=(0.7, 1), bevel=0.03)          # face shadow
+    box(head, (0.4, shadow, 0.3), (0, shadow / 2 - 0.03, 0.03), 'black', taper=(0.7, 1), bevel=0.03)   # face shadow
     for s in (-1, 1):
         box(head, (0.07, 0.05, 0.02), (s * 0.07, 0.17, 0.185), EMBER, emissive=EMBER, strength=6, bevel=0)
 
@@ -290,8 +288,8 @@ def gold_framed(p, size, pos, inner, rot=(0, 0, 0), rim=0.035, depth=0.03, bevel
     box(p, (w - 2 * rim, h - 2 * rim, d + depth * 0.4), pos, inner, rot=rot, bevel=bevel * 0.6)
 
 
-def staff_shaft(w, length, bands):
-    box(w, (0.09, length, 0.09), (0, length / 2 - 0.35, 0), STAFF, taper=(0.85, 0.85), bevel=0.018)
+def staff_shaft(w, length, bands, low=0.35):
+    box(w, (0.09, length, 0.09), (0, length / 2 - low, 0), STAFF, taper=(0.85, 0.85), bevel=0.018)
     for y in bands:
         box(w, (0.12, 0.05, 0.12), (0, y, 0), GOLD, bevel=0.012)
 
@@ -323,38 +321,40 @@ def cultist():
         box(body, (0.16, 0.06, 0.13), (s * 0.27, 0.83, 0.262), POUCH, rot=(0.15, 0, 0), bevel=0.012)
         box(body, (0.04, 0.04, 0.02), (s * 0.27, 0.79, 0.33), GOLD, bevel=0.006)
     head = pivot(body, 'head', (0, 1.42, 0))
-    cowl(head, CULT_HOOD, 5 / 8)
-    box(head, (0.12, 0.12, 0.03), (0, -0.06, 0.38), GOLD, rot=(0, 0, PI / 4), bevel=0.012)   # amulet on the mantle
+    cowl(head, CULT_HOOD, 5 / 9, shadow=0.56)
+    box(head, (0.12, 0.12, 0.03), (0, -0.06, 0.255), GOLD, rot=(0, 0, PI / 4), bevel=0.012)  # amulet in the mantle's V
     for s in (-1, 1):   # dark horns curling up out of the hood, gold-capped at the root
         base = (s * 0.27, 0.36, -0.04)
         box(head, (0.1, 0.06, 0.12), (s * 0.27, 0.34, -0.04), GOLD, rot=(0, 0, -s * 0.5), bevel=0.015)
         curved_horn(head, s, base, ((0.1, 0.06, -0.01), (0.14, 0.18, -0.03), (0.11, 0.3, -0.04)), 0.09)
-    for name, x in (('armL', 0.4), ('armR', -0.4)):
+    # Arms hang against the robe's sides (and swing past them), ending in the fists at the belt.
+    for name, x in (('armL', 0.48), ('armR', -0.48)):
         s = 1 if x > 0 else -1
         a = pivot(body, name, (x, 1.32, 0))
-        box(a, (0.24, 0.62, 0.28), (0, -0.3, 0), ROBE, taper=(1.2, 1.2), bevel=0.04)
-        box(a, (0.31, 0.1, 0.34), (0, -0.6, 0), GOLD, bevel=0.02)                              # cuff
+        box(a, (0.24, 0.52, 0.27), (0, -0.26, 0), ROBE, taper=(1.12, 1.1), bevel=0.04)
+        box(a, (0.3, 0.09, 0.32), (0, -0.52, 0), GOLD, bevel=0.02)                              # cuff
         # Pauldron: a crimson block with a gold rim and an ember stone on its outer face.
         box(a, (0.36, 0.15, 0.4), (s * 0.04, 0.03, 0), GOLD, rot=(0, 0, -s * 0.28), bevel=0.03)
         box(a, (0.32, 0.17, 0.36), (s * 0.04, 0.045, 0), ROBE, rot=(0, 0, -s * 0.28), bevel=0.03)
         box(a, (0.075, 0.2, 0.38), (s * 0.17, -0.08, 0), GOLD, rot=(0, 0, -s * 0.12), bevel=0.02)
         box(a, (0.06, 0.08, 0.08), (s * 0.205, -0.07, 0), EMBER, emissive=EMBER, strength=3, rot=(0, 0, -s * 0.12), bevel=0.012)
         if s > 0:
-            box(a, (0.22, 0.2, 0.24), (0, -0.75, 0.02), SKIN, bevel=0.05)                        # fist
+            fist(a, (0, -0.65, 0.02), SKIN, s, size=(0.21, 0.2, 0.22))
         else:
-            # Staff hand: the fist reaches forward so the shaft passes through its front, clear of the sleeve.
-            box(a, (0.22, 0.2, 0.26), (0, -0.75, 0.1), SKIN, bevel=0.05)
-            w = pivot(a, 'weapon', (-0.04, -0.75, 0.2), (0.12, 0, -0.05))   # leans forward, butt out to the side
-            staff_shaft(w, 1.58, (1.18,))
-            beam(w, (0, -0.31, 0), (0, -0.42, 0), 0.1, 'black', w1=0.02)                       # butt cap
+            # Staff hand: the fist closes round the shaft, which runs upright through its front (clear of the cuff)
+            # with the thumb wrapped over it. The staff hangs on sock_handR, so in the cast anim.ts keeps it upright
+            # in the raised fist, leaning toward the target, instead of letting it swing down behind the head.
+            fist(a, (0, -0.65, 0.15), SKIN, s, size=(0.21, 0.2, 0.24))
+            # Leans forward; turned out as far as the hanging arm turns in (anim.ts ARM_SPLAY), so it stands upright.
+            w = pivot(a, 'sock_handR', (0, -0.65, 0.2), (0.12, 0, 0.09))
+            staff_shaft(w, 1.73, (1.18,), low=0.5)
+            beam(w, (0, -0.46, 0), (0, -0.57, 0), 0.1, 'black', w1=0.02)                       # butt cap
             box(w, (0.16, 0.08, 0.16), (0, 1.25, 0), GOLD, bevel=0.015)                         # socket
             for k in (-1, 1):   # two iron prongs curling up and in round the gem
                 box(w, (0.05, 0.22, 0.06), (k * 0.11, 1.38, 0), HORN, rot=(0, 0, -k * 0.45), bevel=0.012)
                 box(w, (0.045, 0.2, 0.055), (k * 0.12, 1.56, 0), HORN, rot=(0, 0, k * 0.55), bevel=0.012)
             facet_gem(w, 0.12, (0, 1.46, 0), 0xFFD86A, emissive=0xFFC040, strength=2.2, rot=corner_up(), depth=0.17)
-    export('DB_cultist', 'cultist.glb')
-    preview_sheet('cultist.png', target=(0, 1.0, 0), dist=4.2)
-    remove_preview_rig()
+    return scene
 
 
 def priest():
@@ -370,9 +370,9 @@ def priest():
     box(body, (1.02, 0.03, 0.825), (0, 0.645, 0), GOLD, bevel=0.008)
     box(body, (0.96, 0.46, 0.76), (0, 0.88, 0), ROBE, taper=(0.88, 0.88), bevel=0.05)
     box(body, (0.86, 0.05, 0.68), (0, 1.12, 0), GOLD, bevel=0.012)
-    box(body, (0.84, 0.14, 0.66), (0, 1.2, 0), 0x3A2418, bevel=0.03)                         # belt
-    box(body, (0.82, 0.42, 0.62), (0, 1.47, 0), ROBE, bevel=0.05)
-    box(body, (0.82, 0.36, 0.62), (0, 1.84, 0), ROBE, taper=(0.92, 0.92), bevel=0.05)
+    box(body, (0.76, 0.14, 0.66), (0, 1.2, 0), 0x3A2418, bevel=0.03)                         # belt
+    box(body, (0.74, 0.42, 0.62), (0, 1.47, 0), ROBE, bevel=0.05)
+    box(body, (0.74, 0.36, 0.62), (0, 1.84, 0), ROBE, taper=(0.92, 0.92), bevel=0.05)
     # The broad gold stole from the collar to the hem, pointed at the end, an ember gem at the chest; behind, a
     # gold-bordered back panel.
     st = pivot(body, 'stole', (0, 1.98, 0.32), (-0.03, 0, 0))
@@ -410,23 +410,25 @@ def priest():
         box(head, (0.11, 0.12, 0.14), (s * 0.31, 0.5, 0.05), GOLD, bevel=0.02)
         curved_horn(head, s, (s * 0.33, 0.52, 0.04), ((0.12, 0.08, -0.02), (0.2, 0.24, -0.05), (0.18, 0.42, -0.07),
                                                        (0.12, 0.54, -0.07)), 0.12)
-    for name, x in (('armL', 0.48), ('armR', -0.48)):
+    # Long sleeves hanging against the robe's sides (and swinging past them).
+    for name, x in (('armL', 0.52), ('armR', -0.52)):
         s = 1 if x > 0 else -1
         a = pivot(body, name, (x, 1.9, 0))
-        box(a, (0.27, 0.72, 0.31), (0, -0.36, 0), ROBE, taper=(1.25, 1.2), bevel=0.04)
-        box(a, (0.37, 0.07, 0.4), (0, -0.66, 0), GOLD, bevel=0.015)                            # cuff bands
-        box(a, (0.37, 0.07, 0.4), (0, -0.53, 0), GOLD, bevel=0.015)
-        box(a, (0.35, 0.06, 0.38), (0, -0.595, 0), ROBE, bevel=0.015)
+        box(a, (0.27, 0.72, 0.3), (0, -0.36, 0), ROBE, taper=(1.12, 1.1), bevel=0.04)
+        box(a, (0.35, 0.07, 0.36), (0, -0.66, 0), GOLD, bevel=0.015)                            # cuff bands
+        box(a, (0.35, 0.07, 0.36), (0, -0.53, 0), GOLD, bevel=0.015)
+        box(a, (0.33, 0.06, 0.34), (0, -0.595, 0), ROBE, bevel=0.015)
         # Stepped pauldron: a gold-rimmed crimson block over a second step down the arm.
         box(a, (0.42, 0.17, 0.46), (s * 0.05, 0.04, 0), GOLD, rot=(0, 0, -s * 0.26), bevel=0.03)
         box(a, (0.38, 0.19, 0.42), (s * 0.05, 0.055, 0), ROBE, rot=(0, 0, -s * 0.26), bevel=0.03)
         box(a, (0.32, 0.12, 0.44), (s * 0.1, -0.1, 0), GOLD, rot=(0, 0, -s * 0.2), bevel=0.025)
         box(a, (0.28, 0.13, 0.4), (s * 0.1, -0.09, 0), ROBE, rot=(0, 0, -s * 0.2), bevel=0.025)
         if s > 0:
-            box(a, (0.23, 0.21, 0.25), (0, -0.8, 0.02), SKIN, bevel=0.05)
+            fist(a, (0, -0.8, 0.02), SKIN, s, size=(0.23, 0.21, 0.24))
         else:
-            box(a, (0.23, 0.21, 0.27), (0, -0.8, 0.1), SKIN, bevel=0.05)
-            w = pivot(a, 'weapon', (-0.04, -0.8, 0.21), (0.1, 0, -0.04))
+            # As the cultist's: the shaft upright through the fist's front, the staff on sock_handR (upright in the cast).
+            fist(a, (0, -0.8, 0.17), SKIN, s, size=(0.23, 0.21, 0.26))
+            w = pivot(a, 'sock_handR', (0, -0.8, 0.235), (0.1, 0, 0.09))
             staff_shaft(w, 2.25, (0.25, 1.55, 1.7))
             box(w, (0.13, 0.16, 0.13), (0, -0.37, 0), GOLD, bevel=0.02)                         # gold foot
             box(w, (0.17, 0.1, 0.17), (0, 1.84, 0), GOLD, bevel=0.02)                           # socket
@@ -438,12 +440,21 @@ def priest():
             # The flame crystal: a tall faceted diamond flaring from the socket and drawn up into a flame's tip.
             beam(w, (0, 1.93, 0), (0, 2.08, 0), 0.06, EMBER, w1=0.19, d=0.06, d1=0.19, emissive=EMBER, strength=2.5)
             beam(w, (0, 2.08, 0), (0, 2.42, 0), 0.19, 0xFF9A2A, w1=0.012, d=0.19, d1=0.012, emissive=0xFF8A20, strength=2.5)
-    export('DB_priest', 'priest.glb')
-    preview_sheet('priest.png', target=(0, 1.35, 0), dist=5.4)
-    remove_preview_rig()
+    return scene
 
 
-for _build in (goblin, kobold, cultist, priest):   # DB_ONLY = ['kobold'] exports only those
-    if _build.__name__ in (globals().get('DB_ONLY') or ('goblin', 'kobold', 'cultist', 'priest')):
-        _build()
-result = {'ok': True}
+# name: (builder, glb, preview target, preview distance)
+MINIONS = {'goblin': (goblin, 'goblin', (0, 0.75, 0), 3.6), 'kobold': (kobold, 'kobold', (0, 0.5, 0), 2.6),
+           'cultist': (cultist, 'cultist', (0, 1.0, 0), 4.2), 'priest': (priest, 'priest', (0, 1.35, 0), 5.4)}
+
+if globals().get('DB_RUN', True):   # DB_ONLY = ['kobold'] exports only those; DB_RUN = False only defines the builders
+    tris = {}
+    for name in (globals().get('DB_ONLY') or list(MINIONS)):
+        fn, file, tgt, dist = MINIONS[name]
+        scene = fn()
+        tris[name] = tri_count(scene)
+        export(f'DB_{file}', f'{file}.glb')
+        if globals().get('DB_PREVIEW', True):
+            preview_sheet(f'{file}.png', target=tgt, dist=dist)
+            remove_preview_rig()
+    result = {'ok': True, 'tris': tris}

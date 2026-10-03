@@ -179,6 +179,45 @@ def box(parent, size, pos, color, rot=(0, 0, 0), bevel=0.025, emissive=None, str
     return _mesh_obj(bm, parent, pos, rot, color, emissive, strength)
 
 
+def union(base, *others):
+    """Fuse meshes into `base` as one closed solid (exact boolean union), removing the others: one part, one painted
+    tone, no seams or buried faces between the pieces."""
+    bpy.context.view_layer.update()
+    for o in others:
+        m = base.modifiers.new('union', 'BOOLEAN')
+        m.operation = 'UNION'
+        m.solver = 'EXACT'
+        m.object = o
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(base.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+    for p in me.polygons:
+        p.use_smooth = False
+    old = [base.data] + [o.data for o in others]
+    base.modifiers.clear()
+    base.data = me
+    for o in others:
+        bpy.data.objects.remove(o, do_unlink=True)
+    for m in old:
+        bpy.data.meshes.remove(m)
+    return base
+
+
+def fist(parent, pos, color, s, size=(0.25, 0.25, 0.26), rot=(0, 0, 0), bevel=0.05):
+    """A closed fist in one piece, like a mitten: a chamfered block with the thumb wrapped across the upper front,
+    pointing toward the outside of the hand (side s: +1 for a left hand at +X, -1 for a right hand), its tip pressed
+    on the fingers. Every hand with the hero's kind of fist uses it; anything held passes through the fist (a sword
+    grip front to back under the thumb, a staff upright through its front)."""
+    w, h, d = size
+    k = w / 0.25
+    o = box(parent, size, (0, 0, 0), color, bevel=bevel)
+    t = box(parent, (0.15 * k, 0.085 * k, 0.075 * k), (-s * 0.035 * k, 0.03 * k, d / 2 + 0.01 * k), color,
+            rot=(0, 0, s * 0.14), bevel=0.026 * k)
+    union(o, t)
+    o.location = pos
+    o.rotation_euler = rot
+    return o
+
+
 def cyl(parent, r_top, r_bot, h, pos, color, rot=(0, 0, 0), seg=6, emissive=None, strength=2.0):
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=True, segments=seg, radius1=r_bot, radius2=r_top, depth=h)

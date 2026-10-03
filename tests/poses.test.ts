@@ -180,6 +180,29 @@ describe('pose audit: staff', () => {
   });
 });
 
+describe('pose audit: cult staffs', () => {
+  // The owner: the cultist's staff hold looked wrong, and in the cast the staff swung down behind the head. The staff
+  // hangs on sock_handR in the fist, so it stands upright at rest and stays upright, leaning at the target, in the cast.
+  for (const name of ['cultist', 'priest']) {
+    it(`${name}: staff upright at rest and in the cast`, () => {
+      const m = makeModel(name);
+      const holder = new THREE.Group();
+      holder.add(m.root);
+      const rig = new Rig(m.root);
+      const dir = () => {
+        holder.updateMatrixWorld(true);
+        return new THREE.Vector3(0, 1, 0).transformDirection(m.root.getObjectByName('sock_handR')!.matrixWorld);
+      };
+      rig.update(0, { ...newAnimState() });
+      expect(dir().y, 'at rest').toBeGreaterThan(0.95);
+      rig.update(0, { ...newAnimState(), attackKind: 'cast', attack: IMPACT });
+      const d = dir();
+      expect(d.y, 'cast: upright').toBeGreaterThan(0.8);
+      expect(d.z, 'cast: leaning toward the target').toBeGreaterThan(0.1);
+    });
+  }
+});
+
 describe('pose audit: bow', () => {
   for (const weapon of ['worn_bow', 'drakebone_bow']) {
     it(`${weapon}: upright, string toward the archer, arrow at the target, nock on the draw hand`, () => {

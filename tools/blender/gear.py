@@ -8,7 +8,7 @@ name with their local transform unchanged, so everything below is authored in so
   sock_head       head centre (head = 0.46 cube)
   sock_chest      torso centre; tunic is 0.68 x 0.66 x 0.42 (flared to 1.08 x at the top), belt at y -0.37
   sock_shoulderX  top of the shoulder, sleeve below it
-  sock_handL / sock_gloveR   palm centre, unrotated; hand is a 0.26 cube, knuckles forward (+Z)
+  sock_handL / sock_gloveR   palm centre, unrotated; the fist is a 0.25 x 0.25 x 0.26 block, thumb across its front (+Z)
   sock_footL/R    ankle; shoe below (0.3 x 0.17 x 0.4, toe at +Z), ground at y -0.18
 
 Everything is modular blocks (docs/ART_CONTRACT.md, Style): chamfered boxes, stacked slabs, wedges.
@@ -394,8 +394,8 @@ def faces(p, half_w, half_d, y=0.0, sides=True):
 # The cuirass is a few big clean slabs, readable at the gameplay camera (the owner's rule: fewer, bolder surfaces;
 # no ridges, lames, grooves or trim bands): a broad chest block, one narrower waist block under it, a belt, a
 # gorget, and single-slab tassets. (centre y, width, height, depth)
-CHEST = (0.12, 0.8, 0.4, 0.58)
-WAIST = (-0.17, 0.74, 0.2, 0.54)
+CHEST = (0.12, 0.74, 0.4, 0.58)
+WAIST = (-0.17, 0.73, 0.2, 0.54)
 BELT_Y = -0.3
 
 
@@ -424,10 +424,10 @@ def plate_torso(c, color=R.metal, belt=R.leather):
     """Plate cuirass in four slabs: chest block (a little broader at the top), waist block, belt and an open
     gorget, with single-slab tassets below."""
     y, w, hgt, d = CHEST
-    box(c, (w, hgt, d), (0, y, 0), color, taper=(1.06, 1.0), bevel=0.06)
+    box(c, (w, hgt, d), (0, y, 0), color, taper=(1.03, 1.0), bevel=0.06)
     y, w, hgt, d = WAIST
     box(c, (w, hgt, d), (0, y, 0), color, bevel=0.04)
-    box(c, (0.78, 0.08, 0.57), (0, BELT_Y, 0), belt, bevel=0.02)                               # belt
+    box(c, (0.76, 0.08, 0.57), (0, BELT_Y, 0), belt, bevel=0.02)                               # belt
     open_gorget(c, color)
     plate_tassets(c, color)
 
@@ -476,8 +476,8 @@ def block_pauldron(S, s, color=R.metal, top=R.metal, edge=R.trim, rivets=R.dark)
 # ─── Upper arm (body armour, on the palm sockets) ────────────────────────────
 # Upper-arm armour hangs on the palm sockets (sock_handL / sock_gloveR: unrotated, PALM below the arm pivot), so
 # it rides the upper arm exactly and never fans away from it. Authored in ARM space (origin = arm pivot, left arm,
-# outer side +X) and mirrored for the right. Arm space: sleeve x +-0.125, y -0.29..0.03, z +-0.135, sleeve band at
-# y -0.28; the gauntlet cuff rises to y -0.33; the chest block buries everything inside x -0.065.
+# outer side +X) and mirrored for the right. Arm space: forearm x +-0.09 from y -0.28 down, the gauntlet cuff rises
+# to y -0.33; the body armour's side is at x ARM_IN (below), where every armour sleeve starts.
 ARM_SOCKS = (('sock_handL', 1), ('sock_gloveR', -1))
 PALM = 0.63
 # Lames under the cap stepping down the outside of the upper arm: (size, centre).
@@ -487,6 +487,17 @@ ARM_LAMES = (((0.25, 0.085, 0.35), (0.065, -0.07, 0)), ((0.235, 0.08, 0.335), (0
 def arm_box(g, s, size, pos, color, rot=(0, 0, 0), **kw):
     """box() in arm space on a palm socket: pos/rot are for the left arm, mirrored when s < 0."""
     return box(g, size, (pos[0] * s, pos[1] + PALM, pos[2]), color, rot=(rot[0], rot[1] * s, rot[2] * s), **kw)
+
+
+# Every body armour's sides stand at x +-0.38 at the arms' height (CHEST, hauberk, jerkin, Wyrmbone), and the arm
+# pivots at +-0.47, so the armour's sleeves start at ARM_IN in arm space: they hang against the sides of the chest
+# and swing past them without cutting in. (The starting tunic's own sleeves come off under body armour.)
+ARM_IN = -0.09
+
+
+def sleeve(g, s, hgt, y, depth, color, out=0.145, **kw):
+    """A sleeve-like block round the upper arm, from the armour's side (ARM_IN) out to `out`, centred at height y."""
+    return arm_box(g, s, (out - ARM_IN, hgt, depth), ((out + ARM_IN) / 2, y, 0), color, **kw)
 
 
 def arm_lames(g, s, colors=(R.metal, R.metal), edge=R.dark):
@@ -505,9 +516,9 @@ def upper_arm_plate(S, color=R.metal, rim=None, edge=None, couter=False, lames=T
     out = []
     for name, s in ARM_SOCKS:
         g = S(name)
-        arm_box(g, s, (0.29, 0.36, 0.31), (0, -0.14, 0), color, bevel=0.035)                    # rerebrace
+        sleeve(g, s, 0.36, -0.14, 0.31, color, bevel=0.035)                                       # rerebrace
         if rim:
-            arm_box(g, s, (0.305, 0.04, 0.325), (0, -0.305, 0), rim, bevel=0.012)
+            sleeve(g, s, 0.04, -0.305, 0.325, rim, out=0.1525, bevel=0.012)
         if lames:
             arm_lames(g, s, (color, color), edge)
         if couter:
@@ -522,9 +533,9 @@ def mail_sleeve(S, color=R.metal, hem=R.dark, link=R.dark):
     out = []
     for name, s in ARM_SOCKS:
         g = S(name)
-        arm_box(g, s, (0.3, 0.39, 0.32), (0, -0.15, 0), color, bevel=0.03)
-        arm_box(g, s, (0.31, 0.045, 0.33), (0, -0.325, 0), hem, bevel=0.01)
-        for f, hw in faces(pivot(g, 'sleeve', (0, PALM - 0.15, 0)), 0.15, 0.16):
+        sleeve(g, s, 0.39, -0.15, 0.32, color, out=0.15, bevel=0.03)
+        sleeve(g, s, 0.045, -0.325, 0.33, hem, out=0.155, bevel=0.01)
+        for f, hw in faces(pivot(g, 'sleeve', (s * (0.15 + ARM_IN) / 2, PALM - 0.15, 0)), (0.15 - ARM_IN) / 2, 0.16):
             mail_links(f, hw - 0.02, [-0.14 + 0.05 * k for k in range(7)], link)
         out.append((g, s))
     return out
@@ -550,11 +561,11 @@ def mail_links(f, half_w, ys, color=R.dark, pitch=0.05, fill=0.55, hgt=0.009, z=
     return o
 
 
-def plate_gauntlet(g):
-    """Thumbless box gauntlet, as in the approved icons (the hero's hands have no thumbs): a mitten fist, deeper toward
-    the front so the bare hand stays covered, under an open cuff the forearm runs into."""
+def plate_gauntlet(g, s):
+    """Box gauntlet, as in the approved icons: a mitten fist, deeper toward the front so the bare fist and its thumb
+    stay covered, under an open cuff the forearm runs into (slim on the inner side, so it hangs clear of the hips)."""
     box(g, (0.32, 0.27, 0.38), (0, -0.01, 0.03), R.metal, bevel=0.055)
-    open_box(g, (0.31, 0.21, 0.33), (0, 0.2, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)   # cuff
+    open_box(g, (0.275, 0.21, 0.33), (s * 0.0175, 0.2, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)   # cuff
 
 
 def plate_sabaton(f, knee=True):
@@ -652,15 +663,15 @@ MAIL_SKIRT_ROWS = (-0.56, -0.51, -0.46)
 def hauberk(c, mail=R.metal, dark=R.dark, belt=R.leather, buckle=R.trim, collar=None, links=True):
     """Box mail shirt from the collar to a short skirt block, with a belt, hem and collar, covered in fine
     staggered rows of flat links (mail on the metal tiers, stitched leather on the leather set)."""
-    box(c, (0.78, 0.66, 0.52), (0, -0.01, 0), mail, bevel=0.045)
-    box(c, (0.8, 0.26, 0.54), (0, -0.47, 0), mail, taper=(0.96, 0.96), bevel=0.035)          # skirt block
-    box(c, (0.82, 0.04, 0.56), (0, -0.585, 0), dark, bevel=0.01)                             # hem
+    box(c, (0.76, 0.66, 0.52), (0, -0.01, 0), mail, bevel=0.045)
+    box(c, (0.78, 0.26, 0.54), (0, -0.47, 0), mail, taper=(0.96, 0.96), bevel=0.035)          # skirt block
+    box(c, (0.8, 0.04, 0.56), (0, -0.585, 0), dark, bevel=0.01)                             # hem
     open_box(c, (0.5, 0.1, 0.44), (0, 0.36, 0), collar or mail, sink=0.05, bevel=0.02)       # open collar
-    box(c, (0.82, 0.085, 0.56), (0, -0.37, 0), belt, bevel=0.02)
+    box(c, (0.78, 0.085, 0.56), (0, -0.37, 0), belt, bevel=0.02)
     box(c, (0.13, 0.1, 0.03), (0, -0.37, 0.285), buckle, bevel=0.012)
     if not links:
         return
-    for f, hw in faces(c, 0.39, 0.26):
+    for f, hw in faces(c, 0.38, 0.26):
         mail_links(f, hw - 0.03, MAIL_BODY_ROWS, dark)
         mail_links(pivot(f, 'skirt_face', (0, 0, 0.01)), hw - 0.03, MAIL_SKIRT_ROWS, dark)
 
@@ -710,18 +721,18 @@ def body_leather(S):
     leather shoulder caps with studs and leather sleeves with a strap. Main leather is ROLE_metal (the leather
     palette's main colour), straps and collar trim are ROLE_trim (darker), the underlayer ROLE_dark."""
     c = S('sock_chest')
-    box(c, (0.76, 0.64, 0.5), (0, -0.01, 0), R.dark, bevel=0.04)                               # underlayer
-    fr, bk, sl, sr = faces(c, 0.38, 0.25)
+    box(c, (0.72, 0.64, 0.5), (0, -0.01, 0), R.dark, bevel=0.04)                               # underlayer
+    fr, bk, sl, sr = faces(c, 0.36, 0.25)
     for s in (-1, 1):
         panel_stitched(fr[0], s * 0.18, 0.15, 0.33, 0.3)                                          # chest panels
         panel_stitched(fr[0], s * 0.18, -0.17, 0.33, 0.28)                                        # belly panels
         panel_stitched(bk[0], s * 0.18, -0.01, 0.33, 0.6)                                         # back panels
     for f, hw in (sl, sr):
-        panel_stitched(f, 0, -0.01, 0.44, 0.6)
+        panel_stitched(f, 0, -0.01, 0.44, 0.6, depth=0.02)                                        # (sides at 0.38)
     # open stand-up collar with a darker rim over a shoulder yoke
     open_box(c, (0.52, 0.11, 0.44), (0, 0.35, -0.01), R.metal, wall=0.06, sink=0.05, bevel=0.02)
     open_box(c, (0.54, 0.035, 0.46), (0, 0.41, -0.01), R.trim, inner=None, wall=0.06, bevel=0.01)
-    box(c, (0.7, 0.05, 0.46), (0, 0.32, -0.01), R.metal, bevel=0.018)                        # shoulder yoke
+    box(c, (0.68, 0.05, 0.46), (0, 0.32, -0.01), R.metal, bevel=0.018)                        # shoulder yoke
     # strap from the left shoulder across the chest to the right hip, with a brass buckle
     st = pivot(c, 'strap', (0, 0.02, 0.3), (0, 0, 0.62))
     box(st, (0.1, 0.72, 0.03), (0, 0, 0), R.trim, bevel=0.01)
@@ -729,7 +740,7 @@ def body_leather(S):
     box(st, (0.07, 0.05, 0.03), (0, -0.05, 0.02), R.trim, bevel=0)
     stb = pivot(c, 'strap', (0, 0.02, -0.3), (0, 0, 0.62))
     box(stb, (0.1, 0.72, 0.03), (0, 0, 0), R.trim, bevel=0.01)
-    box(c, (0.8, 0.085, 0.54), (0, -0.33, 0), R.trim, bevel=0.02)                              # belt
+    box(c, (0.76, 0.085, 0.54), (0, -0.33, 0), R.trim, bevel=0.02)                              # belt
     box(c, (0.12, 0.1, 0.03), (0, -0.33, 0.275), BRASS, bevel=0.012)
     # skirt: hanging flaps over a dark under-skirt
     box(c, (0.72, 0.24, 0.46), (0, -0.48, 0), R.dark, bevel=0.02)
@@ -747,9 +758,9 @@ def body_leather(S):
         top, side = block_pauldron(S, s, top=R.trim, edge=R.trim, rivets=BRASS)
     for name, s in ARM_SOCKS:
         g = S(name)
-        arm_box(g, s, (0.29, 0.38, 0.31), (0, -0.15, 0), R.metal, bevel=0.03)
-        arm_box(g, s, (0.3, 0.045, 0.32), (0, -0.325, 0), R.dark, bevel=0.01)
-        arm_box(g, s, (0.305, 0.05, 0.325), (0, -0.2, 0), R.trim, bevel=0.01)                  # strap
+        sleeve(g, s, 0.38, -0.15, 0.31, R.metal, bevel=0.03)
+        sleeve(g, s, 0.045, -0.325, 0.32, R.dark, out=0.15, bevel=0.01)
+        sleeve(g, s, 0.05, -0.2, 0.325, R.trim, out=0.1525, bevel=0.01)                           # strap
         arm_lames(g, s, (R.metal, R.metal), R.dark)
 
 
@@ -757,7 +768,7 @@ def plate_accent(c, tabard=R.cloth, under=R.dark):
     """The plate's one accent: a plain tabard falling from the belt between the tassets (ROLE_cloth: it takes the
     wearer's tunic colour, so the knight is not one grey mass), over a plain dark under-skirt that shows between the
     plates at the hips."""
-    box(c, (0.78, 0.28, 0.49), (0, -0.49, 0), under, bevel=0.02)
+    box(c, (0.74, 0.28, 0.49), (0, -0.49, 0), under, bevel=0.02)
     f = pivot(c, 'tabard', (0, -0.34, 0.29), (-0.12, 0, 0))
     box(f, (0.24, 0.38, 0.03), (0, -0.19, 0.03), tabard, taper=(1.12, 1), bevel=0.01)
 
@@ -779,11 +790,12 @@ def body_plate(S):
 def gloves(S):
     for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
         g = S(name)
-        box(g, (0.31, 0.28, 0.37), (0, -0.015, 0.03), R.metal, bevel=0.06)                # thumbless fist
+        box(g, (0.31, 0.28, 0.37), (0, -0.015, 0.03), R.metal, bevel=0.06)                # mitten fist
         box(g, (0.33, 0.06, 0.39), (0, -0.09, 0.03), R.dark, bevel=0.012)                 # knuckle band
         box(g, (0.03, 0.14, 0.2), (s * 0.165, 0.01, 0), R.trim, bevel=0.01)               # back plate
-        open_box(g, (0.31, 0.19, 0.33), (0, 0.2, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)  # open cuff
-        open_box(g, (0.33, 0.045, 0.35), (0, 0.3, 0), R.trim, inner=None, wall=0.05, bevel=0.012)  # cuff rim
+        # open cuff and its rim, slim on the inner side so they hang clear of the hips and armour skirts
+        open_box(g, (0.275, 0.19, 0.33), (s * 0.0175, 0.2, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)
+        open_box(g, (0.295, 0.045, 0.35), (s * 0.0175, 0.3, 0), R.trim, inner=None, wall=0.05, bevel=0.012)
         rivet(g, (s * 0.17, 0.2, 0), R.trim, 0.022, rot=(PI / 4, PI / 2, 0))
 
 
@@ -848,10 +860,10 @@ def u_wyrmbone(S):
     c = S('sock_chest')
     obs = obsidian()
     y, w, hgt, d = CHEST
-    box(c, (w + 0.02, hgt + 0.02, d + 0.02), (0, y, 0), BONE, taper=(1.06, 1.0), bevel=0.07)      # breastplate
+    box(c, (w + 0.02, hgt + 0.02, d + 0.02), (0, y, 0), BONE, bevel=0.07)                        # breastplate
     y, w, hgt, d = WAIST
     box(c, (w, hgt, d), (0, y, 0), obs, bevel=0.04)                                                   # waist
-    box(c, (0.79, 0.085, 0.58), (0, BELT_Y, 0), GRIP, bevel=0.02)                                     # belt
+    box(c, (0.77, 0.085, 0.58), (0, BELT_Y, 0), GRIP, bevel=0.02)                                     # belt
     box(c, (0.13, 0.11, 0.03), (0, BELT_Y, 0.29), obs, bevel=0.012)                                   # buckle
     facet_gem(c, 0.04, (0, BELT_Y, 0.31), EMBER, emissive=EMBER, strength=4)                          # ember in the buckle
     open_gorget(c, obs)                                                                               # gorget
@@ -859,7 +871,7 @@ def u_wyrmbone(S):
           BONE_DK, bevel=0.008)                                                                       # bone chevron
     box(c, (0.1, 0.1, 0.03), (0, 0.08, 0.322), obs, rot=(0, 0, PI / 4), bevel=0.01)                   # gem setting
     facet_gem(c, 0.045, (0, 0.08, 0.34), EMBER, emissive=EMBER, strength=4)                           # chest ember
-    box(c, (0.78, 0.26, 0.55), (0, -0.47, 0), obs, bevel=0.03)                                        # under-skirt
+    box(c, (0.76, 0.26, 0.55), (0, -0.47, 0), obs, bevel=0.03)                                        # under-skirt
     for x in (-0.26, 0, 0.26):
         box(c, (0.08, 0.24, 0.02), (x, -0.47, 0.283), BONE, bevel=0.008)                              # bone skirt strip
     # Keep the skull's rear edge within the shoulder envelope (-0.22 in socket-local Z).
@@ -868,7 +880,7 @@ def u_wyrmbone(S):
     block_pauldron(S, -1, color=BONE, top=None, edge=None, rivets=None)
     for name, s in ARM_SOCKS:
         g = S(name)
-        arm_box(g, s, (0.29, 0.36, 0.31), (0, -0.14, 0), obs, bevel=0.035)                          # rerebrace
+        sleeve(g, s, 0.36, -0.14, 0.31, obs, bevel=0.035)                                             # rerebrace
         arm_box(g, s, (0.265, 0.21, 0.285), (0, -0.41, 0), BONE, bevel=0.03)                         # vambrace
 
 
