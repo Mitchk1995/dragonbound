@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ZONES } from '../src/data/zones';
 import type { BuildingSpec } from '../src/world/building';
+import { FARM } from '../src/world/castle/plan';
 import type { PropSpawn, ZoneLayout } from '../src/world/layout';
 import { PART_AUDIT, type Part } from '../src/world/props';
 import { buildWorldView, type WorldView } from '../src/world/worldView';
@@ -35,8 +36,13 @@ export interface CastleScene {
  * stair (not the farm in the fields at the rock's foot west of the pool).
  */
 export const CASTLE_AREA = { x0: 4, x1: 167, z0: 0, z1: 172 };
-const FARM_FIELDS = { x1: 70, z0: 162 };
-const inArea = (x: number, z: number) => x > CASTLE_AREA.x0 && x < CASTLE_AREA.x1 && z > CASTLE_AREA.z0 && z < CASTLE_AREA.z1 && !(x < FARM_FIELDS.x1 && z > FARM_FIELDS.z0);
+/** The farm left out of the audit: the hay paddock's fence and the vegetable plots, each with a margin round it. */
+const FARM_BOXES = [
+  [FARM.fence[0] - 2, FARM.fence[1] - 2, FARM.fence[2] + 2, FARM.fence[3] + 2],
+  [Math.min(...FARM.plotsX) - 3, Math.min(...FARM.plotsZ) - 3, Math.max(...FARM.plotsX) + 3, Math.max(...FARM.plotsZ) + 3],
+];
+const inFarm = (x: number, z: number) => FARM_BOXES.some(([x0, z0, x1, z1]) => x > x0 && x < x1 && z > z0 && z < z1);
+const inArea = (x: number, z: number) => x > CASTLE_AREA.x0 && x < CASTLE_AREA.x1 && z > CASTLE_AREA.z0 && z < CASTLE_AREA.z1 && !inFarm(x, z);
 
 let scene: CastleScene | null = null;
 

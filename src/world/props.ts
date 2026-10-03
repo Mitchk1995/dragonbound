@@ -1455,8 +1455,6 @@ export const HERO_HEIGHT = 2.1;
  * - `building`: every building's doorway, a pair of leaves meeting under a pointed arch 3 wide;
  * - `single`: one leaf under a pointed arch, the door of a tower onto its wall walk, of a stair tower
  *   and of the roof houses onto the leads;
- * - `wide_gate` / `narrow_gate`: the pair of leaves of a gate (4 or 2 wide), each nearly half the
- *   opening, standing half open in its passage under the tympanum;
  * - `great`: the great door of the hall.
  * Every leaf carries a ring handle at the hero's hand (`handle` over the sill). `walk` is where a
  * tower's doorway opens onto the curtain's wall walk: the walk's height and its middle's offset from
@@ -1465,8 +1463,6 @@ export const HERO_HEIGHT = 2.1;
 export const DOORS = {
   building: { w: 1.41, h: 4.91, rise: 1.77 },
   single: { w: 1.3, h: 3.0 },
-  wide_gate: { w: 1.88, h: 3.3 },
-  narrow_gate: { w: 1.0, h: 2.9 },
   great: { w: 2.88, h: 5.2 },
   handle: 1.05,
   walk: { y: CURTAIN_WALL.walkY, off: CURTAIN_WALL.walkOff },

@@ -26,7 +26,7 @@ One composition on the axis, a mirror image either side of it. From the south: t
 
 ## The terrace and the grand stair
 
-The upper court runs from the north curtain to a retaining wall at z 58, a podium standing out on the axis to z 63. Its edge is a retaining wall carrying a parapet 1.5 m over the paving, open only where the three stairs come down: the grand stair on the axis (16 m wide, twelve real steps of 21 cm between cheek walls, a champion in an open-faced plumed helm on each cheek) and the two garden stairs (6 m wide, twelve real steps each, on the gardens' own axes). The ground under every flight is graded just under its treads (tested).
+The upper court runs from the north curtain to a retaining wall at z 58, a podium standing out on the axis to z 63. Its edge is a retaining wall carrying a parapet 1.5 m over the paving, open only where the three stairs come down: the grand stair on the axis (16 m wide, thirteen steps of 19 cm between cheek walls, a champion in an open-faced plumed helm on each cheek) and the two garden stairs (6 m wide, thirteen steps each, on the gardens' own axes). The ground under every flight is graded just under its treads (tested).
 
 ## The outer works
 
@@ -45,7 +45,7 @@ Lawn everywhere a walk, court or yard does not pave it; there are no barrels, cr
 
 - **Avenue:** six wide, paved, from the gate through the forecourt (clipped yews and a pair of lamps either side) and the fountain plaza to the cour, with paired lamp posts, banded at the gate's threshold.
 - **Great parterre:** four lawn panels round the round fountain plaza, mirrored about both axes, each edged in low clipped box, its plaza side cut back in a concave arc, a lozenge bed of flowers in the middle, spiral and tiered topiary, and blossom trees (the island's grown trees, pink toward the keep and white toward the gate), and a bench on each diagonal facing the fountain.
-- **Dragon fountain:** the centrepiece at the crossing of the axes, facing the gate: a round basin with a moulded kerb, an octagonal pedestal of cream ashlar, and the bronze dragon (Mitchell's pick A), a chunky blocky sentinel sitting upright like a guardian lion, about 10 high (basin 14.6 m across), its forelegs jointed (shoulder, elbow, forearm, paw).
+- **Dragon fountain:** the centrepiece at the crossing of the axes, facing the gate: a round basin with a moulded kerb, an octagonal pedestal of cream ashlar, and the bronze dragon (Mitchell's pick A), a chunky blocky sentinel sitting upright like a guardian lion, about 12 high (basin 14.6 m across), its forelegs jointed (shoulder, elbow, forearm, paw).
 - **Cour d'honneur:** a paved court below the grand stair, the garden walks entering at its sides, a clipped yew either side of each.
 - **Kerbs and walks:** wherever lawn or gravel meets the paving a dressed stone kerb edges it; the walks are the avenue, the cross walk, and the walks round the parterre. The paving is one laid pattern of flagstones everywhere.
 - **Kitchen garden (west):** four boxed vegetable quarters with fruit trained on its walls round a well, bee skeps at the end of its cross walk. **Privy garden (east):** lawns with shade maples, benches, flower beds, a basin and a rose arbour against the curtain. Each has a gate into its yard and one on its cross walk out to the cour.
@@ -128,7 +128,7 @@ Mitchell picked growing the castle 1.3× (pick B, October 3) because the hero (2
 - **The crown and the rock's height.** The crown stays 11 m over the court, so the climb is no taller: the rock's footprint grew to carry the castle, the walls and the keep grew over it.
 - **Creatures.** Horses (in the paddock and in their stalls) and people keep their own size.
 
-The stairs follow a hero's house rule (`STAIR_RULE`: risers of 18 to 20 cm, at most 17 to a flight, flights at least 2 wide), the doors are 3 wide with their leaves 4.9 m to the point (the great door 6 wide), parapets and rails stand at the hero's chest (1.3 to 1.5 m), and the furniture grew with the rooms. The island was reshaped round it: the castle grew north and west from the foot of the climb, the rest of the island moved with it (26 m east and 40 m south in the grid), the farm and the pool's walks sit west of the pool under the rock's south face, and the north-east upland reaches north to the fracture notch beside the castle's rock.
+The stairs follow a hero's house rule (`STAIR_RULE`: risers of 18 to 20 cm, at most 17 to a flight, flights at least 2 wide), the castle's doors are 3 wide with their leaves 4.9 m to the point (the great door 6 wide), parapets and rails stand at the hero's chest (1.3 to 1.5 m), and the furniture grew with the rooms. The island was reshaped round it: the castle grew north and west from the foot of the climb, the rest of the island moved with it (26 m east and 40 m south in the grid), the farm and the pool's walks sit west of the pool under the rock's south face, and the north-east upland reaches to the fracture notch beside the castle's rock.
 
 ## Known departures from the plan
 

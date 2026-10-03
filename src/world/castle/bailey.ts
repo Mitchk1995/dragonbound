@@ -2,6 +2,7 @@ import { KERB_SET } from '../kerbStones';
 import { Cell, Ground, Lawn } from '../layout';
 import { AXIS, BAILEY, CROSS, CROWN_Y, FOUNTAIN, GROW, LAMPS, mx, RANGE, TERRACE, TERRACE_STAIRS, TERRACE_Y, TOWERS, WALKS, ZONES, type Box } from './plan';
 import { LIFT } from './approach';
+import { STAIR_RULE } from '../building';
 import { inBox, type Site } from './site';
 
 /**
@@ -28,8 +29,8 @@ export function turf(s: Site) {
   });
 }
 
-/** The risers of each stair down from the terrace. */
-const STAIR_RISERS = 12;
+/** The risers of each stair down from the terrace: the fewest the hero's stair rule allows, all one height. */
+export const TERRACE_STAIR_RISERS = Math.ceil((TERRACE_Y - CROWN_Y) / STAIR_RULE.riserMax - 1e-6);
 
 /** Is a cell (by its middle) on the terrace: the upper court and the keep's podium, to the curtain's inner cells? */
 const onTerrace = (x: number, z: number) => TERRACE.parts.some(([x0, z0, x1, z1]) => inBox(x, z, [x0 - 0.5, z0 - 0.5, x1 + 0.5, z1]));
@@ -49,12 +50,12 @@ export function terrace(s: Site) {
     s.G.l.ground[i] = Ground.Stone;
     s.G.reserved[i] = 1;
   });
-  // Each stair a flight of twelve risers (about a fifth of a metre each) between its cheek walls, its treads
+  // Each stair one flight of TERRACE_STAIR_RISERS risers (18 to 20 cm each) between its cheek walls, its treads
   // sharing its run: the grand stair's a stately going, the garden stairs' an easy one. The ground
   // under it runs just under the line through the treads' backs, from cell edge to cell edge.
   for (const st of TERRACE_STAIRS) {
-    const run = st.z1 - st.z0, r = (TERRACE_Y - CROWN_Y) / STAIR_RISERS, g = run / STAIR_RISERS;
-    s.prop('stair_flight', (st.x0 + st.x1) / 2, st.z1, 0, 0, { y: CROWN_Y, opt: { w: st.x1 - st.x0, run, n: STAIR_RISERS, r, g, lift: LIFT } });
+    const run = st.z1 - st.z0, r = (TERRACE_Y - CROWN_Y) / TERRACE_STAIR_RISERS, g = run / TERRACE_STAIR_RISERS;
+    s.prop('stair_flight', (st.x0 + st.x1) / 2, st.z1, 0, 0, { y: CROWN_Y, opt: { w: st.x1 - st.x0, run, n: TERRACE_STAIR_RISERS, r, g, lift: LIFT } });
     s.cells([st.x0, st.z0, st.x1, st.z1], (i, _x, z) => s.open(i, CROWN_Y + (Math.max(0, st.z1 - (z + 1)) * r) / g - 0.02, Ground.Stone));
   }
   // The retaining wall (west half, then its mirror): from the curtain along the terrace's edge to

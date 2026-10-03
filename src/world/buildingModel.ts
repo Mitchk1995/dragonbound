@@ -2272,7 +2272,7 @@ const FITS: Record<string, FitBuilder> = {
   loft_stair: (k, g, f, b) => {
     // A steep timber stair up to a loft (along local +Z, climbing toward +Z, `len` long): solid oak
     // steps of one riser each from the floor to the loft's boards, and a handrail on posts.
-    // (Sized to the hero: a step a riser of the house rules, 1.2 wide, the rail at his hand.)
+    // (House-rule risers in one straight flight, past the rule's 17 between landings; 1.2 wide, rail at hand.)
     const H = (b as CastleSpec).look?.loft?.y ?? 2.9, L = f.len ?? 4, n = Math.ceil(H / STAIR_RULE.riserMax - 1e-6), rise = H / n, t = L / n, W = 1.2, R = 1.2;
     for (let i = 0; i < n; i++) {
       const top = (i + 1) * rise;

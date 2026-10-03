@@ -7,6 +7,7 @@ import { cellRole, fitBlocks, fitsOf, flightsOf, inRoom, partitionRuns, raisedAt
 import { CURTAIN_WALL } from '../src/data/castle';
 import { BRIDGE, CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
 import { climbFlights, flightGround, headOf, treadTop } from '../src/world/castle/approach';
+import { TERRACE_STAIR_RISERS } from '../src/world/castle/bailey';
 import { newSave } from '../src/save/save';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
 import { buildKeep } from '../src/world/castle/keepModel';
@@ -222,6 +223,12 @@ describe('Dragonspire Keep', () => {
       expect(a - c, `${st.id} at ${z}`).toBeGreaterThan(0);
       expect(a - c, `${st.id} at ${z}`).toBeLessThan(0.7);
     }
+  });
+  it('the stairs down from the terrace keep the stair rule: risers of 18 to 20 cm, no flight over 17', () => {
+    const riser = (TERRACE_Y - CROWN_Y) / TERRACE_STAIR_RISERS;
+    expect(TERRACE_STAIR_RISERS).toBeLessThanOrEqual(STAIR_RULE.perFlight);
+    expect(riser).toBeGreaterThanOrEqual(STAIR_RULE.riserMin);
+    expect(riser).toBeLessThanOrEqual(STAIR_RULE.riserMax);
   });
   it('the climb is built in real steps sized to the hero: risers of 18 to 20 cm, no flight over 17, an easy going, the ground laid under every tread', () => {
     for (const f of climbFlights()) {
