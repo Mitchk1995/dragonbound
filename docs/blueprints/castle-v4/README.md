@@ -6,15 +6,15 @@ Inside, every building the hero enters works with its outside: each door is the 
 
 The pictures are the plan (`castle-v4-plan.png`), the inside of every building (`castle-v4-interiors.png`), plain blocks from today's overview angle (`castle-v4-massing.png`) and the same blocks from the play camera, including the stair and the lookout, with one view from above the Veil showing the moat behind the keep and the slate roofs (`castle-v4-massing-camera.png`).
 
-Choices you might want to change:
+Approved by the owner on October 3, with these choices decided:
 
-- **Roofs (decided October 3: slate on the hall and the chapel):** the kitchen and the solar keep flat roofs behind battlements, so the range climbs from their battlements over the two slate roofs to the keep, and the ridges (20.9 m) answer the corner towers' spire tips (21.5). They could take lower slate roofs too, gables to the bailey, at the cost of a busier north range.
-- **The rim behind the moat:** the crown and the island grow up to 4.5 m north so a rim of natural rock carries the moat's north bank behind the keep. No one walks it.
-- **The keep's height:** it could come down a few metres. The play camera never shows it whole, only its base, the stair and the great door. Its full height shows on the approach, in the overview and on the title screen.
-- **One waterfall or two:** there is one fall, under the gate terrace, where the moat empties. The painting has two, either side of the bridge.
-- **The belvedere:** the moat takes its ground, so it goes, and the little west gate with it. A footbridge over the moat could bring both back.
-- **The lookout:** a walled terrace on a natural knoll, its wall following the rim. The landing on the south-east follows the rock the same way, but stays squarer where the stair is built against the dressed rock face.
-- **The gate:** today's gatehouse stays as it is, with flags on flat drums. Spires on it would hide the keep's spires when you look up from the farm.
+- **Roofs:** steep blue slate on the great hall and the chapel; the kitchen and the solar keep flat roofs behind battlements, so the range climbs from their battlements over the two slate roofs to the keep, and the ridges (20.9 m) answer the corner towers' spire tips (21.5).
+- **The moat** rings all four sides; behind the keep a rim of natural rock carries its north bank, the crown and the island grown up to 4.5 m north for it. No one walks the rim.
+- **The keep** stands 28 m to its battlements, the turrets 34.5 m, the spires 44 m. The play camera shows its base, the stair and the great door; its full height shows on the approach, in the overview and on the title screen.
+- **One waterfall**, under the gate terrace, where the moat empties.
+- **The belvedere and the little west gate go:** the moat takes their ground.
+- **The lookout** is a walled terrace on a natural knoll, its wall following the rim; the landing on the south-east follows the rock the same way, squarer where the stair is built against the dressed rock face.
+- **The gate:** today's gatehouse stays as it is, with flags on flat drums, so the keep's spires rise over it seen from the farm.
 - **Inside the keep:** a throne hall with the lord's high seat, open 18 m to the great chamber's floor, with galleries on three sides at the wall walk's level. The great chamber, map room and treasury above stay closed for now.
 - **A chapel and the lord's solar** are new: the chapel balances the great hall on the other side of the keep.
 - **The farm** moves 8 m south to make room for the waterfall and the bigger rock.

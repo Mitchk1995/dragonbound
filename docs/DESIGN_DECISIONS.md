@@ -74,7 +74,11 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   and the keep's back rises out of it; the ledge walk, the lookout and the rock round them are shaped naturally, with the
   walls following and sitting on the natural rock (and the same for the landing and the crown's whole edge). Roofs: pick
   B, steep blue slate roofs as in the painting on the great hall and the chapel; the kitchen and the solar stay flat
-  behind battlements so the keep stays the star (our call, open to change).
+  behind battlements so the keep stays the star.
+- **Castle v4 approved (October 3, on the decision page).** The revised plan (`docs/blueprints/castle-v4/`) is the plan
+  to build, superseding its open choices: slate roofs on the hall and the chapel only, the keep at 28 m (spires 44), one
+  waterfall under the gate terrace, the belvedere and the little west gate gone, today's gatehouse unchanged, the farm
+  moved 8 m south.
 - **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
   no flag shadow from nowhere, the fountain dragon's front legs, more variety in the small garden trees, the sunken tree
   and the grass seam by the landing.

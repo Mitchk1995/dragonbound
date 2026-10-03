@@ -1,6 +1,6 @@
 {
  "title": "Castle v4: the Great Keep",
- "status": "proposal for review, revised so every part makes structural sense and every building inside fits its outside; October 3 second round: the moat rings all four sides, the rock's edges are natural with the built work on them, and the great hall and the chapel take steep slate roofs (design only, nothing built)",
+ "status": "approved by the owner on October 3 (the decision page): every part makes structural sense, every building inside fits its outside, the moat rings all four sides, the rock edges are natural with the built work on them, and the great hall and the chapel take steep slate roofs; design only, nothing built yet",
  "conventions": {
   "cells": "island cells, 1 cell = 1 m; x east, z south (north is -Z), as src/data/zoneMaps.ts and CASTLE_PLAN",
   "rects": "[x0, z0, x1, z1] in cell edges",
