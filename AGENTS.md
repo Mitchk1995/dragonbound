@@ -45,7 +45,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 
 ## How work lands
 
-1. **One writer per folder.** Only one agent edits `D:\gameplanning` at a time. Parallel work uses its own worktree on its own branch, and the worktree is removed once merged.
+1. **One writer per folder.** Only one agent edits `D:\gameplanning` at a time. Parallel work uses its own worktree on its own branch, and the worktree is removed once merged. A worktree installs its own packages with `npm ci`; never link or junction its `node_modules` to `D:\gameplanning`'s, because removing such a worktree deleted main's packages on October 3 (main then needed `npm ci` and Electron's install step).
 2. **`main` is always playable.** Changes reach `main` only through a squash-merged pull request with green CI (typecheck, tests, production build, encoding check). Never leave work uncommitted on `main`.
 3. **One branch per feature or fix**, named `feat/…`, `fix/…`, `art/…` or `chore/…`, and small enough to review in one sitting.
 4. **Independent review before merging.** Send the finished change to a reviewer agent, fix substantive findings, and rerun affected checks. Review is read-only unless the reviewer has its own worktree. Handle review, green CI, squash merge and removal of your branch/worktree automatically; the owner should not have to ask for any of it again.
