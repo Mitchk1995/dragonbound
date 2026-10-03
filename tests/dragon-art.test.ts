@@ -2,8 +2,9 @@
  * Dragon art rules from the owner's round 2 notes (October 3), measured on the exported GLBs: Cinderwing's paws are the
  * main mass of its feet, with claws growing out of the toes that are lower and narrower than the paw; its chest wears a
  * run of ivory scutes that wrap its front and narrow down between the forelegs; its tail tapers smoothly from the hips
- * to a fine tip; and the drakeling's skull is one solid piece, with no extra shape stuck on its cheek. Animated as the
- * game does, the dragons' tails stay off the ground and their claws rest on it.
+ * to a fine tip; and the drakeling's skull is one solid piece, with no extra shape stuck on its cheek. From his round 3
+ * notes: the drakeling has a short, deep head and a broad, deep body on thick legs, and both dragons stand in paws wider
+ * than their legs. Animated as the game does, the dragons' tails stay off the ground and their claws rest on it.
  */
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
@@ -30,7 +31,7 @@ beforeAll(async () => {
 
 // Authored colours (tools/blender/dragons.py).
 const CW = { main: 0x5a2422, dark: 0x3a1715, ivory: 0xe4d8be };
-const DRAKE = { main: 0xcf3826 };
+const DRAKE = { main: 0xcf3826, cream: 0xe8c48e };
 
 /** A rig part by name (exports may add Blender's `.001` suffixes). */
 const part = (root: THREE.Object3D, name: string) => {
@@ -58,6 +59,25 @@ const localBox = (m: THREE.Mesh) => {
   return new THREE.Box3(new THREE.Vector3(b.min.x, -b.max.z, b.min.y), new THREE.Vector3(b.max.x, -b.min.z, b.max.y));
 };
 const size = (b: THREE.Box3) => b.getSize(new THREE.Vector3());
+/** A piece's bounds in the frame of one of its ancestors (a rig part), on the authored axes, as `localBox`. */
+const boxIn = (m: THREE.Mesh, frame: THREE.Object3D) => {
+  m.updateWorldMatrix(true, false);
+  frame.updateWorldMatrix(true, false);
+  if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+  const b = m.geometry.boundingBox!.clone().applyMatrix4(frame.matrixWorld.clone().invert().multiply(m.matrixWorld));
+  return new THREE.Box3(new THREE.Vector3(b.min.x, -b.max.z, b.min.y), new THREE.Vector3(b.max.x, -b.min.z, b.max.y));
+};
+/**
+ * A leg's paw and the block standing in it: the paw is the widest of the lowest pieces in the leg's colour (the toes stand
+ * on the ground too), the block the lowest of the leg's own blocks reaching well above the paw.
+ */
+const pawAndLeg = (node: THREE.Object3D, hex: number) => {
+  const blocks = pieces(node, hex).map(localBox);
+  const ground = Math.min(...blocks.map((b) => b.min.y));
+  const paw = blocks.filter((b) => b.min.y < ground + 1e-3).sort((a, b) => size(b).x - size(a).x)[0];
+  const leg = blocks.filter((b) => b.max.y > paw.max.y + 0.1).sort((a, b) => a.min.y - b.min.y);
+  return { paw, leg };
+};
 
 describe('Cinderwing', () => {
   it('stands in paws: each claw grows out of a toe, lower and narrower than the paw it belongs to', () => {
@@ -136,6 +156,44 @@ describe('drakeling', () => {
       const mid = (b.min.z + b.max.z) / 2;
       const side = Math.max(...verts.filter((p) => p.y <= b.max.y && Math.abs(p.z - mid) < 0.15).map((p) => Math.abs(p.x)));
       expect(Math.max(Math.abs(b.min.x), Math.abs(b.max.x)), 'eye sunk inside the side of the skull').toBeLessThan(side);
+    }
+  });
+
+  // The owner's round 3 notes (October 3): "too skinny", a "long head and skinny body", "head shape weak". Its sheet has a
+  // short, deep, wedge-shaped head on a thick neck, a heavy barrel body and thick legs. Each bound sits between round 3,
+  // which fails it, and round 4.
+  it('has a short, deep head, as on its sheet: from the nose to the back of the skull under 1.6 times its depth', () => {
+    const root = raw.get('drakeling')!;
+    const head = part(root, 'head');
+    const skull = boxIn(pieces(head, DRAKE.main)[0], head);
+    const jaw = boxIn(pieces(part(root, 'jaw'), DRAKE.cream)[0], head);
+    const length = Math.max(skull.max.z, jaw.max.z) - Math.min(skull.min.z, jaw.min.z);
+    const depth = Math.max(skull.max.y, jaw.max.y) - Math.min(skull.min.y, jaw.min.y);
+    expect(length / depth).toBeLessThan(1.6);
+  });
+
+  it('has a broad, deep barrel of a body on thick legs, as on its sheet', () => {
+    const root = raw.get('drakeling')!;
+    const torso = pieces(part(root, 'body'), DRAKE.main).map(localBox).reduce((a, b) => a.union(b));
+    const t = size(torso);
+    expect(t.x / t.z, 'body width against its length').toBeGreaterThan(0.55);
+    expect(t.y / t.z, 'body depth against its length').toBeGreaterThan(0.6);
+    const neck = size(pieces(part(root, 'neck1'), DRAKE.main).map(localBox)[0]);
+    expect(neck.x / t.x, 'neck against the body, across').toBeGreaterThan(0.6);
+    for (const leg of ['legFL', 'legFR', 'legBL', 'legBR']) {
+      const thinnest = Math.min(...pawAndLeg(part(root, leg), DRAKE.main).leg.map((b) => size(b).x));
+      expect(thinnest / t.y, `${leg}: its thinnest block against the body's depth`).toBeGreaterThan(0.22);
+    }
+  });
+});
+
+describe('dragons', () => {
+  it('stand in paws wider than the leg that stands in each', () => {
+    for (const [name, hex] of [['drakeling', DRAKE.main], ['cinderwing', CW.main]] as const) {
+      for (const leg of ['legFL', 'legFR', 'legBL', 'legBR']) {
+        const { paw, leg: blocks } = pawAndLeg(part(raw.get(name)!, leg), hex);
+        expect(size(blocks[0]).x, `${name} ${leg}`).toBeLessThan(size(paw).x);
+      }
     }
   });
 });
