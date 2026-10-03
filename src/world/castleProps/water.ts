@@ -7,9 +7,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type V3 } from '../../render/kit';
 import { hash01 } from '../../render/blocks';
-import { drumStones } from '../../render/masonry';
+import { COURSE, drumStones } from '../../render/masonry';
 import { crossedRibbons, fallingWaterMaterial, mistTexture, pour } from '../water';
-import { type Builder, ASHLAR, ball, BASE, BASE_COURSE, brokenFoam, cb, chunk, deep, DRESS, drum, IRON, laidBand, lenOf, limb, ROCK_WET, softDisc, WOOD, WOOD_D } from '../props';
+import { type Builder, ASHLAR, ball, BASE, BASE_COURSE, brokenFoam, cb, chunk, DRESS, drum, IRON, laidBand, lenOf, limb, ROCK_WET, softDisc, WOOD, WOOD_D } from '../props';
 import { slopedBand } from './approach';
 
 /**
@@ -283,8 +283,10 @@ export const WATER_PROPS: Record<string, Builder> = {
   moat_plinth: (k, g, arg) => {
     const o = moatOpt(arg), rTop = lenOf(arg) ?? 3.7, b = o.batter ?? 0.35, n = drumStones(o.r ?? rTop - 0.5);
     const rFoot = rTop + b * o.h;
-    // (Its top course turned half a stone on the base course standing on it: see laidDrum.)
-    drum(k, g, { r: rFoot, rTop, y0: 0, y1: o.h, n, course: BASE_COURSE, turn: -Math.PI / n }, BASE);
+    // (Its top course turned half a stone on the base course standing on it, whose first course is
+    // laid at no turn: see laidDrum.)
+    const topOdd = (Math.round(o.h / COURSE) - 1) % 2 === 1;
+    drum(k, g, { r: rFoot, rTop, y0: 0, y1: o.h, n, turn: topOdd ? 0 : Math.PI / n }, BASE);
     wetBand(g, (u, y) => {
       const a = u * Math.PI * 2, r = rFoot - b * y + 0.03;
       return new THREE.Vector3(Math.sin(a) * r, y, Math.cos(a) * r);
@@ -299,7 +301,7 @@ export const WATER_PROPS: Record<string, Builder> = {
     const o = moatOpt(arg), pts = (o.pts ?? [[-2, 0], [2, 0]]).map(([x, z]) => new THREE.Vector2(x, z)), b = o.batter ?? 0.4;
     const d = pts[1].clone().sub(pts[0]).normalize(), out = o.out ?? [0, 1], s = Math.sign(-d.y * out[0] + d.x * out[1]) || 1;
     const reach = b * o.h, W = reach + 0.9;
-    deep(k.mesh(g, slopedBand(pts, [0, 0], [o.h, o.h], W, s * (reach - W / 2), -s * reach), BASE, [0, 0, 0]));
+    k.mesh(g, slopedBand(pts, [0, 0], [o.h, o.h], W, s * (reach - W / 2), -s * reach), BASE, [0, 0, 0]);
     wetBand(g, (u, y) => {
       const p = along(pts, u, s * (reach - b * y + 0.012));
       return new THREE.Vector3(p.x, y, p.y);

@@ -118,6 +118,9 @@ export async function runInspect(g: Game, suites: string) {
     const baileyAngles = suites.split(',').find((s) => s.startsWith('bailey-angles:'))?.slice(14).split('+');
     if (want('bailey') || rockOnly || baileyOnly || baileyAngles)
       report.bailey = await (await import('./castleInspect')).baileySuite(g, shot, rockOnly, baileyOnly ?? baileyAngles, !!baileyAngles);
+    // `cams:name@ex_ey_ez_lx_ly_lz_span+…`: free cameras over the keep (see camSuite).
+    const camArg = suites.split(',').find((s) => s.startsWith('cams:'));
+    if (camArg) report.cams = await (await import('./castleInspect')).camSuite(g, shot, camArg.slice(5));
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     // The light: the engine test's castle views and the play camera round the island and in every zone (explicit only:
     // `lighting`, `lighting:keep` for the island alone, `lighting:cost` for what each part of the light costs, `lighting:quality` for switching quality mid-session).

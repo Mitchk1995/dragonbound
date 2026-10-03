@@ -7,7 +7,7 @@ import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
 import { PAL } from '../../render/kit';
 import { taper } from '../../render/blocks';
 import { COURSE } from '../../render/masonry';
-import { type Builder, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, ball, BASE, BASE_COURSE, cb, DARK, deep, DRESS, KERB, laidBand, LAMP_NAVY, lenOf, livery, PAVE, spandrels, vOf } from '../props';
+import { type Builder, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, ball, BASE, BASE_COURSE, cb, DARK, DRESS, KERB, laidBand, LAMP_NAVY, lenOf, livery, PAVE, spandrels, vOf } from '../props';
 import { paved } from './curtain';
 
 /** Flagstones laid as props (the round terrace's): the road's flagstone tone, and a little darker. */
@@ -179,12 +179,12 @@ export const CLIMB_PROPS: Record<string, Builder> = {
       k.mesh(g, geo, ASHLAR, [0, 0, 0]);
     }
     const mid = (first[0] + last[0]) / 2;
-    if (o.base) deep(cb(k, g, [L, BASE_COURSE, o.w + (o.talus ? 0 : 0.08)], [mid, BASE_COURSE / 2, o.talus ? 0 : 0.04], BASE, undefined, 0.03));
+    if (o.base) cb(k, g, [L, BASE_COURSE, o.w + (o.talus ? 0 : 0.08)], [mid, BASE_COURSE / 2, o.talus ? 0 : 0.04], BASE, undefined, 0.03);
     if (o.talus) {
       // (Laid in the deep base course's own size, leaning back from its foot into the face at its top;
       // cut back square at an end that meets the inside of a corner, clear of the wall turning there.)
       const T = o.talus, [ta, tb] = o.trim ?? [0, 0], x0 = first[0] + ta, x1 = last[0] - tb;
-      deep(k.mesh(g, hull([[x0, 0, hw], [x1, 0, hw], [x0, 0, hw + TALUS_OUT], [x1, 0, hw + TALUS_OUT], [x0, T, hw], [x1, T, hw], [x0, T, hw + 0.002], [x1, T, hw + 0.002]]), BASE, [0, 0, 0]));
+      k.mesh(g, hull([[x0, 0, hw], [x1, 0, hw], [x0, 0, hw + TALUS_OUT], [x1, 0, hw + TALUS_OUT], [x0, T, hw], [x1, T, hw], [x0, T, hw + 0.002], [x1, T, hw + 0.002]]), BASE, [0, 0, 0]);
     }
     // The coping, a finger over the walling's faces on both sides.
     const cope = slopedBand([new THREE.Vector2(first[0], 0), new THREE.Vector2(last[0], 0)], [first[2] - C, last[2] - C], [first[2], last[2]], o.w + 0.05);
@@ -203,9 +203,9 @@ export const CLIMB_PROPS: Record<string, Builder> = {
     const P = 0.15, x0 = -o.lx / 2 - (o.out & 1 ? P : 0), x1 = o.lx / 2 + (o.out & 2 ? P : 0), z0 = -o.lz / 2 - (o.out & 4 ? P : 0), z1 = o.lz / 2 + (o.out & 8 ? P : 0);
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, sx = x1 - x0, sz = z1 - z0, H = o.top;
     // (The shaft stands on the lane inside its base course, which stands a finger proud all round.)
-    deep(cb(k, g, [sx + 0.06, BASE_COURSE, sz + 0.06], [cx, BASE_COURSE / 2, cz], BASE, undefined, 0.03));
+    cb(k, g, [sx + 0.06, BASE_COURSE, sz + 0.06], [cx, BASE_COURSE / 2, cz], BASE, undefined, 0.03);
     cb(k, g, [sx, H, sz], [cx, H / 2, cz], ASHLAR, undefined, 0.04);
-    if (o.talus && o.out & 8) deep(k.mesh(g, hull([[x0, 0, z1], [x1, 0, z1], [x0, 0, z1 + TALUS_OUT], [x1, 0, z1 + TALUS_OUT], [x0, o.talus, z1], [x1, o.talus, z1], [x0, o.talus, z1 + 0.002], [x1, o.talus, z1 + 0.002]]), BASE, [0, 0, 0]));
+    if (o.talus && o.out & 8) k.mesh(g, hull([[x0, 0, z1], [x1, 0, z1], [x0, 0, z1 + TALUS_OUT], [x1, 0, z1 + TALUS_OUT], [x0, o.talus, z1], [x1, o.talus, z1], [x0, o.talus, z1 + 0.002], [x1, o.talus, z1 + 0.002]]), BASE, [0, 0, 0]);
     // (The cap stands out over every side but one built against a higher wall, `opt.flush`, in the same bits.)
     const f = o.flush ?? 0, c0 = f & 1 ? 0 : 0.09, c1 = f & 2 ? 0 : 0.09, c4 = f & 4 ? 0 : 0.09, c8 = f & 8 ? 0 : 0.09;
     cb(k, g, [sx + c0 + c1, 0.16, sz + c4 + c8], [cx + (c1 - c0) / 2, H + 0.08, cz + (c8 - c4) / 2], DRESS, undefined, 0.03);
@@ -224,7 +224,7 @@ export const CLIMB_PROPS: Record<string, Builder> = {
    */
   climb_buttress: (k, g, arg) => {
     const H = ({ h: 8, ...arg?.opt } as { h: number }).h, W = 0.5, y1 = Math.round((H * 0.45) / COURSE) * COURSE;
-    deep(cb(k, g, [2 * W + 0.1, BASE_COURSE, 1.4], [0, BASE_COURSE / 2, 0.7], BASE, undefined, 0.03));
+    cb(k, g, [2 * W + 0.1, BASE_COURSE, 1.4], [0, BASE_COURSE / 2, 0.7], BASE, undefined, 0.03);
     k.mesh(g, hull([[-W, BASE_COURSE, 0], [W, BASE_COURSE, 0], [-W, BASE_COURSE, 1.3], [W, BASE_COURSE, 1.3], [-W, y1, 1.3], [W, y1, 1.3], [-W, y1 + 0.5, 0], [W, y1 + 0.5, 0], [-W, y1 + 0.5, 0.8], [W, y1 + 0.5, 0.8]]), ASHLAR, [0, 0, 0]);
     k.mesh(g, hull([[-W, y1 + 0.5, 0], [W, y1 + 0.5, 0], [-W, y1 + 0.5, 0.8], [W, y1 + 0.5, 0.8], [-W, H, 0.8], [W, H, 0.8], [-W, H + 0.8, 0], [W, H + 0.8, 0]]), ASHLAR, [0, 0, 0]);
   },
@@ -273,7 +273,7 @@ export const GATE_FRONT_PROPS: Record<string, Builder> = {
     // A string course round the faces at half their height, a course of the dressed stone standing proud.
     const sc = Math.round(H / 2 / COURSE) * COURSE;
     k.mesh(g, laidBand(round3(out(sc) + 0.12, back + 0.4), 0.45, COURSE, 1.0, 13), DRESS, [0, sc, 0]);
-    deep(k.mesh(g, laidBand(round3(out(0) + 0.05, back + 0.4), 0.5, BASE_COURSE, 2.0, 12), BASE, [0, 0, 0]));
+    k.mesh(g, laidBand(round3(out(0) + 0.05, back + 0.4), 0.5, BASE_COURSE, 2.0, 12), BASE, [0, 0, 0]);
   },
   /**
    * The bridge over the moat (along local Z from `opt.z0` to `opt.z1`, `opt.hw` either side of its

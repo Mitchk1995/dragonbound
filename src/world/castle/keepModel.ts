@@ -6,7 +6,7 @@ import { hash01, taper } from '../../render/blocks';
 import { fitsOf, inRoom, isVoid, raisedAt, stairParts, stairRect, stairSteps, flightsOf, type BuildingSpec, type Floor, type Side } from '../building';
 import { buildFitProp, CUT_H, TIMBER, type BuildingProp } from '../buildingModel';
 import {
-  archDressing, archInset, archRing, ASHLAR_B, ASHLAR_L, BASE, BASE_COURSE, cb, DECK, deep, DRESS, drum, finishProp, flag, GILT, HERALD_BLUE,
+  archDressing, archInset, archRing, ASHLAR_B, ASHLAR_L, BASE, BASE_COURSE, cb, DECK, DRESS, drum, finishProp, flag, GILT, HERALD_BLUE,
   LAMP_NAVY, livery, pointedArch, pointedDoor, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, singleDoor, spandrels, spire, spread,
 } from '../props';
 import { carved, drumDoorway, glazedWindow, paved, type Span, type WindowRoom } from '../castleProps/curtain';
@@ -270,7 +270,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     const pz = S + 1.0, r = F.pinnacle.r, n = 8;
     const ring = (y0: number, y1: number, rr: number, color: number, course?: number) =>
       band(true, y0, y1, (kk, pp, a, e) => drum(kk, pp, { r: rr, y0: a, y1: e, n, course, turn: Math.PI / n, bond: false }, color, px, pz));
-    ring(0, BASE_COURSE, r + 0.25, BASE, BASE_COURSE);
+    ring(0, BASE_COURSE, r + 0.25, BASE);
     ring(BASE_COURSE, F.pinnacle.top, r, ASHLAR_B);
     for (const y of KEEP_H.courses) ring(y, y + 0.5, r + 0.08, DRESS);
     ring(F.pinnacle.top, F.pinnacle.top + 0.5, r + 0.14, DRESS);
@@ -296,7 +296,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   };
   for (const side of ['n', 's', 'w', 'e'] as Side[]) for (const [ua, ue] of runs[side]) {
     const x0 = Math.min(fu(side, ua), fu(side, ue)), x1 = Math.max(fu(side, ua), fu(side, ue));
-    band(side === 's', 0, BASE_COURSE, (kk, pp, y0, y1) => deep(cb(kk, frame(side, pp), [x1 - x0, y1 - y0, BAND_OUT], [(x0 + x1) / 2, (y0 + y1) / 2, BAND_OUT / 2], BASE, undefined, 0.04)));
+    band(side === 's', 0, BASE_COURSE, (kk, pp, y0, y1) => cb(kk, frame(side, pp), [x1 - x0, y1 - y0, BAND_OUT], [(x0 + x1) / 2, (y0 + y1) / 2, BAND_OUT / 2], BASE, undefined, 0.04));
   }
   const courseRuns: Record<Side, { y: number; runs: [number, number][] }[]> = {
     n: KEEP_H.courses.map((y) => ({ y, runs: [[R - 0.6, S - R + 0.6]] })),
@@ -409,8 +409,8 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     };
     // The back turrets stand out of the moat on the keep's plinth, stepped in a course at a time from
     // the moat's bed to the base course.
-    if (!t.front) for (let i = 0; i < -KEEP_H.plinth; i++) ring(-1 - i, -i, r + BAND_OUT + STEP_OUT * (i + 1), BASE, { course: BASE_COURSE });
-    ring(0, BASE_COURSE, r + BAND_OUT, BASE, { course: BASE_COURSE, notched: true });
+    if (!t.front) for (let i = 0; i < -KEEP_H.plinth; i++) ring(-1 - i, -i, r + BAND_OUT + STEP_OUT * (i + 1), BASE);
+    ring(0, BASE_COURSE, r + BAND_OUT, BASE, { notched: true });
     // The shaft, cut at the deck where its quarter inside the keep ends, with the walls' string courses
     // standing proud round it.
     ring(BASE_COURSE, KEEP_H.deck - 0.5, r, ASHLAR_B, { notched: true });
@@ -465,7 +465,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
       const x0 = Math.min(fu(side, ua), fu(side, ue)), x1 = Math.max(fu(side, ua), fu(side, ue)), f = frame(side, built);
       for (let i = 0; i < -KEEP_H.plinth; i++) {
         const outI = BAND_OUT + STEP_OUT * (i + 1);
-        deep(cb(k, f, [x1 - x0, 1, outI + T], [(x0 + x1) / 2, -i - 0.5, (outI - T) / 2], BASE, undefined, 0.04));
+        cb(k, f, [x1 - x0, 1, outI + T], [(x0 + x1) / 2, -i - 0.5, (outI - T) / 2], BASE, undefined, 0.04);
       }
     }
   }
@@ -483,11 +483,22 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   paved(cb(ik, floorG, [S - 2 * T + 0.02, 0.06, S - 2 * T + 0.02], [S / 2, 0.02, S / 2], FLOOR, undefined, 0.02));
   const dais = b.raised?.[0];
   if (dais) {
-    const [dx0, dz0, dx1, dz1] = dais.rect, n = Math.max(1, Math.ceil(dais.h / 0.17 - 1e-6));
+    // (Each step stands right down on the floor, a lower step only its tread showing round the one over
+    // it, laid along the step; every top as far over its walking height as the floor's flags stand over
+    // the ground, never in the plane of the ground raised under it.)
+    const [dx0, dz0, dx1, dz1] = dais.rect, n = Math.max(1, Math.ceil(dais.h / 0.17 - 1e-6)), TR = 0.32, open = dz0 > T;
     for (let i = 0; i < n; i++) {
-      const o = 0.32 * (n - 1 - i), y0 = i ? (i * dais.h) / n : 0.04, y1 = ((i + 1) * dais.h) / n;
-      const ax = dx0 - o, ex = dx1 + o, az = dz0 > T ? dz0 - o : dz0, ez = dz1 + o;
-      cb(ik, ground, [ex - ax, y1 - y0, ez - az], [(ax + ex) / 2, (y0 + y1) / 2, (az + ez) / 2], i === n - 1 ? FLOOR : DRESS, undefined, 0.02);
+      const o = TR * (n - 1 - i), y0 = 0.04, y1 = ((i + 1) * dais.h) / n + 0.05;
+      const ax = dx0 - o, ex = dx1 + o, az = open ? dz0 - o : dz0, ez = dz1 + o;
+      const step = (bx0: number, bx1: number, bz0: number, bz1: number, color: number) => cb(ik, ground, [bx1 - bx0, y1 - y0, bz1 - bz0], [(bx0 + bx1) / 2, (y0 + y1) / 2, (bz0 + bz1) / 2], color, undefined, 0.02);
+      if (i === n - 1) {
+        step(ax, ex, az, ez, FLOOR);
+        continue;
+      }
+      step(ax, ax + TR, az, ez, DRESS);
+      step(ex - TR, ex, az, ez, DRESS);
+      if (open) step(ax + TR, ex - TR, az, az + TR, DRESS);
+      step(ax + TR, ex - TR, ez - TR, ez, DRESS);
     }
     const rz0 = dz1 + 0.32 * n + 0.1, rz1 = S - T;
     ik.box(ground, [2.2, 0.03, rz1 - rz0], [S / 2, 0.065, (rz0 + rz1) / 2], RUG);
