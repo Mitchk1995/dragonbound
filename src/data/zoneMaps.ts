@@ -50,7 +50,7 @@ function blockRect(G: Gen, cx: number, cz: number, hw: number, hd: number, rot: 
 // ─── Dragonspire Keep: a floating island in the Veil ────────────────────────
 
 /** Roof colours (painted as shingles). */
-const ROOF = { slate: 0x4e5564, darkSlate: 0x3e4450, terracotta: 0x9a5438, moss: 0x4a6a48, teal: 0x3e6a6a, violet: 0x4a4a78, rust: 0x7a4a34 };
+const ROOF = { darkSlate: 0x3e4450, terracotta: 0x9a5438, moss: 0x4a6a48, teal: 0x3e6a6a, violet: 0x4a4a78, rust: 0x7a4a34 };
 
 /**
  * The keep's enterable buildings: the castle's (the great keep and its ranges, src/world/castle/)
@@ -617,25 +617,6 @@ export function buildKeep(seed: number): ZoneLayout {
       lined.add(i);
     }
     G.verge((x0 + x1) / 2, (z0 + z1) / 2, L / 2 + 1.5);
-  };
-  /**
-   * A clipped box border along an outline of corners (closed into a loop round a bed when `closed`):
-   * one continuous shape (box_border), blocking only the cells its centreline crosses, so it can run
-   * along a lawn's edge hard against paving.
-   */
-  const border = (pts: number[][], closed = false) => {
-    const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cz = pts.reduce((a, q) => a + q[1], 0) / pts.length;
-    const p = G.prop('box_border', cx, cz, 0);
-    p.opt = { pts: pts.map(([x, z]) => [x - cx, z - cz]), closed };
-    const segs = closed ? pts.map((q, k) => [q, pts[(k + 1) % pts.length]]) : pts.slice(0, -1).map((q, k) => [q, pts[k + 1]]);
-    for (const [[x0, z0], [x1, z1]] of segs) {
-      const L = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(L / 0.1), e = Math.min(0.02, L / 4) / L;
-      for (let k = 0; k <= n; k++) {
-        const t = e + ((1 - 2 * e) * k) / n, i = G.idx(Math.floor(x0 + (x1 - x0) * t), Math.floor(z0 + (z1 - z0) * t));
-        if (G.l.cells[i] === Cell.Ground) G.l.cells[i] = Cell.Blocked;
-        lined.add(i);
-      }
-    }
   };
   /** Plant one tree (a planted tree, not scenery: the green, the orchard). */
   const plant = (x: number, z: number) => {

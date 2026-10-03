@@ -1621,9 +1621,8 @@ export function pointedDoor(k: ModelKit, g: THREE.Object3D, W: number, h: number
 }
 
 /**
- * The feet of the courses that run round the castle's buildings and the great door's pavilions: the
- * floor line (BUILDING_FLOOR_LINE) and the course under the hall's parapet, so where a pavilion stands
- * against the hall its lines run on into the hall's.
+ * The floor line of the castle's tall single-storey buildings: the foot of the course that runs round
+ * them at one height, so the courses of every castle building run level.
  */
 export const BUILDING_FLOOR_LINE = 5.0;
 

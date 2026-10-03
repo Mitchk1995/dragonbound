@@ -197,7 +197,6 @@ export const CLIMB = {
   ] as [number, number, number][][],
   /** The dressed rock face over flights 3 and 4 and the turning landing: [x, z, its foot (the treads under it)]. */
   face: [[117.6, 115.5, 11], [118, 115.5, 11], [123, 115.5, 8.25], [124, 115.5, 8.25], [129, 115.5, 5.5], [133.5, 115.5, 5.5]] as [number, number, number][],
-  foot: { x: 131, z: 131 },
 };
 
 /** The crown's natural edge (the rock round the moat, the ledge and the knolls), at CROWN_Y. */

@@ -2,8 +2,8 @@ import type { BuildingSpec, Fit } from '../building';
 import { RANGE, type Box } from './plan';
 
 /**
- * The castle's other enterable buildings, as plain shells in today's castle style (their own roofs,
- * windows and rooms come later): the north range either side of the keep on the terrace (the
+ * The castle's other enterable buildings, plain shells in the castle's stone under flat roofs behind
+ * battlements: the north range either side of the keep on the terrace (the
  * kitchen, the great hall, the chapel and the lord's solar, their party walls shared with the keep
  * and each other), and the stables and the barracks facing each other across the bailey on the
  * cross axis, each built against the curtain. Fittings and rooms are in cells from each building's
@@ -35,13 +35,14 @@ const KITCHEN: BuildingSpec = {
 
 /**
  * The great hall: the screens passage at the west end (the hall door, the buttery door and the
- * stair to the minstrels' gallery over it), the hall open to its roof with the hearth and the long
- * tables, the high table on the dais at the keep end, three steps up, under the lord's door.
+ * stair to the minstrels' gallery over it, the screen opening onto the hall at its south end beside
+ * the stair's head), the hall open to its roof with the hearth and the long tables, the high table
+ * on the dais at the keep end, three steps up, under the lord's door.
  */
 const HALL: BuildingSpec = {
   id: 'great_hall', style: 'keep', interior: 'keep', ...at(RANGE.hall), wallH: 10, storeyH: 5, roof: SLATE, shared: ['w', 'e'],
   doors: [{ side: 's', at: 3, w: 2 }, { side: 'w', at: 9, w: 2 }, { side: 'e', at: 3, w: 2 }],
-  partitions: [{ axis: 'z', at: 5, from: 1, to: 12, doors: [[5, 3]], screen: true }],
+  partitions: [{ axis: 'z', at: 5, from: 1, to: 12, doors: [[10, 2]], screen: true }],
   stairs: [{
     x: 4, z: 1, w: 1, len: 4, dir: 's', land0: [3, 1], land1: [4, 10],
     turns: [{ landing: [4, 5, 5, 6], flight: { x: 4, z: 6, w: 1, len: 4, dir: 's' } }],

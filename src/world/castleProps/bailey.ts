@@ -4,10 +4,10 @@ import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL, type V3 } from '../../render/kit';
 import { KERB_W } from '../kerbStones';
-import { COURSE, drumStones, laidRun } from '../../render/masonry';
+import { drumStones, laidRun } from '../../render/masonry';
 import { hash01, octagon, prism, taper, wedge } from '../../render/blocks';
 import { crossedRibbons, fallingWaterMaterial, mistTexture, planarReflection, pour, poolWater, type Impact } from '../water';
-import { type Builder, ASHLAR, ASHLAR_L, ball, BASE, BELLY, brokenFoam, BRONZE, BRONZE_D, BRONZE_L, cb, chunk, DRESS, drum, GARDEN_LEAF, GILT, HERALD_BLUE, HERALD_BLUE_D, KERB, laidBand, LAMP_NAVY, lenOf, limb, MARBLE, MARBLE_D, MARBLE_L, MEMBRANE, PLANT, pointedArch, spread, STONE, STONE_D, STONE_L, vOf, WOOD, WOOD_D, WOOD_L, WORN } from '../props';
+import { type Builder, ASHLAR, ASHLAR_L, ball, BASE, BELLY, brokenFoam, BRONZE, BRONZE_D, BRONZE_L, cb, DRESS, drum, GARDEN_LEAF, GILT, HERALD_BLUE, HERALD_BLUE_D, KERB, laidBand, LAMP_NAVY, lenOf, limb, MARBLE, MARBLE_D, MARBLE_L, MEMBRANE, PLANT, pointedArch, spread, STONE, STONE_D, STONE_L, vOf, WOOD, WOOD_D, WOOD_L, WORN } from '../props';
 
 /**
  * A band `w` wide and `h` high along a polyline in plan (points (x, z), closed into a loop when

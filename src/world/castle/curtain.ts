@@ -5,7 +5,7 @@ import { CROWN_Y, CURTAIN, CURTAIN_CORNERS, CURTAIN_RUNS, GATE, TOWERS } from '.
 import type { Site } from './site';
 
 /**
- * The curtain, its twelve towers and the gatehouse, in today's kit: each run of wall cut where a
+ * The curtain, its twelve towers and the gatehouse: each run of wall cut where a
  * tower or the gatehouse stands on it (the wall dying into the drum, its walk at a doorway), every
  * tower opening onto the walks that reach it.
  */

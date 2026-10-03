@@ -983,8 +983,8 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     // back over the hall's leads, two stages high, so the castle's crown stands on its axis: a string
     // course at each stage, its corners turned on the walling's own quoins, a lancet on each face of
     // the upper stage (two on the front over the door), a gilt frieze and a crenellated crown on a
-    // course stepped out from its walls, and inside it the tallest spire in the castle (taller than the
-    // donjon's), the lord's flag over it. All of it the castle's stone on the course lines.
+    // course stepped out from its walls, and inside it the tallest spire on the building, the lord's
+    // flag over it. All of it the castle's stone on the course lines.
     const cf = crownFoot(wallH + 10.6), zb0 = d - 6.4, zb1 = zf + P, tz = (zb0 + zb1) / 2, td = zb1 - zb0, tw = u1 - u0;
     cb(ak, ap, [tw, cf - COURSE - wallH, td], [uc, (wallH + cf - COURSE) / 2, tz], ASHLAR_B, undefined, 0.04);
     for (const y of [wallH, wallH + 9 * COURSE]) cb(ak, ap, [tw + 0.12, COURSE, td + 0.12], [uc, y + COURSE / 2, tz], DRESS, undefined, 0.03);
@@ -1017,8 +1017,8 @@ function keepMasonry(band: Band, b: BuildingSpec, face: number, [fk, lifted]: Ki
     const mt = cf + COURSE + 0.14;
     for (let i = 0; i < 5; i++) for (const e of [zb1 + 0.15, zb0 - 0.15]) cb(ak, ap, [0.72, 0.7, 0.5], [u0 + 0.2 + (i * (tw - 0.4)) / 4, mt + 0.35, e], ASHLAR_B, undefined, 0.04);
     for (const s2 of [-1, 1]) for (let i = 0; i < 5; i++) cb(ak, ap, [0.5, 0.7, 0.72], [uc + s2 * (tw / 2 + 0.15), mt + 0.35, zb0 + 0.5 + (i * (td - 1)) / 4], ASHLAR_B, undefined, 0.04);
-    // On the castle's axis, over the great door: the castle's tallest spire inside the merlons (its
-    // crown, answering the donjon's and rising above it), the flag on a pole over its finial.
+    // On the castle's axis, over the great door: a spire inside the merlons, the flag on a pole
+    // over its finial.
     const sr = Math.min(tw, td) / 2 - 0.3, shh = sr * 2.9;
     spire(ak, ap, uc, mt, tz, sr, shh, 12);
     cb(ak, ap, [0.12, 2.6, 0.12], [uc, mt + 0.26 + shh + 1.8, tz], LAMP_NAVY, undefined, 0.02);

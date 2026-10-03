@@ -1,14 +1,13 @@
 /** The castle's curtain: its wall, towers, gates, doors and climbers (src/world/props.ts builds the rest of the world's props). */
 import * as THREE from 'three';
 import { CURTAIN_WALL } from '../../data/castle';
-import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ModelKit, PAL, type V3 } from '../../render/kit';
 import { studioEnv } from '../../render/env';
 import { COURSE, drumStones } from '../../render/masonry';
 import { addPatch } from '../../render/surface';
-import { chamferBox, hash01, taper, wedge } from '../../render/blocks';
-import { type Builder, archPane, archRing, ASHLAR, ASHLAR_B, ASHLAR_L, ASHLAR_W, BASE, BASE_COURSE, boardedLeaf, BUILDING_FLOOR_LINE, cb, CLIMBER_BLOOM, CLIMBER_IVY, CLIMBER_ROSE_LEAF, crownFoot, DARK, DECK, deep, DOORS, DRESS, dressedArch, drum, flag, frieze, GILT, glassMat, HERALD_BLUE, INLAY, IRON, LAMP_NAVY, lancet, lenOf, limb, livery, PAVE, pointedArch, pointedDoor, quoins, roomMat, SLATE_BLUE, spandrels, spire, spread, vOf, WOOD_D } from '../props';
+import { chamferBox, hash01, taper } from '../../render/blocks';
+import { type Builder, archPane, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, BASE, BASE_COURSE, boardedLeaf, cb, CLIMBER_BLOOM, CLIMBER_IVY, CLIMBER_ROSE_LEAF, crownFoot, DARK, DECK, deep, DOORS, DRESS, dressedArch, drum, flag, frieze, GILT, glassMat, HERALD_BLUE, INLAY, IRON, LAMP_NAVY, lenOf, limb, livery, PAVE, pointedArch, pointedDoor, roomMat, spandrels, spire, spread, vOf, WOOD_D } from '../props';
 
 /** A climber's leaf card: a flat pointed leaf (a squashed octahedron), lying flat to the wall. */
 /** A climber's leaf: a small flat card (five-sided, so a sheet of them reads as foliage, not tiles). */

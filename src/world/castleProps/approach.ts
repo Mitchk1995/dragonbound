@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { PAL } from '../../render/kit';
 import { taper } from '../../render/blocks';
-import { type Builder, ASHLAR, ASHLAR_L, ASHLAR_W, ball, BASE, cb, DRESS, KERB, laidBand, LAMP_NAVY, lenOf, PAVE, vOf } from '../props';
+import { type Builder, ASHLAR, ASHLAR_L, ASHLAR_W, ball, BASE, cb, DRESS, KERB, laidBand, LAMP_NAVY, lenOf, vOf } from '../props';
 
 /** Flagstones laid as props (the round terrace's): the road's flagstone tone, and a little darker. */
 const FLAG = 0x958f86, FLAG_D = 0x8a847b;

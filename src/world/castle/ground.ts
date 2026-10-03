@@ -1,3 +1,4 @@
+import { GATEHOUSE } from '../../data/castle';
 import { Cell, Fluid, Ground } from '../layout';
 import { BRIDGE, CROWN_OUTLINE, CROWN_Y, CURTAIN, GATE, KEEP, MOAT, TERRACE_Y, TOWERS, WATER } from './plan';
 import { inPoly, type Site } from './site';
@@ -35,7 +36,7 @@ export function moat(s: Site) {
   const masonry = (x: number, z: number) =>
     insideCurtain(x, z) ||
     TOWERS.some((t) => Math.hypot(x - t.x, z - t.z) <= t.r) ||
-    [-6, 6].some((dx) => Math.hypot(x - GATE.x - dx, z - GATE.z) <= 2.6) ||
+    [-1, 1].some((sx) => Math.hypot(x - GATE.x - sx * GATEHOUSE.cx, z - GATE.z) <= GATEHOUSE.R) ||
     (x > kx0 - 2 && x < kx1 + 2 && z > kz0 - 2 && z < CURTAIN.north) ||
     (x > BRIDGE.x0 - 0.5 && x < BRIDGE.x1 + 0.5 && z > CURTAIN.south && z < BRIDGE.z1);
   s.within(MOAT.counterscarp, (i, x, z) => {

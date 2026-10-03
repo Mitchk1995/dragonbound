@@ -2,8 +2,8 @@ import type { BuildingSpec } from '../building';
 import { KEEP, TERRACE_Y } from './plan';
 
 /**
- * The great keep as an enterable building (its own model, turrets and great door come later; this
- * is the plain shell in today's castle style). Its floor is the terrace's; the throne hall rises the
+ * The great keep as an enterable building: a plain shell in the castle's stone under a flat roof
+ * behind battlements, its entrance bay over the great door. Its floor is the terrace's; the throne hall rises the
  * whole height in the middle, and galleries run round its north, west and east sides at the wall
  * walk's level, each side reached by a stair of two flights from beside the great door, along the
  * south wall to a half landing and up the side wall through the gallery's floor. Cells are local to

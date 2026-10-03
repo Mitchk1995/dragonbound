@@ -296,6 +296,18 @@ describe('Dragonspire Keep', () => {
     const t = B.keep.fits!.find((f) => f.kind === 'high_table')!;
     expect(raisedAt(B.keep, B.keep.x + Math.floor(t.x), B.keep.z + Math.floor(t.z))).toBe(0.5);
   });
+  it('every interior doorway opens onto floor you can stand on, on both sides', () => {
+    for (const b of KEEP_BUILDINGS) for (const floor of [0, 1] as Floor[]) for (const p of floor ? b.upper?.partitions ?? [] : b.partitions ?? []) {
+      for (const [a, dw] of p.doors ?? []) for (let k = a; k < a + dw; k++) {
+        const [lx, lz] = p.axis === 'x' ? [k, p.at] : [p.at, k];
+        const sides = p.axis === 'x' ? [[lx, lz - 1], [lx, lz + 1]] : [[lx - 1, lz], [lx + 1, lz]];
+        for (const [sx, sz] of sides) {
+          const role = cellRole(b, b.x + sx, b.z + sz, floor);
+          expect(role === 'floor' || role === 'door' || role === 'stair', `${b.id} floor ${floor}: doorway cell ${lx},${lz} opens onto ${role} at ${sx},${sz}`).toBe(true);
+        }
+      }
+    }
+  });
   it('every stair keeps the house rules: at most 17 risers of 16 to 17 cm between landings, inside its walls', () => {
     for (const b of KEEP_BUILDINGS) expect(stairProblems(b), b.id).toEqual([]);
   });
