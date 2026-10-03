@@ -18,3 +18,5 @@ Approved by the owner on October 3, with these choices decided:
 - **Inside the keep:** a throne hall with the lord's high seat, open 18 m to the great chamber's floor, with galleries on three sides at the wall walk's level. The great chamber, map room and treasury above stay closed for now.
 - **A chapel and the lord's solar** are new: the chapel balances the great hall on the other side of the keep.
 - **The farm** moves 8 m south to make room for the waterfall and the bigger rock.
+
+Built (October 3): all six stages are merged (PRs #78, #81, #82, #83, #85, #86); the castle as it stands is described in [CASTLE_DESIGN.md](../../CASTLE_DESIGN.md).
