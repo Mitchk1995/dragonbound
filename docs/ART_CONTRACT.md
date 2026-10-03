@@ -2,9 +2,10 @@
 
 Every model is a Python script in `tools/blender/` using `_common.py`, exported to `public/models/<file>.glb`.
 Scripts read and write the checkout named by the `DRAGONBOUND_ROOT` environment variable (else the one two folders
-above the script, else `D:\gameplanning`), so set it when working in a worktree. Headless re-export, e.g.:
-`blender -b --python-expr "exec(open(r'<root>\tools\blender\minions.py').read())"`; for gear, set
-`DB_ONLY = ['staff_oak']` before the `exec` to export only those models.
+above the script, else `D:\gameplanning`), so set it when working in a worktree. Headless re-export goes through the
+heavy-job lock in AGENTS.md, e.g.
+`node tools/heavy.cjs D:/pokemon/tools/blender-5.2.2/blender.exe -b --python-expr "exec(open(r'<root>\tools\blender\minions.py').read())"`;
+for gear, set `DB_ONLY = ['staff_oak']` before the `exec` to export only those models.
 Scripts author inside a root rotated +90° about X, so **all coordinates are three.js: Y up, +Z forward**.
 Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 
@@ -23,7 +24,7 @@ depth. It looks hand-made, not like a photograph.
 creatures, statues, horses, props and the castle's architecture; characters stay blocky and modular, like Lego (owner,
 October 3). Chunky and blocky is never a defect there, and a reviewer must not ask for it to be smoothed or sculpted.
 Organic shapes are used where they read better: wings, hair, cloth, flames, rock, water, terrain, and trees and plants.
-Trees are true to size and grown as one piece rather than built from blocks (owner's pick, October 3); they can be natural or more cartoony, and need not be realistic.
+Trees are true to size and grown as one piece rather than built from blocks (owner's pick, October 3); they can be natural or more cartoony, and need not be realistic. They are being redone now: until the new trees are in, today's blocky trees are not a defect in other work.
 
 **But built, not dumped.** "Blocky" means blocks that are *designed together*: they meet face to face, share edges and
 read as one carved or built object. The owner's standing complaint is "shapes placed together instead of stitched into
@@ -46,7 +47,7 @@ photoreal.
 **Surfaces.** Soft stylized shading, and every surface carries a hand-painted texture: stone, wood, bark, leaves, crops,
 cloth. Dressed stone is the owner's pick B (October 3): chunky blocks with recessed dark joints, bevelled and slightly
 chipped edges, a lit top edge and a little tone variation block to block, its relief drawn in the shader rather than
-modelled stone by stone. A few accents of real material:
+modelled stone by stone. The castle is being moved to this finish now: until it lands, the old painted stone is not a defect in other work. A few accents of real material:
 - forged metal;
 - clear glass with a cool tint that you can genuinely see into;
 - running water.
@@ -55,7 +56,7 @@ Texture scale is consistent: a few block sizes laid in courses that line up acro
 stretched, squeezed or bent round a corner or a curve.
 
 **The castle and the island.** The castle is becoming a grand royal castle round a dominant great keep (castle v4, in
-planning) in cream limestone, its trim cut from the same stone; navy slate spires banded in gold, royal blue and gold
+planning) in cream limestone, its trim cut from the same stone; royal blue slate spires banded in gold, royal blue and gold
 livery, flat crenellated roofs and lush gardens. The rock is dark blue-grey, natural, weathered and mossy. Grass is full
 lawn, never scattered tufts. Clutter is never random; everything is placed on purpose.
 

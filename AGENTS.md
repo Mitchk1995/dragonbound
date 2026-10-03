@@ -10,7 +10,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - **Show, don't tell.** Progress, options and questions go to the owner as pictures (in-game captures, concept images), with a line or two of text at most. No score tables, long lists or walls of text; the owner won't open the game to check. Show progress regularly, not only at the end.
 - **One thing at a time for the owner's eye.** The owner judges one area at a time from pictures before it counts as done. The owner's eye is the judge: visual work goes to the owner straight from the builder, with no separate reviewer or critic stage (owner, October 3, to save usage). Stop and show the owner when progress stalls.
 - **Be honest about style.** Say plainly when a look is or is not achievable with how we build things, and show it. Concept paintings are mood, not blueprints: they tend to be generic, so scrutinise their layout and use your own taste.
-- **Workflows for implementation (October 3).** The owner moved to a bigger plan: use workflows where they help, partitioned so parallel jobs never edit the same code, each job in its own worktree on its own branch. Heavy jobs still run one at a time through the shared lock (see "How work lands"). Keep the repo, branches and scratch output clean.
+- **Parallel jobs for implementation (October 3).** The owner now has a larger usage allowance, so usage no longer has to be kept low: run parallel jobs (Claude's Workflow tool, or several agents) where they help, partitioned so they never edit the same code, each job in its own worktree on its own branch. Heavy jobs still run one at a time through the shared lock (see "How work lands"). Keep the repo, branches and scratch output clean.
 - **How to work through a batch of owner notes.**
   - Export the notes, with marked pictures, to one notes file.
   - Group them by kind (for example masonry; doors and glass; landscaping).
@@ -18,7 +18,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
   - Give every job one shared brief: rules, style, where the code is, how to capture and how to report.
   - A job checks each fix from several camera angles, not only the review view, and extends the geometry audit where it can.
   - The owner judges the result from pictures; there is no separate visual review stage.
-- **Every visual builder starts from the style.** Its prompt points it at "The look" in [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md) and the owner's picks for that area in the plan. Nothing reaches the owner until the geometry checks pass and the builder has zoomed into every capture it shows.
+- **Every visual builder starts from the style.** Its prompt points it at "The look" in [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md) and the owner's picks for that area in the plan. Nothing reaches the owner as finished until the geometry checks pass and the builder has zoomed into every capture it shows; work-in-progress pictures can go sooner, labelled as unfinished.
 - **Mechanics and non-visual systems go to Codex** (GPT 6.1 Sol, max effort, run headless with the Codex app's newest bundled `codex.exe`); Claude does design, planning, look and feel.
 
 ## Where things are
@@ -42,7 +42,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 2. **`main` is always playable.** Changes reach `main` only through a squash-merged pull request with green CI (typecheck, tests, production build, encoding check). Never leave work uncommitted on `main`.
 3. **One branch per feature or fix**, named `feat/…`, `fix/…`, `art/…` or `chore/…`, and small enough to review in one sitting.
 4. **Independent review before merging.** Send the finished change to a reviewer agent, fix substantive findings, and rerun affected checks. Review is read-only unless the reviewer has its own worktree. Handle review, green CI, squash merge and removal of your branch/worktree automatically; the owner should not have to ask for any of it again.
-5. **One heavy job at a time** (build, test run, Blender export or capture session). This PC has crashed from running out of memory. Run each one as `node tools/heavy.cjs <command>` from your checkout: it waits for the machine-wide lock, runs the command and releases the lock, and clears a lock whose owner has died. Blender 5.2 is `D:/pokemon/tools/blender-5.2.2/blender.exe`.
+5. **One heavy job at a time** (build, test run, Blender export or capture session). This PC has crashed from running out of memory. Run each one as `node tools/heavy.cjs <command>` from your checkout: it waits for the machine-wide lock (a Windows named pipe, freed the moment its holder ends), runs the command through cmd.exe and exits with its code. Put a compound command in one quoted argument (`node tools/heavy.cjs "npm run build && npm test"`), and stop a heavy job by ending its whole process tree (`taskkill /T /F /PID <pid>`), never the wrapper alone. Blender 5.2 is `D:/pokemon/tools/blender-5.2.2/blender.exe`.
 
 ## Guardrails
 
