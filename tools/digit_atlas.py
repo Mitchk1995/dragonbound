@@ -12,11 +12,14 @@ out, so the glow becomes a translucent orange rather than a dark box), and every
 height and baseline so a number is just glyphs set side by side. The hurt set is the white set recoloured to the game's
 hurt red with its dark outline kept dark.
 
-Alphabets (public/ui/font, src/ui/fontGlyphs.ts): three Codex-generated sheets (alpha-A forged gold, alpha-B brown
-ink with a cream outline, alpha-C glowing pale blue), each five rows of A-M, N-Z, a-m, n-z and "0123456789.,!?'-:"
-on a flat ground. Glyphs are cut by row band and column gap, set on one shared baseline, the ground is divided back
-out of the glow, and each glyph advances by its own width plus a little tracking. Run `python tools/digit_atlas.py`
-for both, or add `digits` / `fonts` to run one.
+Alphabets (public/ui/font, src/ui/fontGlyphs.ts): four Codex-generated sheets (alpha-A forged gold, alpha-B brown
+ink with a cream outline, alpha-C glowing pale blue, alpha-N neutral silver-white greyscale that the menus tint per
+meaning at runtime), each five rows of A-M, N-Z, a-m, n-z and "0123456789.,!?'-:" on a flat ground; the neutral sheet
+has a sixth row `+ % / ( ) ? ? & # [ ] " ;` whose two middle `?` are a generation mistake and are skipped (the
+middle dot is built from the full stop, raised). Glyphs are cut by row band and column gap (touching letters are
+split at the thinnest column, split marks such as the quote are joined), set on one shared baseline, the ground is
+divided back out of the glow, and each glyph advances by its own width plus a little tracking. Run
+`python tools/digit_atlas.py` for both, or add `digits` / `fonts` to run one.
 
 Run with Python 3 (Pillow, NumPy and SciPy) after putting the sheets in SRC and FONT_SRC:
     python tools/digit_atlas.py
@@ -170,6 +173,7 @@ FONT_SRC = Path('D:/dragonbound-archive/codex/alpha')
 FONT_OUT = ROOT / 'public' / 'ui' / 'font'
 FONT_TABLE = ROOT / 'src' / 'ui' / 'fontGlyphs.ts'
 FONT_ROWS = ['ABCDEFGHIJKLM', 'NOPQRSTUVWXYZ', 'abcdefghijklm', 'nopqrstuvwxyz', "0123456789.,!?'-:"]
+SKIP = '@'  # a placeholder in a row for a piece the sheet drew wrongly: it is cut (to keep the count) and dropped
 CAP_PX = 56  # cap height in the atlas: the zone plaque is ~16 px (x2 on a 200% display) and nothing is set larger
 TRACK = 0.06  # the gap between glyphs, in cap heights, added to each glyph's own width
 SPACE = 0.3  # a word space, in cap heights
@@ -179,6 +183,8 @@ FONTS = {
     'gold': dict(file='alpha-A.png', pad=10, ramp=(10, 50)),
     'brown': dict(file='alpha-B.png', pad=10, ramp=(10, 50)),
     'blue': dict(file='alpha-C.png', pad=26, ramp=(8, 90)),
+    # The neutral sheet: tinted per meaning at runtime (src/ui/uiText.ts). `+` and `·` are real glyphs here, not made.
+    'neutral': dict(file='alpha-N.png', pad=10, ramp=(10, 50), rows=FONT_ROWS + ['+%/()@@&#[]";'], dot=True),
 }
 
 
@@ -200,13 +206,31 @@ def runs(flags, min_gap):
     return out
 
 
+def fit_pieces(cols, chars, profile, path):
+    """Make the column pieces of a row match its characters: join the closest pair of pieces while there are too
+    many (a split quote, a dotted i), split the widest piece at its thinnest column while there are too few (touching
+    letters)."""
+    cols = list(cols)
+    while len(cols) > len(chars):
+        j = min(range(len(cols) - 1), key=lambda k: cols[k + 1][0] - cols[k][1])
+        cols[j:j + 2] = [(cols[j][0], cols[j + 1][1])]
+    while len(cols) < len(chars):
+        i = max(range(len(cols)), key=lambda k: cols[k][1] - cols[k][0])
+        a, b = cols[i]
+        lo, hi = a + (b - a) // 4, b - (b - a) // 4
+        m = lo + int(np.argmin(profile[lo:hi]))
+        cols[i:i + 1] = [(a, m), (m + 1, b)]
+    return cols
+
+
 def cut_alphabet(path, spec):
+    rows = spec.get('rows', FONT_ROWS)
     sheet = np.array(Image.open(path).convert('RGB')).astype(float)
     bg = np.median(np.concatenate([sheet[:8].reshape(-1, 3), sheet[-8:].reshape(-1, 3)]), 0)
     dist = np.sqrt(((sheet - bg) ** 2).sum(-1))
     core = dist > CORE
     bands = [r for r in runs(core.any(1), 12) if r[1] - r[0] > 30]
-    if len(bands) != len(FONT_ROWS):
+    if len(bands) != len(rows):
         raise SystemExit(f'{path}: found {len(bands)} rows')
     # Soft alpha from the distance to the ground; small gaps inside a stroke are filled solid.
     lo, hi = spec['ramp']
@@ -222,10 +246,10 @@ def cut_alphabet(path, spec):
     rgb = np.where(solid[..., None] & (ramp[..., None] < 1), sheet, rgb)
     bounds = [0] + [(bands[i][1] + bands[i + 1][0]) // 2 for i in range(len(bands) - 1)] + [core.shape[0]]
     cells = {}
-    for i, ((y0, y1), chars) in enumerate(zip(bands, FONT_ROWS)):
-        cols = [c for c in runs(core[max(bounds[i], y0 - 10):min(bounds[i + 1], y1 + 10)].any(0), 3) if c[1] - c[0] > 2]
-        if len(cols) != len(chars):
-            raise SystemExit(f'{path}: row {chars} found {len(cols)} pieces')
+    for i, ((y0, y1), chars) in enumerate(zip(bands, rows)):
+        strip = core[max(bounds[i], y0 - 10):min(bounds[i + 1], y1 + 10)]
+        cols = [c for c in runs(strip.any(0), 3) if c[1] - c[0] > 2]
+        cols = fit_pieces(cols, chars, strip.sum(0), path)
         spans = []
         for (x0, x1) in cols:
             ys = np.where(core[bounds[i]:bounds[i + 1], x0:x1].any(1))[0] + bounds[i]
@@ -235,6 +259,8 @@ def cut_alphabet(path, spec):
         cuts = [(cols[k][1] + cols[k + 1][0]) // 2 for k in range(len(cols) - 1)]
         owner = np.searchsorted(cuts, np.arange(core.shape[1]), side='right')
         for k, ch in enumerate(chars):
+            if ch == SKIP:
+                continue
             cells[ch] = dict(
                 k=k, x=cols[k], base=base, above=base - spans[k][0], below=spans[k][1] - base,
                 band=(bounds[i], bounds[i + 1]), owner=owner)
@@ -258,6 +284,17 @@ def make_plus(dash, pad, cy):
     return out, side
 
 
+def raise_dot(dot, cell, centre_row):
+    """The full stop moved up so its centre sits on `centre_row` of the sprite; (sprite, cell for the advance)."""
+    ys = np.where(dot[..., 3] > 127)[0]
+    shift = int(round(centre_row - (ys.min() + ys.max()) / 2))
+    if ys.min() + shift < 0:
+        raise SystemExit('no room above the full stop to raise it')
+    out = np.zeros_like(dot)
+    out[:dot.shape[0] + shift] = dot[-shift:] if shift < 0 else dot[:dot.shape[0] - shift]
+    return out, dict(cell, x=(cell['x'][0], cell['x'][1]))
+
+
 def pack_alphabet(name, spec, cut):
     pad, cap = spec['pad'], cut['cap']
     scale = CAP_PX / cap
@@ -279,15 +316,21 @@ def pack_alphabet(name, spec, cut):
                 rgba[yy, :, :3] = cut['rgb'][sy, xs]
                 rgba[yy, :, 3] = cut['alpha'][sy, xs] * mine * 255
         raws[ch] = rgba
-    # The sheets have no "+": cross the hyphen with itself turned a quarter, centred where a plus sits beside capitals.
-    raws['+'], plus_core = make_plus(raws['-'], pad, up - 0.42 * cap)
-    cells['+'] = dict(x=(0, plus_core))
+    if 'rows' not in spec:
+        # The first three sheets have no "+": cross the hyphen with itself turned a quarter, centred where a plus sits beside capitals.
+        raws['+'], plus_core = make_plus(raws['-'], pad, up - 0.42 * cap)
+        cells['+'] = dict(x=(0, plus_core))
+    if spec.get('dot'):
+        # The middle dot (a list separator) is the full stop raised to the middle of the x-height.
+        raws['·'], cells['·'] = raise_dot(raws['.'], cells['.'], up - 0.5 * cells['x']['above'])
     sprites = {ch: resize(r, scale) for ch, r in raws.items()}
+    order = [ch for ch in ''.join(spec.get('rows', FONT_ROWS)) if ch != SKIP] + ([] if 'rows' in spec else ['+'])
+    order += ['·'] if spec.get('dot') else []
     cell_h = max(s.shape[0] for s in sprites.values())
     total = sum(s.shape[1] + 2 for s in sprites.values())
     atlas = np.zeros((cell_h, total, 4), np.uint8)
     glyphs, x = [], 0
-    for ch in ''.join(FONT_ROWS) + '+':
+    for ch in order:
         s, c = sprites[ch], cells[ch]
         atlas[:s.shape[0], x:x + s.shape[1]] = s
         glyphs.append(dict(c=ch, x=x, w=s.shape[1], adv=round((c['x'][1] - c['x'][0] + TRACK * cap) * scale, 2), lead=round(pad * scale, 2)))
@@ -310,12 +353,12 @@ def fonts():
         sets[name] = pack_alphabet(name, spec, cut_alphabet(FONT_SRC / spec['file'], spec))
         print(name, sets[name]['w'], 'x', sets[name]['h'], (FONT_OUT / f'{name}.png').stat().st_size, 'bytes')
     out = [
-        '// Generated by tools/digit_atlas.py: the three alphabets (public/ui/font) and where each glyph sits.',
+        '// Generated by tools/digit_atlas.py: the four alphabets (public/ui/font) and where each glyph sits.',
         '// Same shape as the digit sets: `w`/`h` the atlas size; `top`/`base` where the cap tops and the baseline sit down a',
         '// sprite; per glyph `x`/`w` its rect in the atlas, `adv` how far the next glyph moves and `lead` where its solid part',
         '// starts. `space` is a word space. All in atlas pixels; the caps stand FONT_CAP px tall.',
         "import type { GlyphSet } from './digitGlyphs';",
-        "export type FontKind = 'gold' | 'brown' | 'blue';",
+        "export type FontKind = 'gold' | 'brown' | 'blue' | 'neutral';",
         f'export const FONT_CAP = {CAP_PX};',
         'export const FONT_SETS: Record<FontKind, GlyphSet> = {',
     ]

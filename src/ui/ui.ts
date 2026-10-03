@@ -6,6 +6,7 @@ import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { SKILL_INFO, levelProgress } from '../progression/skills';
 import { paintText } from './paintedText';
+import { paintTree, setHtml, setText } from './uiText';
 import { xpDropLabel } from './skillGrid';
 import type { Dialogue } from '../systems/story';
 import type { Item, SkillId, Style } from '../types';
@@ -123,6 +124,7 @@ export class UI {
       </div>
       <div class="sidepanel"><div class="stitle"></div><div class="stabs">${tabs}</div><div class="pbody sbody"></div></div>
       <div class="fade"></div>`;
+    paintTree(this.hud);
 
     // Potion belt: healing potion (1) and the Veilstone (T).
     const belt = this.$('.belt');
@@ -139,18 +141,19 @@ export class UI {
     });
     this.tipOn(rec, () => `<div class="tt-name">Veilstone</div><div>Channel to return to Dragonspire Keep. Moving or taking damage interrupts it.</div><div class="tt-dim">Leaving a zone resets it: monsters return, loot on the ground is lost.</div>`);
     belt.append(pot, rec);
+    paintTree(belt);
 
     this.tipOn(this.$('.orb.hp'), () => {
       const st = this.g.stats;
-      return `<div class="tt-name" style="color:#ff7a6a">Life</div><div>${Math.ceil(Math.max(0, this.g.player.hp))} / ${st.maxHp}</div><div class="tt-dim">Regenerates ${st.regen.toFixed(1)}/s, much faster once you're out of combat.</div>`;
+      return `<div class="tt-name tint-bad">Life</div><div>${Math.ceil(Math.max(0, this.g.player.hp))} / ${st.maxHp}</div><div class="tt-dim">Regenerates ${st.regen.toFixed(1)}/s, much faster once you're out of combat.</div>`;
     });
     this.tipOn(this.$('.orb.mana'), () => {
       const st = this.g.stats;
-      return `<div class="tt-name" style="color:#7aa8ff">Mana</div><div>${Math.floor(this.manaNow())} / ${st.maxMana}</div><div class="tt-dim">One pool for every weapon. Skills spend it; it refills ${st.manaRegen.toFixed(1)}/s, faster out of combat. Healing potions restore ${Math.round(MANA_TUNING.potionFrac * 100)}%. Grows with your best combat level.</div>`;
+      return `<div class="tt-name tint-magic">Mana</div><div>${Math.floor(this.manaNow())} / ${st.maxMana}</div><div class="tt-dim">One pool for every weapon. Skills spend it; it refills ${st.manaRegen.toFixed(1)}/s, faster out of combat. Healing potions restore ${Math.round(MANA_TUNING.potionFrac * 100)}%. Grows with your best combat level.</div>`;
     });
     this.tipOn(this.$('.xpline'), () => {
       const st = this.g.stats, k = st.style, p = levelProgress(this.g.save.skills[k]);
-      return `<div class="tt-name" style="color:${SKILL_INFO[k].color}">${SKILL_INFO[k].name} ${p.level}</div><div>${fmt(this.g.save.skills[k])} XP${p.level < 99 ? ` · ${fmt(p.remaining)} to level ${p.level + 1}` : ''}</div><div class="tt-dim">Your weapon decides which style you train; Hitpoints and Defence get a share of every fight.</div>`;
+      return `<div class="tt-name">${SKILL_INFO[k].name} ${p.level}</div><div>${fmt(this.g.save.skills[k])} XP${p.level < 99 ? ` · ${fmt(p.remaining)} to level ${p.level + 1}` : ''}</div><div class="tt-dim">Your weapon decides which style you train; Hitpoints and Defence get a share of every fight.</div>`;
     });
 
     const sp = this.$('.sidepanel');
@@ -197,6 +200,7 @@ export class UI {
       });
       row.appendChild(d);
     }
+    paintTree(row);
   }
 
   /** A cast refused for lack of mana: the orb flashes, and a note appears (at most once a second). */
@@ -217,20 +221,20 @@ export class UI {
     const hpFrac = Math.max(0, p.hp / st.maxHp);
     const hp = this.$('.orb.hp');
     (hp.querySelector('.fill') as HTMLElement).style.height = `${hpFrac * 100}%`;
-    hp.querySelector('span')!.textContent = `${Math.ceil(Math.max(0, p.hp))} / ${st.maxHp}`;
+    setText(hp.querySelector('span')!, `${Math.ceil(Math.max(0, p.hp))} / ${st.maxHp}`);
     hp.classList.toggle('low', hpFrac < 0.3);
 
     const mana = this.manaNow();
     const mo = this.$('.orb.mana');
     (mo.querySelector('.fill') as HTMLElement).style.height = `${(mana / st.maxMana) * 100}%`;
-    mo.querySelector('span')!.textContent = `${Math.floor(mana)} / ${st.maxMana}`;
+    setText(mo.querySelector('span')!, `${Math.floor(mana)} / ${st.maxMana}`);
 
     const style = st.style;
     const prog = levelProgress(s.skills[style]);
     const xl = this.$('.xpline');
     (xl.querySelector('.fill') as HTMLElement).style.width = `${prog.frac * 100}%`;
     xl.style.setProperty('--c', SKILL_INFO[style].color);
-    xl.querySelector('span')!.textContent = prog.level >= 99 ? `${SKILL_INFO[style].name} 99` : `${SKILL_INFO[style].name} ${prog.level} · ${fmt(prog.remaining)} XP to ${prog.level + 1}`;
+    setText(xl.querySelector('span')!, prog.level >= 99 ? `${SKILL_INFO[style].name} 99` : `${SKILL_INFO[style].name} ${prog.level} · ${fmt(prog.remaining)} XP to ${prog.level + 1}`);
 
     const sig = `${style}|${consoleKeys(style).join('')}`;
     if (sig !== this.consoleSig) {
@@ -253,27 +257,27 @@ export class UI {
         const artUrl = abilityArtUrl(def.id);
         if (artUrl) art.src = artUrl;
         else art.removeAttribute('src');
-        d.querySelector('.cost')!.textContent = String(def.mana);
+        setText(d.querySelector('.cost') as HTMLElement, String(def.mana));
       }
       const locked = st.styleLevel < def.unlock;
       const rem = p.cds[def.id] ?? 0;
       const frac = cooldownFrac(rem, def.cooldown, st.cdr);
       d.className = `sk${locked ? ' locked' : ''}${!locked && !canAfford(mana, def.mana) ? ' nomana' : ''}${frac > 0 ? ' cooling' : ''}`;
       d.style.setProperty('--cd', frac.toFixed(3));
-      d.querySelector('.cdnum')!.textContent = rem > 0 ? rem.toFixed(rem < 1 ? 1 : 0) : '';
+      setText(d.querySelector('.cdnum') as HTMLElement, rem > 0 ? rem.toFixed(rem < 1 ? 1 : 0) : '');
     });
     const pot = this.$('.bslot.potion');
-    pot.querySelector('.count')!.textContent = `${s.potions}/${s.potionMax}`;
+    setText(pot.querySelector('.count') as HTMLElement, `${s.potions}/${s.potionMax}`);
     pot.classList.toggle('spent', s.potions <= 0);
 
     paintText(this.$('.zname'), g.zone.def.name, 'gold', PLAQUE_CAP);
-    this.$('.weak').textContent = p.weakenedT > 0 ? `Weakened ${Math.ceil(p.weakenedT)}s` : p.warCryT > 0 ? `War Cry ${Math.ceil(p.warCryT)}s` : '';
+    setText(this.$('.weak'), p.weakenedT > 0 ? `Weakened ${Math.ceil(p.weakenedT)}s` : p.warCryT > 0 ? `War Cry ${Math.ceil(p.warCryT)}s` : '');
     // Target plate for regular enemies; elites/boss use the big bar.
     const tgt = g.hovered ?? (p.cmd.kind === 'attack' ? p.cmd.target : null);
     const tEl = this.$('.target');
     if (tgt && !tgt.dead && tgt !== this.bossTarget) {
       tEl.style.display = 'block';
-      tEl.querySelector('.tname')!.textContent = `${tgt.name}  ·  level ${tgt.def.level}`;
+      setText(tEl.querySelector('.tname') as HTMLElement, `${tgt.name}  ·  level ${tgt.def.level}`);
       (tEl.querySelector('.tbar div') as HTMLElement).style.width = `${(100 * tgt.hp) / tgt.maxHp}%`;
     } else tEl.style.display = 'none';
     const bb = this.$('.bossbar');
@@ -291,7 +295,7 @@ export class UI {
     const th = g.hoveredThing;
     if (th && !this.overUI) {
       hl.style.display = 'block';
-      hl.innerHTML = this.hoverText(th);
+      setHtml(hl, this.hoverText(th));
       hl.style.transform = `translate(${g.mouse.x + 18}px, ${g.mouse.y + 14}px)`;
     } else hl.style.display = 'none';
 
@@ -302,10 +306,10 @@ export class UI {
     if (recalling) {
       const total = g.save.diaryClaimed.medium ? 1.5 : 3;
       (cb.querySelector('.cb-fill') as HTMLElement).style.width = `${(1 - g.recallT / total) * 100}%`;
-      cb.querySelector('span')!.textContent = 'Recalling…';
+      setText(cb.querySelector('span')!, 'Recalling…');
     } else if (skill) {
       (cb.querySelector('.cb-fill') as HTMLElement).style.width = '100%';
-      cb.querySelector('span')!.textContent = skill.kind === 'mine' ? `Mining ${skill.node.name.toLowerCase()}…` : `${skill.recipe.station === 'furnace' ? 'Smelting' : 'Smithing'}: ${skill.left} left`;
+      setText(cb.querySelector('span')!, skill.kind === 'mine' ? `Mining ${skill.node.name.toLowerCase()}…` : `${skill.recipe.station === 'furnace' ? 'Smelting' : 'Smithing'}: ${skill.left} left`);
     }
 
     for (const [skill, acc] of this.xpAcc) {
@@ -390,7 +394,7 @@ export class UI {
       p.addEventListener('mousedown', (e) => e.stopPropagation());
       this.panelRoot.appendChild(p);
     }
-    p.querySelector('.ptitle span')!.textContent = title;
+    setText(p.querySelector('.ptitle span')!, title);
     return p;
   }
 
@@ -400,6 +404,7 @@ export class UI {
     const view = p.classList.contains('sidepanel') ? this.side.tab : 'window';
     const scroll = p.dataset.view === view ? b.scrollTop : 0;
     b.innerHTML = html;
+    paintTree(b);
     b.scrollTop = scroll;
     p.dataset.view = view;
   }
@@ -418,7 +423,7 @@ export class UI {
     const sp = this.$('.sidepanel');
     if (!sp) return;
     sp.classList.toggle('collapsed', this.side.collapsed);
-    sp.querySelector('.stitle')!.textContent = SIDE_TABS.find((t) => t.id === this.side.tab)!.label;
+    setText(sp.querySelector('.stitle')!, SIDE_TABS.find((t) => t.id === this.side.tab)!.label);
     sp.querySelectorAll<HTMLElement>('.stab').forEach((b) => b.classList.toggle('on', b.dataset.tab === this.side.tab));
     if (this.side.collapsed || this.side.tab !== 'inventory') this.panels.clearSelection();
     this.tooltip.hide();
@@ -477,7 +482,7 @@ export class UI {
     const obj = this.g.story.objective();
     const o = this.$('.objective');
     o.classList.toggle('hidden', !obj);
-    if (obj) o.querySelector('.obj-text')!.textContent = obj;
+    if (obj) setText(o.querySelector('.obj-text')!, obj);
   }
 
   private markStation() {
@@ -571,6 +576,7 @@ export class UI {
           <div class="dlg-opts">${d.options.map((o, i) => `<button class="dopt" data-i="${i}"><em>${i + 1}</em> ${esc(o.label)}</button>`).join('')}</div>
         </div>
       </div>`;
+    paintTree(this.dialogueRoot);
     this.dialogueRoot.querySelectorAll<HTMLElement>('.dopt').forEach((b) => b.addEventListener('click', () => this.choose(d.options[Number(b.dataset.i)])));
     this.dialogueRoot.querySelector('.dlg')!.addEventListener('mousedown', (e) => e.stopPropagation());
     this.g.sfx.play('ui');
@@ -601,6 +607,7 @@ export class UI {
   private spawnXpDrop(skill: SkillId, amount: number) {
     const d = el('div', 'xpdrop', `${icon(SKILL_INFO[skill].icon, 22)}<span>+${xpDropLabel(amount)}</span>`);
     this.$('.xpdrops').appendChild(d);
+    paintTree(d);
     setTimeout(() => d.remove(), 1600);
   }
 
@@ -612,6 +619,7 @@ export class UI {
   private showBanner(html: string) {
     const b = this.$('.banner');
     b.innerHTML = html;
+    paintTree(b);
     b.classList.remove('show');
     void b.offsetWidth;
     b.classList.add('show');
@@ -623,6 +631,7 @@ export class UI {
     const m = el('div', `msg ${kind}`);
     m.textContent = text;
     chat.appendChild(m);
+    paintTree(m);
     while (chat.children.length > 8) chat.firstElementChild!.remove();
     setTimeout(() => m.classList.add('old'), 10000);
     if (kind === 'unique' || kind === 'boss') this.showBanner(`<div class="announce ${kind}">${esc(text)}</div>`);

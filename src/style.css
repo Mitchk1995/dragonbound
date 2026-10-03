@@ -16,6 +16,8 @@
   --r-rare: #ffe066;
   --r-unique: #ff9a2e;
   --mana: #4a7cff;
+  /* Painted menu lettering (ui/uiText.ts) is tinted by this: "r g b", inherited. Common is plain body text. */
+  --ptint: 235 232 225;
   /* HUD geometry (1600x900 and up; shrunk below for 1280x720). */
   --slot: 50px;
   --gap: 4px;
@@ -489,7 +491,7 @@ svg { display: block; }
   .invfoot { margin-top: 6px; }
   .sortbtn { height: 24px; padding: 0 14px; font-size: 13px; }
 }
-.modechip { font-family: var(--serif); font-size: 11px; letter-spacing: 1px; color: #1a1006; background: linear-gradient(#f0d08a, #b08a44); border-radius: 8px; padding: 1px 8px; box-shadow: 0 1px 2px #000; }
+.modechip { font-family: var(--serif); font-size: 11px; letter-spacing: 1px; color: #1a1006; background: linear-gradient(#3a2c14, #1c1408); border: 1px solid #b08a44; border-radius: 8px; padding: 0 8px; box-shadow: 0 1px 2px #000; --ptint: 255 220 90; }
 
 /* Equipment: an OSRS paper doll, then the numbers. */
 /* Equipment: an OSRS paper doll. The body column (helm, body, boots) runs down the middle; jewellery flanks
@@ -524,7 +526,7 @@ svg { display: block; }
 .ssum:hover { border-color: var(--gold-dim); }
 .ssum svg { flex: none; }
 .ssum > div { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
-.ssum span { font-family: var(--serif); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+.ssum span { font-family: var(--serif); font-size: 9.5px; letter-spacing: 0; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
 .ssum b { font-family: var(--serif); font-weight: 800; font-size: 15px; color: var(--gold-hi); text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Square tiles on the inventory's own grid: icon above, level out of 99 below. Hover for the XP. */
 .skillgrid { display: grid; grid-template-columns: repeat(4, var(--slot)); gap: var(--gap); }
@@ -749,3 +751,30 @@ svg { display: block; }
 .ilabel.gold { color: #ffd040; }
 .ebar { position: absolute; left: 0; top: 0; width: 48px; height: 6px; background: #200; border: 1px solid #000; }
 .ebar div { height: 100%; background: linear-gradient(#e0503a, #a02a1a); }
+
+/* ── Painted menu lettering ───────────────────────────────────── */
+/* The menus' text is set in the neutral painted alphabet and tinted by --ptint (ui/uiText.ts). Rarity and element
+   classes are put on a name or a line by the tooltip; the rest map the existing text classes to a meaning:
+   Common (plain body text, the default), dim (Common, muted: labels and hints), good (bonus), bad (penalty, refusal),
+   gold (money), and the quest states. A run is a line of words, each word one unbreakable row of glyph sprites. */
+.tint-normal { --ptint: 235 232 225; }
+.tint-magic, .tt-mw, .slot .mw { --ptint: 110 150 255; }
+.tint-rare, .goldline, .sr-price, .qrow.active b, .qlegend .active { --ptint: 255 220 90; }
+.tint-epic { --ptint: 190 110 255; }
+.tint-unique, .msg.unique, .banner .announce.unique, .clog.got .cn { --ptint: 255 150 40; }
+.tint-set, .qrow.done b, .qlegend .done { --ptint: 90 230 110; }
+.tint-fire { --ptint: 255 110 60; }
+.tint-frost { --ptint: 120 220 255; }
+.tint-lightning { --ptint: 255 245 140; }
+.tint-poison { --ptint: 140 230 80; }
+.tint-good, .ok, .tag.ok, .tt-up, .tt-mana, .sk .cost, .msg.level, .msg.buff, .hoverlabel em, .rc-name .lv, .task.done, .drow.ready .dcount, .drow.claimed .dcount { --ptint: 140 175 255; }
+.tint-bad, .no, .err, .tt-bad, .tt-down, .msg.deny, .msg.death, .msg.boss, .weak, .death, .bslot.spent .count, .btn.danger, .rc-name .lv.bad, .sk.nomana .cost, .qrow.new b, .qlegend .new { --ptint: 255 90 80; }
+.tint-dim, .dim, .hint, .lead, .emptynote, .tt-type, .tt-req, .tt-dim, .tt-flavor, .tt-hint, .tt-row, .check, .create-hint, .title-foot, .mbtn small, .statgrid, .statgrid i, .ssum span, .stile .slv i, .stile.stotal span, .banktop, .sr-name small, .rc-in i, .rc-xp, .rs-desc, .rs-cost i, .tab, .q-reqs, .q-rew, .quest p.struck, .task i, .ch span, .clog .cn, .qstep, .drow .dcount, .tally span, .recipe.blocked .rc-name, .hoverlabel i { --ptint: 169 167 162; }
+.tab.on { --ptint: 235 232 225; }
+.ptext.pui { display: inline; white-space: inherit; font: inherit; line-height: inherit; text-shadow: none; pointer-events: none; }
+.pui p-w { display: inline-flex; align-items: baseline; white-space: nowrap; vertical-align: baseline; }
+.pui p-g { position: relative; display: block; flex: none; }
+.pui p-i { position: absolute; background-repeat: no-repeat; image-rendering: auto; }
+/* A real space, so lines wrap at the usual places; its width is set per run (--sp) to the alphabet's word space. */
+p-s.psp { font-family: Georgia, 'Times New Roman', serif; font-size: var(--sp, 4px); font-weight: 400; font-style: normal; letter-spacing: 0; }
+.pui p-f { font-family: var(--sans); font-weight: 700; }

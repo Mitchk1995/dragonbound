@@ -1,11 +1,12 @@
 import { computeStats } from '../combat/stats';
+import { AFFIXES } from '../data/affixes';
 import { BASES, TIERS, UNIQUES } from '../data/items';
-import { RARITY_CSS } from '../entities/groundItem';
 import type { Game } from '../game';
 import { affixText, itemName, itemReq, itemValue } from '../loot/itemGen';
 import { SKILL_INFO } from '../progression/skills';
 import type { Item, Slot } from '../types';
 import { cap, esc } from './dom';
+import { paintTree } from './uiText';
 
 interface Box {
   left: number;
@@ -56,18 +57,18 @@ export class Tooltip {
   item(item: Item, rect: DOMRect, compare: boolean, extra = '') {
     const g = this.g;
     const base = BASES[item.base];
-    const color = RARITY_CSS[item.rarity];
+    const tint = `tint-${item.rarity}`;
     const req = itemReq(item);
     const reqBad = req && g.levels[req.skill] < req.level;
     const L: string[] = [];
-    L.push(`<div class="tt-name" style="color:${color}">${esc(itemName(item))}</div>`);
-    if (item.name && item.rarity === 'rare') L.push(`<div class="tt-base" style="color:${color}">${esc(base.name)}</div>`);
+    L.push(`<div class="tt-name ${tint}">${esc(itemName(item))}</div>`);
+    if (item.name && item.rarity === 'rare') L.push(`<div class="tt-base ${tint}">${esc(base.name)}</div>`);
     const kindLabel = base.kind === 'gear' ? `${item.rarity === 'normal' ? '' : cap(item.rarity) + ' '}${SLOT_LABEL[base.slot!]}${base.style ? ` · ${SKILL_INFO[base.style].name}` : ''}` : base.kind === 'tool' ? 'Tool' : base.kind === 'quest' ? 'Quest item' : 'Material';
     L.push(`<div class="tt-type">${kindLabel}${base.tier ? ` · ${TIERS[base.tier].name} tier` : ''}</div>`);
     if (base.dmg) L.push(`<div>Damage <b>${base.dmg[0]}–${base.dmg[1]}</b> · ${base.speed} attacks/s</div>`);
     if (base.armor) L.push(`<div>Armour <b>${base.armor}</b></div>`);
     if (base.swingTicks) L.push(`<div>Mining speed: a swing every <b>${(base.swingTicks * 0.6).toFixed(1)}s</b></div>`);
-    for (const a of item.affixes) L.push(`<div class="tt-aff">${esc(affixText(a))}</div>`);
+    for (const a of item.affixes) L.push(`<div class="tt-aff tint-${AFFIXES[a.id]?.tint ?? 'good'}">${esc(affixText(a))}</div>`);
     if (item.masterwork) L.push('<div class="tt-mw">Masterwork</div>');
     if (req) L.push(`<div class="${reqBad ? 'tt-bad' : 'tt-req'}">Requires ${SKILL_INFO[req.skill].name} ${req.level}</div>`);
     if (item.unique) L.push(`<div class="tt-flavor">“${esc(UNIQUES[item.unique].flavor)}”</div>`);
@@ -80,6 +81,7 @@ export class Tooltip {
       if (equipped && equipped.uid !== item.uid) cmp = `<div class="tt-cmp"><div class="tt-dim">Compared to your ${esc(itemName(equipped))}:</div>${this.compareLines(item, base.slot)}</div>`;
     }
     this.tip.innerHTML = L.join('') + cmp + (extra ? `<div class="tt-hint">${extra}</div>` : '');
+    paintTree(this.tip);
     this.place(rect);
   }
 
@@ -101,6 +103,7 @@ export class Tooltip {
 
   text(html: string, rect: DOMRect) {
     this.tip.innerHTML = html;
+    paintTree(this.tip);
     this.place(rect);
   }
 
