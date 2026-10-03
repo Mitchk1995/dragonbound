@@ -1,14 +1,18 @@
 """Gear for the hero base: weapons, helms, body armour, gloves, boots, and the hand-built uniques.
 
-Each file holds socket-named empties (sock_handR, sock_head, sock_chest, sock_shoulderL/R, sock_handL,
-sock_gloveR, sock_footL/R). The game moves each socket's children under the hero socket of the same
-name with their local transform unchanged, so everything below is authored in socket-local space:
+Each file holds socket-named empties (sock_handR, sock_head, sock_chest, sock_shoulderL/R, sock_upperL/R,
+sock_cuffL/R, sock_handL, sock_gloveR, sock_footL/R). The game moves each socket's children under the hero socket of
+the same name with their local transform unchanged, so everything below is authored in socket-local space:
 
-  sock_handR      palm centre, rotated +90 X: local +Y points forward, local +Z points down (arm hanging)
+  sock_handR      centre of the right hand's hole, rotated +90 X: local +Y runs forward through the hole, local +Z
+                  points down (arm hanging); everything held runs along +Y through the hole (hero.py HAND)
   sock_head       head centre (head = 0.46 cube)
   sock_chest      torso centre; tunic is 0.68 x 0.66 x 0.42 (flared to 1.08 x at the top), belt at y -0.37
   sock_shoulderX  top of the shoulder, sleeve below it
-  sock_handL / sock_gloveR   palm centre, unrotated; the fist is a 0.25 x 0.25 x 0.26 block, thumb across its front (+Z)
+  sock_upperX / sock_cuffX / sock_handL / sock_gloveR   unrotated, all at the centre of the hand's hole while the arm
+                  hangs straight (PALM below the shoulder pivot), each riding its own part of the arm: the upper arm
+                  (sleeves, rerebraces), the forearm below the elbow (glove cuffs, vambraces) and the hand (the glove's
+                  hand). The hand is a LEGO C (hero.py HAND): a 0.27 octagonal ring round a 0.14 hole, 0.22 deep.
   sock_footL/R    ankle; shoe below (0.3 x 0.17 x 0.4, toe at +Z), ground at y -0.18
 
 Everything is modular blocks (docs/ART_CONTRACT.md, Style): chamfered boxes, stacked slabs, wedges.
@@ -38,7 +42,8 @@ SLIT = 0x0C0A0A
 # Where each socket sits on the base hero (world, three.js coords) -- only used so a gear file
 # previews in a sensible place; the game discards the socket's own transform.
 SOCKET_POS = {
-    'sock_handR': (-0.47, 0.86, 0.04), 'sock_gloveR': (-0.47, 0.89, 0), 'sock_handL': (0.47, 0.89, 0),
+    'sock_handR': (-0.47, 0.865, 0), 'sock_gloveR': (-0.47, 0.865, 0), 'sock_handL': (0.47, 0.865, 0),
+    'sock_upperL': (0.47, 0.865, 0), 'sock_upperR': (-0.47, 0.865, 0), 'sock_cuffL': (0.47, 0.865, 0), 'sock_cuffR': (-0.47, 0.865, 0),
     'sock_head': (0, 1.92, 0), 'sock_chest': (0, 1.34, 0),
     'sock_shoulderL': (0.46, 1.62, 0), 'sock_shoulderR': (-0.46, 1.62, 0),
     'sock_footL': (0.19, 0.18, 0), 'sock_footR': (-0.19, 0.18, 0),
@@ -90,12 +95,16 @@ def crossguard(h, y, width, color=R.trim, block=R.metal, gem=0.035):
     facet_gem(h, gem, (0, y - 0.01, 0.075), R.glow)
 
 
+# Every grip runs through the hand's hole (hero.py HAND, gloves a hair tighter): square grips up to 0.12 across with
+# their corners chamfered, a little longer than the hand is deep (0.22), so they show either side of it.
+
 def sword(S):
-    """Arming sword, ~1.45 long: square grip, block pommel, a proper crossguard and a long bright-edged blade."""
+    """Arming sword, ~1.45 long: square grip through the hand, block pommel, a proper crossguard and a long
+    bright-edged blade."""
     h = S('sock_handR')
-    grip(h, -0.15, 0.15, 0.085, R.leather, (-0.08, 0.06))
-    box(h, (0.12, 0.08, 0.12), (0, -0.19, 0), R.trim, bevel=0.025)                 # pommel block
-    box(h, (0.08, 0.04, 0.08), (0, -0.245, 0), R.trim, bevel=0.012)
+    grip(h, -0.15, 0.15, 0.12, R.leather)
+    box(h, (0.14, 0.08, 0.14), (0, -0.19, 0), R.trim, bevel=0.025)                 # pommel block
+    box(h, (0.09, 0.04, 0.09), (0, -0.245, 0), R.trim, bevel=0.012)
     crossguard(h, 0.19, 0.5)
     blade(h, 0.22, 0.98, 0.15, 0.2)
 
@@ -103,7 +112,7 @@ def sword(S):
 def longsword(S):
     """Longsword, ~1.85 long: long two-hand grip, heavier pommel, a wide crossguard and a long, broad blade."""
     h = S('sock_handR')
-    grip(h, -0.21, 0.21, 0.09, R.leather, (-0.12, 0.0, 0.12))
+    grip(h, -0.21, 0.21, 0.12, R.leather, (-0.16, 0.16))
     box(h, (0.12, 0.06, 0.12), (0, -0.24, 0), R.trim, taper=(0.75, 0.75), bevel=0.015)
     box(h, (0.14, 0.1, 0.14), (0, -0.31, 0), R.trim, bevel=0.03)                   # pommel block
     crossguard(h, 0.25, 0.64, gem=0.045)
@@ -125,15 +134,21 @@ def pickaxe(S):
         box(h, (0.05, 0.12, 0.12), (s * 0.18, 0.86, 0), R.dark, rot=(0, 0, s * -0.2), bevel=0.01)  # binding
 
 
-# Limb profile as (y, z) in the bow's frame (= arm frame: Y up, Z forward). The grip sits at the front
-# of the fist and the limbs sweep forward, so the bow hangs clear of the forearm and the leg.
+# Limb profile as (y, z) in the bow's frame: Y along the bow, Z from the grip toward the string (the limbs sweep that
+# way to their tips). The frame is turned in the hand so the bow runs through the hole (the socket's +Y) with the
+# string off to the hand's side (bow_frame), and the hand holds it BOW_MID below its middle, so the arrow, drawn through
+# the middle of the string, passes just over the hand. Grip wraps and bands keep clear of the hand (the frame's y from
+# -BOW_MID - 0.12 to -BOW_MID + 0.12), where only the limb, at most 0.12 thick, runs through the hole.
 BOW_Z = 0.08
-BOW_LIMB = [(0.1, 0.0), (0.26, 0.05), (0.42, 0.12), (0.56, 0.18), (0.66, 0.19), (0.74, 0.14)]
+BOW_MID = 0.15
 
 
 def bow_frame(S):
-    """The bow's frame in the right hand, counter-rotated so the bow stands vertical in the fist."""
-    return pivot(S('sock_handR'), 'bowbody', (0, 0, 0), (-PI / 2, 0, 0))
+    """The bow's frame in the right hand: the bow upright through the hole, turned a quarter round in the hand so its
+    string lies off to the hand's side (socket +X: inward, toward the body, when the forearm points forward). Carried
+    upright, the string so runs in front of the body beside the forearm instead of back through it; the game turns the
+    hand in the draw so the string faces the archer (anim.ts BOW_STRING)."""
+    return pivot(S('sock_handR'), 'bowbody', (-BOW_Z, BOW_MID, 0), (0, PI / 2, 0))
 
 
 def bow_string(b, tip):
@@ -202,10 +217,19 @@ def bow_tip(b, pts, length, w, color, s=1, w1=0.008):
     beam(b, tuple(a - Vector((0, s * d.y, d.z)) * 0.02), tuple(a + Vector((0, s * d.y, d.z)) * length), w, color, w1=w1, d1=w1)
 
 
+# The bow runs straight through the hand: every profile keeps a straight riser RISER either side of the middle (the
+# hand, held below the middle, needs it straight through its hole) and curves from there to the same tips.
+RISER = 0.28
+
+
 def half_pts(half, H):
     """A half profile, grip to tip, as (fraction of the half length, depth as a fraction of the full length) -> points
-    in the bow's frame."""
-    return [(f * H, BOW_Z + d * 2 * H) for f, d in half]
+    in the bow's frame, straightened over the riser."""
+    f0 = RISER / H
+    (fa, da), (fb, db) = next((p, q) for p, q in zip(half, half[1:]) if p[0] <= f0 <= q[0])
+    d0 = da + (db - da) * (f0 - fa) / (fb - fa)
+    prof = [(0.0, 0.0), (f0, 0.0)] + [(f, d - d0 * (1 - f) / (1 - f0)) for f, d in half if f > f0 + 0.02]
+    return [(f * H, BOW_Z + d * 2 * H) for f, d in prof]
 
 
 def bow_shape(half, H):
@@ -226,10 +250,10 @@ def bow_worn(S):
     """Worn Shortbow: a deep D of weathered grey wood in one smooth piece, a tan rope wrap with a leather strip at the
     grip, rope whipping and small dark caps at the tips."""
     b, H = bow_frame(S), 0.8
-    limb_tube(b, bow_shape(WORN, H), 0.14, 0.15, R.metal, 0.06, 0.065)
-    box(b, (0.165, 0.26, 0.18), (0, 0, BOW_Z), R.trim, bevel=0.035)                   # rope wrap
-    box(b, (0.1, 0.24, 0.02), (0, 0, BOW_Z - 0.093), R.dark, bevel=0.006)              # leather strip
-    for y in (-0.08, 0, 0.08):
+    limb_tube(b, bow_shape(WORN, H), 0.12, 0.12, R.metal, 0.06, 0.065)
+    box(b, (0.165, 0.2, 0.18), (0, 0.07, BOW_Z), R.trim, bevel=0.035)                 # rope wrap, over the hand
+    box(b, (0.1, 0.18, 0.02), (0, 0.07, BOW_Z - 0.093), R.dark, bevel=0.006)           # leather strip
+    for y in (0.0, 0.07, 0.14):
         box(b, (0.169, 0.012, 0.184), (0, y, BOW_Z), R.dark, bevel=0)                  # wrap turns
     pts = half_pts(WORN, H)
     for s in (-1, 1):
@@ -245,10 +269,10 @@ def bow_hunter(S):
     """Hunter's Bow: a tall, slender bow of orange wood swelling mid-limb, a green grip wrap between steel rings and
     pointed steel tips."""
     b, H = bow_frame(S), 0.85
-    limb_tube(b, bow_shape(HUNTER, H), 0.115, 0.13, R.metal, 0.045, 0.05)
-    box(b, (0.135, 0.2, 0.15), (0, 0, BOW_Z), HUNTER_WRAP, bevel=0.03)                 # green wrap
-    for s in (-1, 1):
-        box(b, (0.15, 0.035, 0.165), (0, s * 0.115, BOW_Z), R.dark, bevel=0.01)           # steel rings
+    limb_tube(b, bow_shape(HUNTER, H), 0.115, 0.12, R.metal, 0.045, 0.05)
+    box(b, (0.135, 0.18, 0.15), (0, 0.09, BOW_Z), HUNTER_WRAP, bevel=0.03)            # green wrap, over the hand
+    for y in (-0.0025, 0.1825):
+        box(b, (0.15, 0.035, 0.165), (0, y, BOW_Z), R.dark, bevel=0.01)                   # steel rings
     pts = half_pts(HUNTER, H)
     for s in (-1, 1):
         bow_tip(b, pts, 0.11, 0.06, R.dark, s, w1=0.004)
@@ -268,12 +292,13 @@ def bow_recurve(S):
     gold bands, and long gold sheaths over the curled tips coming to a point."""
     b, H = bow_frame(S), 0.84
     pts = half_pts(RECURVE, H)
-    limb_tube(b, bow_shape(RECURVE[:9], H), 0.13, 0.115, R.metal, 0.08, 0.085)      # to the sheaths
-    box(b, (0.15, 0.25, 0.16), (0, 0, BOW_Z), R.dark, bevel=0.03)                      # grip
-    for y in (-0.075, -0.025, 0.025, 0.075):
+    limb_tube(b, bow_shape(RECURVE[:9], H), 0.12, 0.115, R.metal, 0.08, 0.085)      # to the sheaths
+    box(b, (0.15, 0.2, 0.16), (0, 0.125, BOW_Z), R.dark, bevel=0.03)                   # grip, over the hand
+    for y in (0.065, 0.105, 0.145, 0.185):
         box(b, (0.154, 0.012, 0.164), (0, y, BOW_Z), 0x1A1210, bevel=0)                 # ribs
+    for y in (0.0, 0.25):
+        box(b, (0.17, 0.05, 0.18), (0, y, BOW_Z), R.trim, bevel=0.015)                  # gold bands
     for s in (-1, 1):
-        box(b, (0.17, 0.05, 0.18), (0, s * 0.135, BOW_Z), R.trim, bevel=0.015)          # gold bands
         limb_tube(b, [(s * y, z) for y, z in pts[8:]], 0.1, 0.1, R.trim, 0.012, 0.012, n=3, ends=True)  # gold sheath
     bow_string(b, (RECURVE_NOCK * H, RECURVE_STRING * 2 * H))
 
@@ -287,22 +312,22 @@ def bow_drakebone(S):
     at the tips, a dark grip between red bands, red bands mid-limb and red pointed tips."""
     b, H = bow_frame(S), 0.82
     pts = half_pts(DRAKE, H)
-    limb_tube(b, bow_shape(DRAKE, H), 0.15, 0.125, R.metal, 0.09, 0.08, smooth=False, seg=5, knuckle=0.22)
-    box(b, (0.16, 0.2, 0.17), (0, 0, BOW_Z), R.dark, bevel=0.03)                       # grip
+    limb_tube(b, bow_shape(DRAKE, H), 0.12, 0.12, R.metal, 0.09, 0.08, smooth=False, seg=5, knuckle=0.22)
+    box(b, (0.16, 0.18, 0.17), (0, 0.1, BOW_Z), R.dark, bevel=0.03)                    # grip, over the hand
+    for y in (0.0, 0.2):
+        box(b, (0.18, 0.05, 0.19), (0, y, BOW_Z), R.trim, bevel=0.015)                  # red bands at the grip
     for s in (-1, 1):
-        box(b, (0.18, 0.05, 0.19), (0, s * 0.11, BOW_Z), R.trim, bevel=0.015)           # red bands at the grip
         limb_band(b, pts, 2, 0.18, 0.06, 0.17, R.trim, s)                               # red band mid-limb
         bow_tip(b, pts, 0.11, 0.1, R.trim, s, w1=0.004)                                  # red point
     bow_string(b, (DRAKE_NOCK * H, DRAKE_STRING * 2 * H))
 
-# Staffs run upright through the front of the fist (socket +Y), not down the forearm axis, with the top
-# leaning forward and a touch outward so the shaft clears the forearm and sleeve.
-STAFF_GRIP = (0, 0.1, 0)
-STAFF_LEAN = (-PI / 2 + 0.2, 0, 0.05)
+# Staffs run along the hand's hole (socket +Y), their grip in the hand: the game holds a staff's forearm forward
+# (anim.ts 'upright' hold), so the staff stands upright through the hole. Grip wraps are at most 0.125 across.
 
 
-def staff_frame(S):
-    return pivot(S('sock_handR'), 'staffbody', STAFF_GRIP, STAFF_LEAN)
+def staff_frame(S, grip=0.0):
+    """The staff's frame in the right hand, its shaft along +Y with the point `grip` (staff-local y) in the hole."""
+    return pivot(S('sock_handR'), 'staffbody', (0, -grip, 0))
 
 
 def grip_wraps(b, ys, w=0.125):
@@ -336,7 +361,7 @@ def staff_oak(S):
         beam(b, (x0, y0 - 0.03, 0), (x1, y1, 0), 0.12, R.metal, w1=0.115, d=0.12, d1=0.115)   # gnarled shaft
     for (x0, y0), (x1, y1), w in zip(OAK_CROOK, OAK_CROOK[1:], (0.14, 0.135, 0.13, 0.12, 0.11)):
         beam(b, (x0, y0, 0), (x1, y1, 0), w, R.metal, w1=w - 0.01, d=w, d1=w - 0.01)              # crook
-    grip_wraps(b, (-0.12, -0.02, 0.08, 0.18), w=0.135)
+    grip_wraps(b, (-0.12, -0.02, 0.08, 0.18), w=0.125)
     for x, y in ((0.02, 0.72), (0.0, 1.16)):
         box(b, (0.14, 0.05, 0.14), (x, y, 0), R.trim, bevel=0.012)                      # green bands
     box(b, (0.13, 0.08, 0.13), (0, -0.74, 0), R.dark, bevel=0.02)                       # butt
@@ -445,16 +470,16 @@ def plate_tassets(c, color=R.metal):
 # side block, the two forming one hard corner only a little wider than the arm. Each is (size, centre (x, y),
 # outward tilt). The top block sits on the shoulder socket (shoulder-socket space), which follows the arm by 75%
 # (anim.ts SHOULDER_FOLLOW), so it articulates over the joint. The side block and everything below it ride the arm
-# itself (arm space, on the palm sockets), so nothing lags off the arm when it swings or goes overhead.
+# itself (arm space, on the upper-arm sockets), so nothing lags off the arm when it swings or goes overhead.
 CAP_TOP = ((0.29, 0.13, 0.36), (0.04, 0.0), 0.26)
 CAP_SIDE = ((0.075, 0.18, 0.36), (0.16, 0.045), 0.08)
-SHOULDER_ARM = (('sock_shoulderL', 'sock_handL', 1), ('sock_shoulderR', 'sock_gloveR', -1))
+SHOULDER_ARM = (('sock_shoulderL', 'sock_upperL', 1), ('sock_shoulderR', 'sock_upperR', -1))
 
 
 def block_pauldron(S, s, color=R.metal, top=R.metal, edge=R.trim, rivets=R.dark):
     """Blocky shoulder cap for side s: a top block with a raised plate, and an outer side block with a rim along
     its lower edge. Returns the (top, side) frames: local +X runs outward along each block, +Y up out of it."""
-    sh_name, palm_name, _ = next(r for r in SHOULDER_ARM if r[2] == s)
+    sh_name, upper_name, _ = next(r for r in SHOULDER_ARM if r[2] == s)
     (size, (x, y), tilt) = CAP_TOP
     ft = pivot(S(sh_name), 'pauldron_top', (s * x, y, 0), (0, 0, -s * tilt))
     box(ft, size, (0, 0, 0), color, bevel=0.035)
@@ -462,7 +487,7 @@ def block_pauldron(S, s, color=R.metal, top=R.metal, edge=R.trim, rivets=R.dark)
         w, hgt, d = size
         box(ft, (w * 0.55, 0.045, d * 0.66), (-s * 0.02, hgt / 2 + 0.012, 0), top, bevel=0.014)
     (size, (x, y), tilt) = CAP_SIDE
-    fs = pivot(S(palm_name), 'pauldron_side', (s * x, y + PALM, 0), (0, 0, -s * tilt))
+    fs = pivot(S(upper_name), 'pauldron_side', (s * x, y + PALM, 0), (0, 0, -s * tilt))
     box(fs, size, (0, 0, 0), color, bevel=0.03)
     w, hgt, d = size
     if edge:
@@ -473,19 +498,23 @@ def block_pauldron(S, s, color=R.metal, top=R.metal, edge=R.trim, rivets=R.dark)
     return ft, fs
 
 
-# ─── Upper arm (body armour, on the palm sockets) ────────────────────────────
-# Upper-arm armour hangs on the palm sockets (sock_handL / sock_gloveR: unrotated, PALM below the arm pivot), so
-# it rides the upper arm exactly and never fans away from it. Authored in ARM space (origin = arm pivot, left arm,
-# outer side +X) and mirrored for the right. Arm space: forearm x +-0.09 from y -0.28 down, the gauntlet cuff rises
-# to y -0.33; the body armour's side is at x ARM_IN (below), where every armour sleeve starts.
-ARM_SOCKS = (('sock_handL', 1), ('sock_gloveR', -1))
-PALM = 0.63
+# ─── Upper arm (body armour, on the upper-arm sockets) ───────────────────────
+# Upper-arm armour hangs on the upper-arm sockets (sock_upperL / sock_upperR: unrotated, PALM below the arm pivot), so
+# it rides the upper arm exactly and never fans away from it, and stays on the upper arm when the elbow bends.
+# Authored in ARM space (origin = arm pivot, left arm, outer side +X) and mirrored for the right. Arm space: the
+# elbow at y -0.28, forearm x +-0.09 below it, the gauntlet cuff rises to y -0.33; the body armour's side is at x
+# ARM_IN (below), where every armour sleeve starts.
+ARM_SOCKS = (('sock_upperL', 1), ('sock_upperR', -1))
+# The hand sockets on the hero, by side: (forearm socket, hand socket, side).
+HAND_SOCKS = (('sock_cuffL', 'sock_handL', 1), ('sock_cuffR', 'sock_gloveR', -1))
+PALM = 0.655
 # Lames under the cap stepping down the outside of the upper arm: (size, centre).
 ARM_LAMES = (((0.25, 0.085, 0.35), (0.065, -0.07, 0)), ((0.235, 0.08, 0.335), (0.06, -0.14, 0)))
 
 
 def arm_box(g, s, size, pos, color, rot=(0, 0, 0), **kw):
-    """box() in arm space on a palm socket: pos/rot are for the left arm, mirrored when s < 0."""
+    """box() in arm space on an arm socket (PALM below the shoulder pivot): pos/rot are for the left arm, mirrored
+    when s < 0."""
     return box(g, size, (pos[0] * s, pos[1] + PALM, pos[2]), color, rot=(rot[0], rot[1] * s, rot[2] * s), **kw)
 
 
@@ -510,33 +539,47 @@ def arm_lames(g, s, colors=(R.metal, R.metal), edge=R.dark):
                     rot=(0, 0, -0.06), bevel=0)
 
 
-def upper_arm_plate(S, color=R.metal, rim=None, edge=None, couter=False, lames=True):
-    """Plate rerebrace round the upper arm down to the gauntlet cuff (optionally the pauldron's lames stepping down its
-    outside, a lower rim and a couter over the elbow). Returns [(palm socket, side)]."""
+# The arm bends at the elbow (hero.py ELBOW, below the shoulder pivot). Every armour sleeve stops there and goes on as
+# an elbow guard on the forearm socket, its top rounded about the elbow (_common.joint_limb), so the arm bends without
+# opening a gap: the guard turns up inside the sleeve, and no bare forearm shows between the sleeve and the glove.
+ELBOW = 0.28
+SLEEVE = (0.32, -0.12)          # a sleeve from under the shoulder cap down to the elbow: (height, centre) in arm space
+
+
+def elbow_guard(S, s, color, depth, out=0.145, bottom=-0.345, band=None):
+    """An armour sleeve's forearm part on the forearm socket: from the elbow, rounded about it, down over the top of
+    the glove's cuff, as wide as the sleeve above (ARM_IN to `out`), with an optional band round its foot."""
+    cuff = next(c for c, _, side in HAND_SOCKS if side == s)
+    pv = pivot(S(cuff), 'elbow_guard', (s * (out + ARM_IN) / 2, PALM - ELBOW, 0))
+    joint_limb(pv, out - ARM_IN, depth, 0.0, bottom + ELBOW, color, round_top=True, bevel=0.03)
+    if band:
+        sleeve(S(cuff), s, 0.045, bottom + 0.0225, depth + 0.01, band, out=out + 0.005, bevel=0.01)
+
+
+def upper_arm_plate(S, color=R.metal, edge=None, lames=True):
+    """Plate rerebrace round the upper arm to the elbow and its elbow guard over the gauntlet cuff (optionally the
+    pauldron's lames stepping down its outside). Returns [(upper-arm socket, side)]."""
     out = []
     for name, s in ARM_SOCKS:
         g = S(name)
-        sleeve(g, s, 0.36, -0.14, 0.31, color, bevel=0.035)                                       # rerebrace
-        if rim:
-            sleeve(g, s, 0.04, -0.305, 0.325, rim, out=0.1525, bevel=0.012)
+        sleeve(g, s, *SLEEVE, 0.31, color, bevel=0.035)                                           # rerebrace
+        elbow_guard(S, s, color, 0.31)
         if lames:
             arm_lames(g, s, (color, color), edge)
-        if couter:
-            arm_box(g, s, (0.17, 0.12, 0.06), (0.0, -0.27, -0.175), color, rot=(0.2, 0, 0), bevel=0.02)
         out.append((g, s))
     return out
 
 
 def mail_sleeve(S, color=R.metal, hem=R.dark, link=R.dark):
-    """Mail sleeve block round the upper arm, from under the cap to over the gauntlet cuff, with a dark hem and
-    rows of mail links. Returns [(palm socket, side)]."""
+    """Mail sleeve block round the upper arm, from under the cap to the elbow, with rows of mail links, going on over
+    the elbow to the gauntlet cuff with a dark hem. Returns [(upper-arm socket, side)]."""
     out = []
     for name, s in ARM_SOCKS:
         g = S(name)
-        sleeve(g, s, 0.39, -0.15, 0.32, color, out=0.15, bevel=0.03)
-        sleeve(g, s, 0.045, -0.325, 0.33, hem, out=0.155, bevel=0.01)
+        sleeve(g, s, SLEEVE[0] - 0.005, SLEEVE[1] - 0.0025, 0.32, color, out=0.15, bevel=0.03)
+        elbow_guard(S, s, color, 0.32, out=0.15, band=hem)
         for f, hw in faces(pivot(g, 'sleeve', (s * (0.15 + ARM_IN) / 2, PALM - 0.15, 0)), (0.15 - ARM_IN) / 2, 0.16):
-            mail_links(f, hw - 0.02, [-0.14 + 0.05 * k for k in range(7)], link)
+            mail_links(f, hw - 0.02, [-0.09 + 0.05 * k for k in range(5)], link)
         out.append((g, s))
     return out
 
@@ -561,11 +604,20 @@ def mail_links(f, half_w, ys, color=R.dark, pitch=0.05, fill=0.55, hgt=0.009, z=
     return o
 
 
-def plate_gauntlet(g, s):
-    """Box gauntlet, as in the approved icons: a mitten fist, deeper toward the front so the bare fist and its thumb
-    stay covered, under an open cuff the forearm runs into (slim on the inner side, so it hangs clear of the hips)."""
-    box(g, (0.32, 0.27, 0.38), (0, -0.01, 0.03), R.metal, bevel=0.055)
-    open_box(g, (0.275, 0.21, 0.33), (s * 0.0175, 0.2, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)   # cuff
+# Gloves and gauntlets are the hand's own LEGO C a size up (hero.py HAND), round a hole a hair smaller than the bare
+# hand's, so the hand inside never shows; whatever the hero holds runs through it. The glove's hand rides the hand
+# (sock_handL / sock_gloveR), its cuff the forearm (sock_cuffL / sock_cuffR), so a turned wrist never swings the cuff
+# off the arm. Both are authored round the same origin, the centre of the hole.
+GLOVE = dict(outer=0.15, inner=(0.064, 0.078), depth=0.25, gap=0.064, gap_tilt=0.6, stub=(0.15, 0.08, 0.16))
+GAUNTLET = dict(outer=0.155, inner=(0.064, 0.078), depth=0.27, gap=0.064, gap_tilt=0.6, stub=(0.16, 0.08, 0.17))
+CUFF_Y = 0.225     # a glove cuff's centre above the hole
+
+
+def plate_gauntlet(h, c, s):
+    """Plate gauntlet: the hand's C a size up in plate, under an open cuff the forearm runs into (slim on the inner
+    side, so it hangs clear of the hips)."""
+    clip_hand(h, (0, 0, 0), R.metal, s, **GAUNTLET)
+    open_box(c, (0.275, 0.21, 0.33), (s * 0.0175, CUFF_Y, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)   # cuff
 
 
 def plate_sabaton(f, knee=True):
@@ -758,8 +810,8 @@ def body_leather(S):
         top, side = block_pauldron(S, s, top=R.trim, edge=R.trim, rivets=BRASS)
     for name, s in ARM_SOCKS:
         g = S(name)
-        sleeve(g, s, 0.38, -0.15, 0.31, R.metal, bevel=0.03)
-        sleeve(g, s, 0.045, -0.325, 0.32, R.dark, out=0.15, bevel=0.01)
+        sleeve(g, s, *SLEEVE, 0.31, R.metal, bevel=0.03)
+        elbow_guard(S, s, R.metal, 0.31, band=R.dark)
         sleeve(g, s, 0.05, -0.2, 0.325, R.trim, out=0.1525, bevel=0.01)                           # strap
         arm_lames(g, s, (R.metal, R.metal), R.dark)
 
@@ -788,15 +840,18 @@ def body_plate(S):
 # ─── Gloves & boots ──────────────────────────────────────────────────────────
 
 def gloves(S):
-    for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
-        g = S(name)
-        box(g, (0.31, 0.28, 0.37), (0, -0.015, 0.03), R.metal, bevel=0.06)                # mitten fist
-        box(g, (0.33, 0.06, 0.39), (0, -0.09, 0.03), R.dark, bevel=0.012)                 # knuckle band
-        box(g, (0.03, 0.14, 0.2), (s * 0.165, 0.01, 0), R.trim, bevel=0.01)               # back plate
+    """Leather gloves: the hand's C in leather with a dark strap round the knuckles and a plate on the back of the
+    hand, under an open cuff with a rim and a rivet."""
+    for cuff, hand, s in HAND_SOCKS:
+        h, c = S(hand), S(cuff)
+        clip_hand(h, (0, 0, 0), R.metal, s, **GLOVE)                                       # the glove's hand
+        clip_hand(h, (0, 0, 0), R.dark, s, outer=0.154, inner=0.142, depth=0.07, gap=0.1, gap_tilt=0.6, stub=None,
+                  bevel=0.003)                                                             # knuckle strap
+        box(h, (0.03, 0.14, 0.17), (s * 0.165, 0.005, 0), R.trim, bevel=0.01)              # back plate
         # open cuff and its rim, slim on the inner side so they hang clear of the hips and armour skirts
-        open_box(g, (0.275, 0.19, 0.33), (s * 0.0175, 0.2, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)
-        open_box(g, (0.295, 0.045, 0.35), (s * 0.0175, 0.3, 0), R.trim, inner=None, wall=0.05, bevel=0.012)
-        rivet(g, (s * 0.17, 0.2, 0), R.trim, 0.022, rot=(PI / 4, PI / 2, 0))
+        open_box(c, (0.275, 0.19, 0.33), (s * 0.0175, CUFF_Y, 0), R.metal, wall=0.05, sink=0.05, bevel=0.025)
+        open_box(c, (0.295, 0.045, 0.35), (s * 0.0175, CUFF_Y + 0.1, 0), R.trim, inner=None, wall=0.05, bevel=0.012)
+        rivet(c, (s * 0.17, CUFF_Y, 0), R.trim, 0.022, rot=(PI / 4, PI / 2, 0))
 
 
 def boots(S):
@@ -878,10 +933,11 @@ def u_wyrmbone(S):
     # A small forward seat preserves the skull and horn shapes without sweeping behind the hero.
     dragon_skull(pivot(S('sock_shoulderL'), 'skull', (0.08, 0.05, 0.03), (0, 0, -0.22)))
     block_pauldron(S, -1, color=BONE, top=None, edge=None, rivets=None)
-    for name, s in ARM_SOCKS:
-        g = S(name)
-        sleeve(g, s, 0.36, -0.14, 0.31, obs, bevel=0.035)                                             # rerebrace
-        arm_box(g, s, (0.265, 0.21, 0.285), (0, -0.41, 0), BONE, bevel=0.03)                         # vambrace
+    for (name, s), (cuff, _, _) in zip(ARM_SOCKS, HAND_SOCKS):
+        sleeve(S(name), s, *SLEEVE, 0.31, obs, bevel=0.035)                                          # rerebrace
+        # Bone vambrace from the elbow (rounded about it), set a touch outward so it clears the breastplate.
+        joint_limb(pivot(S(cuff), 'vambrace', (s * 0.01, PALM - ELBOW, 0)), 0.265, 0.285, 0.0, ELBOW - 0.515, BONE,
+                   round_top=True, bevel=0.03)
 
 
 def horn_point(h, a, r, base_y, ln, w):
@@ -922,7 +978,7 @@ def u_cinderfang(S):
     an ember gem for a pommel. Big, clean shapes that read in the hand."""
     h = S('sock_handR')
     obs = obsidian()
-    grip(h, -0.21, 0.21, 0.1, GRIP, (-0.13, -0.01, 0.11), obs)
+    grip(h, -0.21, 0.21, 0.12, GRIP, (-0.16, 0.16), obs)
     box(h, (0.13, 0.08, 0.13), (0, -0.25, 0), obs, bevel=0.02)                                        # pommel cap
     facet_gem(h, 0.07, (0, -0.33, 0), EMBER, emissive=EMBER, strength=4, rot=corner_up(), depth=0.1)  # ember pommel
     box(h, (0.24, 0.16, 0.18), (0, 0.24, 0), obs, bevel=0.04)                                         # jaw guard
@@ -939,35 +995,37 @@ def u_cinderfang(S):
           emissive=EMBER, strength=4)                                                                 # ember line
 
 
+# The Emberstring's limbs: the bow's own profile from the end of its riser.
+EMBER_LIMB = [(RISER, 0.0), (0.4, 0.05), (0.52, 0.12), (0.62, 0.18), (0.7, 0.19), (0.78, 0.14)]
+
+
 def u_emberstring(S):
     """Emberstring, as in the approved icon: a bone recurve with an ember inlay down the inside of each limb, obsidian
     horn tips, an ember gem in the grip and a burning string."""
-    h = S('sock_handR')
     obs = obsidian()
-    b = pivot(h, 'bowbody', (0, 0, 0), (-PI / 2, 0, 0))
+    b = bow_frame(S)
     z0 = BOW_Z
-    box(b, (0.12, 0.28, 0.14), (0, 0, z0), GRIP, bevel=0.03)                                          # grip
+    box(b, (0.12, 2 * RISER, 0.12), (0, 0, z0), GRIP, bevel=0.03)                                    # grip (the riser)
     facet_gem(b, 0.05, (0, 0, z0 - 0.075), EMBER, emissive=EMBER, strength=5, rot=(0, PI / 4, 0))
     for s in (-1, 1):
-        box(b, (0.13, 0.05, 0.15), (0, s * 0.15, z0), obs, bevel=0.015)
-        limb_chain(b, [(s * y, z + z0) for y, z in BOW_LIMB], 0.12, 0.09, BONE)
-        beam(b, (0, s * 0.72, z0 + 0.16), (0, s * 0.9, z0 + 0.06), 0.08, obs, w1=0.015)               # horn tips
-        for (y0, za), (y1, zb) in zip(BOW_LIMB, BOW_LIMB[1:]):
+        box(b, (0.13, 0.05, 0.15), (0, s * (RISER + 0.02), z0), obs, bevel=0.015)
+        limb_chain(b, [(s * y, z + z0) for y, z in EMBER_LIMB], 0.12, 0.09, BONE)
+        beam(b, (0, s * 0.76, z0 + 0.16), (0, s * 0.94, z0 + 0.06), 0.08, obs, w1=0.015)              # horn tips
+        for (y0, za), (y1, zb) in zip(EMBER_LIMB, EMBER_LIMB[1:]):
             beam(b, (0, s * y0, za + z0 + 0.047), (0, s * y1, zb + z0 + 0.047), 0.04, EMBER, d=0.012, bevel=0,
                  emissive=EMBER, strength=3)                                                          # ember inlay
-    box(b, (0.026, 1.24, 0.026), (0, 0, z0 + 0.195), EMBER_HOT, emissive=EMBER, strength=6, bevel=0)  # burning string
+    box(b, (0.026, 1.36, 0.026), (0, 0, z0 + 0.195), EMBER_HOT, emissive=EMBER, strength=6, bevel=0)  # burning string
 
 
 def u_kindled_ash(S):
     """Staff of Kindled Ash, as in the approved icon: an obsidian shaft ringed with bone bands and an oxblood grip;
     four bone claws rise from a bone collar and bend in around a tall burning crystal."""
-    h = S('sock_handR')
     obs = obsidian()
-    b = pivot(h, 'staffbody', STAFF_GRIP, STAFF_LEAN)
+    b = staff_frame(S, grip=-0.31)                                                                    # the oxblood grip
     box(b, (0.11, 1.72, 0.11), (0, 0.21, 0), obs, taper=(0.85, 0.85), bevel=0.02)                   # obsidian shaft
     for y in (-0.5, -0.12, 0.12, 0.8):
         box(b, (0.14, 0.05, 0.14), (0, y, 0), BONE, bevel=0.012)                                     # bone bands
-    box(b, (0.13, 0.2, 0.13), (0, -0.31, 0), GRIP, bevel=0.02)                                       # oxblood grip
+    box(b, (0.125, 0.2, 0.125), (0, -0.31, 0), GRIP, bevel=0.02)                                     # oxblood grip
     beam(b, (0, -0.66, 0), (0, -0.84, 0), 0.12, obs, w1=0.02)                                        # butt spike
     box(b, (0.19, 0.14, 0.19), (0, 1.12, 0), BONE, taper=(1.3, 1.3), bevel=0.02)                     # claw collar
     for i in range(4):

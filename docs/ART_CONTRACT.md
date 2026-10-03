@@ -80,18 +80,36 @@ from the owner's picks. A critic never proposes a different style.
 **Pipeline (owner's rule):** an image-generated concept (with examples of our art as reference) comes first, the 3D model
 is built from that image, then the icon is made from the model. **Every item model matches its approved image**
 (`public/icons/approved` until concepts replace them): same silhouette, parts and colours. A model is approved only
-from textured, in-game renders shown at the same angle as its image; flat previews don't count. Collars, cuffs and boot tops are open (`open_box`: closed walls round a dark sunk floor). Every hand of the hero's
-kind (hero, cultist, priest, goblin, town NPCs) is one solid fist, like a mitten, with the thumb across its front
-(`_common.fist`, fused into one part); held things run through it (a sword's grip front to back under the thumb, a
-staff upright through its front). Gloves and gauntlets are mitten blocks that cover it, thumb and all. Each bow and
+from textured, in-game renders shown at the same angle as its image; flat previews don't count. Collars, cuffs and boot tops are open (`open_box`: closed walls round a dark sunk floor). Each bow and
 staff tier has its own model.
+
+**Hands are LEGO hands; arms bend at the elbow** (owner, October 3: "it has to be all one shape like a lego hand", never
+a thumb). Every humanoid hand (hero, cultist, priest, goblin, Warden, Quartermaster) is one chunky C in one piece
+(`_common.clip_hand`): an octagonal ring round a hole, a slot through its C, a short stub up into the wrist. Its hole
+runs front to back when the arm hangs, and whatever the hand holds runs through it at right angles to the forearm: a
+sword's grip, a club's haft, a staff, a bow, a drawn bowstring. Grips are square, at most 0.12 across, so they fill the
+hole (`gear.py`). Gloves and gauntlets are the same C a size up round a hole a hair smaller (the bare hand inside
+never shows), their cuffs on the forearm. Kobolds keep their lizard claws. Every humanoid arm is an upper arm, a
+forearm and a hand on three pivots, `armX` (shoulder), `elbowX` and `handX` (wrist), authored straight; limbs meeting
+at an elbow are rounded about it (`_common.joint_limb`), so the joint stays closed at any bend. The game bends them
+(anim.ts): a relaxed bend at rest; a staff carried upright with the forearm level (the "upright" hold, from the weapon
+on the hero and from a `staffbody` part on a creature); a bow carried plumb the same way but out from the body, the arm
+a little out and the forearm turned out at the elbow, because its limbs sweep in toward the string and would catch the
+striding leg (the "bow" hold); a blade, club or tool at the side, the wrist tipping it down; the sword's wind-up folds
+the forearm back over the shoulder and cocks the wrist so the blade rises in line with the forearm; and the bow draw
+reaches the string with a two-bone reach (`Rig.reach`), the elbow bent and swung out so the arm stays clear of the
+chest.
 
 **Arms never cut into bodies.** Arms hang against the sides of the body and swing past them: anim.ts turns the hanging
 arms a little out (`ARM_SPLAY`), and every character's arms sit just outside its torso, belt and robe. On the hero,
 body armour's sides stand at x ±0.38 and its sleeves start there (`gear.py` `ARM_IN`, `sleeve`); the tunic's own
-sleeves come off under body armour. `fitcheck.py` `arm_clip_all()` poses every character as the game does (idle, walk,
-each attack) and measures any arm cutting into the body; only the bow's draw arm (no elbow) and the goblin's club arm
-passing behind its ear are allowed.
+sleeves come off under body armour. `fitcheck.py` `arm_clip_all()` poses every humanoid (hero in every gear set,
+creatures and town NPCs, and a bow in every kind of armour) as the game does (idle, walk, the frames of each attack and
+of the bow draw), elbows, wrists and the draw's reach included, and measures any arm cutting into the body; only the
+goblin's club arm passing behind its ear is allowed (and the draw arm's shoulder dipping under its cap for the instant
+the bow comes up). `held_clip_all()` does the same for what the hands carry (every hero weapon, in the starting outfit and
+in plate, and every creature's staff, club or hammer): it runs through the holding hand but cuts into nothing else, so
+no bow limb in the striding leg, staff foot in a robe or pommel in a forearm.
 
 Mostly blocky and modular, not dogmatically: use organic shapes where they look better (e.g. bat wings, hair,
 trees, flames). Blocks are the default where scripted geometry shines (armour, helms, weapons, NPC/enemy bodies,
@@ -112,17 +130,22 @@ Height ~2.0. The starting outfit from the approved concept sheet (October 3): tu
 The outfit's extra pieces sit under empties named `outfit_<slot>_*`, and the game hides them while gear fills that slot (`registry.ts` HeroDresser): `outfit_body_*` (collar, the skirt's split, strap, buckle, pouch, the single pauldron, the sleeves) under body armour, `outfit_gloves_*` (bracers) under gloves, `outfit_boots_*` (boots) under boots. The body, arms, hands and legs under them keep the earlier hero's sizes, so every gear piece fits unchanged; `fitcheck.py` `fit_all()` and `tests/character-art.test.ts` check every piece on the hero.
 
 Rig parts (pivots = empties at joints, children are meshes):
-`body` (hips pivot) → `head`, `armL` (+X side), `armR` (−X side); `legL` (+X), `legR` (−X) on the root.
+`body` (hips pivot) → `head`, `armL` (+X side), `armR` (−X side); `legL` (+X), `legR` (−X) on the root. Each arm:
+`armX` (shoulder, the upper arm) → `elbowX` (0.28 below, the forearm) → `handX` (the wrist, 0.52 below the shoulder,
+the hand), authored straight.
 
-Sockets (empties, gear attaches here with identity transform):
+Sockets (empties, gear attaches here with identity transform). The arm sockets all sit at the centre of the hand's
+hole (0.655 below the shoulder) while the arm hangs straight, each riding its own part of the arm:
 | Socket | Parent | Position (parent-local) | Notes |
 |---|---|---|---|
 | `sock_head` | `head` | head centre | helmets, hair, beards |
 | `sock_chest` | `body` | torso centre | body armour |
 | `sock_shoulderL` / `sock_shoulderR` | `body` | top of each shoulder | pauldrons (from body armour files) |
-| `sock_handL` | `armL` | palm centre | gauntlet L |
-| `sock_handR` | `armR` | palm centre, rotated (+90° X) so local **+Y points forward** when the arm hangs | weapons, tools, gauntlet R uses `sock_gloveR` |
-| `sock_gloveR` | `armR` | palm centre, unrotated | gauntlet R |
+| `sock_upperL` / `sock_upperR` | `armL` / `armR` | the hole's centre, arm hanging | upper-arm armour: sleeves, rerebraces, lames, the pauldron's side block |
+| `sock_cuffL` / `sock_cuffR` | `elbowL` / `elbowR` | the hole's centre, arm hanging | glove cuffs, vambraces |
+| `sock_handL` | `handL` | centre of the hand's hole | glove L's hand |
+| `sock_handR` | `handR` | centre of the hand's hole, rotated (+90° X) so local **+Y runs forward through the hole** when the arm hangs | weapons and tools, along +Y through the hole |
+| `sock_gloveR` | `handR` | centre of the hand's hole, unrotated | glove R's hand |
 | `sock_footL` / `sock_footR` | `legL` / `legR` | ankle | boots |
 
 ### Role materials (recoloured at runtime)
@@ -140,21 +163,22 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `sword` | `sock_handR` | ~1.45 long, blade along +Y: a proper crossguard and a long blade with a bright `ROLE_trim` edge and fuller round a `ROLE_metal` spine (`gear.py` `blade`, `crossguard`) |
 | `longsword` | `sock_handR` | ~1.85 long, wider guard, same blade build |
 | `pickaxe` | `sock_handR` | head at +Y end |
-| `bow` | `sock_handR` | vertical bow in hand (counter-rotate −90° X inside the socket) |
-| `staff` | `sock_handR` | upright staff through the front of the fist (not down the forearm), top leaning forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
+| `bow` | `sock_handR` | the bow along +Y through the hand (`gear.py` `bow_frame`), turned a quarter round so its string lies on the hand's +X side (`anim.ts` `BOW_STRING`; the draw turns the hand so it faces the archer), held `BOW_MID` below its middle so the arrow passes over the hand, a straight riser through the hole |
+| `staff` | `sock_handR` | the staff along +Y through the hand (`staff_frame`), its grip in the hole; the game carries it upright, forearm forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
 | `helm_full` | `sock_head` | plain cube-over-cube great helm (`gear.py` `great_helm`): shell, top block, a low `ROLE_cloth` crest and a T visor cut right through a face plate standing proud of the shell (`slotted_plate`: a real recess with a lit lower lip, over a dark lining); no rivets, bands or ridges. Every heavy tier wears it (Emberforged adds a crimson crest, horns and a thin ember line in the slit); hides hair and beard |
-| `body_chain` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | box mail shirt with a skirt block, fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
-| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | a few bold blocks, like a toy knight readable at ~100px: chest block over a waist block, belt, gorget, one slab tasset per thigh and one accent (a plain `ROLE_cloth` tabard dyed like the wearer's tunic); block pauldron caps and a plain rerebrace down each upper arm (same as plate set `p`). No lames, ridges, straps, rivets or trim bands |
-| `body_leather` | `sock_chest`, `sock_shoulderL/R`, `sock_handL`, `sock_gloveR` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
-| `gloves` | `sock_handL`, `sock_gloveR` | gauntlet cuffs, slightly bigger than bare hands |
+| `body_chain` | `sock_chest`, `sock_shoulderL/R`, `sock_upperL/R` | box mail shirt with a skirt block, fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
+| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_upperL/R` | a few bold blocks, like a toy knight readable at ~100px: chest block over a waist block, belt, gorget, one slab tasset per thigh and one accent (a plain `ROLE_cloth` tabard dyed like the wearer's tunic); block pauldron caps and a plain rerebrace down each upper arm (same as plate set `p`). No lames, ridges, straps, rivets or trim bands |
+| `body_leather` | `sock_chest`, `sock_shoulderL/R`, `sock_upperL/R` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
+| `gloves` | `sock_handL`, `sock_gloveR`, `sock_cuffL/R` | the hand's LEGO C a size up (`gear.py` `GLOVE`, `GAUNTLET`) on the hand sockets, its open cuff on the forearm sockets, both authored round the hole's centre (off the hero they are joined again: `registry.ts` `joinCuffs`) |
 | `boots` | `sock_footL`, `sock_footR` | covers shoe, cuff at shin |
 | `u_<unique id>` | as its base | hand-built unique look (own colours allowed; metal parts use `_common.metallic()` so they get the forged-metal finish) |
 
 Body armour covers the upper arm too. Only the pauldron's top block sits on `sock_shoulderX` (it follows the arm by
 75%, `anim.ts` SHOULDER_FOLLOW, so it articulates over the joint); the pauldron's side block, the lames, the
-rerebrace or mail sleeve and the couter hang on the palm sockets `sock_handL` / `sock_gloveR` (0.63 below the arm
-pivot), so they ride the upper arm exactly and never fan away from it (`gear.py` `block_pauldron`, `arm_box`).
+rerebrace or mail sleeve and the couter hang on the upper-arm sockets `sock_upperL` / `sock_upperR` (0.655 below the
+arm pivot), so they ride the upper arm exactly, never fan away from it and stay put when the elbow bends (`gear.py`
+`block_pauldron`, `arm_box`); anything on the forearm (vambraces) hangs on `sock_cuffL` / `sock_cuffR`.
 Keep shoulder caps only a little wider than the arm.
 
 Forged metal is textured by the game, not by extra geometry: `ROLE_metal` / `ROLE_dark` of forged palettes (and
@@ -182,6 +206,8 @@ the head the side lines run level, so the temples cannot come lower than the hai
 
 ### Enemies/NPCs/props
 Goblin Grunt, Kobold Slinger, Ember Cultist and Cinder Priest (`priest.glb`) are built in `minions.py` from their approved concept sheets (October 3).
-The cult staffs hang on a `sock_handR` empty in the fist (not `weapon`), so the cast keeps them upright in the raised hand.
-Rig names per `src/render/anim.ts` (humanoid: body/head/armL/armR/legL/legR/weapon; quadruped: legFL/legFR/legBL/legBR,
-neck1.., tail1.., wingL/wingR, jaw). Props are static; origin at ground centre.
+The staffs of the cult and the Warden run through a `sock_handR` empty in the hand, framed by a `staffbody` empty: a
+model carrying one, anim.ts carries it upright (forearm level), raised and still upright in the cast. A club, hammer or
+other thing at the side hangs on a `weapon` empty in the hand (carried at the side); the kobold's sling on `sling`.
+Rig names per `src/render/anim.ts` (humanoid: body/head/armL/armR/elbowL/elbowR/handL/handR/legL/legR/weapon;
+quadruped: legFL/legFR/legBL/legBR, neck1.., tail1.., wingL/wingR, jaw). Props are static; origin at ground centre.

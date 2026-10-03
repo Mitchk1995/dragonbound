@@ -1,8 +1,9 @@
 """Plate armour sets: P (plate: bronze, iron and steel share it, only the palette changes) and E (Emberforged:
 the same plate silhouette forged from dragon parts).
 
-Each set is a full kit with the same socket contract as gear.py (body_plate on sock_chest + sock_shoulderL/R,
-helm_full on sock_head, gloves on sock_handL + sock_gloveR, boots on sock_footL/R) and only role materials,
+Each set is a full kit with the same socket contract as gear.py (body_plate on sock_chest + sock_shoulderL/R +
+sock_upperL/R, helm_full on sock_head, gloves on sock_handL + sock_gloveR + sock_cuffL/R, boots on sock_footL/R) and
+only role materials,
 so the tier palette recolours it. The game loads public/models/gear_<piece>_<set>.glb (items.ts PLATE_STYLE).
 
     exec(open(os.path.join(os.environ['DRAGONBOUND_ROOT'], 'tools', 'blender', 'plate_variants.py')).read())
@@ -32,13 +33,13 @@ import importlib
 import _common
 importlib.reload(_common)
 from _common import *
-from mathutils import Euler, Quaternion, Vector
+from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 _p = os.path.join(_ROOT, 'tools', 'blender', 'gear.py')
 _g = {'DB_RUN': False, '__name__': 'db_gear', '__file__': _p}
 exec(open(_p, encoding='utf-8').read(), _g)
-SOCKET_POS, PALM = _g['SOCKET_POS'], _g['PALM']
+SOCKET_POS, PALM, HAND_SOCKS = _g['SOCKET_POS'], _g['PALM'], _g['HAND_SOCKS']
 body_plate, helm_full, plate_torso, block_pauldron = _g['body_plate'], _g['helm_full'], _g['plate_torso'], _g['block_pauldron']
 plate_gauntlet, plate_sabaton, faces = _g['plate_gauntlet'], _g['plate_sabaton'], _g['faces']
 upper_arm_plate, CAP_SIDE = _g['upper_arm_plate'], _g['CAP_SIDE']
@@ -50,7 +51,6 @@ build_hero, dress = _f['build_hero'], _f['dress']
 
 PI = math.pi
 PIECES = ('body_plate', 'helm_full', 'gloves', 'boots')
-SHOULDER_FOLLOW = 0.75          # src/render/anim.ts
 # Tier palettes for the Blender renders (src/data/items.ts TIERS).
 STEEL = {'metal': 0x6F7E93, 'trim': 0xADB9C8, 'dark': 0x2C3440, 'leather': 0x2C3440, 'glow': 0xADB9C8}
 EMBER = {'metal': 0x3A3336, 'trim': 0xFF7A1A, 'dark': 0x5A1A16, 'leather': 0x5A1A16, 'glow': 0xFF7A1A}
@@ -95,34 +95,21 @@ def part(scene, name):
     return next(o for o in scene.objects if _strip(o.name) == name)
 
 
-SOCK_REST = {'sock_shoulderL': (0.46, 0.72, 0), 'sock_shoulderR': (-0.46, 0.72, 0)}   # hero.py, body space
-ARM_REST = {'armL': (0.47, 0.62, 0), 'armR': (-0.47, 0.62, 0)}
-
-# anim.ts rot() offsets. idle/walk: humanoid block; windup = swing a=0.4; slam a=0.5; cast a=0.5.
+# The poses the plate is audited in, as anim.ts poses the hero (animpose.py anim_pose, elbows and wrists included):
+# idle and walk with a blade at the side, the sword's wind-up (swing a=0.4), slam a=0.5 and the staff's cast a=0.5.
 POSES = {
-    'idle': {'armL': (0, 0, 0.1), 'armR': (0, 0, -0.1)},
-    'walk': {'armL': (-0.5, 0, 0.1), 'armR': (0.5, 0, -0.1), 'legL': (0.7, 0, 0), 'legR': (-0.7, 0, 0)},
-    'windup': {'armL': (0, 0, 0.1), 'armR': (-3.2, 0, -0.1)},
-    'slam': {'armL': (-3.0, 0, 0), 'armR': (-3.0, 0, 0)},
-    'cast': {'armL': (-1.8, 0, 0), 'armR': (-2.2, 0, 0)},
+    'idle': _f['anim_pose'](hold='side'),
+    'walk': _f['anim_pose'](sw=1.0, hold='side'),
+    'windup': _f['anim_pose']('swing', 0.4, hold='side'),
+    'slam': _f['anim_pose']('slam', 0.5, hold='side'),
+    'cast': _f['anim_pose']('cast', 0.5, hold='upright'),
 }
 
 
 def apply_pose(scene, pose):
-    """Add pose offsets to the rest rotations, then anim.ts followShoulders(): each shoulder socket
-    orbits its arm pivot and turns by SHOULDER_FOLLOW of the arm's rotation (slerp from identity)."""
-    for name, r in (pose or {}).items():
-        o = part(scene, name)
-        o.rotation_euler = tuple(a + b for a, b in zip(o.rotation_euler, r))
-    for side in ('L', 'R'):
-        arm, sock = part(scene, f'arm{side}'), part(scene, f'sock_shoulder{side}')
-        delta = Euler(arm.rotation_euler, 'ZYX').to_quaternion()      # hero arms rest at identity
-        turn = Quaternion().slerp(delta, SHOULDER_FOLLOW)
-        sock_rest, arm_rest = Vector(SOCK_REST[f'sock_shoulder{side}']), Vector(ARM_REST[f'arm{side}'])
-        sock.location = arm_rest + turn @ (sock_rest - arm_rest)
-        sock.rotation_mode = 'QUATERNION'
-        sock.rotation_quaternion = turn
-    bpy.context.view_layer.update()
+    """Pose the dressed hero as the game does (animpose.py pose_scene: the offsets on the rest rotations, then anim.ts
+    followShoulders: each shoulder socket orbits its arm pivot and turns by SHOULDER_FOLLOW of the arm's rotation)."""
+    _f['pose_scene'](scene, pose or {})
 
 
 def dress_variant(vid, pose='idle', extra=(), scene_name='DB_pv_fit'):
@@ -469,11 +456,12 @@ def closeup(vid, file_name, pose='idle', views=(dict(yaw=0, pitch=8), dict(yaw=4
 # ═══ P: plate (bronze, iron, steel) ══════════════════════════════════════════
 # OSRS-style plate in a few bold blocks (gear.py plate kit), like a toy knight readable at ~100px: a chest block
 # over a waist block, belt, gorget and single-slab tassets; block pauldron caps and plain rerebraces; the cube-over-
-# cube full helm with a T visor; thumbless two-block gauntlets and sabatons. No lames, ridges, rivets or trim bands.
+# cube full helm with a T visor; gauntlets that are the hand's own LEGO C in plate under an open cuff, and sabatons.
+# No lames, ridges, rivets or trim bands.
 
 def P_gloves(S):
-    for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
-        plate_gauntlet(S(name), s)
+    for cuff, hand, s in HAND_SOCKS:
+        plate_gauntlet(S(hand), S(cuff), s)
 
 
 def P_boots(S):
@@ -515,8 +503,8 @@ def ember_seams(S):
     seam(c, (0.5, 0.018, 0.44), (0, 0.318, 0))                                # gorget / chest
     seam(c, (0.76, 0.016, 0.55), (0, -0.252, 0))                              # belly / fauld (above the belt)
     (size, (x, y), tilt) = CAP_SIDE
-    for sh, palm, s in (('sock_shoulderL', 'sock_handL', 1), ('sock_shoulderR', 'sock_gloveR', -1)):
-        fs = pivot(S(palm), 'pauldron_seam', (s * x, y + PALM, 0), (0, 0, -s * tilt))
+    for upper, s in (('sock_upperL', 1), ('sock_upperR', -1)):
+        fs = pivot(S(upper), 'pauldron_seam', (s * x, y + PALM, 0), (0, 0, -s * tilt))
         w, hgt, d = size
         seam(fs, (w + 0.008, 0.014, d + 0.008), (0, -hgt / 2 + 0.028, 0))
 
@@ -553,8 +541,8 @@ def E_helm(S):
 
 
 def E_gloves(S):
-    for name, s in (('sock_handL', 1), ('sock_gloveR', -1)):
-        plate_gauntlet(S(name), s)
+    for cuff, hand, s in HAND_SOCKS:
+        plate_gauntlet(S(hand), S(cuff), s)
 
 
 def E_boots(S):

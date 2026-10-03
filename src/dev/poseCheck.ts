@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { KEEP_STAGE } from '../data/zones';
 import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
-import { BOW_SOCKET, Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
+import { Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
 import { makeModel } from '../render/registry';
 import type { Slot } from '../types';
 
@@ -154,9 +154,6 @@ export function installPoseCheck(g: Game) {
     }
     return out;
   };
-
-  /** The live bow socket offset used by the rig (for tuning; same module instance as the game). */
-  w.__BOW_SOCKET = BOW_SOCKET;
 
   w.__closeViews = () => document.getElementById('views')?.remove();
 

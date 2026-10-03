@@ -6,6 +6,7 @@ import { CLOTH_COLORS, HAIR_COLORS, SKIN_TONES } from '../data/appearance';
 import { BASES, UNIQUES, type Palette } from '../data/items';
 import type { Appearance } from '../save/save';
 import type { Item, Slot } from '../types';
+import type { Hold } from './anim';
 import type { Model } from './kit';
 import { applyFinish, type Finish } from './env';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
@@ -398,8 +399,29 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
   return parts;
 }
 
-const isBow = (model: string) => model.startsWith('bow_') || model === 'u_emberstring';
 const BLADE_MODELS = new Set(['sword', 'longsword', 'u_cinderfang']);
+
+/**
+ * A glove's two parts, its hand (sock_handL / sock_gloveR) and its cuff on the forearm (sock_cuffL / sock_cuffR), are
+ * authored round the same origin; worn they ride the hand and the forearm apart. Off the hero (icons, loot on the
+ * ground) each cuff joins its hand again, so a glove is one piece.
+ */
+export function joinCuffs(parts: Map<string, THREE.Object3D>) {
+  for (const [cuff, hand] of [['sock_cuffL', 'sock_handL'], ['sock_cuffR', 'sock_gloveR']] as const) {
+    const c = parts.get(cuff), h = parts.get(hand);
+    if (!c || !h) continue;
+    for (const child of [...c.children]) h.add(child);
+    parts.delete(cuff);
+  }
+  return parts;
+}
+
+/** How the hero's hand carries a weapon model (anim.ts Hold): staffs and bows upright through the hand, in front. */
+export function holdOf(model: string | null): Hold {
+  if (!model) return 'empty';
+  if (model.startsWith('bow_') || model === 'u_emberstring') return 'bow';
+  return model.startsWith('staff_') || model === 'u_kindled_ash' ? 'upright' : 'side';
+}
 
 /** The tunic's collar and sleeve bands (ROLE_clothDark): the tunic's dye at this brightness. */
 const CLOTH_DARK = 0.55;
@@ -463,21 +485,23 @@ export class HeroDresser {
       for (const g of parts.values()) applyRoles(g, dye);
       this.attachParts(parts);
     }
+    let weapon: string | null = null;
     if (override?.weaponModel) {
+      weapon = override.weaponModel;
       this.attachParts(buildGear(override.weaponModel, override.weaponPalette ?? { main: 0x888888, trim: 0xcccccc, dark: 0x444444 }));
     } else if (equipment.weapon) {
       const gl = gearLook(equipment.weapon);
       if (gl) {
+        weapon = gl.model;
         const parts = buildGear(gl.model, gl.palette);
-        // Bows are authored with the string on the socket's +Y side; turn them so the string
-        // faces the archer when shooting (verified: string sits behind the grip at full draw).
-        if (isBow(gl.model)) parts.get('sock_handR')?.rotateX(Math.PI);
         // Blades are authored flat across the socket; turn them edge-on so the edge leads a vertical swing
         // (verified: blade width axis stays in the swing plane in tests/poses.test.ts).
         if (BLADE_MODELS.has(gl.model)) parts.get('sock_handR')?.rotateY(Math.PI / 2);
         this.attachParts(parts);
       }
     }
+    // How the hand carries it (anim.ts Hold): staffs and bows upright in front, anything else at the side.
+    this.model.root.userData.hold = holdOf(weapon);
     this.refreshMaterials();
   }
 

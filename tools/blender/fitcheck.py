@@ -9,6 +9,7 @@ Run the builder scripts first so their DB_* scenes exist in this .blend (fit_all
     fit('plate', ['DB_gear_body_plate', 'DB_gear_longsword'])
     report = fit_all()   # every gear piece on the hero, audited in every pose (plate_variants.py audit)
     report = arm_clip_all()   # arms (and the gear on them) cutting into the body, every character and pose
+    report = held_clip_all()  # what the hands carry cutting into the body, every weapon, character and pose
 """
 import os
 import re
@@ -22,7 +23,11 @@ import importlib
 import _common
 importlib.reload(_common)
 from _common import *
-from mathutils import Euler, Matrix, Quaternion
+import animpose
+importlib.reload(animpose)
+from animpose import *
+from animpose import _strip
+from mathutils import Matrix
 from mathutils.bvhtree import BVHTree
 
 _p = os.path.join(_ROOT, 'tools', 'blender', 'hero.py')
@@ -30,15 +35,13 @@ _g = {'DB_RUN': False, '__name__': 'db_fit', '__file__': _p}
 exec(open(_p, encoding='utf-8').read(), _g)
 build_hero = _g['build_hero']
 
-_strip = lambda n: re.sub(r'\.\d{3}$', '', n)
 
-
-def _copy_tree(o, parent, scene, src, sock):
+def _copy_tree(o, parent, scene, src, sock, turn=None):
     n = o.copy()
     scene.collection.objects.link(n)
     n.parent = parent
     n.matrix_parent_inverse = Matrix.Identity(4)
-    n.matrix_basis = o.matrix_basis.copy()
+    n.matrix_basis = turn @ o.matrix_basis if turn else o.matrix_basis.copy()
     if n.type == 'MESH':
         n['pv'] = src          # gear, for the plate_variants.py audit
         n['pv_sock'] = sock
@@ -56,6 +59,10 @@ def slot_of(src):
     if 'sock_handL' in names:
         return 'gloves'
     return None
+
+
+# registry.ts turns blades edge-on in the hand (rotateY(PI / 2) on their sock_handR group), so the edge leads.
+BLADES = ('DB_gear_sword', 'DB_gear_longsword', 'DB_gear_u_cinderfang')
 
 
 def dress(scene, sources):
@@ -77,13 +84,15 @@ def dress(scene, sources):
             if name not in socks:
                 missing.append(f'{src}:{name}')
                 continue
+            turn = Matrix.Rotation(math.pi / 2, 4, 'Y') if name == 'sock_handR' and src in BLADES else None
             for ch in o.children:
-                _copy_tree(ch, socks[name], scene, src, name)
+                _copy_tree(ch, socks[name], scene, src, name, turn)
     return missing
 
 
 def fit(label, sources, target=(0, 1.1, 0), dist=4.4, views=((0, 10), (40, 18), (150, 15), (30, 55)), res=384, pose=None):
-    """`pose` = {part: (rx, ry, rz)} added to the rig's rest rotation, e.g. {'armR': (-1.57, 0, 0)} (bow shot)."""
+    """`pose` = {part: (rx, ry, rz)} added to the rig's rest rotation, e.g. {'armR': (-1.57, 0, 0)} (the arm raised
+    forward)."""
     scene, root = build_hero('DB_fitcheck')
     missing = dress(scene, sources)
     for part, r in (pose or {}).items():
@@ -153,91 +162,10 @@ def fit_all(poses=('idle', 'walk', 'windup', 'slam', 'cast'), render=False):
 
 
 # ─── Arms against the body ───────────────────────────────────────────────────
-# The owner: "the arms might be clipping to the sides". Every character is posed exactly as anim.ts poses it (idle,
-# both walk extremes and the frames of its attacks) and every arm surface (sleeves, fists, the gear riding the arm) is
-# tested against every other part of the body (torso, robe, belt, head, legs). Held items and the pauldron tops on the
-# shoulder sockets (which cap the arm on purpose) are left out.
-
-IMPACT = 0.55                                  # src/data/tuning.ts COMBAT_TUNING.impact
-SWING_WRIST = 1.23                             # anim.ts
-BOW_SOCKET = (0, math.pi / 2, math.pi / 2)
-BOW_ANCHOR = (-1.58, -1.51)
-FOLLOW = 0.75                                  # anim.ts SHOULDER_FOLLOW
-SPLAY = 0.1                                    # anim.ts ARM_SPLAY
-_ease = lambda t: t * t * (3 - 2 * t)
-
-
-def anim_pose(kind=None, a=-1.0, sw=0.0):
-    """anim.ts Rig.update for a humanoid: rotation offsets {part: (x, y, z)} for the walk phase sw (sin of the stride,
-    at full speed) and attack `kind` at progress a (-1: none)."""
-    move = 1.0 if sw else 0.0
-    p = {'armL': (-sw * 0.5 * move, 0, SPLAY), 'armR': (sw * 0.3 * move, 0, -SPLAY), 'sock_handR': (0, 0, 0),
-         'legL': (sw * 0.7 * move, 0, 0), 'legR': (-sw * 0.7 * move, 0, 0)}
-    if a < 0 or kind is None:
-        return p
-    if kind == 'swing':
-        up, down = IMPACT - 0.1, IMPACT + 0.1
-        x = (-3.2 * _ease(a / up) if a < up else -3.2 + 2.85 * _ease((a - up) / (down - up)) if a < down
-             else -0.35 * (1 - _ease((a - down) / (1 - down))))
-        wrist = SWING_WRIST * _ease(min(1, a / up)) if a < IMPACT else SWING_WRIST * (1 - _ease((a - IMPACT) / (1 - IMPACT)))
-        p['armR'], p['sock_handR'] = (x, 0, -SPLAY), (wrist, 0, 0)
-    elif kind == 'slam':
-        x = -3.0 * _ease(a / IMPACT) if a < IMPACT else -3.0 + 2.8 * _ease((a - IMPACT) / (1 - IMPACT))
-        p['armR'], p['armL'] = (x, 0, -SPLAY), (x, 0, SPLAY)
-    elif kind == 'bow':
-        r = _ease(min(1, a / 0.2))
-        p['armR'], p['sock_handR'] = (0, 0, -math.pi / 2 * r), tuple(v * r for v in BOW_SOCKET)
-        p['armL'] = (BOW_ANCHOR[0] * r, 0, BOW_ANCHOR[1] * r)
-    elif kind == 'cast':
-        lift = _ease(a / IMPACT) if a < IMPACT else 1 - _ease((a - IMPACT) / (1 - IMPACT))
-        x = -1.2 - 1.0 * lift
-        p['armR'], p['sock_handR'], p['armL'] = (x, 0, 0), (-x + 0.35, 0, 0), (-1.0 - 0.8 * lift, 0, 0)
-    elif kind == 'throw':
-        x = -2.6 * _ease(a / IMPACT) if a < IMPACT else -2.6 + 2.0 * _ease((a - IMPACT) / (1 - IMPACT))
-        p['armR'] = (x, 0, 0)
-    return p
-
-
-# The frames each attack is checked at: wind-up, impact and follow-through.
-ATTACK_FRAMES = {'swing': (0.36, 0.45, 0.55, 0.67), 'slam': (0.45, 0.6), 'cast': (0.4, 0.55, 0.8), 'throw': (0.36, 0.55),
-                 'bow': (0.45,)}
-
-
-def pose_list(kinds):
-    out = [('idle', anim_pose()), ('walk+', anim_pose(sw=1.0)), ('walk-', anim_pose(sw=-1.0))]
-    for k in kinds:
-        out += [(f'{k}@{a}', anim_pose(k, a)) for a in ATTACK_FRAMES[k]]
-    return out
-
-
-def pose_scene(scene, offsets):
-    """Rest rotation + offsets on every rig part present, then the shoulder sockets follow their arms (anim.ts
-    followShoulders)."""
-    parts = {_strip(o.name): o for o in scene.objects}
-    rest = {}
-    for name in ('armL', 'armR'):
-        if name in parts:
-            rest[name] = parts[name].location.copy()
-    for name, r in offsets.items():
-        o = parts.get(name)
-        if o is None:
-            continue
-        base = o.get('rest_rot')
-        if base is None:
-            o['rest_rot'] = base = tuple(o.rotation_euler)
-        o.rotation_euler = tuple(b + v for b, v in zip(base, r))
-    for side in ('L', 'R'):
-        arm, sock = parts.get(f'arm{side}'), parts.get(f'sock_shoulder{side}')
-        if not arm or not sock or arm.parent is not sock.parent:
-            continue
-        if sock.get('rest_loc') is None:
-            sock['rest_loc'] = tuple(sock.location)
-        delta = Euler(arm.rotation_euler, 'ZYX').to_quaternion()
-        turn = Quaternion().slerp(delta, FOLLOW)
-        sock.location = rest[f'arm{side}'] + turn @ (Vector(sock['rest_loc']) - rest[f'arm{side}'])
-        sock.rotation_mode = 'QUATERNION'
-        sock.rotation_quaternion = turn
-    bpy.context.view_layer.update()
+# The owner: "the arms might be clipping to the sides". Every character is posed exactly as anim.ts poses it
+# (animpose.py: idle, both walk extremes and the frames of its attacks) and every arm surface (sleeves, hands, the gear
+# riding the arm) is tested against every other part of the body (torso, robe, belt, head, legs). Held items and the
+# pauldron tops on the shoulder sockets (which cap the arm on purpose) are left out.
 
 
 def _ancestor(o, names):
@@ -262,7 +190,22 @@ def _surface_samples(o):
     return out
 
 
-HELD = ('sock_handR', 'weapon', 'sock_shoulderL', 'sock_shoulderR')
+HELD = ('sock_handR', 'weapon', 'sling', 'sock_shoulderL', 'sock_shoulderR')
+
+
+def _solid(o):
+    """A mesh to test points against: (object, world -> its own space, its own bounds, world-space BVH). Points are
+    first checked against its bounds in its own space, so flat details (mail links, decals) never count as solid,
+    however they are turned."""
+    co = [v.co for v in o.data.vertices]
+    lo = Vector((min(v.x for v in co), min(v.y for v in co), min(v.z for v in co)))
+    hi = Vector((max(v.x for v in co), max(v.y for v in co), max(v.z for v in co)))
+    mw = o.matrix_world
+    return o, mw.inverted(), lo, hi, BVHTree.FromPolygons([mw @ v for v in co], [list(p.vertices) for p in o.data.polygons])
+
+
+def _within(p, lo, hi):
+    return lo.x <= p.x <= hi.x and lo.y <= p.y <= hi.y and lo.z <= p.z <= hi.z
 
 
 def arm_clip(scene, joint=0.1):
@@ -280,14 +223,7 @@ def arm_clip(scene, joint=0.1):
             arms[side[-1]].append(o)
         else:
             body.append(o)
-    solids = []
-    for o in body:
-        mw = o.matrix_world
-        vs = [mw @ v.co for v in o.data.vertices]
-        lo = Vector((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs)))
-        hi = Vector((max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
-        tree = BVHTree.FromPolygons(vs, [list(p.vertices) for p in o.data.polygons])
-        solids.append((o, lo, hi, tree))
+    solids = [_solid(o) for o in body]
     parts = {_strip(o.name): o for o in scene.objects}
     out = {}
     for side, objs in arms.items():
@@ -298,8 +234,8 @@ def arm_clip(scene, joint=0.1):
             for P in _surface_samples(o):
                 deep = 0.0
                 hit = None
-                for b, lo, hi, tree in solids:
-                    if not (lo.x <= P.x <= hi.x and lo.y <= P.y <= hi.y and lo.z <= P.z <= hi.z):
+                for b, to_local, lo, hi, tree in solids:
+                    if not _within(to_local @ P, lo, hi):
                         continue
                     loc, nor, _, dist = tree.find_nearest(P)
                     if loc is not None and (P - loc).dot(nor) < -1e-4 and dist > deep:
@@ -324,18 +260,40 @@ def _hero_part(o):
 
 
 def _minion_builders():
+    """Every humanoid creature and NPC: {name: (builder, attacks, hold)}, the hold as anim.ts reads it from the model
+    (a 'staffbody' part: upright; a 'weapon' part: at the side)."""
     mp = os.path.join(_ROOT, 'tools', 'blender', 'minions.py')
     m = {'DB_RUN': False, '__name__': 'db_minions', '__file__': mp}
     exec(open(mp, encoding='utf-8').read(), m)
-    return {'goblin': (m['goblin'], ('swing',)), 'kobold': (m['kobold'], ('throw',)), 'cultist': (m['cultist'], ('cast',)),
-            'priest': (m['priest'], ('cast',))}
+    npp = os.path.join(_ROOT, 'tools', 'blender', 'npcs.py')
+    n = {'DB_RUN': False, '__name__': 'db_npcs', '__file__': npp}
+    exec(open(npp, encoding='utf-8').read(), n)
+    return {'goblin': (m['goblin'], ('swing',), 'side'), 'kobold': (m['kobold'], ('throw',), 'empty'),
+            'cultist': (m['cultist'], ('cast',), 'upright'), 'priest': (m['priest'], ('cast',), 'upright'),
+            'warden': (n['warden'], (), 'upright'), 'quartermaster': (n['quartermaster'], (), 'side')}
 
 
-HERO_CLIP_SETS = {k: SETS[k] for k in ('plain', 'chain', 'leather', 'plate', 'plate_p', 'plate_e', 'uniques', 'gloves_only')}
-HERO_KINDS = ('swing', 'slam', 'cast', 'bow')
-# The bow's draw arm reaches across the chest to the anchor under the chin: with no elbow, a rigid arm from the left
-# shoulder can only get there through the front of the chest. Measured and reported, not failed.
-EXEMPT = {(True, 'L')}
+# The fit sets, and a bow (carried out from the body and drawn) in each kind of armour the fit sets pair with blades.
+HERO_CLIP_SETS = {**{k: SETS[k] for k in ('plain', 'chain', 'leather', 'plate', 'plate_p', 'plate_e', 'uniques', 'gloves_only')},
+                  'chain_bow': ['body_chain', 'gloves', 'boots', 'bow_worn'],
+                  'plate_bow': ['pv_e_body_plate', 'pv_e_gloves', 'pv_e_boots', 'bow_drakebone'],
+                  'wyrm_bow': ['u_wyrmbone', 'u_emberstring']}
+
+
+def hero_kinds(weapon):
+    """The attacks the hero makes with a weapon: its style's (combat/stats.ts, data/abilities.ts)."""
+    if weapon.startswith('bow_') or weapon == 'u_emberstring':
+        return ('bow',)
+    if weapon.startswith('staff_') or weapon == 'u_kindled_ash':
+        return ('cast',)
+    return ('swing', 'slam')
+
+
+def _weapon(models):
+    return next((m for m in models if m.startswith(('sword', 'longsword', 'pickaxe', 'bow_', 'staff_', 'u_cinderfang',
+                                                    'u_emberstring', 'u_kindled_ash'))), None)
+
+
 # The goblin's club arm, raised overhead, passes behind its big wedge ear (the ear is hidden by the arm, nothing pokes
 # out): measured and reported, not failed.
 EXEMPT_CHAR = {('goblin', 'swing', 'R')}
@@ -347,15 +305,15 @@ def arm_clip_all(limit=0.02, joint_limit=0.04, who=None):
     out, fails = {}, []
     want = lambda n: who is None or n in who
 
-    def check(name, build, kinds):
+    def check(name, build, kinds, hold):
         rep = {}
-        for pose, offs in pose_list(kinds):
+        for pose, offs in pose_list(kinds, hold):
             scene = build()
             pose_scene(scene, offs)
             r = arm_clip(scene)
             rep[pose] = r
             for side, w in r.items():
-                if (pose.startswith('bow'), side) in EXEMPT or (name, pose.split('@')[0], side) in EXEMPT_CHAR:
+                if (name, pose.split('@')[0], side) in EXEMPT_CHAR:
                     continue
                 if w['limb'][0] > limit or w['joint'][0] > joint_limit:
                     fails.append(f'{name} {pose} {side}: {w}')
@@ -387,9 +345,100 @@ def arm_clip_all(limit=0.02, joint_limit=0.04, who=None):
                 scene, _ = build_hero('DB_fitcheck')
                 dress(scene, sources)
                 return scene
-            check(f'hero:{label}', build, HERO_KINDS)
-    for name, (fn, kinds) in _minion_builders().items():
+            weapon = _weapon(models)
+            check(f'hero:{label}', build, hero_kinds(weapon), hold_of(weapon))
+    for name, (fn, kinds, hold) in _minion_builders().items():
         if want(name):
-            check(name, fn, kinds)
+            check(name, fn, kinds, hold)
+    out['fails'] = fails
+    return out
+
+
+# ─── Held things against the body ────────────────────────────────────────────
+# What a hand carries runs through the hand's hole and may touch that hand; it must not cut into anything else: a bow's
+# limbs into the striding leg, a staff into the robe, a sword's pommel into the forearm. Every hero weapon (in the
+# starting outfit and in plate) and every creature's held thing, in every pose of pose_list. The bow's string is the
+# model's static one (the game's follows the draw hand, through its hole).
+
+HERO_WEAPONS = ('sword', 'longsword', 'pickaxe', 'u_cinderfang', 'bow_worn', 'bow_hunter', 'bow_recurve', 'bow_drakebone',
+                'u_emberstring', 'staff_apprentice', 'staff_oak', 'staff_runed', 'staff_ember', 'u_kindled_ash')
+HELD_ITEMS = ('sock_handR', 'weapon', 'sling')
+
+
+def held_clip(scene):
+    """How deep what the right hand carries cuts into the rest of the character (the hand holding it left out):
+    (depth, where)."""
+    bpy.context.view_layer.update()
+    meshes = [o for o in scene.objects if o.type == 'MESH' and len(o.data.polygons)]
+    held = [o for o in meshes if _ancestor(o, HELD_ITEMS)]
+    rest = [o for o in meshes if not _ancestor(o, HELD_ITEMS) and not _ancestor(o, ('handR',))]
+    points = []
+    for o in held:
+        mw = o.matrix_world
+        points += [mw @ v.co for v in o.data.vertices] + [mw @ p.center for p in o.data.polygons]
+    worst = (0.0, None)
+    ray = Vector((1, 0.0013, 0.0007))
+    for b, to_local, lo, hi, tree in map(_solid, rest):
+        for P in points:
+            if not _within(to_local @ P, lo, hi):
+                continue
+            loc, nor, _, d = tree.find_nearest(P)
+            if loc is None or (P - loc).dot(nor) >= -1e-4 or d <= worst[0]:
+                continue
+            hits, q = 0, P.copy()                     # inside a closed mesh: an odd number of crossings out
+            for _ in range(16):
+                h = tree.ray_cast(q, ray, 5)
+                if h[0] is None:
+                    break
+                hits += 1
+                q = h[0] + ray * 1e-4
+            if hits % 2:
+                worst = (round(d, 3), _hero_part(b))
+    return worst
+
+
+def held_clip_all(limit=0.03, who=None):
+    """Every hero weapon and every creature's held thing in every pose: {name: {pose: (depth, where)}} plus 'fails', the
+    poses where it cuts deeper than `limit` into the character."""
+    out, fails = {}, []
+    want = lambda n: who is None or n in who
+
+    def check(name, build, kinds, hold):
+        rep = {}
+        for pose, offs in pose_list(kinds, hold):
+            scene = build()
+            pose_scene(scene, offs)
+            rep[pose] = held_clip(scene)
+            if rep[pose][0] > limit:
+                fails.append(f'{name} {pose}: {rep[pose]}')
+        out[name] = rep
+
+    gp = os.path.join(_ROOT, 'tools', 'blender', 'gear.py')
+    g = {'DB_RUN': False, '__name__': 'db_gear', '__file__': gp}
+    exec(open(gp, encoding='utf-8').read(), g)
+    vp = os.path.join(_ROOT, 'tools', 'blender', 'plate_variants.py')
+    v = {'__name__': 'db_plate', '__file__': vp}
+    exec(open(vp, encoding='utf-8').read(), v)
+    plate = [f'DB_pv_p_{piece}' for piece in ('body_plate', 'gloves', 'boots')]
+    built = False
+    for weapon in HERO_WEAPONS:
+        for outfit, extra in (('plain', []), ('plate', plate)):
+            name = f'hero:{weapon}:{outfit}'
+            if not want(name):
+                continue
+            if extra and not built:
+                v['build_variant']('p')
+                built = True
+            if f'DB_gear_{weapon}' not in bpy.data.scenes:
+                g['build'](weapon)
+
+            def build(sources=[f'DB_gear_{weapon}'] + extra):
+                scene, _ = build_hero('DB_fitcheck')
+                dress(scene, sources)
+                return scene
+            check(name, build, hero_kinds(weapon), hold_of(weapon))
+    for name, (fn, kinds, hold) in _minion_builders().items():
+        if want(name):
+            check(name, fn, kinds, hold)
     out['fails'] = fails
     return out

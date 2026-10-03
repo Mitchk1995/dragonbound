@@ -24,36 +24,98 @@ export interface AnimState {
 export const newAnimState = (): AnimState => ({ speed: 0, attack: -1, attackKind: 'swing', hurt: 0, dead: -1, fly: 0, special: -1 });
 
 const ease = (t: number) => t * t * (3 - 2 * t);
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 const QA = new THREE.Quaternion(), QB = new THREE.Quaternion(), QC = new THREE.Quaternion(), QD = new THREE.Quaternion();
 const V1 = new THREE.Vector3();
 
-/** Dragon head/neck levelling and sword wrist angle; tuned against tests/poses.test.ts. */
+/** Dragon head/neck levelling; tuned against tests/poses.test.ts. */
 export const HEAD_LEVEL = 0.35;
 export const HEAD_FLY_LEVEL = -0.2;
 export const NECK_FLY_EXTEND = 0.3;
-export const SWING_WRIST = 1.23;
 
 /** Where the blow lands in every attack animation (see COMBAT_TUNING.impact). */
 const IMPACT = COMBAT_TUNING.impact;
 
-/** How far the hanging arms turn out from the body (radians, about Z); tools/blender/fitcheck.py poses with it. */
+/** How far the hanging arms turn out from the body (radians, about Z); tools/blender/animpose.py mirrors it. */
 export const ARM_SPLAY = 0.1;
 
 /** How much of the upper arm's rotation the pauldron follows (see Rig.followShoulders). */
 export const SHOULDER_FOLLOW = 0.75;
 
-/** Extra hand-socket rotation during the bow shot so the bow stands upright with the string facing the archer. */
-// Found by searching quarter turns with __bowReport: upright through the draw, arrow at the target,
-// nock on the draw hand, string behind the grip both drawn and at rest (brace toward the archer).
-export const BOW_SOCKET: [number, number, number] = [0, Math.PI / 2, Math.PI / 2];
+/**
+ * How a humanoid carries what is in its right hand. Every hand is a LEGO hand (tools/blender/_common.py clip_hand):
+ * whatever it holds runs through its hole, at right angles to the forearm. 'upright': a staff, carried upright
+ * through the hand with the forearm forward; 'bow': a bow, carried the same way but plumb and out from the body
+ * (BOW_OUT); 'side': a blade, club or tool, the arm hanging and the wrist tipping it a little down;
+ * 'empty': nothing in it (a kobold's sling hangs free). The hero's comes from the weapon (registry.ts HeroDresser,
+ * root.userData.hold); a creature's from its model: a part named 'staffbody' is a staff held upright, one named
+ * 'weapon' is carried at the side.
+ */
+export type Hold = 'upright' | 'bow' | 'side' | 'empty';
+
+/** Elbows bend about their X axis, negative bringing the forearm forward (like a raised arm's x), and then turn about
+ * the upper arm (y, the Euler order 'YXZ': negative swings the bent forearm toward -X). LEGO arms rest a little
+ * bent. */
+export const ELBOW_REST = -0.25;
+/** The upright and bow holds: the forearm level and forward, high enough that the hand clears belts and hips, so the
+ * staff or bow through the hand stands upright... */
+export const HOLD_BEND = -1.57;
+/** ...the wrist tipping a staff a touch toward the target. */
+export const HOLD_WRIST = 0.17;
+/** A bow's limbs sweep in toward its string, which lies on the body's side of the hand (BOW_STRING), so a bow is
+ * carried out from the body, its lower limb clear of the striding leg: the arm a little further out (BOW_OUT, about
+ * Z), the forearm turned out at the elbow (BOW_CARRY, the elbow's turn) and the wrist rolling the bow back to plumb
+ * (BOW_PLUMB, about the forearm). */
+export const BOW_OUT = 0.2;
+export const BOW_CARRY = -0.5;
+export const BOW_PLUMB = -0.2;
+/** Whether a hold carries its forearm level and forward (a staff or a bow). */
+const forearmForward = (hold: Hold) => hold === 'upright' || hold === 'bow';
+/** The hand at the side tips its blade or tool a little down (the wrist, about X; positive turns it toward the
+ * forearm's line). */
+export const SIDE_WRIST = 0.5;
 
 /**
- * Draw-arm rotation at the anchor: the hand level with the middle of the string, on the arrow line behind the grip.
- * Found by searching the arm's reach in the pose test. The arms have no elbow, so this is the only point on the
- * arrow line the hand can reach; it gets there while the bow comes up, takes the string and holds it to release.
+ * Sword swing. The wind-up raises the upper arm forward and up (WIND_ARM) and folds the forearm back over the
+ * shoulder (WIND_ELBOW), the wrist cocking the blade up and back in line with the forearm (SWING_WRIST); the strike
+ * straightens the arm through the target (STRIKE_ELBOW) and the wrist relaxes after the blow.
  */
-export const BOW_ANCHOR: [number, number] = [-1.58, -1.51];
+export const WIND_ARM = 2.6;
+export const WIND_ELBOW = -1.0;
+export const SWING_WRIST = 1.3;
+export const STRIKE_ELBOW = -0.15;
+
+/** Cast: the staff arm lifts forward (CAST_ARM), the forearm opening out of the hold (CAST_ELBOW) while the wrist
+ * keeps the staff upright, leaning at the target (CAST_WRIST); the free hand reaches toward the target (CAST_REACH). */
+export const CAST_ARM = 2.1;
+export const CAST_ELBOW = -0.1;
+export const CAST_WRIST = 0.885;
+export const CAST_REACH = 1.7;
+
+/**
+ * Bow shot, side-on: the body turns BOW_TURN so the bow shoulder (right, -X) leads, the head turns to look down the
+ * arrow and the straight bow arm points the bow at the target, the bow hand turned so the bow stands upright through
+ * it with the string toward the archer and the arrow, drawn through the middle of the string (BOW_MID above the
+ * hand, gear.py), level and at the target. The draw hand reaches that arrow line (Rig.reach): it takes the string
+ * DRAW_GRAB behind the bow's middle while the bow comes up and draws it back to DRAW_ANCHOR, against the cheek, by
+ * bending the elbow, the elbow swung toward DRAW_POLE so the arm stays clear of the chest. The string runs through
+ * the draw hand's hole and the arrow leaves through the slot of its C.
+ */
+export const BOW_TURN = Math.PI / 2;
+export const BOW_HEAD = 0.85;
+/** Where the straight bow arm points, from the right shoulder (body space, unit-free). */
+export const BOW_AIM: [number, number, number] = [-0.807, 0.07, 0.586];
+/** How the straight bow arm rolls: its local +Z (the inside of its elbow) turned up, so its shoulder armour stays
+ * clear of the chest and helm. */
+export const BOW_ROLL: [number, number, number] = [0, 1, 0.3];
+export const BOW_MID = 0.15;
+/** The side of the hand the bow's string lies on, in the hand socket's frame (gear.py bow_frame turns the bow a
+ * quarter round in the hand, so carried upright its string runs beside the forearm, not back through it). */
+export const BOW_STRING: [number, number, number] = [1, 0, 0];
+export const DRAW_GRAB = 1.29;
+export const DRAW_ANCHOR = 1.35;
+export const DRAW_POLE: [number, number, number] = [1, 0.1, 0.6];
 
 /** Procedural animation over named rigid parts. */
 export class Rig {
@@ -63,16 +125,23 @@ export class Rig {
   private phase = 0;
   private time = Math.random() * 10;
   readonly quadruped: boolean;
+  /** A creature's own hold, from what its model carries (see Hold). */
+  private readonly modelHold: Hold;
+  /** The arms' carry this frame (update): each arm's swing (x), each elbow's bend (e) and the right wrist (w). */
+  private readonly carry = { xL: 0, xR: 0, eL: 0, eR: 0, wR: 0 };
 
   constructor(public root: THREE.Object3D, public stride = 2.2) {
     root.traverse((o) => {
       if (o.name && !this.parts.has(o.name)) {
+        // An elbow bends, then turns about the upper arm (see ELBOW_REST).
+        if (o.name === 'elbowL' || o.name === 'elbowR') o.rotation.reorder('YXZ');
         this.parts.set(o.name, o);
         this.baseRot.set(o, o.rotation.clone());
         this.basePos.set(o, o.position.clone());
       }
     });
     this.quadruped = this.parts.has('legFL');
+    this.modelHold = this.parts.has('staffbody') ? 'upright' : this.parts.has('weapon') ? 'side' : 'empty';
   }
 
   part(name: string) {
@@ -91,6 +160,11 @@ export class Rig {
     if (!p) return;
     const b = this.basePos.get(p)!;
     p.position.set(b.x + x, b.y + y, b.z + z);
+  }
+
+  /** The right hand's hold (see Hold). */
+  hold(): Hold {
+    return (this.root.userData.hold as Hold | undefined) ?? this.modelHold;
   }
 
   update(dt: number, s: AnimState) {
@@ -170,10 +244,22 @@ export class Rig {
     this.offset('body', 0, Math.abs(sw) * 0.06 * moveAmt + breathe);
     this.rot('body', hurtLean + moveAmt * 0.08);
     this.rot('head', -moveAmt * 0.05, Math.sin(t * 0.7) * 0.05);
-    // The arms hang a little out from the sides (armL is at +X, armR at -X), so the fists clear the hips and skirts.
-    this.rot('armL', -sw * 0.5 * moveAmt, 0, ARM_SPLAY);
-    this.rot('armR', sw * 0.3 * moveAmt, 0, -ARM_SPLAY);
-    this.rot('sock_handR');
+    // The arms hang a little out from the sides (armL is at +X, armR at -X), so the hands clear the hips and skirts,
+    // and swing with the stride, the elbows bending a little more as each arm swings forward. A staff or bow swings
+    // less and keeps its forearm level through the stride, so it stays upright; a bow is carried out from the body.
+    const hold = this.hold(), fore = forearmForward(hold), bow = hold === 'bow', c = this.carry;
+    c.xL = -sw * 0.5 * moveAmt;
+    c.xR = sw * (fore ? 0.15 : 0.3) * moveAmt;
+    c.eL = ELBOW_REST + Math.min(0, c.xL) * 0.5;
+    c.eR = fore ? HOLD_BEND - c.xR : ELBOW_REST + Math.min(0, c.xR) * 0.5;
+    // A blade or tool at the side is carried steady: the wrist counters the arm's swing.
+    c.wR = hold === 'side' ? SIDE_WRIST - c.xR : hold === 'upright' ? HOLD_WRIST : 0;
+    this.rot('armL', c.xL, 0, ARM_SPLAY);
+    this.rot('armR', c.xR, 0, -ARM_SPLAY - (bow ? BOW_OUT : 0));
+    this.rot('elbowL', c.eL);
+    this.rot('elbowR', c.eR, bow ? BOW_CARRY : 0);
+    this.rot('handL');
+    this.rot('handR', c.wR, bow ? BOW_PLUMB : 0);
     this.rot('tail1', 0, Math.sin(t * 3) * 0.3);
     this.rot('tail2', 0, Math.sin(t * 3 - 0.8) * 0.4);
 
@@ -208,56 +294,67 @@ export class Rig {
    */
   private attackPose(s: AnimState) {
     const a = s.attack;
+    // The arms' carry this frame, stride and all: every attack starts and ends there, so none jumps when it begins or
+    // ends on the move.
+    const { xR: x0, eR: e0, wR: w0, xL, eL } = this.carry;
     switch (s.attackKind) {
       case 'swing': {
         // Wind up overhead, whip down through the target (mid-strike at the impact), recover.
         const up = IMPACT - 0.1, down = IMPACT + 0.1;
-        let x: number;
-        if (a < up) x = -3.2 * ease(a / up);
-        else if (a < down) x = -3.2 + 2.85 * ease((a - up) / (down - up));
-        // The strike ends with the arm still a little forward so long tools (pickaxe) clear the ground.
-        else x = -0.35 * (1 - ease((a - down) / (1 - down)));
+        let x: number, e: number;
+        if (a < up) {
+          const k = ease(a / up);
+          x = lerp(x0, -WIND_ARM, k);
+          e = lerp(e0, WIND_ELBOW, k);
+        } else if (a < down) {
+          const k = ease((a - up) / (down - up));
+          x = -WIND_ARM + (WIND_ARM - 0.35) * k;
+          e = lerp(WIND_ELBOW, STRIKE_ELBOW, k);
+        } else {
+          // The strike ends with the arm still a little forward so long tools (pickaxe) clear the ground.
+          const k = ease((a - down) / (1 - down));
+          x = lerp(-0.35, x0, k);
+          e = lerp(STRIKE_ELBOW, e0, k);
+        }
         this.rot('armR', x, 0, -ARM_SPLAY);
-        // Wrist: cock the blade back over the head in the windup, keep it through the impact, relax after.
-        const wrist = a < IMPACT ? SWING_WRIST * ease(Math.min(1, a / up)) : SWING_WRIST * (1 - ease((a - IMPACT) / (1 - IMPACT)));
-        this.rot('sock_handR', wrist);
+        this.rot('elbowR', e);
+        // Wrist: cock the blade back in line with the forearm in the wind-up, keep it through the impact, relax after.
+        const wrist = a < IMPACT ? lerp(w0, SWING_WRIST, ease(Math.min(1, a / up))) : lerp(SWING_WRIST, w0, ease((a - IMPACT) / (1 - IMPACT)));
+        this.rot('handR', wrist);
         this.rot('body', a < up ? -0.1 : 0.15, a < up ? 0.3 * ease(a / up) : -0.3 * (1 - a), 0);
         break;
       }
       case 'slam': {
-        const x = a < IMPACT ? -3.0 * ease(a / IMPACT) : -3.0 + 2.8 * ease((a - IMPACT) / (1 - IMPACT));
-        this.rot('armR', x, 0, -ARM_SPLAY);
-        this.rot('armL', x, 0, ARM_SPLAY);
+        // Both arms up, the forearms folding back over the head, then down hard, the arms straightening.
+        const up = a < IMPACT ? ease(a / IMPACT) : 1 - ease((a - IMPACT) / (1 - IMPACT));
+        const k = a < IMPACT ? ease(a / IMPACT) : ease((a - IMPACT) / (1 - IMPACT));
+        this.rot('armR', a < IMPACT ? lerp(x0, -3.0, k) : lerp(-3.0, x0, k), 0, -ARM_SPLAY);
+        this.rot('armL', a < IMPACT ? lerp(xL, -3.0, k) : lerp(-3.0, xL, k), 0, ARM_SPLAY);
+        this.rot('elbowR', lerp(e0, -0.5, up));
+        this.rot('elbowL', lerp(eL, -0.5, up));
         this.rot('body', a < IMPACT ? -0.2 : 0.25);
         break;
       }
-      case 'bow': {
-        // Side-on archer stance: the bow shoulder (right, -X) turns to lead, the bow arm points
-        // straight at the target, the draw hand anchors under the chin on the same line, and the
-        // head turns to look down the arrow. Verified numerically with __bowReport (dev/poseCheck).
-        const raise = ease(Math.min(1, a / 0.2));
-        const draw = bowDrawAmount(a);
-        this.root.rotation.y = (Math.PI / 2) * raise;
-        this.rot('armR', 0, 0, (-Math.PI / 2) * raise);
-        this.rot('sock_handR', BOW_SOCKET[0] * raise, BOW_SOCKET[1] * raise, BOW_SOCKET[2] * raise);
-        // Draw arm: up to the anchor on the arrow line while the bow rises; it holds the string there to release.
-        this.rot('armL', BOW_ANCHOR[0] * raise, 0, BOW_ANCHOR[1] * raise);
-        this.rot('head', 0, (-Math.PI / 2) * 0.85 * raise);
+      case 'bow':
+        this.bowPose(a);
         break;
-      }
       case 'cast': {
         const lift = a < IMPACT ? ease(a / IMPACT) : 1 - ease((a - IMPACT) / (1 - IMPACT));
-        const armX = -1.2 - 1.0 * lift;
-        this.rot('armR', armX);
-        // Keep the staff mostly upright, leaning slightly toward the target at the peak.
-        this.rot('sock_handR', -armX + 0.35);
-        this.rot('armL', -1.0 - 0.8 * lift);
+        // The staff rises high and forward out of the hold, still upright and leaning at the target; the free hand
+        // reaches toward the target.
+        this.rot('armR', lerp(x0, -CAST_ARM, lift), 0, -ARM_SPLAY);
+        this.rot('elbowR', lerp(e0, CAST_ELBOW, lift));
+        this.rot('handR', lerp(w0, CAST_WRIST, lift));
+        this.rot('armL', lerp(xL, -CAST_REACH, lift), 0, ARM_SPLAY);
+        this.rot('elbowL', lerp(eL, -0.35, lift));
         this.rot('body', -0.1 * lift);
         break;
       }
       case 'throw': {
-        const x = a < IMPACT ? -2.6 * ease(a / IMPACT) : -2.6 + 2.0 * ease((a - IMPACT) / (1 - IMPACT));
-        this.rot('armR', x);
+        // Wind the arm back over the shoulder, the elbow folded, then whip it forward and straighten it at the release.
+        const k = a < IMPACT ? ease(a / IMPACT) : ease((a - IMPACT) / (1 - IMPACT));
+        this.rot('armR', a < IMPACT ? lerp(x0, -2.6, k) : lerp(-2.6, x0, k), 0, -ARM_SPLAY);
+        this.rot('elbowR', a < IMPACT ? lerp(e0, -1.1, k) : lerp(-1.1, e0, k));
         break;
       }
       case 'bite':
@@ -265,4 +362,105 @@ export class Rig {
         break;
     }
   }
+
+  /** The bow shot (see BOW_TURN). */
+  private bowPose(a: number) {
+    const raise = ease(Math.min(1, a / 0.2));
+    this.root.rotation.y = BOW_TURN * raise;
+    this.rot('head', 0, -BOW_TURN * BOW_HEAD * raise);
+    const armR = this.parts.get('armR'), sock = this.parts.get('sock_handR');
+    if (!this.parts.get('body') || !armR || !sock) return;
+    // Bow arm: straight, pointing the bow at the target; its hold turns into the aim as the bow comes up.
+    this.pointArm(armR, B.aim.fromArray(BOW_AIM).normalize(), B.front.fromArray(BOW_ROLL), raise);
+    this.rot('elbowR', lerp(this.carry.eR, 0, raise), lerp(BOW_CARRY, 0, raise));
+    // Bow hand: the bow upright through it (the hand's +Z up) and its string, on the hand's +X side (BOW_STRING), toward
+    // the archer (body +X): the hand's +Y turns to body -Z.
+    this.orientHand('R', B.up.set(0, 1, 0), B.back.set(0, 0, -1), raise);
+    // Draw hand: onto the arrow line, where it takes the string, then back to the anchor at the cheek, where it holds
+    // after the release.
+    const s = this.bodySpace(sock, B.m);
+    const target = B.target.set(0, BOW_MID, 0).applyMatrix4(s);
+    const back = B.back.fromArray(BOW_STRING).transformDirection(s);
+    target.addScaledVector(back, lerp(DRAW_GRAB, DRAW_ANCHOR, a < IMPACT ? bowDrawAmount(a) : 1));
+    this.reach('L', target, B.pole.fromArray(DRAW_POLE).normalize(), raise);
+    // The draw hand turns so the string runs through its hole (the hand's +Z along the bow), continuing its forearm.
+    this.orientHand('L', B.up.set(0, 1, 0).transformDirection(s), null, raise);
+  }
+
+  /** A part's world matrix in the body's space (written into `out`). */
+  private bodySpace(o: THREE.Object3D, out: THREE.Matrix4) {
+    const body = this.parts.get('body')!;
+    this.root.updateMatrixWorld(true);
+    return out.copy(body.matrixWorld).invert().multiply(o.matrixWorld);
+  }
+
+  /**
+   * Turns an arm (a shoulder pivot on the body, hanging down its local -Y) so it points along `dir` (body space), its
+   * local +Z kept as near `front` as it can be, blended in by k from its current rotation.
+   */
+  private pointArm(arm: THREE.Object3D, dir: THREE.Vector3, front: THREE.Vector3, k: number) {
+    const y = R.y.copy(dir).negate();
+    const z = R.z.copy(front).projectOnPlane(y).normalize();
+    const x = R.x.crossVectors(y, z);
+    arm.quaternion.slerp(R.q.setFromRotationMatrix(R.m.makeBasis(x, y, z)), k);
+  }
+
+  /**
+   * Two-bone reach: turns arm<side> and bends elbow<side> so the centre of the hand's hole lands on `target` (body
+   * space), the elbow swung toward `pole`, blended in by k from the pose already set. The wrist is left as it is.
+   */
+  private reach(side: 'L' | 'R', target: THREE.Vector3, pole: THREE.Vector3, k: number) {
+    const arm = this.parts.get(`arm${side}`), elbow = this.parts.get(`elbow${side}`), hand = this.parts.get(`hand${side}`);
+    const sock = this.parts.get(side === 'L' ? 'sock_handL' : 'sock_gloveR');
+    if (!arm || !elbow || !hand || !sock) return;
+    const l1 = elbow.position.length(), l2 = R.x.copy(hand.position).add(sock.position).length();
+    const toT = R.t.subVectors(target, this.basePos.get(arm)!);
+    const dist = THREE.MathUtils.clamp(toT.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
+    const tDir = toT.normalize();
+    const cosB = THREE.MathUtils.clamp((l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), -1, 1);
+    const out = R.o.copy(pole).projectOnPlane(tDir).normalize();
+    // The upper arm runs from the shoulder to the elbow, swung toward the pole; the forearm on to the target.
+    const u = R.u.copy(tDir).multiplyScalar(cosB).addScaledVector(out, Math.sqrt(1 - cosB * cosB));
+    const f = R.f.copy(tDir).multiplyScalar(dist).addScaledVector(u, -l1).normalize();
+    const bend = Math.acos(THREE.MathUtils.clamp(u.dot(f), -1, 1));
+    // The arm's local -Y runs down the upper arm and its +Z toward the forearm: the elbow bends about X, toward +Z.
+    const z = R.z.copy(f).projectOnPlane(u).normalize();
+    const y = R.y.copy(u).negate();
+    const x = R.x.crossVectors(y, z);
+    arm.quaternion.slerp(R.q.setFromRotationMatrix(R.m.makeBasis(x, y, z)), k);
+    elbow.rotation.x = lerp(elbow.rotation.x, this.baseRot.get(elbow)!.x - bend, k);
+  }
+
+  /**
+   * Turns hand<side> (a wrist pivot) so its hole runs along `axis` (body space, the hand's +Z) and its length back
+   * along `along` (the hand's +Y, toward the wrist); without `along` the hand only twists on its forearm, its hole as
+   * near `axis` as that allows. Blended in by k from the pose already set.
+   */
+  private orientHand(side: 'L' | 'R', axis: THREE.Vector3, along: THREE.Vector3 | null, k: number) {
+    const hand = this.parts.get(`hand${side}`);
+    if (!hand?.parent) return;
+    const fore = this.bodySpace(hand.parent, R.m2);
+    let y: THREE.Vector3, z: THREE.Vector3;
+    if (along) {
+      z = R.z.copy(axis).normalize();
+      y = R.y.copy(along).projectOnPlane(z).normalize();
+    } else {
+      y = R.y.set(0, 1, 0).transformDirection(fore);
+      z = R.z.copy(axis).projectOnPlane(y).normalize();
+    }
+    const x = R.x.crossVectors(y, z);
+    const want = R.q.setFromRotationMatrix(R.m.makeBasis(x, y, z));
+    hand.quaternion.slerp(R.q2.setFromRotationMatrix(fore).invert().multiply(want), k);
+  }
 }
+
+/** Scratch space for the bow pose and its helpers (no allocation per frame). */
+const B = {
+  aim: new THREE.Vector3(), front: new THREE.Vector3(), up: new THREE.Vector3(), back: new THREE.Vector3(),
+  target: new THREE.Vector3(), pole: new THREE.Vector3(), m: new THREE.Matrix4(),
+};
+const R = {
+  x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), t: new THREE.Vector3(), o: new THREE.Vector3(),
+  u: new THREE.Vector3(), f: new THREE.Vector3(), q: new THREE.Quaternion(), q2: new THREE.Quaternion(),
+  m: new THREE.Matrix4(), m2: new THREE.Matrix4(),
+};

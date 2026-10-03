@@ -202,20 +202,93 @@ def union(base, *others):
     return base
 
 
-def fist(parent, pos, color, s, size=(0.25, 0.25, 0.26), rot=(0, 0, 0), bevel=0.05):
-    """A closed fist in one piece, like a mitten: a chamfered block with the thumb wrapped across the upper front,
-    pointing toward the outside of the hand (side s: +1 for a left hand at +X, -1 for a right hand), its tip pressed
-    on the fingers. Every hand with the hero's kind of fist uses it; anything held passes through the fist (a sword
-    grip front to back under the thumb, a staff upright through its front)."""
-    w, h, d = size
-    k = w / 0.25
-    o = box(parent, size, (0, 0, 0), color, bevel=bevel)
-    t = box(parent, (0.15 * k, 0.085 * k, 0.075 * k), (-s * 0.035 * k, 0.03 * k, d / 2 + 0.01 * k), color,
-            rot=(0, 0, s * 0.14), bevel=0.026 * k)
-    union(o, t)
+def _oct(apothem):
+    """An octagon with flats facing +-X, +-Y and the diagonals, as (axis apothem, diagonal apothem): a number is a
+    regular octagon, a pair a square with its corners cut (a bigger diagonal apothem)."""
+    a, d = (apothem, apothem) if isinstance(apothem, (int, float)) else apothem
+    flats = [(k * math.pi / 4, a if k % 2 == 0 else d) for k in range(8)]
+    # Corner k sits between flat k and flat k + 1: where their two lines meet.
+    corners = []
+    for k in range(8):
+        (t0, p0), (t1, p1) = flats[k], flats[(k + 1) % 8]
+        det = math.sin(t1 - t0)
+        x = (p0 * math.sin(t1) - p1 * math.sin(t0)) / det
+        y = (p1 * math.cos(t0) - p0 * math.cos(t1)) / det
+        corners.append((math.atan2(y, x) % (2 * math.pi), math.hypot(x, y)))
+
+    def r(t):   # distance from the centre to the outline along the direction at angle t
+        return min(p / math.cos(t - tf) for tf, p in flats if math.cos(t - tf) > 1e-6)
+    return r, sorted(c[0] for c in corners)
+
+
+def clip_profile(outer, inner, gap, gap_at):
+    """The C of a LEGO-style hand, in its own plane: an octagon `outer` round an octagonal hole `inner` (see _oct),
+    cut through by a slot `gap` wide whose middle points along angle `gap_at` (0 = +X, pi/2 = +Y). Returns the outline
+    as (x, y) points, counter-clockwise: round the outside from one wall of the slot to the other, then back round the
+    hole."""
+    ro, co = _oct(outer)
+    ri, ci = _oct(inner)
+
+    def wall(r_fn, side):
+        d = 0.0
+        for _ in range(8):   # the slot's walls are parallel: offset gap/2 from its middle at every radius
+            d = math.asin(min(0.99, gap / 2 / r_fn(gap_at + side * d)))
+        return gap_at + side * d
+    o0, o1 = wall(ro, 1), wall(ro, -1) + 2 * math.pi
+    i0, i1 = wall(ri, 1), wall(ri, -1) + 2 * math.pi
+    turns = lambda cs: sorted(t + k * 2 * math.pi for t in cs for k in (-1, 0, 1, 2))
+    pt = lambda r_fn, t: (r_fn(t) * math.cos(t), r_fn(t) * math.sin(t))
+    out = [pt(ro, o0)] + [pt(ro, t) for t in turns(co) if o0 < t < o1] + [pt(ro, o1)]
+    hole = [pt(ri, i1)] + [pt(ri, t) for t in reversed(turns(ci)) if i0 < t < i1] + [pt(ri, i0)]
+    return out + hole
+
+
+def clip_hand(parent, pos, color, s, outer=0.135, inner=0.07, depth=0.22, gap=0.05, gap_tilt=0.5, stub=(0.13, 0.09, 0.13),
+              rot=(0, 0, 0), bevel=0.018):
+    """A hand in one piece shaped like a LEGO minifigure's: a chunky C (an octagonal ring) with a hole that whatever it
+    holds passes through, never a thumb. Its local frame is the hanging hand's: the wrist above (+Y), where a short
+    stub carries it into the forearm; the hole runs front to back (local Z), so a held grip points forward; the slot of
+    the C opens downward, tipped `gap_tilt` toward the body (side s: +1 for a left hand at +X, -1 for a right hand).
+    `pos` is the centre of the hole."""
+    gap_at = -math.pi / 2 - s * gap_tilt
+    pts = clip_profile(outer, inner, gap, gap_at)
+    bm = bmesh.new()
+    front = [bm.verts.new((x, y, depth / 2)) for x, y in pts]
+    back = [bm.verts.new((x, y, -depth / 2)) for x, y in pts]
+    bm.faces.new(front)
+    bm.faces.new(list(reversed(back)))
+    n = len(pts)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((front[i], back[i], back[j], front[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    if bevel > 0:   # chamfer the rims round the front and back faces (not along the depth), so it reads chunky and soft
+        rims = [e for e in bm.edges if abs(e.verts[0].co.z - e.verts[1].co.z) < 1e-6]
+        bmesh.ops.bevel(bm, geom=rims, offset=bevel, segments=1, affect='EDGES', profile=0.5, clamp_overlap=True)
+    o = _mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color)
+    if stub:
+        w, h, d = stub
+        union(o, box(parent, (w, h + 0.02, d), (0, outer + h / 2 - 0.01, 0), color, bevel=0))
     o.location = pos
     o.rotation_euler = rot
     return o
+
+
+def joint_limb(parent, w, d, y0, y1, color, round_top=False, round_bottom=False, bevel=0.03, z=0.0):
+    """A limb block from height y0 down to y1 (y0 > y1), w wide (X) and d deep (Z), in its parent's frame. An end at a
+    joint (`round_top` / `round_bottom`) is rounded about the joint's hinge (the X axis through that end's height): it
+    runs on past it as half an octagon of radius d/2, so the block keeps its outline however far the joint bends and
+    two limbs rounded about the same hinge meet in one seamless joint."""
+    r = d / 2
+    t = r * math.tan(math.pi / 8)
+
+    def end(y, sgn, rounded):   # (z, y) points across one end, from +z to -z; sgn = +1 at the top
+        if not rounded:
+            return [(r, y), (-r, y)]
+        return [(r, y + sgn * t), (t, y + sgn * r), (-t, y + sgn * r), (-r, y + sgn * t)]
+    pts = end(y0, 1, round_top) + list(reversed(end(y1, -1, round_bottom)))
+    # The outline lies in the YZ plane; the prism's depth runs along X (its local x becomes -z).
+    return prism(parent, [(-zz, yy) for zz, yy in pts], w, (0, 0, z), color, rot=(0, math.pi / 2, 0), bevel=bevel)
 
 
 def cyl(parent, r_top, r_bot, h, pos, color, rot=(0, 0, 0), seg=6, emissive=None, strength=2.0):
