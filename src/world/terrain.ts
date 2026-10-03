@@ -31,6 +31,38 @@ const WEATHER = 1.6;
 /** How far a gully cuts back into an outdoor face beyond the weathering. */
 const GULLY = 1.3;
 export const WATER_Y = -0.28;
+/** The layer a moat's mirror draws, and how far from its water what it draws stands (see fluidSurface). */
+const MOAT_MIRROR_LAYER = 5, MOAT_MIRROR_REACH = 8;
+
+/**
+ * Does a box come within `reach` (in plan) of a water surface (its geometry's cells, in world units)?
+ * The cells the water covers, grown by `reach`, on a grid a metre square.
+ */
+function waterNear(geo: THREE.BufferGeometry, reach: number) {
+  const p = geo.getAttribute('position');
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (let i = 0; i < p.count; i++) {
+    x0 = Math.min(x0, p.getX(i));
+    x1 = Math.max(x1, p.getX(i));
+    z0 = Math.min(z0, p.getZ(i));
+    z1 = Math.max(z1, p.getZ(i));
+  }
+  const R = Math.ceil(reach), ox = Math.floor(x0) - R, oz = Math.floor(z0) - R, W = Math.ceil(x1) + R - ox + 1, H = Math.ceil(z1) + R - oz + 1;
+  const wet = new Uint8Array(W * H), grown = new Uint8Array(W * H);
+  for (let i = 0; i < p.count; i++) wet[(Math.floor(p.getZ(i)) - oz) * W + (Math.floor(p.getX(i)) - ox)] = 1;
+  for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) {
+    if (!wet[z * W + x]) continue;
+    for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) {
+      const xx = x + dx, zz = z + dz;
+      if (xx >= 0 && zz >= 0 && xx < W && zz < H && dx * dx + dz * dz <= R * R) grown[zz * W + xx] = 1;
+    }
+  }
+  return (b: THREE.Box3) => {
+    const bx0 = Math.max(0, Math.floor(b.min.x) - ox), bx1 = Math.min(W - 1, Math.floor(b.max.x) - ox), bz0 = Math.max(0, Math.floor(b.min.z) - oz), bz1 = Math.min(H - 1, Math.floor(b.max.z) - oz);
+    for (let z = bz0; z <= bz1; z++) for (let x = bx0; x <= bx1; x++) if (grown[z * W + x]) return true;
+    return false;
+  };
+}
 /** Brightness of the ground under a lawn (its root layer). */
 const LAWN_ROOT = 0.5;
 
@@ -214,6 +246,21 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       base[vi(x, z)] = walk > -Infinity ? walk : any > -Infinity ? low : 0;
     }
   }
+  // Water standing at its own level (layout.level on its cells: a moat below the turf) is held by
+  // built banks: every corner it touches stands at the water's level, so the bank drops straight
+  // inside the masonry that holds it and no slope of earth shows in front of the wall's face. Its bed
+  // lies `layout.elev` under the surface where the layout gives one (a fluid cell has no relief).
+  const wLevel = new Float32Array(nV).fill(-Infinity), wDepth = new Float32Array(nV);
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    const i = z * w + x;
+    if (!layout.fluid[i] || layout.cells[i] === Cell.Void) continue;
+    const lv = layout.level ? layout.level[i] : 0;
+    for (const k of [vi(x, z), vi(x + 1, z), vi(x + 1, z + 1), vi(x, z + 1)]) {
+      wLevel[k] = Math.max(wLevel[k], lv);
+      wDepth[k] = Math.max(wDepth[k], layout.elev[i]);
+    }
+  }
+  for (let k = 0; k < nV; k++) if (wLevel[k] > -Infinity && base[k] - wLevel[k] > 1) base[k] = wLevel[k];
   /** Distance from a grid vertex to the nearest dry (non-fluid, non-void) cell, searched out to 5. */
   const distToLand = (vx: number, vz: number) => {
     let best = 5;
@@ -373,7 +420,10 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         const dLand = distToLand(x, z);
         const lava = layout.fluid[Math.min(h - 1, z) * w + Math.min(w - 1, x)] === Fluid.Lava;
         const shoal = lava ? 0 : (noise(x * 0.12 + 31, z * 0.12) - 0.5) * 0.5;
-        y = Math.max(BED_Y, Math.min(WATER_Y - 0.16, WATER_Y - 0.1 - dLand * (lava ? 0.32 : 0.13) + shoal)) + (noise(x * 0.4, z * 0.4) - 0.5) * 0.12;
+        // (A moat's bed falls away steeply from its masonry to its full depth.)
+        y = wDepth[k] > 0
+          ? Math.max(WATER_Y - wDepth[k], WATER_Y - 0.12 - dLand * 0.85) + (noise(x * 0.4, z * 0.4) - 0.5) * 0.16
+          : Math.max(BED_Y, Math.min(WATER_Y - 0.16, WATER_Y - 0.1 - dLand * (lava ? 0.32 : 0.13) + shoal)) + (noise(x * 0.4, z * 0.4) - 0.5) * 0.12;
       } else if (fluidN[k] > 0) {
         // Waterline: some shore corners just above the surface, some just below, so the visible
         // edge (where the bank meets the water) wanders instead of following the cell grid.
@@ -401,7 +451,9 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     for (let z = 1; z < h; z++) for (let x = 1; x < w; x++) {
       const k = vi(x, z);
       if (!shore[k]) continue;
-      next[k] = hgt[k] * 0.4 + (hgt[vi(x - 1, z)] + hgt[vi(x + 1, z)] + hgt[vi(x, z - 1)] + hgt[vi(x, z + 1)]) * 0.15;
+      // (Only among corners on one level: a built bank's top never sags toward the water under it.)
+      const nb = (j: number) => (Math.abs(base[j] - base[k]) < 0.01 ? hgt[j] : hgt[k]);
+      next[k] = hgt[k] * 0.4 + (nb(vi(x - 1, z)) + nb(vi(x + 1, z)) + nb(vi(x, z - 1)) + nb(vi(x, z + 1))) * 0.15;
     }
     hgt.set(next);
   }
@@ -482,7 +534,12 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     for (let x = 0; x < w; x++) {
       if (at(x, z) === Cell.Void) continue;
       const a = vi(x, z), b = vi(x + 1, z), cc = vi(x + 1, z + 1), d = vi(x, z + 1);
-      const tris = (x + z) & 1 ? [a, d, b, b, d, cc] : [a, d, cc, a, cc, b];
+      // (A cell with one corner far off the level of the other three, at a built bank's step, is cut
+      // on the diagonal that leaves that corner's slope to its own half, so the rest stays level.)
+      const ys = [a, b, cc, d].map((v) => hgt[v] + base[v]), level = [a, b, cc, d].every((v) => hgt[v] <= FLOOR_CAP);
+      const odd = !level ? -1 : ys.findIndex((y, j) => ys.every((o, m) => m === j || (Math.abs(o - y) > 1 && ys.every((q, n) => n === j || Math.abs(q - o) < 0.4))));
+      const anti = odd < 0 ? (x + z) & 1 : odd === 0 || odd === 2 ? 1 : 0;
+      const tris = anti ? [a, d, b, b, d, cc] : [a, d, cc, a, cc, b];
       // Cave rock is rebuilt finer (caveRelief below): its cells leave the grid mesh entirely.
       if ([a, b, cc, d].some((v) => hgt[v] > FLOOR_CAP)) {
         caveCells.push(x, z);
@@ -929,25 +986,40 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
     const cells: number[] = [];
     for (let i = 0; i < w * h; i++) if (mark[i]) cells.push(i);
     if (!cells.length) continue;
-    const fp: number[] = [], depth: number[] = [];
+    // Water standing above the zone's floor in a built moat is drawn as its own surface, still and
+    // mirroring the walls round it (a planar reflection at its level), like the drowned city's; open
+    // rivers and lakes elsewhere keep the cheaper painted sky.
+    const parts = new Map<number, { fp: number[]; depth: number[] }>();
     for (const i of cells) {
       const x = i % w, z = Math.floor(i / w);
+      // The surface stands at its own water's level (a skirt cell's: the water's beside it), never
+      // lifted onto a bank above it.
+      let own = -Infinity;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, zz = z + dz;
+        if (xx < 0 || zz < 0 || xx >= w || zz >= h || layout.fluid[zz * w + xx] !== kind) continue;
+        own = Math.max(own, layout.level ? layout.level[zz * w + xx] : 0);
+      }
+      const key = kind === Fluid.Water && own > 0.5 ? Math.round(own * 100) / 100 : 0;
+      if (!parts.has(key)) parts.set(key, { fp: [], depth: [] });
+      const { fp, depth } = parts.get(key)!;
       // Counter-clockwise seen from above (normal +Y), or the surface is culled.
       for (const [dx, dz] of [[0, 0], [1, 1], [1, 0], [0, 0], [0, 1], [1, 1]]) {
-        const vx = x + dx, vz = z + dz;
-        fp.push(vx, base[vi(vx, vz)] + WATER_Y, vz);
-        depth.push(WATER_Y - hgt[vi(vx, vz)]);
+        const k = vi(x + dx, z + dz), y = (wLevel[k] > -Infinity ? wLevel[k] : own) + WATER_Y;
+        fp.push(x + dx, y, z + dz);
+        depth.push(y - base[k] - hgt[k]);
       }
     }
-    const fg = new THREE.BufferGeometry();
-    fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
-    fg.setAttribute('aDepth', new THREE.Float32BufferAttribute(depth, 1));
-    fg.computeVertexNormals();
-    // The drowned city's still water mirrors the ruins and the sky (a planar reflection); open
-    // rivers and lakes elsewhere keep the cheaper painted sky.
-    const { mesh, tick } = fluidSurface(fg, kind, theme, kind === Fluid.Water && theme.wall === 'ruin');
-    meshes.push(mesh);
-    ticks.push(tick);
+    for (const [key, { fp, depth }] of parts) {
+      const fg = new THREE.BufferGeometry();
+      fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
+      fg.setAttribute('aDepth', new THREE.Float32BufferAttribute(depth, 1));
+      fg.computeVertexNormals();
+      const mirror = kind === Fluid.Water && (key > 0 || theme.wall === 'ruin') ? { level: key + WATER_Y, moat: key > 0 } : null;
+      const { mesh, tick } = fluidSurface(fg, kind, theme, mirror);
+      meshes.push(mesh);
+      ticks.push(tick);
+    }
   }
 
   const bilinear = (grid: Float32Array, x: number, z: number) => {
@@ -971,14 +1043,17 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
  *   hot, deep middle; open molten patches churn in the deepest spots. Emission stays moderate so
  *   bloom shows seams, not a blown-out disc.
  */
-function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, mirror = false) {
+function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, mirror: { level: number; moat: boolean } | null = null) {
   const lava = kind === Fluid.Lava;
-  const refl = mirror ? planarReflection(WATER_Y) : null;
-  // The painted sky the water reflects. Mirror water (the drowned city) reflects a deep
+  // (A moat's mirror draws only what stood in the world when it first drew within a few metres of
+  // its water: the walls, the towers, the banks and the rock round it, never the grass carpet's
+  // shells or other water, so it costs a fraction of a second view of the scene.)
+  const refl = mirror ? planarReflection(mirror.level, mirror.moat ? MOAT_MIRROR_LAYER : undefined, mirror.moat ? 3 : 2, !!mirror.moat) : null;
+  // The painted sky the water reflects. Mirror water (the drowned city, a moat) reflects a deep
   // dusk navy instead: a pale painted sky turned its open water milky grey from the steep camera.
   const deepHex = theme.water?.[1] ?? 0x123a52;
-  const skyHigh = mirror ? new THREE.Color(deepHex).lerp(new THREE.Color(theme.hemi[0]), 0.3).multiplyScalar(0.9) : new THREE.Color(theme.hemi[0]).multiplyScalar(0.75);
-  const skyLow = mirror ? new THREE.Color(deepHex).multiplyScalar(0.8) : new THREE.Color(theme.bg).lerp(new THREE.Color(theme.hemi[0]), 0.25);
+  const skyHigh = refl ? new THREE.Color(deepHex).lerp(new THREE.Color(theme.hemi[0]), 0.3).multiplyScalar(0.9) : new THREE.Color(theme.hemi[0]).multiplyScalar(0.75);
+  const skyLow = refl ? new THREE.Color(deepHex).multiplyScalar(0.8) : new THREE.Color(theme.bg).lerp(new THREE.Color(theme.hemi[0]), 0.25);
   const uniforms = {
     uTime: { value: 0 },
     uNoise: { value: noiseTexture() },
@@ -989,6 +1064,10 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
     uRefl: { value: refl?.texture ?? null },
     uReflMat: { value: refl?.texMat ?? new THREE.Matrix4() },
     uReflOn: refl?.on ?? { value: 0 },
+    // How strongly the mirror shows (x, plus y toward grazing angles) and how much of the water's
+    // own colour tints it (z): the drowned city's still pools mirror the ruins outright; a moat seen
+    // from above shows the walls and the sky in it softly, the water's colour through them.
+    uReflK: { value: mirror?.moat ? new THREE.Vector3(0.32, 0.6, 0.55) : new THREE.Vector3(1, 0, 0) },
   };
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff, roughness: lava ? 0.55 : 0.3, metalness: 0,
@@ -1002,6 +1081,7 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
     uniform vec3 uSkyHigh;
     uniform vec3 uSkyLow;
     uniform float uReflOn;
+    uniform vec3 uReflK;
     uniform mat4 uReflMat;
     ${refl ? 'uniform sampler2D uRefl;' : ''}
     varying float vDepth;
@@ -1109,8 +1189,9 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
              vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
              vec2 ruv = rc.xy / rc.w + (normal.xy - flatN.xy) * 0.45;
              vec4 mir = texture2D(uRefl, ruv);
-             float cover = clamp(mir.a, 0.0, 1.0) * uReflOn;
-             envC = mix(envC, mir.rgb * (0.95 + 0.25 * pow(1.0 - ndv, 2.0)), cover);
+             float cover = clamp(mir.a, 0.0, 1.0) * uReflOn * min(1.0, uReflK.x + uReflK.y * pow(1.0 - ndv, 3.0));
+             vec3 mirC = mir.rgb * mix(vec3(1.0), uShallow * 1.6, uReflK.z);
+             envC = mix(envC, mirC * (0.95 + 0.25 * pow(1.0 - ndv, 2.0)), cover);
              diffuseColor.rgb *= 1.0 - cover * 0.78;
              // Caustic shimmer in the shallows: a drifting web of light over the drowned paving.
              float ca = fluidN(fp * 0.55 + vec2(uTime * 0.035, uTime * 0.013));
@@ -1132,7 +1213,19 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
   mat.customProgramCacheKey = () => (lava ? 'fluid4-lava' : refl ? 'fluid4-mirror' : 'fluid4-water');
   const mesh = new THREE.Mesh(geo, mat);
   if (refl) {
-    mesh.onBeforeRender = (renderer, scene, camera) => refl.render(renderer, scene, camera, mesh);
+    let layered = !mirror?.moat;
+    mesh.onBeforeRender = (renderer, scene, camera) => {
+      if (!layered) {
+        layered = true;
+        const near = waterNear(geo, MOAT_MIRROR_REACH), box = new THREE.Box3();
+        scene.traverse((o) => {
+          if (!(o as THREE.Mesh).isMesh || (o as THREE.InstancedMesh).isInstancedMesh || o.name === 'water') return;
+          box.setFromObject(o);
+          if (box.max.y > mirror!.level && near(box)) o.layers.enable(MOAT_MIRROR_LAYER);
+        });
+      }
+      refl.render(renderer, scene, camera, mesh);
+    };
     mat.addEventListener('dispose', () => refl.dispose());
   }
   mesh.name = lava ? 'lava' : 'water';

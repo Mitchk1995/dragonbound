@@ -620,7 +620,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         if (debrisFloor) addDebris(x, z);
         // Reeds along shores (water only, never lava), bushes where the forest thins out, flowers
         // in open meadows.
-        if (nearFluid(x, z) && !theme.lava && !theme.wallRise && rng() < 0.35) {
+        // (On the island of levels, the castle's, never on the moat's paved and masonry banks.)
+        if ((green || !layout.level) && nearFluid(x, z) && !theme.lava && !theme.wallRise && rng() < 0.35) {
           // A clump of reeds rooted on the bank (never standing out in the open water).
           const cx = x + 0.2 + rng() * 0.6, cz = z + 0.2 + rng() * 0.6;
           for (let k = 0; k < 6; k++) {
@@ -671,21 +672,30 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const propNear = new Uint8Array(w * h), massAt = new Uint8Array(w * h);
     /** Round every prop, the height it stands at: no rock mass may rise over it there. */
     const propFoot = new Float32Array(w * h).fill(-Infinity);
+    /** Where a prop stands: its middle, and all along the plan points a wall is laid on (kinds whose `opt.pts` are plan offsets). */
+    const PLAN_RUNS = new Set(['ramp_wall', 'moat_bank', 'moat_plinth_run']);
+    const standsAt = (pr: (typeof layout.props)[number]) => {
+      const pts = PLAN_RUNS.has(pr.kind) ? ((pr.opt?.pts as number[][] | undefined) ?? []) : [], at = [[0, 0]];
+      for (let k = 0; k + 1 < pts.length; k++) {
+        const [ax, az] = pts[k], [bx, bz] = pts[k + 1], n = Math.ceil(Math.hypot(bx - ax, bz - az) / 0.5);
+        for (let j = 0; j <= n; j++) at.push([ax + ((bx - ax) * j) / n, az + ((bz - az) * j) / n]);
+      }
+      return at.map(([ox, oz]) => [pr.x + ox, pr.z + oz]);
+    };
     for (const pr of layout.props) {
       const py = pr.y ?? Math.max(floorAt(pr.x, pr.z), heightAt(pr.x, pr.z));
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        const xx = Math.floor(pr.x) + dx, zz = Math.floor(pr.z) + dz;
+      for (const [ax, az] of standsAt(pr)) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = Math.floor(ax) + dx, zz = Math.floor(az) + dz;
         if (xx >= 0 && zz >= 0 && xx < w && zz < h) propFoot[zz * w + xx] = Math.max(propFoot[zz * w + xx], py);
       }
     }
     // Room kept round props by kind (parapets and lamps stand above the rock, not in front of it).
-    const room: Record<string, number> = { spring_fall: 3, edge_fall: 3, parapet: -1, lamp_post: -1 };
+    const room: Record<string, number> = { moat_outfall: 3, edge_fall: 3, parapet: -1, lamp_post: -1 };
     for (const pr of layout.props) {
       const r = room[pr.kind] ?? 1;
       if (r < 0) continue;
-      const px = Math.floor(pr.x), pz = Math.floor(pr.z);
-      for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
-        const xx = px + dx, zz = pz + dz;
+      for (const [ax, az] of standsAt(pr)) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+        const xx = Math.floor(ax) + dx, zz = Math.floor(az) + dz;
         if (xx >= 0 && zz >= 0 && xx < w && zz < h) propNear[zz * w + xx] = Math.max(propNear[zz * w + xx], r > 1 ? 2 : 1);
       }
     }

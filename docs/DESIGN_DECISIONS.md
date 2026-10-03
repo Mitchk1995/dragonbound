@@ -158,8 +158,12 @@ Where things stand (October 3):
   https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins notes and picks options; a fixed note is
   marked `status: done` and drops off the page. Now the blueprint is approved the castle is rebuilt to it. Stage 1 (the ground plan) is in: the castle's layout lives in
   `src/world/castle/` and its props in `src/world/castleProps/`; the keep and the other buildings stand as plain shells
-  in today's style, and the moat's water stands level with the crown until its banks and the towers' plinths are built
-  (stage B).
+  in today's style. Stage 3 (moat, water and the rock) is in: the moat stands 2 m under the turf on all four sides and
+  in the basin behind the keep, held by a dressed outer bank with a stone coping, the curtain, its towers and the gate's
+  drums rising out of it on battered plinths; two springs spill into the basin from arched spouts, a sluice in the west
+  bank feeds the west fall through a rock channel, and the moat leaves by the bastion's culvert as the south fall. The
+  moat's still water mirrors the walls round it; the crown's edge wanders in bays and spurs, the rim beyond the moat
+  grows the island's meadow grass and the turf thins out short of every brink. Awaiting Mitchell's look.
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
   - Stage 1 departures from the plan, for the later stages: the wall towers stand 1.7 m out from the curtain's line
@@ -167,6 +171,10 @@ Where things stand (October 3):
     wall walk overhangs its inner face), so building it hard against the curtain (stage E) needs the walk changed there;
     the keep's galleries are at the walk's level less 6 cm (on a course line); the farm's plots moved 2 m west as well as
     8 m south, clear of the new pool.
+  - Stage 3 departures: the moat's outer bank is set out on the cell grid (its splays true diagonals, none more than
+    half a metre off the plan), so no step of the bank's earth shows in front of its face; the weir and the culvert's
+    mouth under the bridge are not modelled (out of sight under the bridge's south arch); the rock faces of the knolls
+    seen from below are still the cliff generator's broad facets.
 - **Characters** come after the castle and stay blocky and modular. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
 - **Trees:** the grown oak and the common tree are built and approved with their bark (Mitchell, "looks good", October 3; see "Trees" below); the willow, maple, yew and magic tree are built and every zone's woods and lawns now grow the ladder, waiting on Mitchell's verdict from pictures.
 
