@@ -40,7 +40,6 @@ const ALLOWED = {
   'tests/balance/sim.ts': 608,
   'tests/castle-geometry.test.ts': 879,
   'tools/blender/_common.py': 728,
-  'tools/blender/dragons.py': 781,
   'tools/blender/gear.py': 1079,
 };
 
