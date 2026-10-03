@@ -70,8 +70,14 @@ Where things stand (October 3):
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
   - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided.
 - **Characters** are next once the castle is approved. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
+- **Trees:** the grown oak is built as a preview tree style and waits for Mitchell's verdict from pictures (see "Trees" below); the game's forests still use the block trees.
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
+
+### Trees (October 3)
+
+- **Trees are redone as natural, true-size trees** (Mitchell, castle round 5, on the landing's trees): bigger, actual tree size, moving away from blocky completely, and laid out for woodcutting in a ladder like RuneScape's (tree, oak, willow, maple, yew, magic). From two painted rows he picked B, "Natural": closer to real trees in proportion and leaf detail, softly painted, still clean and readable from above, made with Claude's own taste rather than copied from the painting. Everything gets a proper texture.
+- **The oak comes first, as the proof** (the 'natural' tree style, `src/world/trees.ts`): a mature oak about 11 m tall with a crown about 13 m across, five and a half times the 2 m hero; its trunk, flared roots and crooked limbs grown as one continuous surface with furrowed bark and smooth collars at every fork; a crown of painted sprays of lobed oak leaves, shaded in soft masses (lit tops, cool undersides, a darker inner crown) and swaying in the wind; three seeded variants, about 7,000 to 7,500 triangles each. A wood of them is thinned to one oak every 7.5 m, with no bush under their crowns. Seen with `npm run inspect -- trees:oak`; the other kinds follow the same way once the oak is approved.
 
 ### Follow-up (October 1, late)
 

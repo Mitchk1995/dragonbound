@@ -17,7 +17,7 @@ import { chamferBox, hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMa
 import { useStrataRock } from '../render/rock';
 
 import type { SurfaceKind } from '../render/textures';
-import { treeSet, type TreeKind, type TreeSet, type TreeStyle } from './trees';
+import { thinWood, treeSet, type TreeKind, type TreeSet, type TreeStyle } from './trees';
 
 // ─── See-through occlusion ──────────────────────────────────────────────────
 
@@ -281,6 +281,9 @@ type SceneryArgs = [color: number, occlude: boolean, surface?: SurfaceKind | Pai
 
 /** Material arguments for a tree's trunk and canopy (shared by the world and the dev lineup). */
 function treeArgs(ts: TreeSet, k: TreeKind): [SceneryArgs, SceneryArgs] {
+  // Grown trees bring their own bark and leaves (foliage.ts), swaying with the world's wind.
+  const grown = ts.grown[k];
+  if (grown) return [[0xffffff, true, undefined, true, undefined, (m) => grown.trunk(m, WIND)], [0xffffff, true, undefined, true, undefined, (m) => grown.canopy(m, WIND)]];
   return [
     [k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark'],
     [0, true, ts.paint[k], true, ts.grade, ts.shaded && k !== 'ash' ? withVertexShade : undefined],
@@ -296,8 +299,8 @@ export function treeMeshes(style: TreeStyle, kind: TreeKind, mats: THREE.Matrix4
   const [trunk, crown] = treeArgs(ts, kind);
   const mk = (geo: THREE.BufferGeometry, c: THREE.Color[] | null, [color, occlude, surface, shadow = true, grade, setup]: SceneryArgs) =>
     instanced(geo, sceneryMaterial(!!c, color, occlude, surface, grade, setup), mats, c, shadow);
-  const vs = ts.canopy[kind];
-  return [mk(ts.trunk[kind], null, trunk), mk(vs[variant % vs.length], cols, crown)];
+  const vs = ts.canopy[kind], trunks = ts.trunk[kind];
+  return [mk(trunks[trunks.length === vs.length ? variant % vs.length : 0], null, trunk), mk(vs[variant % vs.length], cols, crown)];
 }
 
 // ─── Builder ────────────────────────────────────────────────────────────────
@@ -380,13 +383,16 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   const trees: Record<TreeKind, { m: THREE.Matrix4[]; c: THREE.Color[] }> = { pine: { m: [], c: [] }, grove: { m: [], c: [] }, ash: { m: [], c: [] } };
   /** A tree at (x, z) (on the ground, or standing at `y`); with `keep` false its draws are made but it is left out. */
   const addTree = (x: number, z: number, scale = 1, y?: number, kind = speciesAt(x, z), keep = true) => {
-    const sc = (0.8 + rng() * 0.6) * scale;
+    // (Grown trees vary less in size: they are true to size.)
+    const grown = ts.grown[kind], [lo, hi] = grown?.size ?? [0.8, 1.4];
+    const sc = (lo + rng() * (hi - lo)) * scale;
     if (y === undefined) p.set(x + (rng() - 0.5) * 0.3, heightAt(x, z) - 0.05, z + (rng() - 0.5) * 0.3);
     else p.set(x, y - 0.05, z);
     q.setFromEuler(e.set((rng() - 0.5) * 0.1, rng() * Math.PI * 2, (rng() - 0.5) * 0.1));
-    s.set(sc, sc * (0.9 + rng() * 0.3), sc);
+    const tall = rng();
+    s.set(sc, sc * (grown ? 0.96 + tall * 0.08 : 0.9 + tall * 0.3), sc);
     const mm = m.compose(p, q, s).clone();
-    const pal = leafPal[kind];
+    const pal = grown?.palette ?? leafPal[kind];
     const tc = new THREE.Color(pal[rng() < 0.15 ? Math.min(pal.length - 1, 3 + Math.floor(rng() * 2)) : Math.floor(rng() * Math.min(3, pal.length))]);
     tc.offsetHSL(0, 0, (rng() - 0.5) * 0.05);
     if (!keep) return;
@@ -1015,16 +1021,31 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       }
     }
   }
+  // Grown trees need far more room than one to a cell: their woods are thinned (trees.ts thinWood),
+  // and no bush is left in the shade of their crowns.
+  if (Object.keys(ts.grown).length) {
+    const tp = new THREE.Vector3();
+    const xz = (mm: THREE.Matrix4) => (tp.setFromMatrixPosition(mm), { x: tp.x, z: tp.z });
+    const thin = thinWood({ pine: trees.pine.m.map(xz), grove: trees.grove.m.map(xz), ash: trees.ash.m.map(xz) }, ts.grown, bushes.map(xz));
+    for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) trees[k] = { m: trees[k].m.filter((_, i) => thin.trees[k][i]), c: trees[k].c.filter((_, i) => thin.trees[k][i]) };
+    for (let i = bushes.length - 1; i >= 0; i--) {
+      if (thin.under[i]) continue;
+      bushes.splice(i, 1);
+      bushCols.splice(i, 1);
+    }
+  }
   for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) {
     if (!trees[k].m.length) continue;
     const [trunk, crown] = treeArgs(ts, k);
     // Painted canopies: leaf clusters on broadleaves, needle tufts on pines, bark on dead ash.
     // Each tree takes one of the style's canopy variants, picked from its position (no pattern
     // along the rows, and the same tree every visit).
-    const vs = ts.canopy[k], tp = new THREE.Vector3();
+    const vs = ts.canopy[k], trunks = ts.trunk[k], tp = new THREE.Vector3();
     const variant = trees[k].m.map((mm) => (tp.setFromMatrixPosition(mm), Math.floor(hash01(tp.x, tp.z) * vs.length)));
     const pick = <T>(list: T[], v: number) => list.filter((_, i) => variant[i] === v);
-    const made = [...inst(ts.trunk[k], trees[k].m, null, ...trunk)!, ...vs.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), pick(trees[k].c, v), ...crown) ?? [])];
+    // A grown tree's trunk is its own, paired with its crown; block trees share one trunk.
+    const wood = trunks.length === vs.length ? trunks.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), null, ...trunk) ?? []) : inst(trunks[0], trees[k].m, null, ...trunk)!;
+    const made = [...wood, ...vs.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), pick(trees[k].c, v), ...crown) ?? [])];
     for (const mesh of made) mesh.name = 'tree';
   }
   // Rocks are chunky faceted blocks (two shapes, alternating) sunk into the ground.

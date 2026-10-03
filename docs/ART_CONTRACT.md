@@ -20,9 +20,10 @@ play distance and a handful of strong colours per object rather than fine detail
 craft, not a photograph.
 
 **Blocky on purpose.** Chamfered blocks, slabs, wedges and tapered beams are the house language for characters, gear,
-creatures, statues, horses, props, trees (leafy blocks) and the castle. Chunky and blocky is never a defect, and a
-reviewer must not ask for it to be smoothed or sculpted. Organic shapes are used where they read better: wings, hair,
-cloth, flames, rock, water and terrain.
+creatures, statues, horses, props and the castle. Chunky and blocky is never a defect, and a reviewer must not ask for
+it to be smoothed or sculpted. Organic shapes are used where they read better: wings, hair, cloth, flames, rock, water,
+terrain and trees. Trees are natural, grown and true to size (October 3; `docs/DESIGN_DECISIONS.md`, "Trees"): one
+continuous grown trunk and limbs under a crown of painted leaf sprays, never assembled from primitives.
 
 **But built, not dumped.** "Blocky" means blocks that are *designed together*: they meet face to face, share edges and
 read as one carved or built object. The owner's standing complaint is "shapes placed together instead of stitched into
