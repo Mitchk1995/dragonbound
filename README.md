@@ -44,6 +44,7 @@ npm run inspect -- memory  # isolated desktop check for repeated travel, looting
 - `src/render/`: model registry (GLB loading, gear attachment, role recolouring), rig animation, 3D item icons.
 - `src/ui/`: HUD, panels, title and character creation, tooltip, stone and iron kit, SVG icons.
 - `tools/blender/`: every model is a script; see [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
+- `tools/bark_textures.py`: turns sourced bark images into the grown trees' tileable bark maps in `public/textures/bark/` (sources listed in its `LICENSES.md`).
 
 ## Docs
 

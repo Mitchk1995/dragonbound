@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import type { Enemy } from '../entities/enemy';
+import type { Interactable } from '../entities/interactable';
 import type { GroundItem } from '../entities/groundItem';
 import type { Game } from '../game';
+import type { DigitKind } from './digitGlyphs';
+import { isDigitText, paintDigits, paintText, preloadDigits, preloadFonts } from './paintedText';
 
 interface Floater {
   el: HTMLElement;
@@ -13,18 +16,29 @@ interface Floater {
   dx: number;
 }
 
+/** The painted digit set for each floater class; the rest (gold pickups) stay text. */
+const DIGIT_KINDS: Record<string, DigitKind | undefined> = { dmg: 'white', crit: 'crit', hurt: 'hurt', heal: 'heal' };
+
+/** Floating words ("+30 gold", "+1 potion") are set in the gold alphabet, this many px to the capitals. */
+const WORD_CAP = 22;
+/** Names over heads: how tall the capitals stand, how far off a name still shows, and how high above the head. */
+const NAME_CAP = 19, NAME_RANGE = 14, NAME_LIFT = 0.15;
+
 /** Screen-space overlays anchored to world positions: damage numbers, loot labels, enemy health bars. */
 export class WorldText {
   labelHovered = false;
   private floaters: Floater[] = [];
   private labels = new Map<GroundItem, HTMLElement>();
   private bars = new Map<Enemy, HTMLElement>();
+  private names = new Map<Interactable, HTMLElement>();
   private v = new THREE.Vector3();
   private layerNums: HTMLElement;
   private layerLabels: HTMLElement;
   private layerBars: HTMLElement;
 
   constructor(private root: HTMLElement, private g: Game) {
+    preloadDigits();
+    preloadFonts();
     this.layerBars = this.layer();
     this.layerLabels = this.layer();
     this.layerNums = this.layer();
@@ -53,17 +67,24 @@ export class WorldText {
 
   float(text: string, x: number, y: number, z: number, cls: string) {
     const el = document.createElement('div');
-    el.className = `floater ${cls}`;
-    el.textContent = text;
+    const kind = DIGIT_KINDS[cls];
+    const painted = kind !== undefined && isDigitText(text);
+    const word = !painted && (cls === 'gold' || cls === 'heal');
+    el.className = `floater ${cls}${painted ? ' digits' : word ? ' painted' : ''}`;
+    if (painted) paintDigits(el, text, kind);
+    else if (word) paintText(el, text, 'gold', WORD_CAP);
+    else el.textContent = text;
     this.layerNums.appendChild(el);
     this.floaters.push({ el, x, y, z, t: 0, life: cls === 'crit' ? 1.0 : 0.8, dx: (Math.random() - 0.5) * 40 });
     if (this.floaters.length > 80) this.floaters.shift()!.el.remove();
   }
 
-/** Drop every overlay tied to the previous zone (labels, health bars, floating numbers). */
+/** Drop every overlay tied to the previous zone (labels, names, health bars, floating numbers). */
   clear() {
     for (const el of this.labels.values()) el.remove();
     for (const el of this.bars.values()) el.remove();
+    for (const el of this.names.values()) el.remove();
+    this.names.clear();
     for (const f of this.floaters) f.el.remove();
     this.labels.clear();
     this.bars.clear();
@@ -97,6 +118,7 @@ export class WorldText {
     });
     this.updateLabels();
     this.updateBars();
+    this.updateNames();
   }
 
   private updateLabels() {
@@ -147,6 +169,33 @@ export class WorldText {
       }
       placed.push({ x: e.x, y, w, h });
       e.el.style.transform = `translate(${e.x}px, ${y}px) translate(-50%, -50%)`;
+    }
+  }
+
+  /** The name of every nearby NPC, in gold lettering just over its head. */
+  private updateNames() {
+    const pl = this.g.player;
+    const seen = new Set<Interactable>();
+    for (const it of this.g.zone.interactables) {
+      if (it.kind !== 'npc' || !it.obj.visible || Math.hypot(it.x - pl.x, it.z - pl.z) > NAME_RANGE) continue;
+      const p = this.project(it.x, it.height + NAME_LIFT, it.z);
+      if (!p.visible) continue;
+      seen.add(it);
+      let el = this.names.get(it);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'npcname';
+        paintText(el, it.name, 'gold', NAME_CAP);
+        this.layerBars.appendChild(el);
+        this.names.set(it, el);
+      }
+      el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+    }
+    for (const [it, el] of this.names) {
+      if (!seen.has(it)) {
+        el.remove();
+        this.names.delete(it);
+      }
     }
   }
 

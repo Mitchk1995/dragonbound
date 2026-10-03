@@ -5,6 +5,7 @@ import type { Enemy } from '../entities/enemy';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
 import { SKILL_INFO, levelProgress } from '../progression/skills';
+import { paintText } from './paintedText';
 import { xpDropLabel } from './skillGrid';
 import type { Dialogue } from '../systems/story';
 import type { Item, SkillId, Style } from '../types';
@@ -26,6 +27,11 @@ const STATION_PANELS: WindowId[] = ['bank', 'shop', 'craft', 'keep'];
 
 /** Anything under the cursor matching this is UI: the world ignores hover there. */
 const UI_SELECTOR = '.panel, .sidepanel, .console, .dlg, .objective, .slot';
+
+/** How tall the capitals stand (px) in the zone plaque and in the boss's name. */
+const PLAQUE_CAP = 16, BOSS_CAP = 18;
+/** The kind-of-place ribbon: small painted capitals, spaced out, in a muted gold (see .zkind in style.css). */
+const RIBBON_CAP = 10, RIBBON_TRACK = 0.16;
 
 /** What kind of place a zone is, shown beside the zone plaque on arrival. */
 const ZONE_KIND: Record<string, string> = { hub: 'Sanctuary', gather: 'Gathering grounds', hunt: 'Hunting grounds', quest: 'Forgotten ruin', lair: "Dragon's lair" };
@@ -260,8 +266,7 @@ export class UI {
     pot.querySelector('.count')!.textContent = `${s.potions}/${s.potionMax}`;
     pot.classList.toggle('spent', s.potions <= 0);
 
-    const zn = this.$('.zname');
-    if (zn.textContent !== g.zone.def.name) zn.textContent = g.zone.def.name;
+    paintText(this.$('.zname'), g.zone.def.name, 'gold', PLAQUE_CAP);
     this.$('.weak').textContent = p.weakenedT > 0 ? `Weakened ${Math.ceil(p.weakenedT)}s` : p.warCryT > 0 ? `War Cry ${Math.ceil(p.warCryT)}s` : '';
     // Target plate for regular enemies; elites/boss use the big bar.
     const tgt = g.hovered ?? (p.cmd.kind === 'attack' ? p.cmd.target : null);
@@ -274,7 +279,7 @@ export class UI {
     const bb = this.$('.bossbar');
     if (this.bossTarget && !this.bossTarget.dead) {
       bb.style.display = 'block';
-      bb.querySelector('.bname')!.textContent = this.bossTarget.name;
+      paintText(bb.querySelector('.bname') as HTMLElement, this.bossTarget.name, 'gold', BOSS_CAP, 0.08);
       (bb.querySelector('.bfill') as HTMLElement).style.width = `${(100 * this.bossTarget.hp) / this.bossTarget.maxHp}%`;
     } else {
       bb.style.display = 'none';
@@ -634,9 +639,15 @@ export class UI {
   zoneTitle(name: string) {
     const tl = this.$('.topleft');
     if (!tl) return;
-    this.$('.zname').textContent = name;
+    paintText(this.$('.zname'), name, 'gold', PLAQUE_CAP);
     const def = this.g.zone.def;
-    this.$('.zkind').textContent = def.name === name ? (ZONE_KIND[def.kind] ?? '') : '';
+    const kind = def.name === name ? (ZONE_KIND[def.kind] ?? '') : '';
+    const ribbon = this.$('.zkind');
+    if (kind) paintText(ribbon, kind.toUpperCase(), 'gold', RIBBON_CAP, RIBBON_TRACK);
+    else {
+      ribbon.replaceChildren();
+      delete ribbon.dataset.painted;
+    }
     tl.classList.remove('arrive');
     void tl.offsetWidth;
     tl.classList.add('arrive');
