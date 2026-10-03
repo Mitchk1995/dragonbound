@@ -1,13 +1,13 @@
 """Dragons: Drakeling (minion), Cinderwing (boss) and the Ember Whelp pet.
 
-Blocky, modular build: bodies are stacked chamfered slabs (hips, belly, chest, withers), necks and tails are
-chains of shrinking boxes (Cinderwing's tail one smooth eight-sided taper cut into mitred segments), heads are a box
-skull with a tapered snout and jaw (the drakeling's carved as one solid), legs are box segments standing in paws whose
-claws grow out of the toes, horns are angled wedge segments. Only the bat-wing membranes, the whelp's flame and the
-glowing cracks are flat faceted panels; the parts are built by dragon_parts.py. The drakeling and Cinderwing follow their
-approved concept sheets (docs/concepts). Faces +Z; right-side parts (legFR/legBR/wingR) at -X, left at +X. Rig names match
-src/render/anim.ts: body, neck1.., head, jaw, tail1.., wingL/wingR, legFL/legFR/legBL/legBR, all under a
-scaled 'inner' empty (the animation's flight lift and bob are in that scaled space).
+Blocky, modular build: bodies are stacked chamfered slabs (hips, belly, chest and Cinderwing's withers), necks and
+tails are chains of shrinking boxes (Cinderwing's tail one smooth eight-sided taper cut into mitred segments), heads
+are a box skull with a tapered snout and jaw (the drakeling's carved as one solid), legs are box segments standing in
+paws whose claws grow out of the toes, horns are angled wedge segments. Only the bat-wing membranes, the whelp's flame
+and the glowing cracks are flat faceted panels; the parts are built by dragon_parts.py. The drakeling and Cinderwing
+follow their approved concept sheets (docs/concepts). Faces +Z; right-side parts (legFR/legBR/wingR) at -X, left at
++X. Rig names match src/render/anim.ts: body, neck1.., head, jaw, tail1.., wingL/wingR, legFL/legFR/legBL/legBR, all
+under a scaled 'inner' empty (the animation's flight lift and bob are in that scaled space).
 """
 import math
 import os
@@ -168,7 +168,6 @@ def cinderwing():
              girth=1.3, paw_r=2.2 if back else 2.35)
 
     body = pivot(inner, 'body', (0, 1.21, 0))
-    built = set(body.children)
     box(body, (1.0, 0.8, 0.6), (0, 0.06, -0.6), main, bevel=0.12)                      # hips
     box(body, (1.2, 0.98, 0.72), (0, 0.06, -0.08), main, bevel=0.12)                   # belly block
     box(body, (1.3, 1.16, 0.72), (0, 0.16, 0.42), main, rot=(-0.18, 0, 0), bevel=0.14)  # barrel chest
@@ -223,7 +222,7 @@ def cinderwing():
             box(body, (0.03, 0.04, 0.03), (s * 0.706, 0.13, z), leather, bevel=0)
     # The torso, harness and all, grown as one to the sheet's massive build: broader and deeper, a little longer.
     G = (1.18, 1.1, 1.04)
-    inflate(body, built, G)
+    inflate(body, G)
     g = lambda x, y, z: (x * G[0], y * G[1], z * G[2])
 
     def neck(n, i):

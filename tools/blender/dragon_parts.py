@@ -9,6 +9,7 @@ plates. All coordinates are three.js: Y up, +Z forward; right-side parts at -X, 
 import math
 import _common
 from _common import *   # dragons.py reloads _common before it imports this
+# `beam` below replaces _common's (its own arguments); dragons.py takes this module's names after _common's.
 
 PI = math.pi
 
@@ -160,7 +161,7 @@ def finish(scene_name, file_name):
 # Both are built from docs/concepts/drakeling.jpg and cinderwing.jpg: chamfered block bodies in a leather harness with
 # gilt fittings, one eye a side sunk in a socket (carved into the drakeling's one-piece skull; walled with blocks on
 # Cinderwing: a brow ridge above it, a cheek below, a wall in front) so it reads only from the side and the brow never
-# covers it, paws with toes and claws, and raised bat wings rooted on the shoulder blades.
+# covers it, paws with toes and claws, and raised bat wings rooted on the shoulders.
 
 def obox(parent, size, centre, xdir, ydir, color, bevel=0.0, taper=None, emissive=None, strength=2.0):
     """Box whose local X and Y run along `xdir` and `ydir` (Y is squared up to X; Z completes the frame)."""
@@ -257,12 +258,13 @@ def carve(base, *cutters):
     return base
 
 
-def inflate(parent, keep, k):
-    """Grow every mesh built on `parent` since `keep` (its children before) by k = (x, y, z) about the parent's origin,
-    baking it into the meshes: the assembly grows as one built thing, every part still meeting the next."""
+def inflate(parent, k):
+    """Grow every mesh on `parent` by k = (x, y, z) about the parent's origin, baking it into the meshes: the assembly
+    grows as one built thing, every part still meeting the next (a turned part shears a little and its bevels stretch
+    with the uneven scale). Run it before any rig pivots hang on `parent`; place those at the grown positions."""
     S = Matrix.Diagonal((k[0], k[1], k[2], 1.0))
     for o in parent.children:
-        if o not in keep and o.type == 'MESH':
+        if o.type == 'MESH':
             o.data.transform(S @ o.matrix_basis)
             o.matrix_basis = Matrix.Identity(4)
 
@@ -423,7 +425,8 @@ def limb(inner, name, pos, main, pad, claw, r=1.0, back=False, toe=None, gilt=No
     outside of the elbow or knee, the paw with its toes (`toe`, a colour, else the leg's) and claws (`claw_k` sizes them),
     and optionally a gilt band round the leg just above the paw (`gilt`) and a glowing crack down the outside of the
     upper leg (`glow`). `r` sets the leg's build; `girth` thickens its blocks on top of that and `paw_r` sizes the paw
-    (default `r`), so a heavy leg still stands in a paw bigger than the leg."""
+    (default `r`), so a heavy leg still stands in a paw bigger than the leg. The ankle sits inside the top of the paw, so
+    a paw bigger than `r` 1.9 lifts it."""
     l = pivot(inner, name, pos)
     g = -pos[1]
     s = 1 if pos[0] > 0 else -1
