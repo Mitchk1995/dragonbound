@@ -2,9 +2,9 @@
 // `w`/`h`: the atlas size; `top`/`base`: where the digit tops and baseline sit down a sprite; per glyph `x`/`w`: its
 // rect in the atlas, `adv`: how far the next glyph moves along, `lead`: where its solid part starts.
 export interface DigitGlyph { c: string; x: number; w: number; adv: number; lead: number }
-export interface DigitSet { file: string; w: number; h: number; top: number; base: number; glyphs: DigitGlyph[] }
+export interface GlyphSet { file: string; w: number; h: number; top: number; base: number; space?: number; glyphs: DigitGlyph[] }
 export type DigitKind = 'white' | 'crit' | 'heal' | 'hurt';
-export const DIGIT_SETS: Record<DigitKind, DigitSet> = {
+export const DIGIT_SETS: Record<DigitKind, GlyphSet> = {
   "white": {
     "file": "ui/digits/white.png",
     "w": 566,

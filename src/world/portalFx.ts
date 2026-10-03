@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { ZoneTheme } from '../data/zones';
 import { noiseTexture } from '../render/textures';
+import { FONT_SETS } from '../ui/fontGlyphs';
+import { drawText, layoutText, loadAtlas } from '../ui/paintedText';
 
 /**
  * The portal a platform projects: an upright oval window that shows a glimpse of the place it
@@ -401,74 +403,40 @@ const css = (c: THREE.Color, k = 1, a = 1) => {
 };
 
 /**
- * Paint a title into a canvas: chunky Cinzel capitals with a chiselled extrusion falling away
- * below them (so they read as solid letters), a dark outline, a warm face graded toward the zone
- * colour, a soft glow in the zone colour, and a small rule with a gem beneath. Locked: grey stone
- * letters, no glow, a padlock and the hint under them.
+ * Paint a title into a canvas: the zone's name in the glowing blue alphabet (case as written upper, the way the
+ * plates always were), then a small rule with a gem beneath. Locked: the same letters drained to grey stone, no gem,
+ * a padlock and the hint under them. `atlas` is the blue alphabet's image; until it arrives only the rule is drawn
+ * (the caller repaints when it loads).
  */
-function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, open: boolean, hint: string) {
+function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, open: boolean, hint: string, atlas: ImageBitmap | null) {
   const { width: W, height: H } = ctx.canvas;
   ctx.clearRect(0, 0, W, H);
   const zc = new THREE.Color(color);
   const lines = titleLines(name);
-  const face = (size: number) => `800 ${size}px Cinzel, 'Palatino Linotype', Georgia, serif`;
   const two = lines.length > 1;
-  let size = two ? 104 : 124;
-  ctx.font = face(size);
-  (ctx as any).letterSpacing = `${Math.round(size * 0.06)}px`;
-  const maxW = W * 0.9;
-  const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
-  if (widest > maxW) size = Math.floor((size * maxW) / widest);
-  ctx.font = face(size);
-  (ctx as any).letterSpacing = `${Math.round(size * 0.06)}px`;
-  ctx.textAlign = 'center';
+  const lay = (cap: number) => {
+    ctx.font = `800 ${Math.round(cap / 0.72)}px Cinzel, 'Palatino Linotype', Georgia, serif`;
+    return lines.map((l) => layoutText(l, 'blue', cap, { track: 0.04, measure: (c) => ctx.measureText(c).width }));
+  };
+  let cap = two ? 74 : 84;
+  const widest = Math.max(...lay(cap).map((l) => l.width));
+  if (widest > W * 0.9) cap = Math.floor((cap * W * 0.9) / widest);
+  const laid = lay(cap);
+  const size = cap / 0.72;
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
   const gap = size * 1.02;
   const blockH = gap * (lines.length - 1) + size * 0.72;
   const top = (H - 64 - blockH) / 2 + size * 0.72;
   const depth = Math.round(size * 0.11);
-  const sideTop = open ? css(zc, 0.34) : 'rgb(58,56,60)';
-  const sideLow = open ? css(zc, 0.14) : 'rgb(28,27,30)';
-  lines.forEach((line, i) => {
-    const y = top + i * gap;
-    const x = W / 2;
-    // Glow.
-    if (open) {
-      ctx.save();
-      ctx.shadowColor = css(zc, 1, 0.9);
-      ctx.shadowBlur = size * 0.45;
-      ctx.fillStyle = css(zc, 0.8, 0.55);
-      ctx.fillText(line, x, y + depth * 0.5);
-      ctx.restore();
-    }
-    // Extrusion: the letter repeated downward, darkening as it recedes.
-    ctx.lineWidth = size * 0.07;
-    ctx.strokeStyle = 'rgba(12,8,6,0.9)';
-    ctx.strokeText(line, x, y + depth);
-    for (let k = depth; k >= 1; k--) {
-      const g = ctx.createLinearGradient(0, y - size * 0.72 + k, 0, y + k);
-      g.addColorStop(0, sideTop);
-      g.addColorStop(1, sideLow);
-      ctx.fillStyle = g;
-      ctx.fillText(line, x, y + k);
-    }
-    // Face: outline, then a graded fill, then a thin top highlight.
-    ctx.lineWidth = size * 0.06;
-    ctx.strokeStyle = 'rgba(20,14,10,0.95)';
-    ctx.strokeText(line, x, y);
-    const fg = ctx.createLinearGradient(0, y - size * 0.72, 0, y);
-    if (open) {
-      fg.addColorStop(0, '#fff8e6');
-      fg.addColorStop(0.45, '#f4dca8');
-      fg.addColorStop(1, css(new THREE.Color(0xe0b060).lerp(zc, 0.55)));
-    } else {
-      fg.addColorStop(0, '#bdbab6');
-      fg.addColorStop(1, '#77736f');
-    }
-    ctx.fillStyle = fg;
-    ctx.fillText(line, x, y);
-  });
+  if (atlas) {
+    ctx.save();
+    if (!open) ctx.filter = 'grayscale(1) brightness(0.75)';
+    ctx.fillStyle = open ? '#a8dcff' : '#b0aca6';
+    laid.forEach((l, i) => drawText(ctx, atlas, 'blue', l, (W - l.width) / 2, top + i * gap));
+    ctx.restore();
+  }
   // Rule with a gem (open) or a padlock and the hint (locked).
   const ry = top + (lines.length - 1) * gap + depth + 34;
   const cx = W / 2;
@@ -539,12 +507,17 @@ function buildTitle(name: string, color: number, open: boolean, hint: string): T
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
+  let atlas: ImageBitmap | null = null;
   const draw = () => {
-    paintTitle(ctx, name, color, open, hint);
+    paintTitle(ctx, name, color, open, hint, atlas);
     tex.needsUpdate = true;
   };
   draw();
-  // Repaint once the display font has loaded (the first paint may use the fallback serif).
+  // Repaint once the alphabet has loaded, and once the display font has (the first paint may use the fallback serif).
+  void loadAtlas(FONT_SETS.blue).then((a) => {
+    atlas = a;
+    draw();
+  });
   const fonts = (document as any).fonts as FontFaceSet | undefined;
   if (fonts && !fonts.check("800 64px Cinzel")) void fonts.load("800 64px Cinzel").then(draw, () => {});
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
