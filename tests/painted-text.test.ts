@@ -45,11 +45,13 @@ describe('painted damage digits', () => {
 
 describe('painted alphabets', () => {
   const ALL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?'-:+";
+  /** The neutral menu alphabet also has the sheet's sixth row and the built middle dot. */
+  const ALL_NEUTRAL = `${ALL}%/()&#[]";·`;
   const glyph = (font: FontKind, c: string) => FONT_SETS[font].glyphs.find((g) => g.c === c)!;
 
   it('has every letter, digit and mark in each set, inside its atlas, in order', () => {
     for (const set of Object.values(FONT_SETS)) {
-      expect(set.glyphs.map((g) => g.c).join('')).toBe(ALL);
+      expect(set.glyphs.map((g) => g.c).join('')).toBe(set === FONT_SETS.neutral ? ALL_NEUTRAL : ALL);
       let end = 0;
       for (const g of set.glyphs) {
         expect(g.x).toBeGreaterThanOrEqual(end);

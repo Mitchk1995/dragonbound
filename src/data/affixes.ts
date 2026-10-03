@@ -11,6 +11,8 @@ export interface AffixDef {
   per: number;
   decimals?: number;
   weight: number;
+  /** What the tooltip line is tinted for: an element, or 'bad' for a penalty. Plain bonuses (the default) read as 'good'. */
+  tint?: 'fire' | 'frost' | 'lightning' | 'poison' | 'bad';
   /** Word used when naming a magic item. */
   prefix?: string;
   suffix?: string;

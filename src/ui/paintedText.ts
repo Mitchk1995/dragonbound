@@ -53,10 +53,10 @@ export function preloadDigits() {
 // ─── Words: the three alphabets ──────────────────────────────────────────────────────────────────────────────────────
 
 /** Typographic marks the alphabets lack a glyph for, set with the plain one instead. */
-const LOOKALIKES: Record<string, string> = { '’': "'", '‘': "'", '–': '-', '—': '-' };
+const LOOKALIKES: Record<string, string> = { '’': "'", '‘': "'", '–': '-', '—': '-', '“': '"', '”': '"' };
 
 /** The ordinary text colour for characters no painted set has, matched to each alphabet. */
-export const FALLBACK_COLOR: Record<FontKind, string> = { gold: '#f3d98a', brown: '#5a3418', blue: '#a8dcff' };
+export const FALLBACK_COLOR: Record<FontKind, string> = { gold: '#f3d98a', brown: '#5a3418', blue: '#a8dcff', neutral: '#ebe8e1' };
 
 /** A drawn glyph's sprite geometry (screen px). Its advance box starts at the item's `x`; the sprite overhangs by `lead`. */
 export interface GlyphItem { kind: 'glyph'; c: string; set: GlyphSet; x: number; adv: number; lead: number; w: number; h: number; srcX: number; atlasW: number; atlasH: number; top: number }
@@ -85,7 +85,7 @@ export function layoutText(text: string, font: FontKind, cap: number, opts: { tr
   const items: TextItem[] = [];
   const fallbacks: string[] = [];
   let x = 0;
-  for (const raw of text) {
+  for (const raw of text.replace(/…/g, '...')) {
     const c = LOOKALIKES[raw] ?? raw;
     if (c === ' ') {
       const adv = (set.space ?? 0.3 * (set.base - set.top)) * s;
