@@ -11,7 +11,7 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * warm lights and cool darks. Patterns are large and calm so they read as painted detail from
  * the top-down camera, never as noise.
  *
- * Everything is generated at startup into two RGBA atlases (one pattern per channel), so every
+ * Everything is generated at startup into a few RGBA atlases (one pattern per channel), so every
  * painted material binds one texture and makes one fetch: box projection picks the face's
  * dominant axis, with the texture's V always along world/object up on side faces, so courses,
  * strata and plank seams never flip direction between faces.
@@ -21,10 +21,10 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * instances (rocks, walls).
  */
 
-export type PaintKind = 'masonry' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles' | 'foliage';
+export type PaintKind = 'masonry' | 'ashlar' | 'rock' | 'wood' | 'shingle' | 'bone' | 'hide' | 'plaster' | 'soft' | 'bark' | 'leaves' | 'needles' | 'foliage' | 'grain';
 
 interface PaintParams {
-  atlas: 0 | 1 | 2;
+  atlas: 0 | 1 | 2 | 3;
   channel: 0 | 1 | 2 | 3;
   /** Pattern repeats per unit (one tile = 1 / scale units). */
   scale: number;
@@ -34,6 +34,8 @@ interface PaintParams {
 
 export const PAINTS: Record<PaintKind, PaintParams> = {
   masonry: { atlas: 0, channel: 0, scale: 0.5, amount: 0.34 },
+  /** The castle's dressed limestone: the masonry pattern, painted a little stronger, damp and cool at its foot. */
+  ashlar: { atlas: 0, channel: 0, scale: 0.5, amount: 0.38 },
   rock: { atlas: 0, channel: 1, scale: 0.33, amount: 0.3 },
   wood: { atlas: 0, channel: 2, scale: 0.8, amount: 0.3 },
   shingle: { atlas: 0, channel: 3, scale: 0.55, amount: 0.34 },
@@ -45,6 +47,8 @@ export const PAINTS: Record<PaintKind, PaintParams> = {
   leaves: { atlas: 2, channel: 1, scale: 0.5, amount: 0.48 },
   needles: { atlas: 2, channel: 2, scale: 0.6, amount: 0.46 },
   foliage: { atlas: 2, channel: 3, scale: 0.42, amount: 0.5 },
+  /** A door's boards: the grain of each board, stained, with no seams (the boards are built apart). */
+  grain: { atlas: 3, channel: 0, scale: 0.5, amount: 0.42 },
 };
 
 const smooth = (a: number, b: number, x: number) => {
@@ -70,14 +74,16 @@ const hash = (a: number, b: number, seed: number) => {
  */
 export const PAINTERS: Record<PaintKind, () => Gen> = {
   masonry: () => {
-    // Four courses per tile, blocks of varied length in running bond, painted mortar, a lighter
-    // top edge on each block and a soft shadow under it.
+    // Four courses per tile, dressed blocks in running bond as a mason lays them: each block between
+    // one and a half and three times as long as its course is high (never a square or upright
+    // block), each course's joints falling over the middle of the blocks below, painted mortar, a
+    // lighter top edge on each block and a soft shadow under it.
     const rows = 4, rowH = SIZE / rows, rng = mulberry32(501);
-    const layout = Array.from({ length: rows }, () => {
-      const off = Math.floor(rng() * SIZE), edges: number[] = [];
+    const layout = Array.from({ length: rows }, (_, r) => {
+      const off = (r * 76 + Math.floor(rng() * 24)) % SIZE, edges: number[] = [];
       for (let x = 0; x < SIZE;) {
-        let l = 48 + Math.floor(rng() * 4) * 16;
-        if (SIZE - x - l < 40) l = SIZE - x;
+        let l = 104 + Math.floor(rng() * 5) * 16;
+        if (SIZE - x - l < 96) l = SIZE - x;
         edges.push(x);
         x += l;
       }
@@ -98,6 +104,8 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
       return 0.17 + (v - 0.17) * inside;
     };
   },
+  // The castle's ashlar shares the masonry's pattern (and its atlas channel).
+  ashlar: () => PAINTERS.masonry(),
   rock: () => {
     // Painted strata: soft horizontal bands that wander, in flat tones, with pale chips.
     const warp = fbm(511, 2, 3), bands = tileNoise(512, 2, 12), blotch = fbm(513, 3, 3), chips = worley(514, 7);
@@ -187,6 +195,24 @@ export const PAINTERS: Record<PaintKind, () => Gen> = {
       return posterize(0.31 + c.light * 0.36 + (c.tone - 0.5) * 0.2 - c.rim * 0.08 - c.tuck * 0.15 + dab + (drift(x, y) - 0.5) * 0.24 + (blot(x, y) - 0.5) * 0.06, 6);
     }, { size: [0.7, 1.25], lobes: 0.14, stretch: 0.25, turn: 0.7, order: 0.9 });
   },
+  grain: () => {
+    // Long grain running up the board: fine streaks and broader growth bands that drift across as
+    // they climb, a few dark knots with the grain swept round them, and the stain pooled darker in
+    // soft weathered patches.
+    const streak = tileNoise(621, 96, 2), bands = tileNoise(622, 20, 3), drift = fbm(623, 2, 2), weather = fbm(624, 3, 3);
+    const knots = Array.from({ length: 5 }, (_, i) => [hash(i, 1, 625) * SIZE, hash(i, 2, 625) * SIZE, 5 + hash(i, 3, 625) * 5]);
+    return (x, y) => {
+      let sweep = 0, knot = 0;
+      for (const [kx, ky, kr] of knots) for (const ox of [-SIZE, 0, SIZE]) for (const oy of [-SIZE, 0, SIZE]) {
+        const dx = x - kx - ox, dy = (y - ky - oy) * 0.45, d = Math.hypot(dx, dy);
+        knot = Math.max(knot, smooth(kr, kr * 0.5, d));
+        sweep += Math.sign(dx) * kr * 1.8 * Math.exp(-(d * d) / (kr * kr * 9));
+      }
+      const xx = x + (drift(x, y) - 0.5) * 26 + sweep;
+      const v = 0.5 + (streak(xx, y) - 0.5) * 0.34 + (posterize(bands(xx, y), 4) - 0.5) * 0.3 - posterize(weather(x, y), 3) * 0.16 + 0.06;
+      return v * (1 - 0.55 * knot);
+    };
+  },
 };
 
 interface Clump {
@@ -271,18 +297,22 @@ function clumps(seed: number, n: number, shade: (c: Clump, x: number, y: number)
   };
 }
 
-const atlases: (THREE.DataTexture | null)[] = [null, null, null];
+const atlases: (THREE.DataTexture | null)[] = [null, null, null, null];
 
 export const isPaintKind = (k: string): k is PaintKind => k in PAINTS;
 
 /** A painted atlas (built once, up to four patterns per texture, one per channel). */
-export function paintAtlas(atlas: 0 | 1 | 2): THREE.DataTexture {
+export function paintAtlas(atlas: 0 | 1 | 2 | 3): THREE.DataTexture {
   const hit = atlases[atlas];
   if (hit) return hit;
   const kinds = (Object.keys(PAINTS) as PaintKind[]).filter((k) => PAINTS[k].atlas === atlas);
-  const data = new Uint8Array(SIZE * SIZE * 4);
+  const data = new Uint8Array(SIZE * SIZE * 4), done = new Set<number>();
   for (const k of kinds) {
-    const gen = PAINTERS[k](), c = PAINTS[k].channel;
+    const c = PAINTS[k].channel;
+    // Kinds sharing a channel share its pattern: paint it once.
+    if (done.has(c)) continue;
+    done.add(c);
+    const gen = PAINTERS[k]();
     for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) data[(y * SIZE + x) * 4 + c] = Math.max(0, Math.min(1, gen(x, y))) * 255;
   }
   const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
@@ -300,11 +330,53 @@ export function paintAtlas(atlas: 0 | 1 | 2): THREE.DataTexture {
 /** GLSL: warm lights and cool darks, scaled by how strongly the paint applies. */
 export const PAINT_TINT = 'mix(vec3(1.0), mix(vec3(0.94, 0.97, 1.06), vec3(1.05, 1.01, 0.93), paintV), uPaintAmt * 1.6)';
 
+/** GLSL (ashlar only): a damp, cooler foot brightening upward (props and buildings stand on y = 0). */
+const ASHLAR_FOOT = 'diffuseColor.rgb *= mix(vec3(0.84, 0.83, 0.87), vec3(1.03), smoothstep(0.0, 5.0, vPaintPos.y));';
+
 /**
- * Paint a material. Box projection: top/bottom faces take (x, z), side faces take (z or x, y),
- * so the texture's V always runs up the side of a model.
+ * GLSL: dressed stone from a part's own layout (masonry.ts). vMason = (stone coordinate along the
+ * face, course coordinate, stone length, course height), both coordinates whole on the joints;
+ * vMasonK = (mode, seed). Running bond: every other course's joints fall over the middle of the
+ * stones below. Painted mortar, a tone per stone, soft stains, a lighter top edge on each stone and a
+ * soft shadow under it, as the painted masonry atlas.
  */
-export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceSpace = 'object', scaleMul = 1) {
+const MASON_GLSL = `
+          varying vec4 vMason;
+          varying vec2 vMasonK;
+          uniform sampler2D uPaintStain;
+          float masonHash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+          }
+          float masonSample() {
+            float mode = vMasonK.x;
+            float X = vMason.x, C = vMason.y, l = vMason.z, h = vMason.w;
+            // A drum: whole stones round its axis (x carries how many), a drum's top one ring of them.
+            if (mode > 2.5) X = (atan(vPaintPos.x, vPaintPos.z) / 6.2831853 + 0.5) * vMason.x;
+            if (mode > 3.5) C = 0.5;
+            float r = floor(C + 1e-4), fy = C - r;
+            float xo = X + (mod(r, 2.0) > 0.5 ? 0.5 : 0.0);
+            float bi = floor(xo), fx = xo - bi;
+            // Distances to the joints in metres, so mortar is one width on every stone.
+            float jx = min(fx, 1.0 - fx) * l, jy = min(fy, 1.0 - fy) * h;
+            float inside = smoothstep(0.011, 0.03, jx) * smoothstep(0.011, 0.03, jy);
+            float stain = texture2D(uPaintStain, vec2(X * l, C * h) * 0.5).b;
+            // (Hashed from whole numbers only: an interpolated value would jitter the hash into streaks.)
+            float v = 0.47 + (masonHash(vec2(r + floor(vMasonK.y + 0.5) * 13.0, bi)) - 0.5) * 0.24 + (0.5 - stain) * 0.6;
+            if (mode < 1.5 || (mode > 2.5 && mode < 3.5)) {
+              float up = fy * h;
+              v += 0.11 * smoothstep(h - 0.11, h - 0.04, up) - 0.07 * (1.0 - smoothstep(0.03, 0.11, up));
+            }
+            return 0.17 + (v - 0.17) * inside;
+          }`;
+
+/**
+ * Paint a material. Top and bottom faces take (x, z); side faces take the distance along the face
+ * itself (its horizontal tangent) and y, so the texture's V always runs up the side of a model and
+ * its blocks keep one size on a face turned at any angle. `wrap` paints a drum (a round tower
+ * centred on its model's origin): its side faces take the arc length round the axis instead, so the
+ * courses run on round it at one block size with no seam between its facets.
+ */
+export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceSpace = 'object', scaleMul = 1, wrap = false) {
   if (!(mat instanceof THREE.MeshStandardMaterial)) return;
   // Every rock surface shares one richer painted rock (strata blocks, cracks, grain, drift).
   if (kind === 'rock') return applyRock(mat, space, scaleMul);
@@ -316,8 +388,12 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
     uPaintScale: { value: p.scale * scaleMul },
     uPaintAmt: { value: p.amount },
   };
+  const ashlar = kind === 'ashlar';
+  // Dressed stone laid by its parts' own stone layouts where they carry one (masonry.ts).
+  const fit = kind === 'masonry' || kind === 'ashlar';
+  if (fit) Object.assign(uniforms, { uPaintStain: { value: paintAtlas(1) } });
   addPatch(mat, {
-    key: `paint:${space}`,
+    key: `paint:${space}${ashlar ? ':ashlar' : ''}${wrap ? ':wrap' : ''}${fit ? ':fit' : ''}`,
     slot: 'surface',
     apply(shader) {
       Object.assign(shader.uniforms, uniforms);
@@ -334,8 +410,8 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           }`
         : 'vPaintPos = transformed; vPaintNrm = objectNormal;';
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vPaintPos;\nvarying vec3 vPaintNrm;')
-        .replace('#include <project_vertex>', `#include <project_vertex>\n${vert}`);
+        .replace('#include <common>', `#include <common>\nvarying vec3 vPaintPos;\nvarying vec3 vPaintNrm;${fit ? '\nattribute vec4 aMason;\nattribute vec2 aMasonK;\nvarying vec4 vMason;\nvarying vec2 vMasonK;' : ''}`)
+        .replace('#include <project_vertex>', `#include <project_vertex>\n${vert}${fit ? '\nvMason = aMason; vMasonK = aMasonK;' : ''}`);
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
@@ -346,10 +422,18 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           uniform vec4 uPaintCh;
           uniform float uPaintScale;
           uniform float uPaintAmt;
+          ${fit ? MASON_GLSL : ''}
           float paintSample() {
+            ${fit ? 'if (vMasonK.x > 0.5) return masonSample();' : ''}
             vec3 n = abs(vPaintNrm);
             vec3 q = vPaintPos * uPaintScale;
-            vec2 uv = n.y >= max(n.x, n.z) ? q.xz : (n.x > n.z ? q.zy : q.xy);
+            vec2 uv;
+            if (n.y >= max(n.x, n.z)) uv = q.xz;
+            else {
+              ${wrap
+                ? 'uv = vec2(atan(vPaintPos.x, vPaintPos.z) * length(vPaintPos.xz) * uPaintScale, q.y);'
+                : 'uv = vec2(dot(q.xz, normalize(vec2(-vPaintNrm.z, vPaintNrm.x))), q.y);'}
+            }
             return dot(texture2D(uPaintTex, uv), uPaintCh);
           }`,
         )
@@ -359,6 +443,7 @@ export function applyPaint(mat: THREE.Material, kind: PaintKind, space: SurfaceS
           {
             float paintV = paintSample();
             diffuseColor.rgb *= clamp(1.0 + (paintV - 0.5) * 2.0 * uPaintAmt, 0.0, 2.0) * ${PAINT_TINT};
+            ${ashlar ? ASHLAR_FOOT : ''}
           }`,
         );
     },

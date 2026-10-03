@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { RESTORATION_BY_ID } from '../src/data/keep';
-import { KEEP_BUILDINGS } from '../src/data/zoneMaps';
+import { CASTLE_PLAN, KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
 import { cellRole, fitBlocks, fitsOf, inRoom, partitionRuns, sideLen, stairDest, stairRect, wallCell, wallRuns, type BuildingSpec, type Floor, type Stair } from '../src/world/building';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
@@ -14,6 +14,29 @@ const L = ZONES.keep.build(1000 + 'keep'.length * 97);
 const nav = new NavGrid(L.w, L.h, L.cells);
 const B = Object.fromEntries(KEEP_BUILDINGS.map((b) => [b.id, b]));
 const station = (kind: string, id: string) => L.stations.find((s) => s.kind === kind && s.id === id)!;
+/** 4-connected flood fill over cells where `ok` holds, from cell index `from`. */
+function flood(from: number, ok: (i: number) => boolean) {
+  const seen = new Uint8Array(L.w * L.h), stack = [from];
+  seen[from] = 1;
+  while (stack.length) {
+    const i = stack.pop()!, x = i % L.w;
+    for (const j of [x > 0 ? i - 1 : -1, x < L.w - 1 ? i + 1 : -1, i - L.w, i + L.w]) {
+      if (j < 0 || j >= L.w * L.h || seen[j] || !ok(j)) continue;
+      seen[j] = 1;
+      stack.push(j);
+    }
+  }
+  return seen;
+}
+/** Is a point inside a polygon (even-odd rule)? */
+function inPoly(x: number, z: number, poly: number[][]) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
 
 describe('building specs (pure)', () => {
   const b: BuildingSpec = { id: 't', style: 'stone', interior: 'bank', x: 10, z: 20, w: 8, d: 6, wallH: 4, roof: 0, doors: [{ side: 's', at: 3, w: 2 }], windows: [] };
@@ -95,8 +118,8 @@ describe('Dragonspire Keep', () => {
     const p = buildBuilding(k), box = new THREE.Box3().setFromObject(p.obj);
     expect(box.max.y).toBeGreaterThan(k.wallH + 4);
   });
-  it('the castle stands level on the crown, its curtain closing the wards; the outer gate, the lower ward and the inner gate lead to the hall\'s great door', () => {
-    // The wards are level with the crown (+11): round the well in the inner court and across the lower ward.
+  it('the castle stands level on the crown, its curtain closing the bailey; the gate and the avenue lead to the hall\'s great door', () => {
+    // The bailey is level with the crown (+11): across the cour d'honneur and the training yard.
     let inside = 0;
     for (const [cx, cz] of [[70, 56], [98, 62]]) for (let z = cz - 6; z <= cz + 6; z++) for (let x = cx - 6; x <= cx + 6; x++) {
       const i = z * L.w + x;
@@ -109,11 +132,55 @@ describe('Dragonspire Keep', () => {
     const door = { x: k.x + great.at + great.w / 2, z: k.z + k.d + 0.5 };
     const path = nav.findPath(L.entry.x, L.entry.z, door.x, door.z)!;
     expect(path).not.toBeNull();
-    // On the way in it passes the outer gate (112, 71) and the inner gate (82, 54.8).
+    // On the way in it passes through the gate (its passage is four cells wide) and up the avenue.
     const near = (g: { x: number; z: number }) => Math.min(...path.slice(1).map((q, i) => distToPoly(g.x, g.z, [path[i], q]).d));
-    for (const g of [{ x: 112, z: 71 }, { x: 82, z: 54.8 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(1.5);
+    for (const g of [{ x: 66, z: 100 }, { x: 66, z: 62 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(2.1);
     // The curtain is shut elsewhere: a step through its north wall is blocked.
-    expect(nav.isWalkable(80, 19)).toBe(false);
+    expect(nav.isWalkable(80, 22)).toBe(false);
+  });
+  it('the castle is laid out on one axis: the great door, the gate and the dragon fountain', () => {
+    const k = B.keep, great = k.doors.find((d) => d.side === 's' && d.w === 4)!;
+    const gate = L.props.find((p) => p.kind === 'outer_gatehouse')!, fountain = L.props.find((p) => p.kind === 'dragon_fountain')!;
+    expect(k.x + great.at + great.w / 2).toBe(CASTLE_PLAN.gate.x);
+    expect(gate.x).toBeCloseTo(CASTLE_PLAN.gate.x, 6);
+    expect(fountain).toBeDefined();
+    expect([fountain.x, fountain.z]).toEqual([66, 78]);
+    expect(fountain.x).toBe(CASTLE_PLAN.gate.x);
+  });
+  it('the west wing and the barracks mirror each other across the axis', () => {
+    const wing = B.west_wing, bar = B.barracks, axis = CASTLE_PLAN.gate.x;
+    expect(axis - wing.x).toBe(bar.x + bar.w - axis);
+    expect([wing.z, wing.d]).toEqual([bar.z, bar.d]);
+    const span = (b: BuildingSpec, side: 'e' | 'w') => b.doors.filter((d) => d.side === side).map((d) => [b.z + d.at, b.z + d.at + d.w]);
+    expect(span(bar, 'w')).toEqual(span(wing, 'e'));
+  });
+  it('every castle door opens onto paving and is reached from the gate', () => {
+    const from = nav.nearestWalkable(CASTLE_PLAN.gate.x, CASTLE_PLAN.gate.z - 2)!;
+    for (const b of KEEP_BUILDINGS.filter((q) => q.style === 'keep')) for (const d of b.doors) {
+      for (let k = 0; k < d.w; k++) {
+        const [x, z] = d.side === 's' ? [b.x + d.at + k, b.z + b.d] : d.side === 'n' ? [b.x + d.at + k, b.z - 1] : d.side === 'w' ? [b.x - 1, b.z + d.at + k] : [b.x + b.w, b.z + d.at + k];
+        const i = z * L.w + x;
+        expect(L.ground[i] === Ground.Stone || L.ground[i] === Ground.Path, `${b.id} ${d.side}@${d.at} threshold ${x},${z}`).toBe(true);
+        expect(L.cells[i], `${b.id} ${d.side}@${d.at} threshold ${x},${z}`).toBe(Cell.Ground);
+        const path = nav.findPath(from.x, from.z, x + 0.5, z + 0.5);
+        expect(path, `${b.id} ${d.side}@${d.at}`).not.toBeNull();
+        expect(path!.at(-1), `${b.id} ${d.side}@${d.at}`).toEqual({ x: x + 0.5, z: z + 0.5 });
+      }
+    }
+  });
+  it('the bailey has no orphan ground, and its walks join up into one network', () => {
+    const curtain = CASTLE_PLAN.curtain.map((p) => [p.x, p.z]);
+    const inside = (i: number) => inPoly((i % L.w) + 0.5, Math.floor(i / L.w) + 0.5, curtain);
+    expect((L.sealed ?? []).filter(inside), 'walkable cells nobody can reach').toEqual([]);
+    // Every walkable cell inside the curtain is reached from the arrival dais.
+    const reach = flood(Math.floor(L.entry.z) * L.w + Math.floor(L.entry.x), (i) => L.cells[i] === Cell.Ground);
+    for (let i = 0; i < L.w * L.h; i++) if (inside(i) && L.cells[i] === Cell.Ground) expect(reach[i], `${i % L.w},${Math.floor(i / L.w)}`).toBe(1);
+    // The paving (walks, courts, yards, building floors) is one 4-connected region.
+    const paved = (i: number) => L.cells[i] === Cell.Ground && inside(i) && (L.ground[i] === Ground.Stone || L.ground[i] === Ground.Path);
+    const seed = (CASTLE_PLAN.gate.z - 2) * L.w + CASTLE_PLAN.gate.x;
+    expect(paved(seed)).toBe(true);
+    const net = flood(seed, paved);
+    for (let i = 0; i < L.w * L.h; i++) if (paved(i)) expect(net[i], `paving at ${i % L.w},${Math.floor(i / L.w)}`).toBe(1);
   });
   it('the keep has several rooms with a purpose, and you can walk into every one of them', () => {
     const k = B.keep;
@@ -333,7 +400,10 @@ describe('building models', () => {
       const glass = hits.find((h) => (h.object as THREE.Mesh).material instanceof THREE.Material && ((h.object as THREE.Mesh).material as THREE.Material).transparent);
       expect(glass, `${b.id} has glass in the opening`).toBeDefined();
       expect(((glass!.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.5);
-      const solid = hits.find((h) => !((h.object as THREE.Mesh).material as THREE.Material).transparent);
+      // (A castle window shows its lit room painted on a plate just behind the glass, seen from
+      // outside only; past it the ray goes on into the room.)
+      if (b.style === 'keep') expect(hits.some((h) => h.object.name === 'room'), `${b.id} shows its lit room behind the glass`).toBe(true);
+      const solid = hits.find((h) => !((h.object as THREE.Mesh).material as THREE.Material).transparent && h.object.name !== 'room');
       // The first solid thing the ray meets is inside the room, not the wall around the window.
       expect(solid ? solid.point.z : Infinity, b.id).toBeGreaterThan(b.z + 1.1);
     }

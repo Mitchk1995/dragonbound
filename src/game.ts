@@ -17,7 +17,7 @@ import { Particles } from './fx/particles';
 import { Sfx } from './fx/sfx';
 import { Rig, newAnimState } from './render/anim';
 import { PAL } from './render/kit';
-import { zoneLighting } from './render/env';
+import { steadyShadows, zoneLighting } from './render/env';
 import { makeModel } from './render/registry';
 import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
 import { SaveWriter } from './save/writer';
@@ -31,6 +31,7 @@ import { Story } from './systems/story';
 import type { SkillId } from './types';
 import { UI } from './ui/ui';
 import { WorldText } from './ui/worldText';
+import { LAWN_SHELLS, setLawnShells } from './world/lawn';
 import { OCCLUDE } from './world/worldView';
 import { ZoneRuntime } from './world/zone';
 
@@ -113,6 +114,7 @@ export class Game {
   private titleDragon: { obj: THREE.Group; rig: Rig; anim: ReturnType<typeof newAnimState> } | null = null;
 
   constructor(public canvas: HTMLCanvasElement) {
+    steadyShadows();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -133,8 +135,12 @@ export class Game {
     sc.right = sc.top = 28;
     sc.near = 1;
     sc.far = 90;
-    this.sun.shadow.bias = -0.0005;
-    this.sun.shadow.normalBias = 0.04;
+    // (Enough normal offset that faces turned from the sun never speckle with their own shadow.)
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.07;
+    // (A wide, even filter: where a shadow edge lies along a face the sun only grazes, its texels
+    // stretch into long steps; spread over a few texels they blend into a soft edge, not a stipple.)
+    this.sun.shadow.radius = 2.2;
     this.fill.target = this.sun.target;
     this.scene.add(this.sun, this.sun.target, this.fill, this.particles.mesh, this.glow.mesh, this.player.obj);
     this.player.bind(this);
@@ -491,13 +497,14 @@ export class Game {
   /**
    * Quality presets. High: up to 2× pixel ratio, 4× MSAA, 2048 shadows, bloom. Medium: 1.5×,
    * MSAA, 1536 shadows, bloom. Low: 1× (no supersampling on HiDPI), no MSAA, 1024 shadows, no
-   * bloom — for integrated GPUs.
+   * bloom — for integrated GPUs. The lawn draws 8, 6 or 4 shells.
    */
   applyGraphics(level: Graphics) {
     const p = { high: { ratio: 2, msaa: 4, shadow: 2048, bloom: true }, medium: { ratio: 1.5, msaa: 4, shadow: 1536, bloom: true }, low: { ratio: 1, msaa: 0, shadow: 1024, bloom: false } }[level];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
     for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) rt.samples = p.msaa;
     this.bloom.enabled = p.bloom;
+    setLawnShells(LAWN_SHELLS[level]);
     if (this.sun.shadow.mapSize.x !== p.shadow) {
       this.sun.shadow.mapSize.set(p.shadow, p.shadow);
       this.sun.shadow.map?.dispose();

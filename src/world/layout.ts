@@ -55,6 +55,12 @@ export interface PropSpawn {
   len?: number;
   /** Builder variant/seed for props that take one alongside a length (ruin walls, slabs). */
   v?: number;
+  /** The radius of a curved face the prop hugs (a climber on a round tower's drum); none = a flat wall. */
+  bend?: number;
+  /** A builder's own options (a tower's doorways, a border's outline…). */
+  opt?: Record<string, unknown>;
+  /** The height it stands at, where that is not the ground under it (a wall following a road's grade). */
+  y?: number;
 }
 
 /** Liquid in a cell: rendered as a lowered bed with an animated surface. Bridges are walkable cells over it. */
@@ -62,6 +68,23 @@ export enum Fluid {
   None = 0,
   Water = 1,
   Lava = 2,
+}
+
+/** Grass carpet over a cell (see lawn.ts): none (loose tufts instead), meadow, or a clipped lawn. */
+export enum Lawn {
+  None = 0,
+  Meadow = 1,
+  /** Clipped castle lawn: short, striped. */
+  Clipped = 2,
+  /** A private garden's lawn: a little longer, scattered with daisies and clover. */
+  Garden = 3,
+}
+
+/** The lawn a cell grows: grass ground on open ground, under trees and under props. */
+export function lawnCell(cell: number, ground: number, fluid: number, clipped: boolean): Lawn {
+  if (fluid || ground !== Ground.Grass) return Lawn.None;
+  if (cell !== Cell.Ground && cell !== Cell.Blocked && cell !== Cell.Tree) return Lawn.None;
+  return clipped ? Lawn.Clipped : Lawn.Meadow;
 }
 
 export interface ZoneLayout {
@@ -96,6 +119,29 @@ export interface ZoneLayout {
   buildings?: BuildingSpec[];
   /** Chance (percent) of a tree on each raised relief cell; the theme's reliefTrees otherwise. */
   canopy?: Uint8Array;
+  /** Grass carpet per cell (Lawn enum); absent = loose grass tufts only. */
+  lawn?: Uint8Array;
+  /** Discs the lawn is cut back from, its border running exactly along each circle. */
+  lawnCut?: { x: number; z: number; r: number }[];
+  /** Walkable cells nobody could reach, sealed off by Gen.connect (a designed area should leave none). */
+  sealed?: number[];
+  /**
+   * Roads and streams as centre lines (with their half widths): the ground, the grass carpet and the
+   * water draw their edges along these smooth curves instead of the cell grid.
+   */
+  strands?: Strand[];
+  /** Round pools (a spring, a pond): dished hollows with a soft, round shore. */
+  pools?: { x: number; z: number; r: number }[];
+  /** Stone kerbs edging paving where it meets a lawn (centre, turn and length), drawn as one mesh. */
+  kerbs?: { x: number; z: number; rot: number; len: number }[];
+}
+
+export interface Strand {
+  pts: Vec2[];
+  hw: number;
+  kind: 'path' | 'water';
+  /** The ground the strand is paved with (a road), or its banks' wet earth (a stream). */
+  ground: number;
 }
 
 export interface Burn {

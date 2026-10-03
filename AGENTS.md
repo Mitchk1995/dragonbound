@@ -7,6 +7,18 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - The owner cares about the game, not the code or GitHub. Report in game terms: what changed in play, where to see it, and any game decision you need. Leave out code, files, branches, commits, PRs and CI unless the owner asks.
 - Handle all repository housekeeping yourself, start to finish: branch, commit, open the PR, fix CI, merge, then delete the branch and any worktree. When you finish, nothing is left uncommitted and no stray branch, worktree or scratch folder remains.
 - Ask the owner only about the game: feel, look, design direction and priorities.
+- **Show, don't tell.** Progress, options and questions go to the owner as pictures (in-game captures, concept images), with a line or two of text at most. No score tables, long lists or walls of text; the owner won't open the game to check.
+- **One thing at a time.** Finish one area or feature until the owner judges it good from pictures, then move on. The owner's eye is the judge; critic agents are a tool for finding defects, not a loop to grind. Stop and show the owner when progress stalls.
+- **Be frugal.** Keep usage low: small focused jobs, no big parallel agent runs unless the owner asks, and keep the repo, branches and scratch output clean.
+- **How to work through a batch of owner notes.**
+  - Export the notes, with marked pictures, to one notes file.
+  - Group them by kind (for example masonry; doors and glass; landscaping).
+  - Run one fresh, focused agent per group, one after another. A single long-running agent costs more with every step, and two agents can't write in the same folder at once.
+  - Give every job one shared brief: rules, style, where the code is, how to capture and how to report.
+  - A job checks each fix from several camera angles, not only the review view, and extends the geometry audit where it can.
+  - A style-aware reviewer checks the result before the owner sees it.
+- **Every visual builder, critic or reviewer starts from the style.** Its prompt points it at "The look" in [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md) and the owner's picks for that area in the plan. Nothing reaches the owner until the geometry checks pass and a style-aware reviewer has zoomed into every capture.
+- **Mechanics and non-visual systems go to Codex** (GPT 6.1 Sol, max effort, run headless with the Codex app's newest bundled `codex.exe`); Claude does design, planning, look and feel.
 
 ## Where things are
 

@@ -11,10 +11,10 @@ import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
  * face normal, with V along world up on side faces, so it never stretches on tall faces and the
  * strata stay level across neighbouring rocks.
  *
- * The rock atlas carries four patterns (0.5 = the base colour):
- * - R side faces: stacked strata, each band split into blocks by vertical joints, a dark gap
- *   between bands, a pale lip along each band's top and a shadow tucked under the band above,
- *   one tone per block and the odd diagonal fracture;
+ * A rock atlas carries four patterns (0.5 = the base colour):
+ * - R side faces: weathered natural rock (big upright facets split by cracks, a few broken bedding
+ *   lines) or, for the cave walls, stacked strata blocks (each band split into blocks by vertical
+ *   joints, a dark gap between bands, a pale lip along each band's top);
  * - G ledge tops: broken flat slabs with their own tones and dark cracks between;
  * - B grain: speckle (pale and dark flecks) over a fine mottle;
  * - A a broad blotch (warm ochre vs cool grey drift).
@@ -86,29 +86,71 @@ function strataBlocks(seed: number): Gen {
 }
 
 /**
- * Tileable cellular noise that also names the two nearest cells, so a crack can run along only
- * some of the borders (closed cells everywhere read as laid paving, not rock).
+ * Tileable cellular noise that also names the two nearest cells (and where the nearest one's seed
+ * lies), so a crack can run along only some of the borders (closed cells everywhere read as laid
+ * paving, not rock). `ny` rows of `n` columns: fewer rows stretch the cells upright.
  */
-function cells2(seed: number, n: number) {
-  const rng = mulberry32(seed), cell = SIZE / n;
-  const pts = Array.from({ length: n * n }, (_, i) => [((i % n) + 0.1 + rng() * 0.8) * cell, (Math.floor(i / n) + 0.1 + rng() * 0.8) * cell]);
+function cells2(seed: number, n: number, ny = n) {
+  const rng = mulberry32(seed), cw = SIZE / n, ch = SIZE / ny;
+  const pts = Array.from({ length: n * ny }, (_, i) => [((i % n) + 0.1 + rng() * 0.8) * cw, (Math.floor(i / n) + 0.1 + rng() * 0.8) * ch]);
   return (x: number, y: number) => {
-    const cx = Math.floor(x / cell), cy = Math.floor(y / cell);
-    let f1 = 1e9, f2 = 1e9, a = 0, b = 0;
+    const cx = Math.floor(x / cw), cy = Math.floor(y / ch);
+    let f1 = 1e9, f2 = 1e9, a = 0, b = 0, ax = 0, ay = 0;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const gx = (cx + dx + n) % n, gy = (cy + dy + n) % n, k = gy * n + gx;
-      const d = Math.hypot(x - (pts[k][0] + (cx + dx - gx) * cell), y - (pts[k][1] + (cy + dy - gy) * cell));
+      const gx = (((cx + dx) % n) + n) % n, gy = (((cy + dy) % ny) + ny) % ny, k = gy * n + gx;
+      const px = pts[k][0] + (cx + dx - gx) * cw, py = pts[k][1] + (cy + dy - gy) * ch;
+      const d = Math.hypot(x - px, y - py);
       if (d < f1) {
         f2 = f1;
         b = a;
         f1 = d;
         a = k;
+        ax = px;
+        ay = py;
       } else if (d < f2) {
         f2 = d;
         b = k;
       }
     }
-    return { f1, f2, a, b };
+    return { f1, f2, a, b, ax, ay };
+  };
+}
+
+/**
+ * R (natural rock): a face of weathered natural rock, not courses. Big upright facets, each its
+ * own tone and catching the light from its own side (a low-poly face of fractured stone), split by
+ * long cracks along most of their borders and finer ones along a few; a handful of broken, wavy
+ * bedding lines run across, and the odd patch of diagonal fractures.
+ */
+function rockFace(seed: number): Gen {
+  const rng = mulberry32(seed);
+  const big = cells2(seed, 5, 2), small = cells2(seed + 7, 9, 5);
+  const warp = fbm(seed + 1, 4, 2), warp2 = fbm(seed + 2, 4, 2), mott = fbm(seed + 3, 6, 3), frac = worley(seed + 4, 6), fracMask = fbm(seed + 5, 3, 2);
+  const bedRuns = runs(rng, SIZE, 50, 120), bedMask = fbm(seed + 6, 3, 2), cw = SIZE / 5;
+  const joints = runs(rng, SIZE, 70, 150), jointWob = tileNoise(seed + 8, 3, 6), jointMask = fbm(seed + 9, 3, 2);
+  return (x, y) => {
+    const wx = x + (warp(x, y) - 0.5) * 30, wy = y + (warp2(x, y) - 0.5) * 20;
+    const B = big(wx, wy), S = small(wx, wy);
+    // Each facet a plane turned its own way to the light: a steady ramp of tone across it.
+    const ang = hash(B.a, 2, seed) * Math.PI * 2;
+    const rel = ((wx - B.ax) * Math.cos(ang) + (wy - B.ay) * Math.sin(ang) * 0.5) / cw;
+    let v = 0.5 + (hash(B.a, 1, seed) - 0.5) * 0.26 + rel * 0.24 + (hash(S.a, 3, seed) - 0.5) * 0.06;
+    v += (steps(mott(x, y), 4) - 0.5) * 0.1;
+    // Cracks along only some facet borders (closed outlines everywhere read as crazy paving).
+    const edgeB = hash(Math.min(B.a, B.b), Math.max(B.a, B.b), seed + 3) < 0.3 ? 1 - smooth(0.5, 1.5, B.f2 - B.f1) : 0;
+    const edgeS = hash(Math.min(S.a, S.b), Math.max(S.a, S.b), seed + 5) < 0.12 ? 1 - smooth(0.4, 1.1, S.f2 - S.f1) : 0;
+    // Long vertical joints running down through the beds (broken here and there).
+    const jx = (((x + (jointWob(x, y) - 0.5) * 26) % SIZE) + SIZE) % SIZE;
+    const jt = runAt(joints, SIZE, jx);
+    const joint = (1 - smooth(0.5, 1.6, Math.min(jt.from, jt.to))) * (jointMask(x, y) > 0.38 ? 1 : 0);
+    // Dark on the joint, a lit edge just to its right (the side of the next block standing proud).
+    v += 0.07 * (1 - smooth(1.5, 5, jt.from)) * (jointMask(x, y) > 0.38 ? 1 : 0);
+    const yy = (((y + (warp(x, y) - 0.5) * 44) % SIZE) + SIZE) % SIZE;
+    const bed = runAt(bedRuns, SIZE, yy);
+    const bedLine = (1 - smooth(0.6, 2.0, Math.min(bed.from, bed.to))) * (bedMask(x, y) > 0.5 ? 1 : 0);
+    const [f1, f2] = frac(x, y);
+    if (f2 - f1 < 1.3 && fracMask(x, y) > 0.62) v -= 0.1;
+    return Math.max(0.06, v - Math.max(edgeB * 0.22, edgeS * 0.12, bedLine * 0.2, joint * 0.36));
   };
 }
 
@@ -142,12 +184,17 @@ function grain(seed: number): Gen {
   };
 }
 
-let atlas: THREE.DataTexture | null = null;
+const atlases: Partial<Record<RockKind, THREE.DataTexture>> = {};
 
-/** The rock atlas (built once). */
-export function rockAtlas(): THREE.DataTexture {
-  if (atlas) return atlas;
-  const gens: Gen[] = [strataBlocks(901), ledgeTops(911), grain(921)];
+/**
+ * The rock atlases (each built once). 'natural' (cliffs, boulders, crags and every rock prop) paints
+ * side faces as weathered natural rock; 'strata' (the mine's cave walls and the slabs stacked at
+ * their foot) as stacked strata blocks. Both share the ledge tops, grain and blotch.
+ */
+export function rockAtlas(kind: RockKind = 'natural'): THREE.DataTexture {
+  const have = atlases[kind];
+  if (have) return have;
+  const gens: Gen[] = [kind === 'strata' ? strataBlocks(901) : rockFace(941), ledgeTops(911), grain(921)];
   const blot = fbm(931, 2, 3);
   const data = new Uint8Array(SIZE * SIZE * 4);
   const raw = new Float32Array(SIZE * SIZE);
@@ -169,9 +216,20 @@ export function rockAtlas(): THREE.DataTexture {
   tex.generateMipmaps = true;
   tex.anisotropy = 8;
   tex.needsUpdate = true;
-  tex.name = 'rock';
-  atlas = shareResource(tex);
+  tex.name = `rock-${kind}`;
+  atlases[kind] = shareResource(tex);
   return tex;
+}
+
+export type RockKind = 'natural' | 'strata';
+
+/** The rock uniforms of each material painted by applyRock (so a caller can switch its atlas). */
+const rockUniforms = new WeakMap<THREE.Material, { uRockTex: { value: THREE.Texture } }>();
+
+/** Paint a material applyRock already painted with the stacked strata instead (cave walls). */
+export function useStrataRock(mat: THREE.Material) {
+  const u = rockUniforms.get(mat);
+  if (u) u.uRockTex.value = rockAtlas('strata');
 }
 
 /**
@@ -218,7 +276,8 @@ export const ROCK_GLSL = `
  */
 export function applyRock(mat: THREE.Material, space: SurfaceSpace = 'world', scaleMul = 1) {
   if (!(mat instanceof THREE.MeshStandardMaterial)) return;
-  const uniforms = { uRockTex: { value: rockAtlas() }, uRockScale: { value: scaleMul / ROCK_TILE } };
+  const uniforms = { uRockTex: { value: rockAtlas() as THREE.Texture }, uRockScale: { value: scaleMul / ROCK_TILE } };
+  rockUniforms.set(mat, uniforms);
   addPatch(mat, {
     key: `rock:${space}`,
     slot: 'surface',

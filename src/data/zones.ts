@@ -38,6 +38,8 @@ export interface ZoneTheme {
   wallRise?: number;
   /** Ground on top of cliffs/mesas (their steep faces are rock); undefined = rock all over. */
   mesaTop?: Ground;
+  /** How far moss spreads over outdoor rock (0: patches on the flattest ledges, 1: lush over every crown and shoulder). */
+  rockMoss?: number;
   /** The land dims over its last cells before the Void that ends it (an organic outline). */
   edgeFade?: boolean;
 }
@@ -62,13 +64,18 @@ export const ZONES: Record<string, ZoneDef> = {
   keep: {
     id: 'keep', name: 'Dragonspire Keep', kind: 'hub', arch: 0xffffff, build: buildKeep,
     theme: {
-      bg: 0x0b0a1c, fog: [60, 140], hemi: [0x9a9ad8, 0x4a3a50, 1.25], sun: [0xffd6a8, 2.3], exposure: 1.1,
+      // The golden hour: a warm low sun, a soft rose-lilac sky light and a warm bounce, so shade stays
+      // readable and the castle's cream stays honey in its shadow; distant land fades into the peach
+      // haze of the horizon.
+      bg: 0xc39a9c, fog: [70, 160], hemi: [0xc8b8d4, 0x8a7058, 1.9], sun: [0xffd9b2, 2.3], exposure: 1.1,
       ambient: 'void', trees: 'grove', wall: 'castle',
-      ground: { [Ground.Grass]: [0x4a7a3a, 0x5a8a44], [Ground.Stone]: [0x8a8478, 0x7a7468], [Ground.Path]: [0x8a7a5e, 0x7a6a50], [Ground.Dirt]: [0x6e6048, 0x5e5240] },
-      // The castle rock and the upland: grey stone faces, grass growing over their tops.
-      cliff: [0x8a8274, 0x686052],
+      ground: { [Ground.Grass]: [0x4a7a3a, 0x5a8a44], [Ground.Stone]: [0x928e88, 0x827e78], [Ground.Path]: [0x8a7a5e, 0x7a6a50], [Ground.Dirt]: [0x6e6048, 0x5e5240] },
+      // The castle rock and the upland: dark blue-grey rock softened by moss (framing the cream
+      // castle), grass over their tops, pines rooted on the ledges.
+      cliff: [0x5e6572, 0x464c5a],
       mesaTop: Ground.Grass,
-      reliefTrees: 0.04,
+      rockMoss: 1,
+      reliefTrees: 0.08,
       forest: { grove: 0.75, pine: 0.25 },
       flowers: [0xf0d060, 0xe86a8a, 0xb0a0ff, 0xffffff],
       water: [0x4aa0b8, 0x1a4a62],

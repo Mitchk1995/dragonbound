@@ -21,6 +21,8 @@ export interface Window {
   at: number;
   /** Storey: 0 = ground floor (default), 1 = the upper floor of a building with `storeyH`. */
   floor?: number;
+  /** A stable stall's opening on the facade (a half-door, a horse looking out), not a glazed window. */
+  stall?: boolean;
 }
 
 /**
@@ -72,6 +74,8 @@ export interface BuildingSpec {
   windows: Window[];
   /** Sides whose wall belongs to a neighbour sharing it (not drawn twice; still blocks). */
   shared?: Side[];
+  /** Sides built hard against the curtain: the curtain's foot runs there, so they take no base course. */
+  backs?: Side[];
   fits?: Fit[];
   /** Roof: a gable (ridge along the longer side) or a flat crenellated deck. */
   roofKind?: 'gable' | 'flat';
@@ -79,6 +83,16 @@ export interface BuildingSpec {
   restore?: string;
   /** Interior walls dividing the floor into rooms. */
   partitions?: Partition[];
+  /**
+   * Walls this building shares with a neighbour of the same height whose roof continues its own:
+   * no parapet stands on them, so the two roofs read as one.
+   */
+  joined?: Side[];
+  /**
+   * Stretches of a side's roof parapet (from..to along it, in cells) where it runs into a drum or
+   * pavilion standing against the face: plain, with no merlons, so no merlon stands half in it.
+   */
+  plainParapet?: { side: Side; from: number; to: number }[];
   /** Height of the ground storey of a multi-storey building (upper-floor windows sit above it). */
   storeyH?: number;
   /** Stairs between the ground and upper floors (a building with an `upper` floor). */

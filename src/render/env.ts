@@ -123,3 +123,22 @@ export function zoneLighting(t: LightingTheme): ZoneLighting {
     fillIntensity: t.sun[1] * (under ? 0.2 : 0.32),
   };
 }
+
+/**
+ * Soft, steady shadow edges: the stock PCF filter turns its few samples by a per-pixel noise, which
+ * reads as a dithered stripe along every shadow edge on a wall or a basin's rim. A fixed 4 × 4 grid
+ * of filtered taps across the light's shadow radius gives an even soft edge with no noise. (Patched into the shader
+ * chunk once, before any material compiles.)
+ */
+export function steadyShadows() {
+  const chunk = THREE.ShaderChunk.shadowmap_pars_fragment;
+  if (chunk.includes('steady-shadows')) return;
+  const next = chunk.replace(/float phi = interleavedGradientNoise\( gl_FragCoord\.xy \) \* PI2;[\s\S]*?\) \* 0\.2;/, `// steady-shadows
+				shadow = 0.0;
+				for ( int i = 0; i < 4; i ++ ) for ( int j = 0; j < 4; j ++ ) {
+					shadow += texture( shadowMap, vec3( shadowCoord.xy + ( vec2( float( i ), float( j ) ) - 1.5 ) * radius * 0.66, shadowCoord.z ) );
+				}
+				shadow /= 16.0;`);
+  if (next === chunk) throw new Error('steadyShadows: the shadow chunk has changed; update the patch');
+  THREE.ShaderChunk.shadowmap_pars_fragment = next;
+}
