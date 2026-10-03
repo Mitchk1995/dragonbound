@@ -37,7 +37,7 @@ export const NECK_FLY_EXTEND = 0.3;
 /** Where the blow lands in every attack animation (see COMBAT_TUNING.impact). */
 const IMPACT = COMBAT_TUNING.impact;
 
-/** How far the hanging arms turn out from the body (radians, about Z); tools/blender/fitcheck.py poses with it. */
+/** How far the hanging arms turn out from the body (radians, about Z); tools/blender/animpose.py mirrors it. */
 export const ARM_SPLAY = 0.1;
 
 /** How much of the upper arm's rotation the pauldron follows (see Rig.followShoulders). */

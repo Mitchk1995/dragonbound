@@ -322,8 +322,7 @@ def bow_drakebone(S):
     bow_string(b, (DRAKE_NOCK * H, DRAKE_STRING * 2 * H))
 
 # Staffs run along the hand's hole (socket +Y), their grip in the hand: the game holds a staff's forearm forward
-# (anim.ts, the 'upright' hold), so the hole, and the staff with it, stands upright. Grip wraps are at most 0.125
-# across.
+# (anim.ts 'upright' hold), so the staff stands upright through the hole. Grip wraps are at most 0.125 across.
 
 
 def staff_frame(S, grip=0.0):
@@ -936,8 +935,7 @@ def u_wyrmbone(S):
     block_pauldron(S, -1, color=BONE, top=None, edge=None, rivets=None)
     for (name, s), (cuff, _, _) in zip(ARM_SOCKS, HAND_SOCKS):
         sleeve(S(name), s, *SLEEVE, 0.31, obs, bevel=0.035)                                          # rerebrace
-        # The bone vambrace from the elbow (rounded about it, so it turns inside the rerebrace) down the forearm, a
-        # touch off the forearm's middle toward the outside, so its inner side clears the breastplate.
+        # Bone vambrace from the elbow (rounded about it), set a touch outward so it clears the breastplate.
         joint_limb(pivot(S(cuff), 'vambrace', (s * 0.01, PALM - ELBOW, 0)), 0.265, 0.285, 0.0, ELBOW - 0.515, BONE,
                    round_top=True, bevel=0.03)
 

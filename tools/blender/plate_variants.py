@@ -95,7 +95,7 @@ def part(scene, name):
     return next(o for o in scene.objects if _strip(o.name) == name)
 
 
-# The poses the plate is audited in, as anim.ts poses the hero (fitcheck.py anim_pose, elbows and wrists included):
+# The poses the plate is audited in, as anim.ts poses the hero (animpose.py anim_pose, elbows and wrists included):
 # idle and walk with a blade at the side, the sword's wind-up (swing a=0.4), slam a=0.5 and the staff's cast a=0.5.
 POSES = {
     'idle': _f['anim_pose'](hold='side'),
@@ -107,7 +107,7 @@ POSES = {
 
 
 def apply_pose(scene, pose):
-    """Pose the dressed hero as the game does (fitcheck.py pose_scene: the offsets on the rest rotations, then anim.ts
+    """Pose the dressed hero as the game does (animpose.py pose_scene: the offsets on the rest rotations, then anim.ts
     followShoulders: each shoulder socket orbits its arm pivot and turns by SHOULDER_FOLLOW of the arm's rotation)."""
     _f['pose_scene'](scene, pose or {})
 
