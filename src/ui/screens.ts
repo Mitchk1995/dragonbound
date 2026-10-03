@@ -27,7 +27,7 @@ export class Screens {
     this.root.innerHTML = `
       <div class="title-vignette"></div>
       <div class="logo">
-        <div class="logo-main">DRAGONBOUND</div>
+        <img class="logo-main" src="./ui/logo.png" alt="Dragonbound" draggable="false">
         <div class="logo-rule"><span></span>◆<span></span></div>
         <div class="logo-sub">Chapter I · The Hidden Keep</div>
       </div>
