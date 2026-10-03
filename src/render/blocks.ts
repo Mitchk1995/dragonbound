@@ -165,29 +165,52 @@ export function rockMass(v: number) {
   });
 }
 
+/** How tall for its width a rock mass may stand, in the steps its moss is laid for (rockMassMoss). */
+export const MOSS_TALL = [0.6, 1, 1.6, 2.6, 4];
+
 /**
- * The moss over a rock mass (rockMass(v)): its upward faces, the top all covered and the steeper
- * shoulders only here and there, so the moss drapes over the crown in a ragged sheet; each face split
- * in four and its points lifted off the stone by their own amounts, so the sheet is a soft, lumpy
- * cushion, never a flat painted plate.
+ * The moss over a rock mass (rockMass(v)) stood `tall` times as high as it is wide: the faces that
+ * face up on it, the top all covered and the steeper shoulders only here and there, so the moss
+ * drapes over the crown in a ragged patch. It is bedded on the stone: round its edge it lies a hair
+ * off the rock, and only inside the patch, each face split in four and its inner points lifted by
+ * their own small amounts, does it swell off the stone, so it reads as a soft, lumpy cushion
+ * following the rock, never a sheet or a sliver standing off it.
  */
-export function rockMassMoss(v: number) {
-  return cached(`rmm${v}`, () => {
+export function rockMassMoss(v: number, tall = 1) {
+  return cached(`rmm${v},${tall}`, () => {
     const src = rockMass(v), pos = src.getAttribute('position');
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), e = new THREE.Vector3(), nrm = new THREE.Vector3();
-    const out: number[] = [];
-    // Each point is lifted straight up by an amount that depends on the point alone, so faces
-    // sharing it stay joined.
-    const put = (p: THREE.Vector3) => out.push(p.x, p.y + 0.025 + hash01(v, Math.round(p.x * 200), Math.round(p.y * 200), Math.round(p.z * 200)) * 0.07, p.z);
+    const key = (p: THREE.Vector3) => `${Math.round(p.x * 1e4)},${Math.round(p.y * 1e4)},${Math.round(p.z * 1e4)}`;
+    // The mossy faces, and how many of them share each edge (an edge only one shares is the patch's rim).
+    const faces: THREE.Vector3[][] = [], edges = new Map<string, number>();
+    const edgeKey = (p: THREE.Vector3, q: THREE.Vector3) => [key(p), key(q)].sort().join('|');
     for (let t = 0; t < pos.count; t += 3) {
       a.fromBufferAttribute(pos, t);
       b.fromBufferAttribute(pos, t + 1);
       c.fromBufferAttribute(pos, t + 2);
       // (The hull's faces wind counter-clockwise seen from outside: this is the outward normal.)
-      nrm.subVectors(b, a).cross(e.subVectors(c, a)).normalize();
+      // (Judged as the face will lie on a mass stood `tall` times as high as it is wide.)
+      nrm.subVectors(b, a).cross(e.subVectors(c, a));
+      nrm.y /= tall;
+      nrm.normalize();
       if (nrm.y < 0.36 + hash01(v, t) * 0.3) continue;
-      const ab = a.clone().lerp(b, 0.5), bc = b.clone().lerp(c, 0.5), ca = c.clone().lerp(a, 0.5);
-      for (const [p0, p1, p2] of [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]) {
+      faces.push([a.clone(), b.clone(), c.clone()]);
+      for (const [p, q] of [[a, b], [b, c], [c, a]]) edges.set(edgeKey(p, q), (edges.get(edgeKey(p, q)) ?? 0) + 1);
+    }
+    // Points on the rim (the corners and middles of rim edges) lie on the stone; the rest swell off it.
+    const rim = new Set<string>();
+    for (const [p, q, r] of faces) for (const [m, n] of [[p, q], [q, r], [r, p]]) {
+      if (edges.get(edgeKey(m, n)) !== 1) continue;
+      rim.add(key(m));
+      rim.add(key(n));
+      rim.add(key(m.clone().lerp(n, 0.5)));
+    }
+    const out: number[] = [];
+    // (Each point is lifted straight up by an amount that depends on the point alone, so faces sharing it stay joined.)
+    const put = (p: THREE.Vector3) => out.push(p.x, p.y + (rim.has(key(p)) ? 0.006 : 0.016 + hash01(v, Math.round(p.x * 200), Math.round(p.y * 200), Math.round(p.z * 200)) * 0.024), p.z);
+    for (const [p, q, r] of faces) {
+      const pq = p.clone().lerp(q, 0.5), qr = q.clone().lerp(r, 0.5), rp = r.clone().lerp(p, 0.5);
+      for (const [p0, p1, p2] of [[p, pq, rp], [pq, q, qr], [rp, qr, r], [pq, qr, rp]]) {
         put(p0);
         put(p1);
         put(p2);

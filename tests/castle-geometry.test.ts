@@ -660,6 +660,108 @@ describe('castle geometry', () => {
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 40).join('\n')).toEqual([]);
   });
 
+  it('a low wall runs square into one face of its pier, its end buried in the pier', () => {
+    const bad: string[] = [];
+    const Y = new THREE.Vector3(0, 1, 0);
+    // Each run's ends: where it stops, the way it runs into the end, and its coping's half width.
+    const ends: { name: string; at: number[]; dir: number[]; hw: number }[] = [];
+    for (const sp of S.layout.props.filter((q) => q.kind === 'parapet' || q.kind === 'balustrade')) {
+      const L = (sp.len ?? 6) / 2, hw = sp.kind === 'parapet' ? 0.39 : 0.09;
+      for (const sg of [-1, 1]) {
+        const v = new THREE.Vector3(sg * L, 0, 0).applyAxisAngle(Y, sp.rot ?? 0);
+        ends.push({ name: `${sp.kind}@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`, at: [sp.x + v.x, sp.z + v.z], dir: [v.x / L, v.z / L], hw });
+      }
+    }
+    for (const sp of S.layout.props.filter((q) => q.kind === 'ramp_wall')) {
+      const pts = (sp.opt as { pts: number[][] }).pts.map(([x, z]) => [x + sp.x, z + sp.z]);
+      for (const [e, f] of [[pts[0], pts[1]], [pts[pts.length - 1], pts[pts.length - 2]]]) {
+        const l = Math.hypot(e[0] - f[0], e[1] - f[1]);
+        ends.push({ name: `ramp_wall@${sp.x.toFixed(1)},${sp.z.toFixed(1)}`, at: e, dir: [(e[0] - f[0]) / l, (e[1] - f[1]) / l], hw: 0.3 });
+      }
+    }
+    for (const pier of P.filter((p) => p.kind === 'parapet_pier')) {
+      const c = pier.obj.getWorldPosition(new THREE.Vector3());
+      for (const e of ends) {
+        if (Math.hypot(e.at[0] - c.x, e.at[1] - c.z) > 0.75) continue;
+        // In the pier's own frame: the wall's way in lies within 25° of a face's normal...
+        const d = local(pier, new THREE.Vector3(c.x + e.dir[0], c.y, c.z + e.dir[1]));
+        const off = Math.atan2(Math.min(Math.abs(d.x), Math.abs(d.z)), Math.max(Math.abs(d.x), Math.abs(d.z)));
+        if (off > (25 * Math.PI) / 180) bad.push(`${e.name} runs into ${pier.name} ${((off * 180) / Math.PI).toFixed(0)}° off square, into its corner`);
+        // ...and both corners of its coping's end stand inside the pier's shaft (0.95 square).
+        for (const sg of [-1, 1]) {
+          const q = local(pier, new THREE.Vector3(e.at[0] - e.dir[1] * e.hw * sg, c.y, e.at[1] + e.dir[0] * e.hw * sg));
+          if (Math.max(Math.abs(q.x), Math.abs(q.z)) > 0.475 + 0.03) bad.push(`${e.name} stops short of ${pier.name}'s face at (${(c.x + q.x).toFixed(1)}, ${(c.z + q.z).toFixed(1)})`);
+        }
+      }
+    }
+    expect([...new Set(bad)], [...new Set(bad)].join('\n')).toEqual([]);
+  });
+
+  it('the climb\'s paving lies over its ground and under its walls: their plinth and coping stand clear above it all the way up', () => {
+    const bad: string[] = [];
+    const pv = S.layout.props.find((q) => q.kind === 'ramp_paving')!, po = pv.opt as { pts: number[][]; ys: number[] };
+    for (const sp of S.layout.props.filter((q) => q.kind === 'ramp_wall')) {
+      const o = sp.opt as { pts: number[][]; ys: number[]; tops: number[] }, pts = o.pts.map(([x, z]) => [x + sp.x, z + sp.z]);
+      po.pts.forEach(([px, pz], i) => {
+        const x = px + pv.x, z = pz + pv.z;
+        // The wall beside this point of the paving: where it passes nearest, and its heights there.
+        let best = Infinity, foot = 0, top = 0;
+        for (let k = 0; k < pts.length - 1; k++) {
+          const [ax, az] = pts[k], [bx, bz] = pts[k + 1], dx = bx - ax, dz = bz - az;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))), d = Math.hypot(x - ax - dx * t, z - az - dz * t);
+          if (d < best) (best = d), (foot = o.ys[k] + (o.ys[k + 1] - o.ys[k]) * t + 0.4), (top = o.tops[k] + (o.tops[k + 1] - o.tops[k]) * t);
+        }
+        if (foot - po.ys[i] < 0.15 || top - po.ys[i] < 0.5) bad.push(`the climb's paving at (${x.toFixed(1)}, ${z.toFixed(1)}) stands ${(foot - po.ys[i]).toFixed(2)} under ${sp.kind}@${sp.x.toFixed(1)},${sp.z.toFixed(1)}'s plinth top and ${(top - po.ys[i]).toFixed(2)} under its coping`);
+      });
+    }
+    // And no ground rises through it anywhere across its width, out to the walls' feet.
+    const pts = po.pts.map(([x, z]) => [x + pv.x, z + pv.z]);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1], l = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / l, nz = (bx - ax) / l;
+      for (const t of [0, 0.25, 0.5, 0.75]) for (const off of [-2.15, -1.8, -1, 0, 1, 1.8, 2.15]) {
+        const x = ax + (bx - ax) * t + nx * off, z = az + (bz - az) * t + nz * off, y = po.ys[i] + (po.ys[i + 1] - po.ys[i]) * t;
+        const g = Math.max(S.view.heightAt(x, z), S.view.floorAt(x, z));
+        if (g > y - 0.01) bad.push(`ground rises ${(g - y).toFixed(2)} through the climb's paving at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+      }
+    }
+    expect(bad, bad.slice(0, 20).join('\n')).toEqual([]);
+  });
+
+  it('no tree stands out over a drop: ground or rock lies under the whole foot of every trunk', () => {
+    const bad: string[] = [];
+    const m = new THREE.Matrix4(), pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+    const trees = new Map<string, { p: THREE.Vector3; s: number }>();
+    const solid: THREE.Object3D[] = [];
+    S.view.group.traverse((o) => {
+      if (o.name === 'relief' || (o instanceof THREE.InstancedMesh && o.userData.rock)) solid.push(o);
+      if (!(o instanceof THREE.InstancedMesh) || o.name !== 'tree') return;
+      for (let k = 0; k < o.count; k++) {
+        o.getMatrixAt(k, m);
+        m.decompose(pos, quat, scl);
+        if (pos.x > CASTLE_AREA.x0 - 20 && pos.x < CASTLE_AREA.x1 + 20 && pos.z > CASTLE_AREA.z0 - 20 && pos.z < CASTLE_AREA.z1 + 30) trees.set(`${pos.x.toFixed(2)},${pos.z.toFixed(2)}`, { p: pos.clone(), s: scl.x });
+      }
+    });
+    const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+    for (const { p, s } of trees.values()) {
+      // (Only trees standing above the land's own ground: on a ledge or a rock's shoulder.)
+      const ground = (x: number, z: number) => Math.max(S.view.heightAt(x, z), S.view.floorAt(x, z));
+      if (p.y < ground(p.x, p.z) + 0.3) continue;
+      const R = 0.25 * s;
+      for (let j = 0; j < 8; j++) {
+        const x = p.x + Math.cos((j / 8) * Math.PI * 2) * R, z = p.z + Math.sin((j / 8) * Math.PI * 2) * R;
+        if (ground(x, z) > p.y - 0.35) continue;
+        ray.set(new THREE.Vector3(x, p.y + 1.5, z), down);
+        ray.far = 2.0;
+        const hit = ray.intersectObjects(solid, false)[0];
+        if (!hit || hit.point.y < p.y - 0.35) {
+          bad.push(`a tree at ${fmt(p)} stands out over a drop at (${x.toFixed(2)}, ${z.toFixed(2)})`);
+          break;
+        }
+      }
+    }
+    expect(bad, bad.join('\n')).toEqual([]);
+  });
+
   it('every lawn is kerbed all round where it meets paving, and no kerb runs on past its lawn', () => {
     const { layout: L } = S, bad: string[] = [];
     // The kerbs in plan: the layout's (laid along cell edges) and the kerb props' blocks.

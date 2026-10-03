@@ -10,7 +10,7 @@ import {
 import { studioEnv } from '../render/env';
 import { courseSpans } from '../render/masonry';
 import {
-  archDressing, archPane, archRing, archTympanum, roomMaterial, stone, roomPlate, ASHLAR_B, ASHLAR_L, audit, DOORS, pointedDoor, singleDoor, windowGlass, ASHLAR_W, BLOCKS, TRIM_L, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
+  archDressing, archInset, archPane, archRing, archTympanum, roomMaterial, stone, roomPlate, ASHLAR_B, ASHLAR_L, audit, DOORS, pointedDoor, singleDoor, windowGlass, ASHLAR_W, BLOCKS, TRIM_L, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
   GILT, LAMP_NAVY, PLOT_MARK, pointedArch, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, TRIM, TRIM_D, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
@@ -176,8 +176,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   const UPPER = timber ? PLASTER : keep ? ASHLAR_B : STONE;
   const CAP = timber ? TIMBER : STONE_D;
   const FRAME = timber ? TIMBER : S.light;
-  // (A castle doorway's pointed head stands as high as its leaves reach: see DOORS.)
-  const doorH = keep ? DOORS.building.h + 0.05 : hall ? 3.8 : timber ? 2.8 : 3.1;
+  // (A castle doorway's pointed head; its leaves hang inside it a hand clear of the stone: see DOORS.)
+  const doorH = keep ? 4.05 : hall ? 3.8 : timber ? 2.8 : 3.1;
   // The two cut thresholds (world heights: OFF = nothing cut) and the glass for each band.
   const uMid = { value: OFF }, uTop = { value: OFF };
   const glass = { still: glassMats(), mid: glassMats(), top: glassMats() };
@@ -320,7 +320,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         // The surround: one ring of dressed stones in the two tones round the arch and down both
         // jambs to the ground, the keystone pale on the centre line, all flush in one plane, and the
         // blue-grey moulding close round it from foot to foot (the base courses stop against it).
-        for (const pc of archDressing(dr.w, doorH, rise, { foot: 0, t: DRESS_T, hood: DRESS_HOOD })) {
+        for (const pc of archDressing(dr.w, doorH, rise, { foot: 0, t: DRESS_T, hood: DRESS_HOOD, inset: 0.02 })) {
           const [dk2, dp2] = at(fade, pc.y);
           stone(W.shape(dk2, dp2, pc.geo, pc.color, uc, 0, face, undefined, 0, true));
         }
@@ -350,15 +350,17 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           const bh = btop - 0.07 - bbot - bwid * 0.6;
           if (bh > 0.8) livery(bk, fg, 0, btop, 0, bwid, bh);
         }
-        // The leaves: a pair of boarded leaves in the stained oak closing the whole doorway from the
-        // sill to the point of its arch, set a little back in the reveal, a ring handle on each at the
-        // hero's hand. (On the camera side they go with the wall when the hero is inside.)
+        // The leaves: a pair of boarded leaves in the stained oak closing the doorway from the sill to
+        // the point of its arch, set a little back in the reveal with a clear gap round them to the
+        // stone (never touching the jambs), a ring handle on each at the hero's hand. (On the camera
+        // side they go with the wall when the hero is inside.)
         const [dk, dp] = fade ? [mk, mid] : [k, built], dg = new THREE.Group(), lo = face - 0.24;
         if (ns) dg.position.set(uc, 0.05, (side === 'n' ? 0.5 : b.d - 0.5) + lo * W.out);
         else dg.position.set((side === 'w' ? 0.5 : b.w - 0.5) + lo * W.out, 0.05, uc);
         dg.rotation.y = side === 's' ? 0 : side === 'n' ? Math.PI : side === 'e' ? Math.PI / 2 : -Math.PI / 2;
         dp.add(dg);
-        pointedDoor(dk, dg, dr.w, doorH - 0.05, rise, 'building', true);
+        const leaves = archInset(dr.w, doorH - 0.05, rise, 0.09);
+        pointedDoor(dk, dg, leaves.w, leaves.h, leaves.rise, 'building', true);
         continue;
       }
       if (!keep) piece(dr.w, wallH - 0.21, wallH + 0.03, WALL_T + 0.16, uc, 0, CAP);

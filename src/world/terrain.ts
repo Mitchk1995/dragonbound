@@ -695,7 +695,8 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       return band[((b % 4) + 4) % 4] * (0.95 + noise(x * 0.3 + 60, z * 0.3) * 0.1);
     };
     const ea = new THREE.Vector3(), eb = new THREE.Vector3(), fn = new THREE.Vector3();
-    const tri = (p: number[][], c: number[][], a: number[][], want: number[]) => {
+    /** One triangle, wound to face `want`; its normal its own face's, or `nrm` (a weathered lip's: see slice). */
+    const tri = (p: number[][], c: number[][], a: number[][], want: number[], nrm?: number[]) => {
       ea.set(p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]);
       eb.set(p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]);
       fn.crossVectors(ea, eb);
@@ -707,6 +708,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         fn.negate();
       }
       fn.divideScalar(len);
+      if (nrm) fn.set(nrm[0], nrm[1], nrm[2]);
       for (const o of order) {
         P.push(p[o][0], p[o][1], p[o][2]);
         C.push(c[o][0], c[o][1], c[o][2]);
@@ -754,6 +756,13 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
       const det = ab[0] * ac[1] - ab[1] * ac[0] || 1e-9;
       const gx = (ab[2] * ac[1] - ac[2] * ab[1]) / det, gz = (ac[2] * ab[0] - ab[2] * ac[0]) / det;
       const down = [-gx, 0, -gz];
+      // How wide each bed's ledge runs across this triangle: its thickness over how fast the strata
+      // climb across it. A ledge only a hand or two deep partway down a face is no shelf for moss:
+      // it is the bed's weathered lip, rounded off toward the drop, so it never shows as a thin bright
+      // line of moss drawn along the face (its normal leans out, so it takes the light as a lip).
+      const sb = [t[1].s - t[0].s, t[2].s - t[0].s], gsx = (sb[0] * ac[1] - sb[1] * ab[1]) / det, gsz = (sb[1] * ab[0] - sb[0] * ac[0]) / det, gs = Math.hypot(gsx, gsz);
+      const dl = Math.hypot(gx, gz), lipN = dl > 1e-6 ? [(-gx / dl) * 0.88, 0.47, (-gz / dl) * 0.88] : [0, 1, 0];
+      const lip = (k: number, q: V[]) => natural && k < k1 && gs > 1e-6 && (level(k + 1) - level(k)) / gs < 0.7 && q.every((v) => gridAt(topNear, v.x, v.z) - bandY(k, v) > 0.6);
       for (let k = k0; k <= k1; k++) {
         // The band of this triangle between plane k and k + 1, lying on plane k.
         let poly = t;
@@ -762,7 +771,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
         if (poly.length >= 3) {
           for (let i = 1; i < poly.length - 1; i++) {
             const q = [poly[0], poly[i], poly[i + 1]];
-            tri(q.map((v) => [v.x, bandY(k, v), v.z]), q.map((v) => ledgeCol(shadeOf(k, v, k > 0 ? 1 : 0), v, bandY(k, v))), q.map((v) => ledgeA(v, bandY(k, v))), [0, 1, 0]);
+            tri(q.map((v) => [v.x, bandY(k, v), v.z]), q.map((v) => ledgeCol(shadeOf(k, v, k > 0 ? 1 : 0), v, bandY(k, v))), q.map((v) => ledgeA(v, bandY(k, v))), [0, 1, 0], lip(k, q) ? lipN : undefined);
           }
           // Where this band's edge runs along the island's edge, the skirt drops from it.
           if (skirtOn) for (let i = 0; i < poly.length; i++) {

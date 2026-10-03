@@ -1925,19 +1925,21 @@ export function archRing(k: ModelKit, g: THREE.Object3D, x: number, y0: number, 
  * unbroken line. Returns the pieces (outline geometry, colour and the height of its foot), so a
  * caller that splits its walls by height can place each piece in its own band.
  */
-export function archDressing(w: number, h: number, rise: number, opt: { foot: number; t?: number; p?: number; dep?: number; hood?: number; tones?: [number, number]; hoodColor?: number }) {
-  const { foot, t = 0.34, p = 0.08, dep = 0.3, hood = 0.14, tones = [ASHLAR_L, TRIM], hoodColor = TRIM } = opt;
+export function archDressing(w: number, h: number, rise: number, opt: { foot: number; t?: number; p?: number; dep?: number; hood?: number; tones?: [number, number]; hoodColor?: number; inset?: number }) {
+  // (`inset`: the surround's inner face stands that far inside the opening, so it never lies in one
+  // plane with the end of a wall cut to the opening behind it.)
+  const { foot, t = 0.34, p = 0.08, dep = 0.3, hood = 0.14, tones = [ASHLAR_L, TRIM], hoodColor = TRIM, inset = 0 } = opt;
   const { ys, c, R } = pointedArch(w, h, 2, rise), hw = w / 2;
   const arcLen = R * Math.atan2(Math.sqrt(Math.max(0, (R + t / 2) ** 2 - c * c)), c);
   const n = Math.max(2, Math.round((arcLen - 0.2) / 0.38));
   const pieces: { geo: THREE.BufferGeometry; color: number; y: number }[] = [];
-  for (const s of archStones(w, h, rise, 0, t, n, 0.4)) pieces.push({ geo: plate(s.pts, -dep, p), color: tones[s.place % 2], y: Math.min(...s.pts.map(([, y]) => y)) });
+  for (const s of archStones(w, h, rise, -inset, t, n, 0.4)) pieces.push({ geo: plate(s.pts, -dep, p), color: tones[s.place % 2], y: Math.min(...s.pts.map(([, y]) => y)) });
   // The jambs, in courses from the springing down to the foot, carrying on the ring's alternation.
   const ys2 = fitCourses(foot, ys, 0.45).reverse();
   for (let i = 0; i + 1 < ys2.length; i++) {
     const y1 = ys2[i], y0 = ys2[i + 1], tone = tones[(n + 1 + i) % 2];
     for (const sx of [-1, 1]) {
-      const a = sx * hw, b = sx * (hw + t);
+      const a = sx * (hw - inset), b = sx * (hw + t);
       pieces.push({ geo: plate(sx > 0 ? [[a, y0], [b, y0], [b, y1], [a, y1]] : [[b, y0], [a, y0], [a, y1], [b, y1]], -dep, p), color: tone, y: y0 });
     }
   }
@@ -2052,7 +2054,7 @@ export const HERO_HEIGHT = 2.1;
  * the wall's centre line toward the bailey.
  */
 export const DOORS = {
-  building: { w: 1.0, h: 4.0, rise: 1.24 },
+  building: { w: 0.91, h: 3.91, rise: 1.24 },
   single: { w: 1.3, h: 3.0 },
   wide_gate: { w: 1.88, h: 3.3 },
   narrow_gate: { w: 1.0, h: 2.9 },
@@ -2108,6 +2110,16 @@ export function archHeight(W: number, h: number, rise: number, x: number) {
     return arc[i][1] + (arc[i + 1][1] - arc[i][1]) * t;
   }
   return h;
+}
+
+/**
+ * The pointed arch `d` inside a pointed opening `W` wide with its apex `h` up and its arch rising
+ * `rise` (the same centres, each arc `d` shorter): the outline of leaves hung in the opening with a
+ * gap `d` round them to the stone.
+ */
+export function archInset(W: number, h: number, rise: number, d: number) {
+  const { c, R, ys } = pointedArch(W, h, 2, rise), r2 = Math.sqrt(Math.max(0, (R - d) ** 2 - c * c));
+  return { w: W - 2 * d, h: ys + r2, rise: r2 };
 }
 
 /** A black iron ring handle on its back plate, on a door's face at (x, y, z) (facing +Z). */
@@ -3225,12 +3237,22 @@ const BUILDERS: Record<string, Builder> = {
   /**
    * The paving of a sloping road laid as one surface along `opt.pts` ([x, z] relative to the prop,
    * which stands at height 0), `opt.w` wide, its top at `opt.ys` at each point: flagstones running
-   * edge to edge between the walls that kerb it, no step or jag anywhere along it.
+   * edge to edge between the walls that kerb it, no step or jag anywhere along it. With `opt.sill`
+   * its head is finished with a threshold: a course of dressed blue-grey stones laid square across
+   * the road over the joint with the paving beyond, a hair proud of both.
    */
   ramp_paving: (k, g, arg) => {
-    const o = (arg?.opt ?? {}) as { pts?: number[][]; ys?: number[]; w?: number };
-    const pts = (o.pts ?? [[-2, 0], [2, 0]]).map(([x, z]) => new THREE.Vector2(x, z)), ys = o.ys ?? pts.map(() => 0);
-    k.mesh(g, slopedBand(pts, ys.map((y) => y - 0.4), ys, o.w ?? 4), PAVE, [0, 0, 0]);
+    const o = (arg?.opt ?? {}) as { pts?: number[][]; ys?: number[]; w?: number; sill?: number };
+    const pts = (o.pts ?? [[-2, 0], [2, 0]]).map(([x, z]) => new THREE.Vector2(x, z)), ys = o.ys ?? pts.map(() => 0), w = o.w ?? 4;
+    k.mesh(g, slopedBand(pts, ys.map((y) => y - 0.4), ys, w), PAVE, [0, 0, 0]);
+    if (o.sill) {
+      const end = pts[pts.length - 1], d = end.clone().sub(pts[pts.length - 2]).normalize(), across = new THREE.Vector2(-d.y, d.x), top = ys[ys.length - 1] + 0.03;
+      const n = Math.max(2, Math.round(w / 0.9)), sw = w / n;
+      for (let i = 0; i < n; i++) {
+        const c = end.clone().addScaledVector(across, -w / 2 + sw * (i + 0.5));
+        cb(k, g, [sw, 0.3, 0.6], [c.x, top - 0.15, c.y], TRIM_L, [0, Math.atan2(-across.y, across.x), 0], 0.03);
+      }
+    }
   },
   ramp_wall: (k, g, arg) => {
     const o = (arg?.opt ?? {}) as { pts?: number[][]; ys?: number[]; tops?: number[] };
@@ -5220,6 +5242,9 @@ function masonLayout(g: THREE.Object3D) {
     // (A part whose builder laid its quoins to its courses names its own breaks.)
     const own = mesh.userData.courses as number[] | undefined;
     const ys = own ? [...own] : [foot, top];
+    // (A band is one course of its own: its foot and top lie on course lines, the same lines the
+    // walling behind it is laid to, so a course standing proud round a drum lines up with its stones.)
+    if (!own && b.max.y - b.min.y <= 0.8) ys.push(b.min.y, b.max.y);
     if (!own) for (const q of bands) {
       if (q === p || q.box.min.y <= b.min.y + 0.02 && q.box.max.y >= b.max.y - 0.02) continue;
       const qb = q.box;

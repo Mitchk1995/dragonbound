@@ -1588,14 +1588,16 @@ export function buildKeep(seed: number): ZoneLayout {
   // (mirrored about it), so the lists read as pells, racks, the line, then the butts.
   for (const x of [WARD_AXIS - 4.5, WARD_AXIS + 4.5]) place('weapon_rack', x, 60.9, Math.PI, { block: [1.0, 0.3] });
 
-  // The stable court: flowers under the stable's stall openings, the trough before its door on the
-  // court's axis, a blossom tree in a square planter either side of the axis (clear of the corner
-  // tower); the paddock's gate on the same axis between stone piers, the trough just inside it, the
-  // field shelter (flat-roofed, behind a parapet) against the east wall facing the gate's lawn, the
-  // two horses side by side before it, a fence across its foot short of the curtain.
+  // The stable court: flowers under the stable's stall openings, the trough beside its door, a
+  // blossom tree in a square planter either side of the axis (clear of the corner tower); the
+  // paddock's gate on the same axis between stone piers, the trough just inside it, the field
+  // shelter (flat-roofed, behind a parapet) against the east wall facing the gate's lawn, the two
+  // horses side by side before it, a fence across its foot short of the curtain.
   for (const x of [STABLE_AXIS - 3.5, STABLE_AXIS + 3.5]) bed(x, 76.35, 0, 2.0, 1);
   for (const x of [STABLE_AXIS - 2.2, STABLE_AXIS + 2.2]) place('topiary', x, 84.6, 0, { len: 1, block: 0.5 });
-  place('fit_trough', STABLE_AXIS, 78.6, 0, { block: [0.9, 0.35] });
+  // (The trough stands end-on to the wall a stride east of the door, between it and the stall's bed,
+  // so the doorway reads clear from every side.)
+  place('fit_trough', STABLE_AXIS + 2.0, 78.4, Math.PI / 2, { block: [0.9, 0.35] });
   // The corner tower's drum stands into the court's east side (on the court's paving); a planted bed
   // against the west wall opposite answers it, so both sides read as intended.
   bed(103.0, 86, Math.PI / 2, 3.6, 2);
@@ -1687,8 +1689,10 @@ export function buildKeep(seed: number): ZoneLayout {
     const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
     return [[a[0] + ux * ta, a[1] + uz * ta], [b[0] - ux * tb, b[1] - uz * tb]];
   };
+  // (The last runs on to the middle of the landing's corner pier, which stands turned between it and
+  // the climb's wall, so its end is buried in the pier on both sides.)
   for (const [i, [a, b]] of runs.entries()) {
-    const [a2, b2] = trim(a, b, i === 0 ? 0 : 0.5, 0.5);
+    const [a2, b2] = trim(a, b, i === 0 ? 0 : 0.5, i === runs.length - 1 ? 0 : 0.5);
     parapet(a2, b2);
   }
   // (Each bend's pier turned halfway between its two runs.)
@@ -1707,32 +1711,54 @@ export function buildKeep(seed: number): ZoneLayout {
   // its foot to its head: the west wall up to the landing parapet's corner pier, the east wall to a
   // pier where the landing opens, so the road reads as built up its cutting.
   {
-    /** The line `CLIMB_KERB` out from the climb on `side`, mitred at its bends, from `t0` along its first stretch. */
-    const offsetLine = (side: number) => {
-      const out: number[][] = [];
-      for (let k = 0; k < ramp.length; k++) {
-        const nrm = (i: number) => {
-          const [ax, az] = ramp[i], [bx, bz] = ramp[i + 1], l = Math.hypot(bx - ax, bz - az);
-          return [(-(bz - az) / l) * side, ((bx - ax) / l) * side];
-        };
-        const n0 = nrm(Math.max(0, k - 1)), n1 = nrm(Math.min(ramp.length - 2, k)), mx = n0[0] + n1[0], mz = n0[1] + n1[1], ml = Math.hypot(mx, mz);
-        const f = CLIMB_KERB / Math.max(0.35, (mx / ml) * n1[0] + (mz / ml) * n1[1]);
-        out.push([ramp[k][0] + (mx / ml) * f, ramp[k][1] + (mz / ml) * f]);
-      }
-      return out;
-    };
     const lerp = (a: number[], b: number[], t: number) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    // The climb's stations: every unit along the road from its foot up to the line between the two
+    // head piers (where the landing's paving takes over), its bends among them, and the paving's top
+    // at each. The paving and both walls are laid on these same stations, so the walls keep the
+    // road's eased grade exactly and the paving never rises over a wall's foot.
+    const stations: number[][] = [], bends: number[] = [0], lastSeg = ramp.length - 2;
+    for (let k = 0; k <= lastSeg; k++) {
+      const e = k === lastSeg ? lerp(ramp[k], ramp[k + 1], corner.t) : ramp[k + 1], L = Math.hypot(e[0] - ramp[k][0], e[1] - ramp[k][1]), n = Math.ceil(L);
+      for (let j = k === 0 ? 0 : 1; j <= n; j++) stations.push(lerp(ramp[k], e, j / n));
+      bends.push(stations.length - 1);
+    }
+    // (Laid just over the ground the road's cells make, out to the walls' feet: the terrain under a
+    // point stands at the level of the cell just uphill of it, and round a bend the cells on its outside
+    // stand higher, so the stones are set by the grade a little uphill, across the road's whole width.)
+    const paveYs = stations.map(([x, z], k) => {
+      const [nx, nz] = stations[Math.min(stations.length - 1, k + 1)], [px, pz] = stations[Math.max(0, k - 1)], l = Math.hypot(nx - px, nz - pz) || 1;
+      const ux = (nx - px) / l, uz = (nz - pz) / l;
+      let y = -Infinity;
+      for (const a of [0, 0.75, 1.25]) for (const o of [-(CLIMB_KERB - 0.3), 0, CLIMB_KERB - 0.3]) y = Math.max(y, climbAt(x + ux * a - uz * o, z + uz * a + ux * o));
+      return y + 0.06;
+    });
+    /** Each station `CLIMB_KERB` out on `side`, mitred at the bends. */
+    const offsetLine = (side: number) => stations.map((q, k) => {
+      const nrm = (i: number) => {
+        const [ax, az] = stations[i], [bx, bz] = stations[i + 1], l = Math.hypot(bx - ax, bz - az);
+        return [(-(bz - az) / l) * side, ((bx - ax) / l) * side];
+      };
+      const n0 = nrm(Math.max(0, k - 1)), n1 = nrm(Math.min(stations.length - 2, k)), mx = n0[0] + n1[0], mz = n0[1] + n1[1], ml = Math.hypot(mx, mz);
+      const f = CLIMB_KERB / Math.max(0.35, (mx / ml) * n1[0] + (mz / ml) * n1[1]);
+      return [q[0] + (mx / ml) * f, q[1] + (mz / ml) * f];
+    });
+    // The climb from the court to the landing kerbed on both sides by a low dressed wall that follows
+    // the road's grade in one slope (no steps), each wall one continuous piece from a capped pier at
+    // its foot to its head: the west wall up to the landing parapet's corner pier, the east wall to a
+    // pier square across the road from it where the landing opens, so the road reads as built up its
+    // cutting. (Its foot stands 0.06 under the paving's top, so its plinth shows the same height
+    // above the road all the way up.)
     for (const side of [-1, 1]) {
-      const line = offsetLine(side), last = line.length - 1;
-      // (Each wall's head runs into the middle of its pier: the west wall's the landing parapet's
-      // corner pier, the east wall's a pier square across the road from it, where the landing opens.)
-      const head = side < 0 ? [corner.x, corner.z] : lerp(line[last - 1], line[last], corner.t);
-      const pts = [lerp(line[0], line[1], 0.35 / Math.hypot(ramp[1][0] - ramp[0][0], ramp[1][1] - ramp[0][1])), ...line.slice(1, last), head];
+      const line = offsetLine(side), first = 0.35 / Math.hypot(stations[1][0] - stations[0][0], stations[1][1] - stations[0][1]);
+      const pts = [lerp(line[0], line[1], first), ...line.slice(1)];
+      const ys = paveYs.map((y) => y - 0.06);
+      ys[0] += (ys[1] - ys[0]) * first;
       const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cz = pts.reduce((a, q) => a + q[1], 0) / pts.length;
       const wall = G.prop('ramp_wall', cx, cz, 0);
       wall.y = 0;
       // (Where the ground behind it stands higher than the road, it rises as a retaining wall to meet
-      // that ground, up to 3 over the road; above that the rock stands on behind it.)
+      // that ground, up to 3 over the road: judged at its foot, its bends and its head, and eased
+      // evenly between them so its coping runs in straight lines.)
       const behind = ([x, z]: number[]) => {
         let q = ramp[0], best = Infinity;
         for (let k = 0; k < ramp.length - 1; k++) for (let j = 0; j <= 40; j++) {
@@ -1743,8 +1769,12 @@ export function buildKeep(seed: number): ZoneLayout {
         const i = G.idx(Math.floor(x + (ox / ol) * 1.0), Math.floor(z + (oz / ol) * 1.0));
         return level[i] + (G.l.cells[i] === Cell.Cliff ? G.l.elev[i] : 0);
       };
-      const ys = pts.map(([x, z]) => climbAt(x, z));
-      wall.opt = { pts: pts.map(([x, z]) => [x - cx, z - cz]), ys, tops: pts.map((q, k) => Math.min(ys[k] + 3, Math.max(ys[k] + 0.76, behind(q) + 0.1)))};
+      const rise = bends.map((k) => Math.min(3, Math.max(0.76, behind(pts[k]) + 0.1 - ys[k])));
+      const tops = ys.map((y, k) => {
+        const b = Math.max(0, bends.findIndex((s) => s >= k) - 1), k0 = bends[b], k1 = bends[b + 1] ?? k0;
+        return y + (k1 > k0 ? rise[b] + ((rise[b + 1] - rise[b]) * (k - k0)) / (k1 - k0) : rise[b]);
+      });
+      wall.opt = { pts: pts.map(([x, z]) => [x - cx, z - cz]), ys, tops };
       for (let k = 0; k < pts.length - 1; k++) {
         const L = Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]), n = Math.ceil(L / 0.25);
         for (let j = 0; j <= n; j++) {
@@ -1762,27 +1792,21 @@ export function buildKeep(seed: number): ZoneLayout {
         pier.v = 2;
       }
     }
-    // The climb's paving between the walls, from the foot piers up to the landing, as one surface
-    // (sampled every unit along the road so it keeps the road's eased grade).
+    // The climb's paving between the walls, from the foot piers up to the landing, as one surface,
+    // finished at its head with a threshold of dressed stones laid across the joint with the
+    // landing's paving.
     {
-      // (Up to the line between the two head piers, where the landing's paving takes over.)
-      const pts: number[][] = [], last = ramp.length - 2;
-      for (let k = 0; k <= last; k++) {
-        const e = k === last ? lerp(ramp[k], ramp[k + 1], corner.t) : ramp[k + 1], L = Math.hypot(e[0] - ramp[k][0], e[1] - ramp[k][1]), n = Math.ceil(L);
-        for (let j = k === 0 ? 0 : 1; j <= n; j++) pts.push(lerp(ramp[k], e, j / n));
-      }
-      const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cz = pts.reduce((a, q) => a + q[1], 0) / pts.length;
+      const cx = stations.reduce((a, q) => a + q[0], 0) / stations.length, cz = stations.reduce((a, q) => a + q[1], 0) / stations.length;
       const pv = G.prop('ramp_paving', cx, cz, 0);
       pv.y = 0;
-      // (Laid just over the ground the road's cells make: the terrain under a point stands at the
-      // level of the cell just uphill of it, so the stones are set by the grade a little uphill.)
-      const ys = pts.map(([x, z], k) => {
-        const [nx, nz] = pts[Math.min(pts.length - 1, k + 1)], [px, pz] = pts[Math.max(0, k - 1)], l = Math.hypot(nx - px, nz - pz) || 1;
-        return Math.max(climbAt(x, z), climbAt(x + ((nx - px) / l) * 0.75, z + ((nz - pz) / l) * 0.75)) + 0.06;
-      });
-      pv.opt = { pts: pts.map(([x, z]) => [x - cx, z - cz]), ys, w: 2 * CLIMB_KERB - 0.3 };
+      pv.opt = { pts: stations.map(([x, z]) => [x - cx, z - cz]), ys: paveYs, w: 2 * CLIMB_KERB - 0.3, sill: 1 };
     }
-    const cp = G.prop('parapet_pier', corner.x, corner.z, Math.atan2(-(landing1[1] - landing0[1]), landing1[0] - landing0[0]));
+    // (The corner pier turned halfway between the landing's parapet and the climb's west wall, so
+    // each runs square into one face of it instead of into its corner.)
+    const rotA = Math.atan2(-(landing1[1] - landing0[1]), landing1[0] - landing0[0]);
+    const [wa, wb] = [ramp[ramp.length - 2], ramp[ramp.length - 1]], rotB = Math.atan2(-(wb[1] - wa[1]), wb[0] - wa[0]);
+    const turn = rotB - rotA - Math.round((rotB - rotA) / (Math.PI / 2)) * (Math.PI / 2);
+    const cp = G.prop('parapet_pier', corner.x, corner.z, rotA + turn / 2);
     cp.y = climbAt(corner.x, corner.z);
     cp.v = 2;
     blockDisc(G.l, corner.x, corner.z, 0.6);

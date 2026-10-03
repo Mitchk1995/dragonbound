@@ -13,7 +13,7 @@ import { applyPaint, isPaintKind, type PaintKind } from '../render/paint';
 import { masonGeometry } from '../render/masonry';
 import { KERB_W, kerbStones } from './kerbStones';
 import { buildTerrain, isRelief, smoothNoise, WATER_Y } from './terrain';
-import { chamferBox, hash01, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock, taper } from '../render/blocks';
+import { chamferBox, hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock, taper } from '../render/blocks';
 import { useStrataRock } from '../render/rock';
 
 import type { SurfaceKind } from '../render/textures';
@@ -378,16 +378,19 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     return kinds[kinds.length - 1];
   };
   const trees: Record<TreeKind, { m: THREE.Matrix4[]; c: THREE.Color[] }> = { pine: { m: [], c: [] }, grove: { m: [], c: [] }, ash: { m: [], c: [] } };
-  const addTree = (x: number, z: number, scale = 1, y?: number, kind = speciesAt(x, z)) => {
+  /** A tree at (x, z) (on the ground, or standing at `y`); with `keep` false its draws are made but it is left out. */
+  const addTree = (x: number, z: number, scale = 1, y?: number, kind = speciesAt(x, z), keep = true) => {
     const sc = (0.8 + rng() * 0.6) * scale;
     if (y === undefined) p.set(x + (rng() - 0.5) * 0.3, heightAt(x, z) - 0.05, z + (rng() - 0.5) * 0.3);
     else p.set(x, y - 0.05, z);
     q.setFromEuler(e.set((rng() - 0.5) * 0.1, rng() * Math.PI * 2, (rng() - 0.5) * 0.1));
     s.set(sc, sc * (0.9 + rng() * 0.3), sc);
-    trees[kind].m.push(m.compose(p, q, s).clone());
+    const mm = m.compose(p, q, s).clone();
     const pal = leafPal[kind];
     const tc = new THREE.Color(pal[rng() < 0.15 ? Math.min(pal.length - 1, 3 + Math.floor(rng() * 2)) : Math.floor(rng() * Math.min(3, pal.length))]);
     tc.offsetHSL(0, 0, (rng() - 0.5) * 0.05);
+    if (!keep) return;
+    trees[kind].m.push(mm);
     trees[kind].c.push(tc);
   };
   const rocks: THREE.Matrix4[] = [], rockCols: THREE.Color[] = [];
@@ -621,7 +624,8 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   // ledges and along the top lip, the odd pine on a broad ledge. Nothing is set on a road or paving,
   // or near a prop (the parapets and the falls keep their own faces).
   const rockMasses: THREE.Matrix4[][] = Array.from({ length: ROCK_MASSES }, () => []), rockMassCols: THREE.Color[][] = Array.from({ length: ROCK_MASSES }, () => []);
-  const mossCols: THREE.Color[][] = Array.from({ length: ROCK_MASSES }, () => []);
+  // (Each mass's moss laid for how tall it stands for its width, so only what faces up on it takes moss.)
+  const mossMats: THREE.Matrix4[][][] = Array.from({ length: ROCK_MASSES }, () => MOSS_TALL.map(() => [])), mossCols: THREE.Color[][][] = Array.from({ length: ROCK_MASSES }, () => MOSS_TALL.map(() => []));
   const ferns: THREE.Matrix4[] = [], fernCols: THREE.Color[] = [];
   const ledgeTufts: THREE.Matrix4[] = [], ledgeTuftCols: THREE.Color[] = [];
   const cushions: THREE.Matrix4[] = [], cushionCols: THREE.Color[] = [];
@@ -651,11 +655,14 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const grassy = theme.mesaTop !== undefined;
     const grassPal0 = theme.ground[Ground.Grass] ?? [0x5a7a3a, 0x6a8a44];
     const mossA = new THREE.Color(grassPal0[0]).lerp(new THREE.Color(0x6e8a3c), 0.4), mossB = new THREE.Color(grassPal0[1]).lerp(new THREE.Color(0x46642c), 0.5);
-    const addFern = (x: number, y: number, z: number, sc: number) => {
+    const addFern = (x: number, y: number, z: number, sc: number, keep = true) => {
       p.set(x, y - 0.04, z);
       q.setFromEuler(e.set((rng() - 0.5) * 0.3, rng() * 6.3, (rng() - 0.5) * 0.3));
-      ferns.push(m.compose(p, q, s.set(sc, sc * (0.8 + rng() * 0.4), sc)).clone());
-      fernCols.push(mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0.04, (rng() - 0.5) * 0.06));
+      const mm = m.compose(p, q, s.set(sc, sc * (0.8 + rng() * 0.4), sc)).clone();
+      const col = mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0.04, (rng() - 0.5) * 0.06);
+      if (!keep) return;
+      ferns.push(mm);
+      fernCols.push(col);
     };
     /** The rock mass's height at a fraction `f` of its radius out from the middle (at most, as a share of its own). */
     const prof = (f: number) => (f <= 0.45 ? 1 : 1 - 0.85 * ((f - 0.45) / 0.6) ** 2);
@@ -746,22 +753,60 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
       // until it stays under them (a meadow's turf may still roll over its crown), or left out.
       T = fitUnder(v, W, T, dr, (R) => R * 1.15 + 0.5);
       if (T < (low ? 1.1 : 1.6)) return;
-      rockMasses[v].push(m.compose(p, q, s.set(W, T, W * dr)).clone());
+      const mm = m.compose(p, q, s.set(W, T, W * dr)).clone(), tall = T / (W * Math.sqrt(dr));
+      rockMasses[v].push(mm);
+      const tb = MOSS_TALL.reduce((a, t, i) => (Math.abs(Math.log(t / tall)) < Math.abs(Math.log(MOSS_TALL[a] / tall)) ? i : a), 0);
+      mossMats[v][tb].push(mm);
       rockMassCols[v].push(cliffA.clone().lerp(cliffB, rng() * 0.6).offsetHSL((rng() - 0.5) * 0.02, 0, (rng() - 0.45) * 0.07));
-      mossCols[v].push(mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.06));
+      mossCols[v][tb].push(mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.06));
       if (!grassy || T < 2.2) return;
+      // What grows on its shoulder roots in the stone it stands on: the rock under the plant's
+      // whole foot is found (straight down onto this mass, at its middle and all round its foot),
+      // and it is left out unless rock lies under every point of it and the shoulder there is near
+      // level, so no trunk hangs out past a ledge and no fern or cushion stands off a slope.
+      fitMesh.geometry = rockMass(v);
+      fitMesh.matrix.compose(p, q, s.set(W, T, W * dr));
+      fitMesh.matrixWorld.copy(fitMesh.matrix);
+      const rockUnder = (x: number, z: number, R: number, spread: number) => {
+        let lo = Infinity, hi = -Infinity;
+        for (let j = -1; j < 8; j++) {
+          const sx = j < 0 ? x : x + Math.cos((j / 8) * Math.PI * 2) * R, sz = j < 0 ? z : z + Math.sin((j / 8) * Math.PI * 2) * R;
+          fitRay.set(new THREE.Vector3(sx, base + T * 2 + 2, sz), fitDown);
+          const hit = fitRay.intersectObject(fitMesh, false)[0];
+          if (!hit) return null;
+          lo = Math.min(lo, hit.point.y);
+          hi = Math.max(hi, hit.point.y);
+        }
+        return hi - lo <= spread ? lo : null;
+      };
+      // (Each plant's draws are made whether or not it is kept, so the rest of the rock keeps its shapes.)
       const sf = 0.4, fy = base + T * prof(sf) - 0.1, fx0 = px + ox * W * 0.5 * sf, fz0 = pz + oz * W * 0.5 * sf;
       if (heightAt(fx0, fz0) > fy - 0.3) return;
       const r = rng();
-      if (T > 3.4 && r < 0.3) addTree(fx0, fz0, 0.55 + rng() * 0.35, fy, 'pine');
-      else if (r < 0.65) {
+      if (T > 3.4 && r < 0.3) {
+        const sc = 0.55 + rng() * 0.35, y = rockUnder(fx0, fz0, 0.3 * sc * 1.4, 0.3);
+        addTree(fx0, fz0, sc, y ?? fy, 'pine', y !== null);
+      } else if (r < 0.65) {
+        // A moss cushion bedded in the shoulder, sunk into the stone.
         const sc = 0.4 + Math.min(W, 6) * 0.1;
-        p.set(fx0, fy - 0.08, fz0);
-        q.setFromEuler(e.set((rng() - 0.5) * 0.25, rng() * 6.3, (rng() - 0.5) * 0.25));
-        cushions.push(m.compose(p, q, s.set(sc * (0.9 + rng() * 0.6), sc * (0.6 + rng() * 0.3), sc * (0.8 + rng() * 0.4))).clone());
-        cushionCols.push(mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0.02, (rng() - 0.5) * 0.06));
+        e.set((rng() - 0.5) * 0.25, rng() * 6.3, (rng() - 0.5) * 0.25);
+        const sx = sc * (0.9 + rng() * 0.6), sy = sc * (0.6 + rng() * 0.3), sz = sc * (0.8 + rng() * 0.4);
+        const col = mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0.02, (rng() - 0.5) * 0.06);
+        const y = rockUnder(fx0, fz0, Math.max(sx, sz) * 0.5, 0.12 + sc * 0.15);
+        if (y !== null) {
+          // (Laid level with the stone, not tipped: it follows the shoulder it is bedded in.)
+          e.x *= 0.4;
+          e.z *= 0.4;
+          p.set(fx0, y - sy * 0.12, fz0);
+          cushions.push(m.compose(p, q.setFromEuler(e), s.set(sx, sy, sz)).clone());
+          cushionCols.push(col);
+        }
       }
-      for (let j = 0, nj = Math.floor(rng() * 3); j < nj; j++) addFern(fx0 + (rng() - 0.5) * W * 0.3, fy - 0.05, fz0 + (rng() - 0.5) * W * 0.3, 0.7 + rng() * 0.6);
+      // Ferns rooted in the stone round it, never standing off it.
+      for (let j = 0, nj = Math.floor(rng() * 3); j < nj; j++) {
+        const fx = fx0 + (rng() - 0.5) * W * 0.3, fz = fz0 + (rng() - 0.5) * W * 0.3, sc = 0.7 + rng() * 0.6, y = rockUnder(fx, fz, 0.22 * sc, 0.1);
+        addFern(fx, y ?? fy, fz, sc, y !== null);
+      }
     };
     for (let n = 0; n < rockCells.length; n += 2) {
       const x = rockCells[n], z = rockCells[n + 1], i = z * w + x;
@@ -822,8 +867,13 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
             if (walkable(bxi, bzi) && !looseOk(bxi, bzi)) continue;
             p.set(bx, foot - sc * 0.22, bz);
             q.setFromEuler(e.set((rng() - 0.5) * 0.5, rng() * 6.3, (rng() - 0.5) * 0.5));
-            rocks.push(m.compose(p, q, s.set(sc * (0.9 + rng() * 0.4), sc * (0.55 + rng() * 0.4), sc)).clone());
-            rockCols.push(cliffA.clone().lerp(rockBase, 0.2).offsetHSL(0, 0, -0.03 + (rng() - 0.5) * 0.1));
+            const mm = m.compose(p, q, s.set(sc * (0.9 + rng() * 0.4), sc * (0.55 + rng() * 0.4), sc)).clone();
+            const col = cliffA.clone().lerp(rockBase, 0.2).offsetHSL(0, 0, -0.03 + (rng() - 0.5) * 0.1);
+            // (Only where the ground lies at the face's foot under the whole boulder: none is left
+            // hanging out over a lower drop beside it, as by a road carried up past the rock.)
+            if (Array.from({ length: 9 }, (_, j) => (j ? heightAt(bx + Math.cos(j * 0.785) * sc * 0.5, bz + Math.sin(j * 0.785) * sc * 0.5) : heightAt(bx, bz))).some((y) => y < foot - 0.35)) continue;
+            rocks.push(mm);
+            rockCols.push(col);
           }
         }
         // Scree spilling out over the ground below.
@@ -860,6 +910,20 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
           ledgeTuftCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(grassPal0[1]), rng()).multiplyScalar(1.1).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.05));
         }
       }
+      /**
+       * Whether the ledge at height y under (px, pz) carries a plant `R` across where it is drawn at
+       * (wx, wz): the same bed all round it, out past its edge, and the weathered face (the cliff's
+       * warp) leaving at least `R` of that ledge round it, so nothing hangs out over the lip.
+       */
+      const seated = (px: number, pz: number, y: number, wx: number, wz: number, R: number) => {
+        for (let j = 0; j < 8; j++) for (const f of [0.8, 1.6]) {
+          const a = (j / 8) * Math.PI * 2, sx = px + Math.cos(a) * R * f, sz = pz + Math.sin(a) * R * f, ly = terrain.ledge(sx, sz, 0.01);
+          if (ly === null || Math.abs(ly - y) > 0.3) return false;
+          const [ax, az] = terrain.warp(sx, y, sz);
+          if (Math.hypot(ax - wx, az - wz) < R * f * 0.6) return false;
+        }
+        return true;
+      };
       for (let k = 0; k < 3; k++) {
         const px = x + 0.1 + rng() * 0.8, pz = z + 0.1 + rng() * 0.8;
         const y = terrain.ledge(px, pz, 0.4);
@@ -877,16 +941,24 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
           const sc = 0.35 + rng() * 0.55;
           p.set(wx, y - 0.06 - sc * 0.05, wz);
           q.setFromEuler(e.set((rng() - 0.5) * 0.25, rng() * 6.3, (rng() - 0.5) * 0.25));
-          cushions.push(m.compose(p, q, s.set(sc * (0.9 + rng() * 0.6), sc * (0.7 + rng() * 0.4), sc * (0.8 + rng() * 0.4))).clone());
-          cushionCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]), 0.3 + rng() * 0.4).offsetHSL((rng() - 0.5) * 0.03, 0.02, (rng() - 0.5) * 0.06));
+          const sx = sc * (0.9 + rng() * 0.6), sz = sc * (0.8 + rng() * 0.4), mm = m.compose(p, q, s.set(sx, sc * (0.7 + rng() * 0.4), sz)).clone();
+          const col = new THREE.Color(grassPal0[0]).lerp(new THREE.Color(leafPal[theme.trees][Math.floor(rng() * 3)]), 0.3 + rng() * 0.4).offsetHSL((rng() - 0.5) * 0.03, 0.02, (rng() - 0.5) * 0.06);
+          // (Only where the ledge runs on under the whole cushion: none hangs out over its lip.)
+          if (!seated(px, pz, y, wx, wz, Math.max(sx, sz) * 0.6)) continue;
+          cushions.push(mm);
+          cushionCols.push(col);
         } else if (r < 0.85 && layout.lawn) {
           // Where the land is carpeted in lawn, the ledges carry low pads of the same short turf
           // (no loose tufts of long blades).
           const sc = 0.4 + rng() * 0.45;
           p.set(wx, y - 0.05, wz);
           q.setFromEuler(e.set((rng() - 0.5) * 0.15, rng() * 6.3, (rng() - 0.5) * 0.15));
-          cushions.push(m.compose(p, q, s.set(sc * (1.1 + rng() * 0.6), sc * 0.32, sc * (0.9 + rng() * 0.5))).clone());
-          cushionCols.push(new THREE.Color(grassPal0[0]).lerp(new THREE.Color(grassPal0[1]), rng()).multiplyScalar(1.05).offsetHSL((rng() - 0.5) * 0.02, 0, (rng() - 0.5) * 0.04));
+          const sx = sc * (1.1 + rng() * 0.6), mm = m.compose(p, q, s.set(sx, sc * 0.32, sc * (0.9 + rng() * 0.5))).clone();
+          const col = new THREE.Color(grassPal0[0]).lerp(new THREE.Color(grassPal0[1]), rng()).multiplyScalar(1.05).offsetHSL((rng() - 0.5) * 0.02, 0, (rng() - 0.5) * 0.04);
+          // (Only where the ledge runs on under the whole pad: none hangs out over its lip as a loose plate.)
+          if (!seated(px, pz, y, wx, wz, sx * 0.6)) continue;
+          cushions.push(mm);
+          cushionCols.push(col);
         } else if (r < 0.85) {
           const sc = 0.7 + rng() * 0.6;
           p.set(wx, y - 0.03, wz);
@@ -976,7 +1048,7 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
   rocky(inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false));
   for (let v = 0; v < ROCK_MASSES; v++) {
     rocky(inst(rockMass(v), rockMasses[v], rockMassCols[v], 0, true, 'rock'));
-    rocky(inst(rockMassMoss(v), rockMasses[v], mossCols[v], 0, true, ts.paint.grove, false));
+    MOSS_TALL.forEach((tall, tb) => rocky(inst(rockMassMoss(v, tall), mossMats[v][tb], mossCols[v][tb], 0, true, ts.paint.grove, false)));
   }
   if (ferns.length) {
     // A fern: a ring of fronds arching up and out from the root and nodding over at their tips,
