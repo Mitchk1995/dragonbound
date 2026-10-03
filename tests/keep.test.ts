@@ -333,7 +333,7 @@ describe('Dragonspire Keep', () => {
     for (const kind of ['high_table', 'pillar', 'brazier']) expect(kinds('keep'), kind).toContain(kind);
     for (const kind of ['high_table', 'feast_table', 'open_hearth']) expect(kinds('great_hall'), kind).toContain(kind);
     expect(kinds('kitchen')).toContain('hearth_oven');
-    for (const kind of ['chapel_altar', 'bench']) expect(kinds('chapel'), kind).toContain(kind);
+    for (const kind of ['chapel_altar', 'chapel_bench', 'pew']) expect(kinds('chapel'), kind).toContain(kind);
     expect(kinds('barracks')).toContain('bunk');
     expect(kinds('stables')).toContain('hay');
     // The lord's high table stands on the keep's dais, three steps up.

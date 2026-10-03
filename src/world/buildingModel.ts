@@ -7,9 +7,12 @@ import {
   fitsOf, flightsOf, inRoom, raisedAt, isVoid, partitionRuns, partitionsOf, sideLen, stairParts, stairRect, stairSteps, wallRuns,
   type BuildingSpec, type Fit, type FlightSteps, type Floor, type Side, type Window,
 } from './building';
+import { CURTAIN_WALL } from '../data/castle';
 import { COURSE } from '../render/masonry';
+import { glazedWindow } from './castleProps/curtain';
+import { BACK_PARAPET, fleche, hangingLamp, lantern, LEAD, RIDGE as RIDGE_LEAD, roseRing, rosePlate, slateRoof, SLATES } from './castle/rangeParts';
 import {
-  archDressing, archInset, archPane, archRing, roomMaterial, roomPlate, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, deep, DOORS, DRESS, frieze, pointedDoor, singleDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
+  archDressing, archInset, archPane, archRing, glassMat, roomMaterial, roomPlate, spread, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, deep, DOORS, DRESS, frieze, pointedDoor, singleDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, PLASTER,
   GILT, LAMP_NAVY, PLOT_MARK, pointedArch, quoins, ROOF_BLUE, ROOF_BLUE_L, ROOF_ROLL, spandrels, spire, STONE, STONE_D, STONE_DD, STONE_L, WOOD, WOOD_D, WOOD_L, type Prop,
 } from './props';
 
@@ -60,6 +63,62 @@ export interface BuildingProp extends Prop {
   /** Is a world point inside (floor or doorway)? */
   contains(x: number, z: number): boolean;
 }
+
+/**
+ * A window from the castle's window kit on a castle building's face (castle v4): every building takes
+ * its own kind, so no two read as copies of each other.
+ */
+export interface CastleWindow {
+  side: Side;
+  /** Its middle along the wall (cells from the wall's low end), its sill over the floor, its opening's width and height (to the apex of a pointed head). */
+  u: number;
+  sill: number;
+  w: number;
+  h: number;
+  /**
+   * lancet: a tall pointed light under a hood mould; pair: two pointed lights under one hood; square: a
+   * square-headed light, mullioned when wide; slit: a small square-headed light; shuttered: a square
+   * light with its shutters open flat either side; rose: a round window, seven round lights in a plate
+   * of the dressed stone; oriel: a bay of lights standing out on corbels; stall: a stall's half-door,
+   * the horse inside looking out over it; loft: a hay loft's door, shut, its hoist beam over it.
+   */
+  kind: 'lancet' | 'pair' | 'square' | 'slit' | 'shuttered' | 'rose' | 'oriel' | 'stall' | 'loft';
+}
+
+/** A local cell rectangle [x0, z0, x1, z1) (fractions allowed). */
+type Area = [number, number, number, number];
+
+/** How a castle building of the north range or the bailey looks, beyond its plan (rangeSpecs.ts). */
+export interface CastleLook {
+  /** Its windows (in place of the spec's plain ones). */
+  windows?: CastleWindow[];
+  /**
+   * A steep slate roof on coped gables in place of the flat leads (rangeParts.ts): its ridge over the
+   * floor, the louvred lantern (at u along the ridge, its tip) and the flèche.
+   */
+  roof?: { ridge: number; lantern?: { u: number; tip: number }; fleche?: { u: number; tip: number } };
+  /** A shared wall's neighbour stands this high: this building carries the wall on up over it (to its own gable). */
+  over?: Partial<Record<Side, number>>;
+  /** Back walls walled up solid to the curtain's inner face under its walk: each step `out` from the wall's face, up to `top`. */
+  fill?: { side: Side; steps: { out: number; top: number }[] }[];
+  /** Buttresses on the south face (at u), in place of the pilasters. */
+  buttresses?: number[];
+  /** A gabled hood on corbels over the south door, a lantern hung under it. */
+  porch?: boolean;
+  /** The string course's foot (a sill course under the windows), in place of the floor line's. */
+  course?: number;
+  /** The upper floor is a gallery open over the room below: it stays standing while the hero is under it. */
+  gallery?: boolean;
+  /** A boarded ceiling over low rooms of a building otherwise open to its roof (its height). */
+  ceiling?: { rect: Area; y: number };
+  /** A closed loft over the rooms (its boards' height): its edge railed where it stands open over a room. */
+  loft?: { rect: Area; y: number };
+  /** The ground floor's interior walls stop at this height (under a ceiling or a loft). */
+  partitionTop?: number;
+}
+
+/** A castle building's spec with its look. */
+export type CastleSpec = BuildingSpec & { look?: CastleLook };
 
 /** Clean horizontal cut: fragments above the world height `u` are cut away (it sweeps down as the building opens). */
 function cutPatch(mat: THREE.Material, u: { value: number }) {
@@ -145,6 +204,13 @@ function glassMats() {
 }
 
 type Put = (kk: ModelKit, pp: Obj, y0: number, y1: number) => void;
+/** An opening in a wall: u along it, y up. */
+type Hole = { u0: number; u1: number; y0: number; y1: number };
+/** A paired window's two lights: [middle along the wall, width] each, their surrounds meeting between them. */
+const lightsOf = (o: CastleWindow): [number, number][] => {
+  const lw = (o.w - 0.4) / 2;
+  return [-1, 1].map((s) => [o.u + s * (lw / 2 + 0.325), lw]);
+};
 /** Splits a vertical span of a piece by the cut bands (see buildBuilding). */
 type Band = (lift: boolean, y0: number, y1: number, put: Put) => void;
 
@@ -171,7 +237,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
    * The floor line (the foot of the castle buildings' string course): the upper floor's, and on a tall
    * single storey the same height, so the courses of every castle building run at one level.
    */
-  const floorLine = b.storeyH ? storeyH : wallH > 7 ? BUILDING_FLOOR_LINE : wallH;
+  const look = (b as CastleSpec).look;
+  const floorLine = look?.course ?? (b.storeyH ? storeyH : wallH > 7 ? BUILDING_FLOOR_LINE : wallH);
   /** Room for the floor line's course under the course that carries the parapet (none on a low range). */
   const lined = floorLine + COURSE < wallH - COURSE;
   // The castle's buildings (keep style) are built in its own stone: cream ashlar walls, their trim cut
@@ -193,7 +260,25 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   cutPatch(glass.top, uTop);
   cutPatch(room.mid, uMid);
   cutPatch(room.top, uTop);
-  const shared = new Set(b.shared ?? []);
+  const shared = new Set(b.shared ?? []), joinedTo = new Set(b.joined ?? []);
+  /** Where a shared wall's neighbour stops and this building carries the wall on up (its gable end). */
+  const over = (side: Side) => (shared.has(side) ? look?.over?.[side] : undefined);
+  /** The castle windows of a side (the look's), and the openings they cut in its wall. */
+  const castleWins = (side: Side) => (look?.windows ?? []).filter((o) => o.side === side);
+  const holesOf = (o: CastleWindow): Hole[] => {
+    // (Its foot a hair under the sill, so the walling's top never lies in the plane of the sill stone's.)
+    const at = (u: number, w: number, w0 = o.sill, h = o.h) => ({ u0: u - w / 2, u1: u + w / 2, y0: w0 > 0 ? w0 - 0.006 : w0, y1: w0 + h });
+    if (o.kind === 'loft') return [];
+    if (o.kind === 'pair') return lightsOf(o).map(([u, w]) => at(u, w));
+    if (o.kind === 'oriel') return [at(o.u, o.w - 0.6)];
+    return [at(o.u, o.w)];
+  };
+  /** Where on a side a window stands across a height band [y0, y1] (a course, a pilaster's stage): its span along the wall with its surround. */
+  const winSpans = (side: Side, y0: number, y1: number): [number, number][] => castleWins(side).flatMap((o) => {
+    // (A window whose sill sits on a course does not cross it.)
+    const a = o.kind === 'oriel' ? o.sill - 0.9 : o.kind === 'stall' ? 0 : o.sill + 0.01, e = o.sill + o.h + (o.kind === 'lancet' || o.kind === 'pair' ? 0.8 : 0.4), half = o.w / 2 + (o.kind === 'pair' ? 0.4 : 0.35);
+    return e > y0 && a < y1 ? [[o.u - half, o.u + half] as [number, number]] : [];
+  });
   /** The walls the deep base course does not run along (shared, joined or backing onto the curtain). */
   const inBand = new Set([...shared, ...(b.joined ?? []), ...(b.backs ?? [])]);
   const ticks: ((t: number) => void)[] = [];
@@ -247,7 +332,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   for (const dr of b.doors) {
     const W = wallFrame(b, dr.side), uc = dr.at + dr.w / 2;
     W.box(ik, floorG, dr.w + 0.2, 0.1, 1.0, uc, 0.05, 0, S.course, 0, 0.02);
-    if (!shared.has(dr.side)) W.box(ik, floorG, dr.w + 0.6, 0.1, 0.74, uc, 0.05, 0.85, keep ? BASE : STONE_D, 0, 0.03);
+    if (!shared.has(dr.side) && !joinedTo.has(dr.side)) W.box(ik, floorG, dr.w + 0.6, 0.1, 0.74, uc, 0.05, 0.85, keep ? BASE : STONE_D, 0, 0.03);
   }
 
   // ─── Walls ────────────────────────────────────────────────────────────────
@@ -261,17 +346,26 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   const upperWy = multi ? storeyH + CUT_H + 0.3 : floorLine + COURSE + 0.35;
   const winDims = (wi: Window) => (keep && wi.stall ? { ww: 1.5, wh: 3.0, wy: 0 } : keep ? { ww: 0.95, wh: wi.floor ? Math.min(2.5, wallH - COURSE - 0.55 - upperWy) : 2.4, wy: wi.floor ? upperWy : 1.5 } : wi.floor ? { ww: 1.1, wh: 2.1, wy: storeyH + 1.0 } : hall ? { ww: 1.3, wh: 2.3, wy: 1.9 } : { ww: 1.0, wh: 1.3, wy: 1.55 });
   for (const side of ['n', 's', 'e', 'w'] as Side[]) {
-    if (shared.has(side)) continue;
+    if (shared.has(side)) {
+      // A wall shared with a lower neighbour: this building carries it on up from the neighbour's top
+      // (under its gable), between its own north and south walls.
+      const h0 = over(side);
+      if (h0 !== undefined) holed(wallFrame(b, side), k, built, 1, sideLen(b, side) - 1, h0, wallH, WALL_T, UPPER, []);
+      continue;
+    }
     const W = wallFrame(b, side), fade = side === 's';
     /** A box between heights y0 and y1, split at the cuts on the camera side. */
     const piece = (len: number, y0: number, y1: number, dep: number, u: number, off: number, color: number, ch = 0.03) =>
       band(fade, y0, y1, (kk, pp, a, e) => W.box(kk, pp, len, e - a, dep, u, (a + e) / 2, off, color, 0, ch));
     const ns = side === 'n' || side === 's';
     const L = sideLen(b, side);
-    // The north and south walls take the corners.
-    const lo = ns ? 0 : 1, hi = ns ? L : L - 1;
+    // The north and south walls take the corners (over a lower neighbour's wall, only above its top).
+    const ow = ns ? over('w') : undefined, oe = ns ? over('e') : undefined;
+    const lo = ns ? (ow !== undefined ? 1 : 0) : 1, hi = ns ? (oe !== undefined ? L - 1 : L) : L - 1;
     const runs = wallRuns(b, side).map(([a, e]) => [Math.max(lo, a), Math.min(hi, e)] as [number, number]).filter(([a, e]) => e > a);
+    for (const [h0, c] of [[ow, 0.5], [oe, L - 0.5]] as [number | undefined, number][]) if (h0 !== undefined) piece(1, h0, wallH, WALL_T, c, 0, UPPER, 0);
     const wins = b.windows.filter((wi) => wi.side === side).map((wi) => ({ wi, ...winDims(wi) }));
+    const cw = castleWins(side), cHoles = cw.flatMap(holesOf);
     for (const [a, e] of runs) {
       const len = e - a, u = (a + e) / 2;
       // Stone plinth and stub (always standing), capped by a pale course that hides the cut. The
@@ -283,11 +377,12 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // joins or backs onto the curtain with, where no course runs.)
       if (!keep) W.box(k, built, len, 0.34, WALL_T + 0.16, u, 0.17, 0, STONE_D, 0, 0.04);
       const s0 = keep ? 0 : 0.34, s1 = keep && !inBand.has(side) ? CUT_H - 0.01 : CUT_H;
-      W.box(k, built, len, s1 - s0, WALL_T, u, (s0 + s1) / 2, 0, S.foot, 0, 0.02);
+      // (A stall's half-door opens right down to the floor.)
+      holed(W, k, built, a, e, s0, s1, WALL_T, S.foot, cHoles.filter((h) => h.y0 < s1 && h.u1 > a && h.u0 < e));
       if (!keep) W.box(k, built, len, 0.16, WALL_T + 0.1, u, CUT_H - 0.05, 0, S.course, 0, 0.03);
       // Upper wall with its window openings, and the wall plate / cornice on top. On a two-storey
       // camera side the upper storey's own course caps the cut there too.
-      const holes = wins.filter((o) => !o.wi.stall && o.wi.at > a && o.wi.at < e).map((o) => ({ u0: o.wi.at - o.ww / 2, u1: o.wi.at + o.ww / 2, y0: o.wy, y1: o.wy + o.wh }));
+      const holes = [...wins.filter((o) => !o.wi.stall && o.wi.at > a && o.wi.at < e).map((o) => ({ u0: o.wi.at - o.ww / 2, u1: o.wi.at + o.ww / 2, y0: o.wy, y1: o.wy + o.wh })), ...cHoles.filter((h) => h.u1 > a && h.u0 < e)];
       band(fade, CUT_H, wallH, (kk, pp, y0, y1) => holed(W, kk, pp, a, e, y0, y1, face * 2, UPPER, holes));
       // (A castle building's cut lies on a course line, so it needs no course of its own over it.)
       if (fade && multi && !keep) W.box(mk, mid, len, 0.16, WALL_T + 0.1, u, upCut - 0.08, 0, S.course, 0, 0.03);
@@ -324,7 +419,11 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     // and the lord's blue leaves standing open inside.
     for (const dr of b.doors.filter((x) => x.side === side)) {
       const u0 = dr.at, u1 = dr.at + dr.w, uc = (u0 + u1) / 2;
-      const castle = keep && !shared.has(side), stable = b.windows.some((wi) => wi.stall);
+      const castle = keep && !shared.has(side), stable = b.windows.some((wi) => wi.stall) || !!look?.windows?.some((o) => o.kind === 'stall');
+      // (A door through a wall joined to a neighbour's opens inside the range: no lanterns or banner. A
+      // door under the porch's hood has the hood's lantern; one under a window has no banner.)
+      const inner = joinedTo.has(side), hooded = !!look?.porch && side === 's';
+      const under = cw.some((o) => o.u + o.w / 2 > u0 - 0.6 && o.u - o.w / 2 < u1 + 0.6 && o.sill > doorH);
       // (A door in a wall shared with the great keep has a square head on a course line, its lintel the
       // course over it.)
       const dH = castle || !keep ? doorH : GREAT_DOOR_H, lintel = keep ? COURSE : 0.36;
@@ -338,8 +437,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         if (hall || (!timber && !keep)) piece(0.5, dH + 0.05, dH + 0.55, WALL_T + 0.3, uc, 0, S.light, 0.04);
       }
       // The wall over the door, cut round any window above it.
-      const over = wins.filter((o) => !o.wi.stall && o.wi.at + o.ww / 2 > u0 && o.wi.at - o.ww / 2 < u1).map((o) => ({ u0: o.wi.at - o.ww / 2, u1: o.wi.at + o.ww / 2, y0: o.wy, y1: o.wy + o.wh }));
-      band(fade, castle ? doorH : dH + lintel, wallH, (kk, pp, y0, y1) => holed(W, kk, pp, u0, u1, y0, y1, face * 2, UPPER, over));
+      const aboveDoor = [...wins.filter((o) => !o.wi.stall && o.wi.at + o.ww / 2 > u0 && o.wi.at - o.ww / 2 < u1).map((o) => ({ u0: o.wi.at - o.ww / 2, u1: o.wi.at + o.ww / 2, y0: o.wy, y1: o.wy + o.wh })), ...cHoles.filter((h) => h.u1 > u0 && h.u0 < u1)];
+      band(fade, castle ? doorH : dH + lintel, wallH, (kk, pp, y0, y1) => holed(W, kk, pp, u0, u1, y0, y1, face * 2, UPPER, aboveDoor));
       if (castle) {
         const [hk, hp] = at(fade, sp);
         W.shape(hk, hp, spandrels(dr.w, doorH, WALL_T - 0.02, rise), UPPER, uc, 0, 0);
@@ -350,7 +449,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           const [dk2, dp2] = at(fade, st.y);
           W.shape(dk2, dp2, st.geo, DRESS, uc, 0, face, undefined, 0, true);
         }
-        for (const s of [-1, 1]) {
+        if (!inner && !hooded) for (const s of [-1, 1]) {
           const [lk, lp] = at(fade, 2.4);
           // A navy wall lantern with warm glass and a gold finial, on the plain wall beside the door,
           // midway between its hood and the next window's (clear of both); the stables' the same.
@@ -362,7 +461,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           W.box(lk, lp, 0.32, 0.06, 0.32, lu, 2.6, face + 0.5, LAMP_NAVY, 0, 0.02);
           W.box(lk, lp, 0.1, 0.1, 0.1, lu, 3.12, face + 0.5, PAL.gold, Math.PI / 4, 0.01);
         }
-        if (!stable) {
+        if (!stable && !inner && !hooded && !under) {
           // The house banner over the door, above the floor-line course (clear of it and of the hood), so
           // the way in reads from across the court.
           const [bk, bp] = at(fade, doorH + 0.8), fg = new THREE.Group();
@@ -372,7 +471,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           bp.add(fg);
           // (A long banner from under the parapet's corbels down to just over the floor-line course, or
           // over the door's hood on a low building; none where there is no room for one.)
-          const bwid = Math.min(1.4, dr.w * 0.6), btop = wallH >= 7 ? wallH - 0.75 : wallH - 0.35, bbot = wallH >= 7 ? floorLine + 0.35 : doorH + 0.75;
+          const bwid = Math.min(1.4, dr.w * 0.6), btop = wallH >= 7 ? wallH - 0.75 : wallH - 0.35, bbot = wallH >= 7 ? Math.max(floorLine + 0.35, doorH + 0.75) : doorH + 0.75;
           const bh = btop - 0.07 - bbot - bwid * 0.6;
           if (bh > 0.8) livery(bk, fg, 0, btop, 0, bwid, bh);
         }
@@ -441,6 +540,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       }
       if (timber) for (const s of [-1, 1]) W.box(gk, gp, ww / 2, wh, 0.05, wi.at + s * (ww * 0.75 + 0.2), wy + wh / 2, face + 0.03, SHUTTER, 0, 0.01);
     }
+    for (const o of cw) castleWindow(W, fade, o);
     // Stone buildings: buttresses on the outer face of long walls, between doors and windows.
     if (!timber && !keep && ns) {
       const busy = (p: number) => wins.some((o) => Math.abs(p - o.wi.at) < o.ww / 2 + 0.7) || b.doors.some((dr) => dr.side === side && p > dr.at - 0.8 && p < dr.at + dr.w + 0.8);
@@ -455,8 +555,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // front reads as bays with depth rather than one flat box. A single tall storey takes its
       // string course and the pilasters' set-back at mid-height.
       // (Not on a wall built against the curtain: its face is behind the curtain's wall walk.)
-      if (L >= 10 && !(b.backs ?? []).includes(side)) {
-        const open: [number, number][] = wins.map((o) => [o.wi.at - o.ww / 2 - 0.3, o.wi.at + o.ww / 2 + 0.3]);
+      // (A building with buttresses takes them instead.)
+      if (L >= 10 && !(b.backs ?? []).includes(side) && !joinedTo.has(side) && !look?.buttresses) {
+        const open: [number, number][] = [...wins.map((o) => [o.wi.at - o.ww / 2 - 0.3, o.wi.at + o.ww / 2 + 0.3] as [number, number]), ...winSpans(side, 0, wallH)];
         for (const dr of b.doors.filter((x) => x.side === side)) open.push([dr.at - 1.7, dr.at + dr.w + 1.7]);
         open.push([-9, lo + 0.4], [hi - 0.4, L + 9]);
         open.sort((p1, p2) => p1[0] - p2[0]);
@@ -487,14 +588,29 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // The floor line: a string course outside, one course of the dressed stone a hand proud of the
       // face, and inside (on the walls that stay standing) the beam the upper floor's joists rest on.
       // (The north and south courses reach round the corners; the east and west ones butt into them.)
-      const c0 = ns ? -0.06 : 0.12, c1 = ns ? L + 0.06 : L - 0.12;
-      if (lined) piece(c1 - c0, floorLine, floorLine + COURSE, 0.12, (c0 + c1) / 2, face, DRESS);
-      if (!fade) {
+      // (It stops at a shared wall's line, where the neighbour's face runs on, and is broken where a door
+      // or a window stands across it; none runs behind the walling against the curtain.)
+      const c0 = ns ? (shared.has('w') ? 1 : -0.06) : 0.12, c1 = ns ? (shared.has('e') ? L - 1 : L + 0.06) : L - 0.12;
+      if (lined && !joinedTo.has(side) && !look?.fill?.some((f) => f.side === side)) {
+        const cuts = [
+          ...b.doors.filter((dr) => dr.side === side && floorLine < doorH + DRESS_T).map((dr) => [dr.at - DRESS_T - 0.02, dr.at + dr.w + DRESS_T + 0.02] as [number, number]),
+          ...winSpans(side, floorLine, floorLine + COURSE),
+        ].sort((p1, p2) => p1[0] - p2[0]);
+        let a = c0;
+        for (const [ca, ce] of [...cuts, [c1, c1] as [number, number]]) {
+          const e = Math.min(c1, ca);
+          if (e - a > 0.3) piece(e - a, floorLine, floorLine + COURSE, 0.12, (a + e) / 2, face, DRESS);
+          a = Math.max(a, ce);
+        }
+      }
+      // (Not under a timber roof open to the hall; a loft's beams carry its boards.)
+      if (!fade && !look?.roof) {
         // (The beams along the east and west walls stop against the north and south walls' beams.)
         const bl = ns ? hi - lo : hi - lo - 0.3;
         // (A hair under the course that carries the parapet where the floor is the roof's, never in its plane.)
-        W.box(k, built, bl, 0.3, 0.2, (lo + hi) / 2, storeyH - 0.36, -(face + 0.1), TIMBER, 0, 0.02);
-        for (let t = lo + 0.8; t < hi - 0.5; t += 1.4) W.box(k, built, 0.26, 0.26, 0.24, t, storeyH - 0.66, -(face + 0.12), ASHLAR_L, 0, 0.03);
+        const by = look?.loft?.y ?? storeyH;
+        W.box(k, built, bl, 0.3, 0.2, (lo + hi) / 2, by - 0.36, -(face + 0.1), TIMBER, 0, 0.02);
+        for (let t = lo + 0.8; t < hi - 0.5; t += 1.4) W.box(k, built, 0.26, 0.26, 0.24, t, by - 0.66, -(face + 0.12), ASHLAR_L, 0, 0.03);
       }
     }
   }
@@ -503,7 +619,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   // corners and broken only at the doorways (none along a wall it shares or joins, which stands inside
   // the range).
   if (keep) {
-    const base = footBand(k, built, b, 0, BASE_COURSE, 0.3, S.base, 0.05);
+    // (Broken where a stall's half-door opens right down to the floor.)
+    const stalls = (look?.windows ?? []).filter((o) => o.kind === 'stall').map((o) => ({ side: o.side, span: [o.u - o.w / 2 - 0.36, o.u + o.w / 2 + 0.36] as [number, number] }));
+    const base = footBand(k, built, b, 0, BASE_COURSE, 0.3, S.base, 0.05, stalls);
     if (base) deep(base);
   }
   // Stone corners: quoins in alternating courses (the camera-side pair lift with the wall).
@@ -522,7 +640,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   // and its door heads go with the cut. The ground floor's stubs hide with its rooms upstairs.
   for (const floor of (multi ? [0, 1] : [0]) as Floor[]) {
     // (A ground-floor partition stops a hair under the boards over it, never in their plane.)
-    const base = floor ? storeyH : 0, top = floor ? wallH : multi ? storeyH - 0.02 : Math.min(storeyH, wallH);
+    const base = floor ? storeyH : 0, top = floor ? wallH : look?.partitionTop ?? (multi ? storeyH - 0.02 : Math.min(storeyH, wallH));
+    /** A doorway's head in an interior wall (under a low ceiling, its lintel the wall's top course). */
+    const head = Math.min(2.9, top - base - 0.32);
     const [sk, sp]: [ModelKit, Obj] = floor ? [mk, mid] : [k, ground];
     const [hk, hp]: [ModelKit, Obj] = floor ? [fk, lifted] : [mk, mid];
     for (const pt of partitionsOf(b, floor)) {
@@ -549,11 +669,11 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       for (const [da, dw] of pt.doors ?? []) {
         for (const j of [da + 0.1, da + dw - 0.1]) {
           pbox(sk, sp, j - 0.12, j + 0.12, 0, CUT_H, T + 0.14, FRAME, 0.03);
-          pbox(hk, hp, j - 0.12, j + 0.12, CUT_H, 2.9, T + 0.14, FRAME, 0.03);
+          pbox(hk, hp, j - 0.12, j + 0.12, CUT_H, head, T + 0.14, FRAME, 0.03);
         }
-        pbox(hk, hp, da - 0.2, da + dw + 0.2, 2.9, 3.2, T + 0.16, FRAME, 0.03);
+        pbox(hk, hp, da - 0.2, da + dw + 0.2, head, head + 0.3, T + 0.16, FRAME, 0.03);
         // (A hair inside the door's width, so its ends never lie in the plane of the boards' edges.)
-        pbox(hk, hp, da + 0.01, da + dw - 0.01, 3.2, top - base, T, keep ? PLASTER : UPPER);
+        if (top - base > head + 0.4) pbox(hk, hp, da + 0.01, da + dw - 0.01, head + 0.3, top - base, T, keep ? PLASTER : UPPER);
       }
     }
   }
@@ -563,6 +683,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     // Oak boards on the joists, wall to wall, row by row, leaving the voids (a hall open to its
     // roof) and the stairwells open; a balustrade runs round every opening.
     const y = storeyH - 0.15;
+    // (A gallery open over the room below stays standing while the hero is under it.)
+    const [gk, gp]: [ModelKit, Obj] = look?.gallery ? [k, built] : [uk, mid];
     const open = (lx: number, lz: number) => isVoid(b, lx, lz) || (b.stairs ?? []).some((st) => stairParts(st).some((r) => inRect(r, lx, lz)));
     for (let lz = 1; lz < d - 1; lz++) {
       let a = -1;
@@ -571,7 +693,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         if (solid && a < 0) a = lx;
         if (!solid && a >= 0) {
           const x0 = a === 1 ? 0.95 : a, x1 = lx === w - 1 ? w - 0.95 : lx, z0 = lz === 1 ? 0.95 : lz, z1 = lz === d - 2 ? d - 0.95 : lz + 1;
-          cb(uk, mid, [x1 - x0, 0.3, z1 - z0], [(x0 + x1) / 2, y, (z0 + z1) / 2], PLANKS[1], undefined, 0.01);
+          cb(gk, gp, [x1 - x0, 0.3, z1 - z0], [(x0 + x1) / 2, y, (z0 + z1) / 2], PLANKS[1], undefined, 0.01);
           a = -1;
         }
       }
@@ -587,8 +709,14 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         // stops at its inner face, so the two never lie in each other.)
         const turn = (sz: number) => (!along && lz + sz >= 1 && lz + sz <= d - 2 && open(lx, lz + sz) && !headOf(lx, lz + sz) ? 0.12 : 0);
         const z0 = -0.5 + turn(-1), z1 = 0.5 - turn(1);
-        cb(uk, mid, along ? [1.0, 0.1, 0.12] : [0.12, 0.1, z1 - z0], [ex, storeyH + 0.95, ez + (along ? 0 : (z0 + z1) / 2)], WOOD_D, undefined, 0.02);
-        cb(uk, mid, [0.12, 0.95, 0.12], [ex - (along ? 0.45 : 0), storeyH + 0.47, ez - (along ? 0 : 0.45)], WOOD_D, undefined, 0.02);
+        cb(gk, gp, along ? [1.0, 0.1, 0.12] : [0.12, 0.1, z1 - z0], [ex, storeyH + 0.95, ez + (along ? 0 : (z0 + z1) / 2)], WOOD_D, undefined, 0.02);
+        cb(gk, gp, [0.12, 0.95, 0.12], [ex - (along ? 0.45 : 0), storeyH + 0.47, ez - (along ? 0 : 0.45)], WOOD_D, undefined, 0.02);
+        if (look?.gallery) {
+          // A gallery's front: oak panels between the posts, and a deep beam under its edge.
+          const zc = ez + (along ? 0 : (z0 + z1) / 2);
+          cb(gk, gp, along ? [1.0, 0.72, 0.05] : [0.05, 0.72, z1 - z0], [ex, storeyH + 0.46, zc], PLANKS[0], undefined, 0.01);
+          cb(gk, gp, along ? [1.0, 0.38, 0.24] : [0.24, 0.38, z1 - z0], [ex - dx * 0.1, storeyH - 0.42, zc - dz * 0.1], TIMBER, undefined, 0.02);
+        }
       }
     }
   }
@@ -599,6 +727,136 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       if (!inRect([x0, z0, x1, z1], lx, lz)) return false;
       return top.dir === 'n' ? lz === z0 : top.dir === 's' ? lz === z1 - 1 : top.dir === 'w' ? lx === x0 : lx === x1 - 1;
     });
+  }
+
+  /**
+   * A window of the castle's window kit on a face (its wall already laid round the opening, holesOf):
+   * every piece in a frame on the wall's outer face at the window's middle (x along the wall, z out),
+   * the whole window going with the cut its sill stands in.
+   */
+  function castleWindow(W: WallFrame, fade: boolean, o: CastleWindow) {
+    const [kk, pp] = at(fade, Math.max(0, o.sill - 0.2)), f = W.frame(pp, o.u, face);
+    /** A pane of the castle's clear glass, set back in the reveal. */
+    const pane = (x: number, y: number, z: number, pw: number, ph: number, alongZ = false) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(alongZ ? 0.03 : pw, ph, alongZ ? pw : 0.03), glassMat(kk));
+      m.position.set(x, y, z);
+      f.add(m);
+      audit(m, 'glass');
+    };
+    /** A square-headed opening's dressed surround: jambs, lintel and a sill standing out under it. */
+    const surround = (t: number, hood: boolean) => {
+      const { w: ow, h: oh, sill } = o;
+      // (Their faces a hair inside the opening, never in the plane of the walling's cut ends.)
+      for (const s of [-1, 1]) cb(kk, f, [t + 0.02, oh, 0.24], [s * (ow / 2 + t / 2 - 0.01), sill + oh / 2, -0.06], DRESS, undefined, 0.02);
+      cb(kk, f, [ow + 2 * t, t + 0.06, 0.26], [0, sill + oh + (t + 0.04) / 2 - 0.01, -0.06], DRESS, undefined, 0.02);
+      cb(kk, f, [ow + 2 * t + 0.12, 0.14, 0.34], [0, sill - 0.07, 0.05], DRESS, undefined, 0.02);
+      if (!hood) return;
+      // A drip-stone over it, its ends dropping a little either side.
+      const hy = sill + oh + t + 0.04 + 0.08, hw = ow / 2 + t + 0.12;
+      cb(kk, f, [2 * hw + 0.16, 0.16, 0.22], [0, hy + 0.08, 0.06], DRESS, undefined, 0.02);
+      for (const s of [-1, 1]) cb(kk, f, [0.16, 0.42, 0.22], [s * hw, hy - 0.13, 0.06], DRESS, undefined, 0.02);
+    };
+    switch (o.kind) {
+      case 'lancet': {
+        // A tall pointed light, and a hood mould over its head standing clear of its ring.
+        glazedWindow(kk, f, 0, o.sill, 0, { w: o.w, h: o.h, T: WALL_T, stone: UPPER });
+        const rise = pointedArch(o.w, o.h, 2).ah + 0.4;
+        archRing(kk, f, 0, o.sill, 0, o.w + 0.8, o.h + 0.5, { n: 5, t: 0.16, p: 0.16, dep: 0.1, rise });
+        return;
+      }
+      case 'pair': {
+        // Two pointed lights side by side under one pointed hood, the wall's stone between their heads.
+        for (const [u, lw] of lightsOf(o)) glazedWindow(kk, f, u - o.u, o.sill, 0, { w: lw, h: o.h, T: WALL_T, stone: UPPER });
+        archRing(kk, f, 0, o.sill, 0, o.w + 1.1, o.h + 1.4, { n: 7, t: 0.16, p: 0.16, dep: 0.1 });
+        return;
+      }
+      case 'square':
+      case 'slit':
+      case 'shuttered': {
+        // A square-headed light (two, either side of a stone mullion, when it is wide).
+        const t = o.kind === 'slit' ? 0.2 : 0.28, mull = o.w >= 1.4;
+        surround(t, o.kind === 'square');
+        if (mull) {
+          cb(kk, f, [0.16, o.h, WALL_T - 0.1], [0, o.sill + o.h / 2, -face], DRESS, undefined, 0.02);
+          for (const s of [-1, 1]) pane((s * (o.w / 2 + 0.08)) / 2, o.sill + o.h / 2, -0.2, o.w / 2 - 0.08, o.h);
+        } else pane(0, o.sill + o.h / 2, -0.2, o.w, o.h);
+        if (o.kind === 'shuttered') {
+          // The shutters standing open flat against the wall either side: boarded oak, two iron straps.
+          for (const s of [-1, 1]) {
+            const sx = s * (o.w / 2 + t + o.w / 4 + 0.04);
+            for (let i = 0; i < 2; i++) cb(kk, f, [o.w / 4 - 0.01, o.h, 0.06], [sx + (i - 0.5) * (o.w / 4), o.sill + o.h / 2, 0.03], DOOR_STAIN[(i + (s > 0 ? 1 : 0)) % 3], undefined, 0.01);
+            for (const y of [0.22, o.h - 0.22]) cb(kk, f, [o.w / 2 - 0.08, 0.06, 0.03], [sx, o.sill + y, 0.075], IRON, undefined, 0.005);
+          }
+        }
+        return;
+      }
+      case 'rose': {
+        // A round window over the door: seven round lights pierced in a plate of the dressed stone, the
+        // glass behind them, a ring of voussoirs round it.
+        const R = o.w / 2, cy = o.sill + R, { plate, fill } = rosePlate(o.w, WALL_T - 0.04);
+        kk.mesh(f, plate, DRESS, [0, cy, -face]);
+        kk.mesh(f, fill, UPPER, [0, cy, -face]);
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.02, R - 0.02, 0.03, 32).rotateX(Math.PI / 2), glassMat(kk));
+        disc.position.set(0, cy, -face - 0.12);
+        f.add(disc);
+        audit(disc, 'glass');
+        const g = new THREE.Group();
+        g.position.set(0, cy, 0);
+        f.add(g);
+        roseRing(kk, g, R, 0.34, 0.08, 16);
+        return;
+      }
+      case 'oriel': {
+        // A bay of lights standing out on corbels of the dressed stone stepping out from the wall: a
+        // post at each corner and a mullion in its front, the glass between them, a cornice and a lead
+        // roof sloping back to the wall.
+        const D = 0.7, ow = o.w, y = o.sill, h = o.h, P = 0.18;
+        // (Its corbelling one stone, tapering down into the wall over the door's arch.)
+        kk.mesh(f, taper(0.7, 0.2, ow, D, 0.9, 0, (D - 0.2) / 2), DRESS, [0, y - 0.45, 0.1 - 0.01]);
+        for (const s of [-1, 1]) {
+          cb(kk, f, [P, h, P], [s * (ow / 2 - P / 2), y + h / 2, D - P / 2], DRESS, undefined, 0.02);
+          cb(kk, f, [P, h, P], [s * (ow / 2 - P / 2), y + h / 2, P / 2], DRESS, undefined, 0.02);
+          pane(s * (ow / 2 - P / 2), y + h / 2, D / 2, D - 2 * P, h, true);
+          const a0 = P / 2, a1 = ow / 2 - P;
+          pane((s * (a0 + a1)) / 2, y + h / 2, D - P / 2, a1 - a0, h);
+        }
+        cb(kk, f, [P, h, P], [0, y + h / 2, D - P / 2], DRESS, undefined, 0.02);
+        cb(kk, f, [ow + 0.1, 0.16, D + 0.1], [0, y + h + 0.08, D / 2], DRESS, undefined, 0.02);
+        kk.mesh(f, taper(ow + 0.1, D + 0.1, ow - 0.3, 0.12, 0.3, 0, -(D + 0.1 - 0.12) / 2), LEAD, [0, y + h + 0.31, D / 2]);
+        return;
+      }
+      case 'stall': {
+        // A stall's own door: a pointed opening right down to the floor in a ring of the dressed stone,
+        // its boarded oak half-door shut in the reveal, the horse inside looking out over it.
+        const rise = Math.min(o.w * 0.62, 1.7), [hk, hp] = at(fade, o.h - rise);
+        W.shape(hk, hp, spandrels(o.w, o.h, WALL_T - 0.02, rise), UPPER, o.u, 0, 0);
+        for (const st of archDressing(o.w, o.h, rise, { foot: 0, t: 0.36, inset: 0.02 })) {
+          const [dk, dp] = at(fade, st.y);
+          W.shape(dk, dp, st.geo, DRESS, o.u, 0, face, undefined, 0, true);
+        }
+        const [bk, bp] = at(fade, 0), df = W.frame(bp, o.u, face), n = 4, bw = (o.w - 0.04) / n;
+        for (let i = 0; i < n; i++) cb(bk, df, [bw - 0.012, 1.22, 0.07], [-o.w / 2 + 0.02 + bw * (i + 0.5), 0.67, -0.24], DOOR_STAIN[i % 3], undefined, 0.01);
+        cb(bk, df, [o.w - 0.02, 0.09, 0.15], [0, 1.32, -0.24], WOOD_D, undefined, 0.01);
+        for (const yy of [0.32, 1.02]) cb(bk, df, [o.w - 0.2, 0.06, 0.03], [0, yy, -0.19], IRON, undefined, 0.005);
+        cb(bk, df, [o.w, 0.06, WALL_T - 0.02], [0, 0.03, -face], DRESS, undefined, 0.01);
+        return;
+      }
+      case 'loft': {
+        // The hay loft's door, shut in its dressed frame, and over it the hoist's beam standing out
+        // from under the parapet's course, its pulley, rope and hook.
+        surround(0.22, false);
+        for (const s of [-1, 1]) for (let i = 0; i < 2; i++) {
+          cb(kk, f, [o.w / 4 - 0.012, o.h - 0.02, 0.07], [s * (o.w / 4) + (i - 0.5) * (o.w / 4), o.sill + o.h / 2, -0.04], DOOR_STAIN[(i + (s > 0 ? 1 : 0)) % 3], undefined, 0.01);
+        }
+        for (const s of [-1, 1]) for (const yy of [0.3, o.h - 0.3]) cb(kk, f, [o.w / 2 - 0.12, 0.06, 0.03], [s * (o.w / 4), o.sill + yy, 0.005], IRON, undefined, 0.005);
+        const by = o.sill + o.h + 0.5;
+        cb(kk, f, [0.24, 0.24, 1.7], [0, by, 0.45], TIMBER, undefined, 0.02);
+        kk.cyl(f, 0.14, 0.14, 0.1, [0, by - 0.22, 1.12], IRON, [0, 0, Math.PI / 2], 10);
+        cb(kk, f, [0.03, 1.1, 0.03], [0, by - 0.82, 1.18], 0xb89a6a, undefined, 0.005);
+        cb(kk, f, [0.06, 0.2, 0.12], [0, by - 1.44, 1.18], IRON, undefined, 0.01);
+        return;
+      }
+    }
   }
 
   // ─── Stairs ───────────────────────────────────────────────────────────────
@@ -612,26 +870,110 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     });
   }
 
-  // A stable range: the hay loft's door over its door (its lanterns are the castle door's).
-  if (keep && b.windows.some((wi) => wi.stall)) {
-    const dr = b.doors.find((x) => x.side === 's');
-    if (dr) {
-      const W = wallFrame(b, 's'), uc = dr.at + dr.w / 2;
-      // The hay door: a pair of boarded shutters closed in their frame, strapped in black iron, on a
-      // stone sill clear over the arch's hood.
-      const h0 = doorH + 0.75, h1 = h0 + 0.85;
-      band(true, h0, h1, (kk, pp, a, e) => W.box(kk, pp, 1.1, e - a, 0.1, uc, (a + e) / 2, face + 0.02, DARK, 0, 0.01));
-      for (const s of [-1, 1]) {
-        // (Each shutter two boards of the castle's stained oak, the dark of the frame between them.)
-        for (const [i, bu] of [0.135, 0.405].entries()) band(true, h0 + 0.02, h1 - 0.02, (kk, pp, a, e) => W.box(kk, pp, 0.248, e - a, 0.08, uc + s * bu, (a + e) / 2, face + 0.1, DOOR_STAIN[(i + (s > 0 ? 1 : 0)) % 3], 0, 0.01));
-        for (const y of [h0 + 0.2, h1 - 0.24]) band(true, y, y + 0.07, (kk, pp, a, e) => W.box(kk, pp, 0.44, e - a, 0.1, uc + s * 0.29, (a + e) / 2, face + 0.13, IRON, 0, 0.005));
+  // ─── The castle's look: what stands against and inside its walls ───────────
+  if (look) {
+    // The back walls walled up solid to the curtain's inner face under its walk, step by step up to
+    // its corbels and its inner parapet: along a north wall from end to end (round the corner where
+    // the side wall is filled too, to the line of a wall shared with the range's next building), along
+    // a side wall between the north wall's face and the south front.
+    const filled = (s: Side) => !!look.fill?.some((f) => f.side === s);
+    for (const { side, steps } of look.fill ?? []) {
+      const W = wallFrame(b, side), ns = side === 'n' || side === 's', L = sideLen(b, side);
+      let y0 = 0;
+      for (const st of steps) {
+        const lo = ns ? (shared.has('w') ? 1 : filled('w') ? -st.out : 0) : filled('n') ? 0.05 : 0;
+        const hi = ns ? (shared.has('e') ? L - 1 : filled('e') ? L + st.out : L) : L - 0.05;
+        W.box(k, built, hi - lo, st.top - y0, st.out + 0.02, (lo + hi) / 2, (y0 + st.top) / 2, WALL_T / 2 + st.out / 2 - 0.01, UPPER, 0, 0.02);
+        y0 = st.top;
       }
-      band(true, h0 - 0.1, h0, (kk, pp, a, e) => W.box(kk, pp, 1.4, e - a, 0.24, uc, (a + e) / 2, face + 0.1, ASHLAR_L, 0, 0.01));
+    }
+    // A boarded ceiling over low rooms, and a loft's floor on its joists, a rail along its open edge.
+    // (They go with the ground floor's cut, so the rooms under them open to the camera.)
+    if (look.ceiling) {
+      const [x0, z0, x1, z1] = look.ceiling.rect, y = look.ceiling.y;
+      cb(uk, mid, [x1 - x0 - 0.02, 0.2, z1 - z0 - 0.02], [(x0 + x1) / 2, y + 0.1, (z0 + z1) / 2], PLANKS[0], undefined, 0.01);
+    }
+    if (look.loft) {
+      const [x0, z0, x1, z1] = look.loft.rect, y = look.loft.y, zc = (z0 + z1) / 2;
+      // (The boards' top a hair over the walls under them.)
+      cb(uk, mid, [x1 - x0 - 0.02, 0.16, z1 - z0 - 0.02], [(x0 + x1) / 2, y, zc], PLANKS[1], undefined, 0.01);
+      for (let x = x0 + 0.9; x < x1 - 0.5; x += 1.4) cb(uk, mid, [0.18, 0.22, z1 - z0 + 0.06], [x, y - 0.19, zc], TIMBER, undefined, 0.01);
+      const edge = x0 > 1.01 ? x0 + 0.08 : x1 < w - 1.01 ? x1 - 0.08 : null;
+      if (edge !== null) {
+        cb(uk, mid, [0.1, 0.1, z1 - z0 - 0.04], [edge, y + 0.95, zc], WOOD_D, undefined, 0.02);
+        for (let z = z0 + 0.3; z < z1 - 0.1; z += 1.0) cb(uk, mid, [0.1, 0.92, 0.1], [edge, y + 0.46, z], WOOD_D, undefined, 0.02);
+      }
+    }
+    // Buttresses on the south front: a broad lower stage to the sill course, a weathered set-off, a
+    // narrower stage, and a long weathering dying back into the wall under the eaves' corbels.
+    const S2 = wallFrame(b, 's');
+    for (const p of look.buttresses ?? []) {
+      const top = wallH - 2 * COURSE - 0.75, mid1 = floorLine + COURSE;
+      for (const [y0, y1, dep, wid] of [[0, mid1, 0.95, 1.1], [mid1 + COURSE, top, 0.6, 1.0]] as [number, number, number, number][]) {
+        band(true, y0, y1, (kk, pp, a, e) => S2.box(kk, pp, wid, e - a, dep + 0.02, p, (a + e) / 2, WALL_T / 2 + dep / 2 - 0.01, UPPER, 0, 0.04));
+      }
+      for (const [y, d0, d1, wid, h] of [[mid1, 0.95, 0.6, 1.1, COURSE], [top, 0.6, 0.06, 1.0, 0.75]] as [number, number, number, number, number][]) {
+        const [kk, pp] = at(true, y);
+        kk.mesh(S2.frame(pp, p, face), taper(wid, d0, wid, d1, h, 0, -(d0 - d1) / 2), DRESS, [0, y + h / 2, d0 / 2 - 0.01]);
+      }
+    }
+    // The porch's hood over the south door: a little gabled slate roof standing out on two corbels of
+    // the dressed stone stepping out from the wall, a stone gable in front over an oak tie beam, the
+    // lantern hung under it.
+    const pdr = look.porch ? b.doors.find((x) => x.side === 's') : undefined;
+    if (pdr) {
+      const [kk, pp] = at(true, doorH), f = S2.frame(pp, pdr.at + pdr.w / 2, face), HW = 1.95, D = 1.35, y0 = doorH + 0.95, rise = 1.25;
+      for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(kk, f, [0.42, 0.3, 0.42 * (i + 1)], [sx * 1.7, y0 - 0.75 + 0.3 * i, 0.21 * (i + 1) - 0.02], DRESS, undefined, 0.03);
+      cb(kk, f, [2 * HW, 0.18, 0.24], [0, y0 - 0.06, D - 0.12], TIMBER, undefined, 0.02);
+      const A = Math.atan2(rise, HW), Ls = Math.hypot(HW + 0.12, rise + 0.09);
+      for (const sx of [-1, 1]) cb(kk, f, [Ls, 0.16, D + 0.12], [sx * ((HW + 0.12) / 2 + 0.05), y0 + rise / 2 + 0.06, D / 2 + 0.04], SLATES, [0, 0, -sx * A], 0.03);
+      cb(kk, f, [0.22, 0.22, D + 0.14], [0, y0 + rise + 0.15, D / 2 + 0.04], RIDGE_LEAD, [0, 0, Math.PI / 4], 0.02);
+      kk.mesh(f, wedge(0.28, rise, 2 * HW - 0.3), UPPER, [0, y0 + rise / 2 - 0.02, D - 0.16], [0, Math.PI / 2, 0]);
+      for (const sx of [-1, 1]) cb(kk, f, [Math.hypot(HW, rise) - 0.1, 0.16, 0.36], [(sx * HW) / 2, y0 + rise / 2 + 0.17, D - 0.14], DRESS, [0, 0, -sx * A], 0.02);
+      cb(kk, f, [0.26, 0.26, 0.4], [0, y0 + rise + 0.18, D - 0.14], DRESS, undefined, 0.03);
+      hangingLamp(kk, f, 0, y0 - 0.15, D - 0.12);
+    }
+    // Under a timber roof open to the room: oak wall posts on stone corbels against the back wall, a
+    // brace from each to the wall plate along its top (the roof's trusses spring from them).
+    if (look.roof) {
+      const lo = shared.has('w') ? 1 : 0.95, hi = shared.has('e') ? w - 1 : w - 0.95, zf = 0.95;
+      cb(k, built, [hi - lo - 0.02, 0.3, 0.32], [(lo + hi) / 2, wallH - 0.15, zf + 0.16], TIMBER, undefined, 0.02);
+      const n = Math.max(2, Math.round((hi - lo - 2) / 3.4));
+      for (let i = 0; i <= n; i++) {
+        const x = lo + 1 + ((hi - lo - 2) * i) / n, yc = wallH - 4.2;
+        cb(k, built, [0.5, 0.42, 0.44], [x, yc - 0.21, zf + 0.21], ASHLAR_L, undefined, 0.03);
+        cb(k, built, [0.3, wallH - yc - 0.3, 0.26], [x, (yc + wallH - 0.3) / 2, zf + 0.13], TIMBER, undefined, 0.02);
+        cb(k, built, [0.22, 1.6, 0.22], [x, wallH - 1.0, zf + 0.42], TIMBER, [0.55, 0, 0], 0.02);
+      }
     }
   }
 
   // ─── Roof ─────────────────────────────────────────────────────────────────
-  const roofTop = roof(fk, lifted, b, UPPER);
+  let roofTop: number;
+  if (look?.roof) {
+    // The steep slate roof (rangeParts.ts): a gable of its own over a lower neighbour, a lead flashing
+    // where it runs in under a taller one (the keep); the south eaves on a corbelled cornice, the north
+    // slope into its gutter behind the back parapet over the wall walk; the lantern or the flèche.
+    const R = look.roof, gw = over('w') !== undefined, ge = over('e') !== undefined, finial = R.fleche ? ('cross' as const) : ('ball' as const);
+    const x0 = shared.has('w') ? (gw ? 0.92 : 0.97) : 0.92, x1 = shared.has('e') ? (ge ? w - 0.92 : w - 0.97) : w - 0.92;
+    const P = slateRoof(fk, lifted, {
+      w, d, eave: wallH, ridge: R.ridge, x0, x1,
+      gables: [...(gw || !shared.has('w') ? [{ x: 0.5, finial }] : []), ...(ge || !shared.has('e') ? [{ x: w - 0.5, finial }] : [])],
+      flashed: [...(shared.has('w') && !gw ? [1] : []), ...(shared.has('e') && !ge ? [w - 1] : [])],
+    });
+    // The cornice under the south eaves: a course of the dressed stone standing out over corbels.
+    const c0 = shared.has('w') && !gw ? 1 : 0, c1 = shared.has('e') && !ge ? w - 1 : w, z = d - 0.05;
+    cb(fk, lifted, [c1 - c0, COURSE, 0.47], [(c0 + c1) / 2, wallH - COURSE / 2, z + 0.215], DRESS, undefined, 0.03);
+    for (const u of spread(c1 - c0 - 0.6, 0.9, 0)) cb(fk, lifted, [0.34, COURSE, 0.3], [(c0 + c1) / 2 + u, wallH - 1.5 * COURSE, z + 0.13], ASHLAR_B, undefined, 0.03);
+    // The back parapet over the wall walk, its coping, and the lead gutter behind it.
+    const p0 = gw ? 0.95 : x0 + 0.03, p1 = ge ? w - 0.95 : x1 - 0.03;
+    cb(fk, lifted, [p1 - p0, BACK_PARAPET, 0.5], [(p0 + p1) / 2, wallH + BACK_PARAPET / 2, 0.3], ASHLAR_B, undefined, 0.03);
+    cb(fk, lifted, [p1 - p0, 0.12, 0.62], [(p0 + p1) / 2, wallH + BACK_PARAPET + 0.06, 0.3], DRESS, undefined, 0.02);
+    cb(fk, lifted, [p1 - p0, 0.14, 0.42], [(p0 + p1) / 2, wallH + 0.07, 0.76], LEAD, undefined, 0.02);
+    if (R.lantern) lantern(fk, lifted, R.lantern.u, P, R.lantern.tip);
+    if (R.fleche) fleche(fk, lifted, R.fleche.u, P, R.fleche.tip);
+    roofTop = Math.max(R.ridge, R.lantern?.tip ?? 0, R.fleche?.tip ?? 0);
+  } else roofTop = roof(fk, lifted, b, UPPER);
 
   // ─── Exterior dressing (signs, emblems, chimneys) ─────────────────────────
   const front = b.doors.find((x) => x.side === 's');
@@ -648,8 +990,11 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     case 'keep': {
       // The castle's buildings: a chimney stack over every hearth, rising through the roof from the
       // wall the hearth backs onto, and a louver on the ridge over an open hearth.
-      for (const f of b.fits ?? []) {
+      const stacks: [number, number][] = [];
+      for (const f of [...(b.fits ?? []), ...(b.upper?.fits ?? [])]) {
         if (f.kind === 'open_hearth') {
+          // (Under a slate roof the lantern on its ridge lets the smoke out.)
+          if (look?.roof) continue;
           // A square stone louvre on the leads over the hearth: dark openings crossed by stone slats,
           // a dressed cornice (on a course line) and a blue-slate cap with a gilt finial.
           cb(fk, lifted, [1.8, 1.3, 1.8], [f.x, wallH + 0.85, f.z], ASHLAR_B, undefined, 0.04);
@@ -662,9 +1007,16 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           continue;
         }
         if (f.kind !== 'fireplace' && f.kind !== 'hearth_oven') continue;
-        // The hearth faces `rot` (0 = +Z): its back is toward the opposite wall.
-        const r = f.rot ?? 0, bx = -Math.sin(r), bz = -Math.cos(r);
-        const x = Math.abs(bx) > Math.abs(bz) ? (bx > 0 ? w - 0.9 : 0.9) : f.x, z = Math.abs(bx) > Math.abs(bz) ? f.z : bz < 0 ? 0.9 : d - 0.9;
+        // The hearth faces `rot` (0 = +Z): its stack rises from the wall at its back (an outer wall, or
+        // an interior one), one stack to each hearth's flue (an upper hearth over a lower one shares it).
+        const r = f.rot ?? 0;
+        let x = f.x - Math.sin(r) * 0.95, z = f.z - Math.cos(r) * 0.95;
+        if (x < 1.5) x = 0.9;
+        else if (x > w - 1.5) x = w - 0.9;
+        if (z < 1.5) z = 0.9;
+        else if (z > d - 1.5) z = d - 0.9;
+        if (stacks.some(([sx, sz]) => Math.hypot(sx - x, sz - z) < 1.6)) continue;
+        stacks.push([x, z]);
         const top = roofTop + 1.4;
         cb(fk, lifted, [1.5, top - wallH, 1.5], [x, (wallH + top) / 2, z], ASHLAR_B, undefined, 0.05);
         cb(fk, lifted, [1.8, 0.3, 1.8], [x, top + 0.1, z], DRESS, undefined, 0.04);
@@ -697,8 +1049,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // (On a raised part of the floor, a dais, it stands on the platform.)
       fg.position.set(f.x, floor ? storeyH : raisedAt(b, b.x + Math.floor(f.x), b.z + Math.floor(f.z)), f.z);
       fg.rotation.y = f.rot ?? 0;
-      (floor ? mid : ground).add(fg);
-      const res = FITS[f.kind]?.(floor ? uk : ik, fg, f, b, floor);
+      const gallery = floor && look?.gallery;
+      (gallery ? built : floor ? mid : ground).add(fg);
+      const res = FITS[f.kind]?.(gallery ? k : floor ? uk : ik, fg, f, b, floor);
       if (res?.tick) ticks.push(res.tick);
       if (res?.light) lamp = res.light;
       // Ruined plots show a heap of fallen stone where the furniture will stand.
@@ -938,7 +1291,7 @@ type KitAt = [ModelKit, Obj];
  * inside the range) or at the face of a wall built against the curtain (whose foot is the curtain's),
  * and broken at the doorways. Extruded and merged into one mesh.
  */
-function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, out: number, color: number, inset = 0): THREE.Mesh | undefined {
+function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, out: number, color: number, inset = 0, gaps: { side: Side; span: [number, number] }[] = []): THREE.Mesh | undefined {
   const { w, d } = b, inner = new Set([...(b.shared ?? []), ...(b.joined ?? [])]), backs = new Set(b.backs ?? []), skip = new Set([...inner, ...backs]);
   const lo = -WALL_T / 2 - inset, hi = WALL_T / 2 + out;
   const pieces: THREE.BufferGeometry[] = [];
@@ -954,7 +1307,7 @@ function footBand(k: ModelKit, p: Obj, b: BuildingSpec, y0: number, y1: number, 
      */
     const stop = (end: number, n: number) => (inner.has(ends[end]) ? 0 : backs.has(ends[end]) ? -WALL_T / 2 : -n);
     // (A castle door's base courses stop against the outside of its dressed surround.)
-    const cuts = b.doors.filter((dr) => dr.side === side).map((dr) => [dr.at - DRESS_T, dr.at + dr.w + DRESS_T] as [number, number]).sort((p1, p2) => p1[0] - p2[0]);
+    const cuts = [...b.doors.filter((dr) => dr.side === side).map((dr) => [dr.at - DRESS_T, dr.at + dr.w + DRESS_T] as [number, number]), ...gaps.filter((q) => q.side === side).map((q) => q.span)].sort((p1, p2) => p1[0] - p2[0]);
     // Stretches between the ends and the doors: [u at the inner edge, u at the outer edge] at each end.
     let from: [number, number] = [0.5 + stop(0, lo), 0.5 + stop(0, hi)];
     const runs: [[number, number], [number, number]][] = [];
@@ -1046,14 +1399,6 @@ function flight(k: ModelKit, g: Obj, { flight: st, risers: n, riser, y0 }: Fligh
 const inRect = ([x0, z0, x1, z1]: [number, number, number, number], lx: number, lz: number) => lx >= x0 && lx < x1 && lz >= z0 && lz < z1;
 
 /**
- * The castle's roof: a flat lead deck (laid in sheets with standing rolls) inside a corbelled,
- * crenellated parapet with one merlon at each corner; a wall shared with a neighbour carries only
- * the neighbour's parapet, so a range of buildings reads as one even parapet. Big roofs (the wings)
- * take a stair turret on the middle of their back wall, a pair of chimney stacks in the side walls
- * and two glazed roof lanterns down the middle, all symmetric about the building's own axis.
- * Returns the parapet's top.
- */
-/**
  * The top of a chimney stack (its coping's top at y): a slate cap course and a pair of round flue
  * pots in dark slate, each with a gilt ring and a little slate hood, so no open void shows from above.
  */
@@ -1069,6 +1414,12 @@ export function chimneyPots(fk: ModelKit, p: Obj, x: number, y: number, z: numbe
   }
 }
 
+/**
+ * The castle's flat roof: a lead deck (laid in a diamond chequer with standing rolls) inside a
+ * corbelled, crenellated parapet with one merlon at each corner; a wall shared with a neighbour carries
+ * only the neighbour's parapet, so a range of buildings reads as one even parapet. Returns the
+ * parapet's top.
+ */
 function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
   const { w, d, wallH } = b, shared = new Set(b.shared ?? []), joined = new Set(b.joined ?? []);
   // (Its underside a hair above the walls' tops inside, never in their plane.)
@@ -1080,14 +1431,21 @@ function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
     // (Along a wall built against the curtain the parapet stands flush on the wall, on no course, so
     // nothing of the roof juts out over the curtain's wall walk.)
     const back = (b.backs ?? []).includes(side);
+    // (A building lower than the curtain's wall walk has none along its back: the walk's own inner
+    // parapet stands there over its roof.)
+    if (back && wallH < CURTAIN_WALL.walkY) continue;
     const W = wallFrame(b, side), L = sideLen(b, side), o = back ? WALL_T / 2 - 0.35 : WALL_T / 2 - 0.05, ns = side === 'n' || side === 's';
     // Along the north and south walls the ends at a shared wall stop short of it (the neighbour's
     // parapet runs there); the east and west walls leave the corner merlons to the north and south.
-    const lo = ns && shared.has('w') ? 1.0 : 0, hi = ns && shared.has('e') ? L - 1.0 : L;
+    // (Along a wall joined to a taller neighbour the run stops a hair into its face, the neighbour's wall
+    // carried on up there.)
+    // (Nor round a low back, where it stops over the back wall's inner face, clear of the wall walk.)
+    const low = (s: Side) => (b.backs ?? []).includes(s) && wallH < CURTAIN_WALL.walkY;
+    const lo = ns && shared.has('w') ? 1.0 : ns && joined.has('w') ? 0.98 : ns && low('w') ? 0.95 : 0, hi = ns && shared.has('e') ? L - 1.0 : ns && joined.has('e') ? L - 0.98 : ns && low('e') ? L - 0.95 : L;
     // (The north and south runs reach round the corners, so the projecting parapets meet without a
     // notch; where a joined neighbour's roof runs on, the run stops on the wall line and the
     // neighbour's starts there, end to end.)
-    const open0 = ns && !shared.has('w') && !joined.has('w'), open1 = ns && !shared.has('e') && !joined.has('e');
+    const open0 = ns && !shared.has('w') && !joined.has('w') && !low('w'), open1 = ns && !shared.has('e') && !joined.has('e') && !low('e');
     // (The east and west runs stop against the north and south runs' inner faces, so no two stretches of
     // parapet overlap at a corner.)
     // (Against a flush back parapet they stop at its inner face.)
@@ -1109,7 +1467,7 @@ function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
   // The leads: slate-navy lead (the spires' slate) laid on the diagonal in a subtle two-tone diamond
   // chequer, a standing roll along every seam so the sheets read as metal, a pale stone band round
   // them inside the parapet and a thin gilt fillet just inside the band.
-  const along = w >= d, iw = w - 1.8, id = d - 1.8, y = wallH + 0.22;
+  const iw = w - 1.8, id = d - 1.8, y = wallH + 0.22;
   fk.box(p, [iw, 0.06, id], [w / 2, y, d / 2], ROOF_BLUE);
   const DIA = 1.5, hd = DIA / 2, side = DIA / Math.SQRT2;
   for (let i = 0; i * hd <= iw; i++) for (let j = 0; j * hd <= id; j++) {
@@ -1126,46 +1484,6 @@ function keepRoof(fk: ModelKit, p: Obj, b: BuildingSpec): number {
   }
   for (const [bx, bz, bw, bd] of [[w / 2, 1.13, iw, 0.46], [w / 2, d - 1.13, iw, 0.46], [1.13, d / 2, 0.46, id - 0.92], [w - 1.13, d / 2, 0.46, id - 0.92]]) fk.box(p, [bw, 0.05, bd], [bx, y + 0.05, bz], ASHLAR_L);
   for (const [bx, bz, bw, bd] of [[w / 2, 1.42, iw - 0.92, 0.08], [w / 2, d - 1.42, iw - 0.92, 0.08], [1.42, d / 2, 0.08, id - 1.16], [w - 1.42, d / 2, 0.08, id - 1.16]]) fk.box(p, [bw, 0.06, bd], [bx, y + 0.05, bz], GILT);
-  if (w * d >= 150) {
-    // The stair house on the middle of the back (north) wall, up from below onto the leads: tall
-    // enough for the castle's single door onto the leads, under a course of the dressed stone on the
-    // course lines and a crenellated top.
-    // (Broad enough that the door's hood and label stops sit well inside its corners.)
-    const tx = w / 2, tz = 1.4, sill = wallH + 0.25, TH = Math.ceil((sill + DOORS.single.h + 0.9) / COURSE) * COURSE, D = 2.6, TW = 3.2;
-    cb(fk, p, [TW, TH - wallH, D], [tx, (wallH + TH) / 2, tz], ASHLAR_B, undefined, 0.04);
-    cb(fk, p, [TW + 0.3, COURSE, D + 0.3], [tx, TH - COURSE / 2, tz], DRESS, undefined, 0.03);
-    cb(fk, p, [TW + 0.4, 0.5, D + 0.4], [tx, TH + 0.25, tz], ASHLAR_B, undefined, 0.04);
-    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(fk, p, [0.7, 0.6, 0.7], [tx + dx * (TW / 2 - 0.15), TH + 0.8, tz + dz * 1.15], ASHLAR_B, undefined, 0.04);
-    singleDoor(fk, p, tx, sill, tz + D / 2 + 0.02);
-    // Chimney stacks in the side walls, level with each other.
-    const stacks: [number, number][] = along ? [[w / 2, 0.6], [w / 2, d - 0.6]] : [[0.6, d * 0.55], [w - 0.6, d * 0.55]];
-    for (const [cx, cz] of stacks) {
-      cb(fk, p, [1.3, 2.6, 1.3], [cx, wallH + 1.3, cz], ASHLAR_B, undefined, 0.04);
-      cb(fk, p, [1.55, 0.26, 1.55], [cx, wallH + 2.7, cz], DRESS, undefined, 0.03);
-      chimneyPots(fk, p, cx, wallH + 2.83, cz);
-    }
-    // Two glazed lanterns over the long room, on its axis: lit lights between pale mullions under a
-    // blue-slate cap with a gilt finial; and a roof garden either side of them, clipped box balls in
-    // stone planters in two rows, mirrored about the building's axis.
-    for (const f of [0.45, 0.78]) {
-      const lx = along ? w * f : w / 2, lz = along ? d / 2 : d * f;
-      cb(fk, p, [1.8, 0.5, 1.8], [lx, wallH + 0.5, lz], DRESS, undefined, 0.04);
-      cb(fk, p, [1.5, 0.9, 1.5], [lx, wallH + 1.2, lz], ASHLAR_L, undefined, 0.04);
-      for (const [dx, dz] of [[0.76, 0], [-0.76, 0], [0, 0.76], [0, -0.76]]) {
-        fk.box(p, [dz ? 0.9 : 0.04, 0.55, dz ? 0.04 : 0.9], [lx + dx, wallH + 1.2, lz + dz], 0xffc870, undefined, 0xffa040, 0.7);
-        fk.box(p, [dz ? 0.08 : 0.06, 0.6, dz ? 0.06 : 0.08], [lx + dx * 1.02, wallH + 1.2, lz + dz * 1.02], ASHLAR_L);
-      }
-      cb(fk, p, [1.75, 0.16, 1.75], [lx, wallH + 1.72, lz], DRESS, undefined, 0.02);
-      spire(fk, p, lx, wallH + 1.8, lz, 0.95, 1.1, 4);
-      for (const s of [-1, 1]) {
-        const px = along ? lx : lx + s * 2.6, pz = along ? lz + s * 2.6 : lz;
-        cb(fk, p, [0.95, 0.55, 0.95], [px, wallH + 0.5, pz], ASHLAR_B, undefined, 0.04);
-        cb(fk, p, [1.05, 0.1, 1.05], [px, wallH + 0.8, pz], DRESS, undefined, 0.02);
-        cb(fk, p, [0.95, 0.85, 0.95], [px, wallH + 1.25, pz], 0x4a7a34, [0, 0.4, 0], 0.3);
-        cb(fk, p, [0.7, 0.6, 0.7], [px, wallH + 1.42, pz], 0x56883c, [0, 1.1, 0], 0.22);
-      }
-    }
-  }
   return wallH + 1.9;
 }
 
@@ -1183,9 +1501,16 @@ const FITS: Record<string, FitBuilder> = {
     cb(k, g, [1.0, 0.36, 1.0], [0, H - 0.36, 0], STONE_D, undefined, 0.05);
     cb(k, g, [0.86, 0.2, 0.86], [0, H - 0.08, 0], STONE_L, undefined, 0.04);
   },
-  fireplace: (k, g, _f, _b, floor) => {
+  fireplace: (k, g0, f0, _b, floor) => {
     // A great hearth against the back wall (built facing +Z): stone surround, mantel, fire. Only
     // the ground floor's hearth lights the room (upstairs ones glow without a light of their own).
+    // (`len`: a narrower hearth, its width.)
+    let g: Obj = g0;
+    if (f0.len) {
+      g = new THREE.Group();
+      g.scale.x = f0.len / 4.0;
+      g0.add(g);
+    }
     cb(k, g, [3.6, 3.0, 0.9], [0, 1.5, 0], STONE_D, undefined, 0.06);
     cb(k, g, [4.0, 0.34, 1.1], [0, 3.1, 0.1], STONE_L, undefined, 0.05);
     for (const x of [-1.45, 1.45]) cb(k, g, [0.6, 2.2, 1.1], [x, 1.1, 0.12], STONE, undefined, 0.05);
@@ -1249,8 +1574,9 @@ const FITS: Record<string, FitBuilder> = {
   },
   rug: (k, g, f) => {
     const L = f.len ?? 4;
-    k.box(g, [2.4, 0.03, L], [0, 0.1, 0], RUG);
-    for (const x of [-1.05, 1.05]) k.box(g, [0.14, 0.035, L - 0.2], [x, 0.105, 0], RUG_TRIM);
+    // (Lying on the floor a hair over its stone or its boards, upstairs or down.)
+    k.box(g, [2.4, 0.05, L], [0, 0.05, 0], RUG);
+    for (const x of [-1.05, 1.05]) k.box(g, [0.14, 0.055, L - 0.2], [x, 0.052, 0], RUG_TRIM);
   },
   shelf: (k, g, f) => {
     // Open shelves against a wall (built facing +Z): a dark back board, side boards and four
@@ -1534,7 +1860,7 @@ const FITS: Record<string, FitBuilder> = {
     }
     // A kite shield on the left post: wood with an iron rim and boss, red field.
     const sh = new THREE.Group();
-    sh.position.set(-1.0, 1.05, 0.1);
+    sh.position.set(-1.0, 1.05, 0.04);
     g.add(sh);
     cb(k, sh, [0.62, 0.62, 0.07], [0, 0.08, 0], IRON, undefined, 0.03);
     cb(k, sh, [0.54, 0.54, 0.08], [0, 0.08, 0.01], RUG, undefined, 0.03);
@@ -1877,6 +2203,83 @@ const FITS: Record<string, FitBuilder> = {
     k.box(g, [0.05, 0.08, 0.05], [0.5, 1.09, -0.4], 0xffd080, undefined, 0xffb040, 2);
     for (const [x, z] of [[-0.95, 0], [0.95, 0.1], [0.1, 0.85]]) cb(k, g, [0.42, 0.5, 0.42], [x, 0.25, z], WOOD_L, undefined, 0.04);
   },
+  horse_stall: (k, g, f) => {
+    // A stall (facing +Z, toward its half-door in the outer wall): deep straw, a corner manger by the
+    // door, a boarded gate on the aisle side, and the horse standing in it looking out over its door
+    // (`len`: its coat by turns, chestnut, bay or grey).
+    k.box(g, [3.1, 0.06, 2.9], [0, 0.04, 0], 0xc8a858);
+    for (let i = 0; i < 5; i++) k.box(g, [0.5 + hash01(i, 31) * 0.4, 0.03, 0.08], [(hash01(i, 32) - 0.5) * 2.4, 0.08, (hash01(i, 33) - 0.5) * 2.2], 0xa8883e, [0, hash01(i, 34) * Math.PI, 0]);
+    cb(k, g, [0.9, 0.5, 0.5], [1.05, 0.95, 1.3], WOOD_D, undefined, 0.02);
+    cb(k, g, [0.8, 0.1, 0.4], [1.05, 1.18, 1.3], 0xc8a858, undefined, 0.02);
+    for (const x of [-1.5, 1.5]) cb(k, g, [0.16, 1.5, 0.16], [x, 0.75, -1.45], TIMBER, undefined, 0.02);
+    for (let i = 0; i < 4; i++) cb(k, g, [0.66, 1.1, 0.06], [-1.05 + i * 0.7, 0.62, -1.45], PLANKS[i % 3], undefined, 0.01);
+    cb(k, g, [3.1, 0.1, 0.14], [0, 1.22, -1.45], WOOD_D, undefined, 0.01);
+    stallHorse(k, g, (f.len ?? 0) % 3);
+  },
+  stall_boards: (k, g, f) => {
+    // The boarded wall between two stalls (along local Z, `len` long): oak boards to shoulder height
+    // between posts, iron bars above them to the post heads.
+    const L = f.len ?? 3, n = Math.round(L / 0.5);
+    for (const z of [-L / 2 + 0.09, L / 2 - 0.09]) cb(k, g, [0.18, 2.2, 0.18], [0, 1.1, z], TIMBER, undefined, 0.02);
+    for (let i = 0; i < n; i++) cb(k, g, [0.07, 1.4, L / n - 0.012], [0, 0.7, -L / 2 + (L * (i + 0.5)) / n], PLANKS[i % 3], undefined, 0.01);
+    cb(k, g, [0.16, 0.1, L - 0.2], [0, 1.45, 0], TIMBER, undefined, 0.01);
+    cb(k, g, [0.16, 0.1, L - 0.2], [0, 2.15, 0], TIMBER, undefined, 0.01);
+    for (let z = -L / 2 + 0.35; z < L / 2 - 0.25; z += 0.22) k.box(g, [0.03, 0.62, 0.03], [0, 1.8, z], IRON);
+  },
+  saddle_rack: (k, g) => {
+    // The tack on the wall (facing +Z): two saddles on their trees, bridles on pegs, a folded blanket.
+    cb(k, g, [1.9, 1.8, 0.08], [0, 1.2, -0.3], WOOD_D, undefined, 0.02);
+    for (const x of [-0.45, 0.45]) {
+      cb(k, g, [0.12, 0.12, 0.5], [x, 1.25, -0.04], WOOD, undefined, 0.01);
+      cb(k, g, [0.52, 0.2, 0.62], [x, 1.36, 0.0], 0x6e3a22, undefined, 0.06);
+      cb(k, g, [0.2, 0.16, 0.2], [x, 1.5, 0.22], 0x5a2e1a, undefined, 0.04);
+      for (const s of [-1, 1]) cb(k, g, [0.05, 0.5, 0.18], [x + s * 0.27, 1.08, 0.0], 0x5a2e1a, undefined, 0.01);
+      k.box(g, [0.04, 0.04, 0.2], [x, 2.0, -0.18], IRON);
+      cb(k, g, [0.06, 0.6, 0.04], [x, 1.68, -0.08], 0x3a2416, undefined, 0.005);
+    }
+    cb(k, g, [0.9, 0.3, 0.5], [0, 0.15, 0], 0x3a4a6a, undefined, 0.04);
+  },
+  loft_stair: (k, g, f) => {
+    // A steep timber stair up to a loft (along local +Z, climbing toward +Z, `len` long): solid oak
+    // steps of one riser each from the floor to the loft's boards, and a handrail on posts.
+    const L = f.len ?? 4, n = 17, rise = 2.9 / n, t = L / n;
+    for (let i = 0; i < n; i++) {
+      const top = (i + 1) * rise;
+      cb(k, g, [0.9, top, t + 0.01], [0, top / 2, -L / 2 + (i + 0.5) * t], i % 2 ? WOOD : WOOD_L, undefined, 0.01);
+    }
+    const A = Math.atan2(2.9, L), Lr = Math.hypot(L, 2.9);
+    cb(k, g, [0.08, 0.08, Lr], [0.47, 1.45 + 0.95, 0], WOOD_D, [-A, 0, 0], 0.01);
+    for (const z of [-L / 2 + 0.2, 0, L / 2 - 0.2]) cb(k, g, [0.08, 0.95, 0.08], [0.47, ((z + L / 2) / L) * 2.9 + 0.48, z], WOOD_D, undefined, 0.01);
+  },
+  chancel_rail: (k, g, f) => {
+    // The chancel's rail (along local Z, `len` long): an oak rail on turned balusters over a kneeling step.
+    const L = f.len ?? 3;
+    cb(k, g, [0.5, 0.12, L], [-0.25, 0.06, 0], WOOD_D, undefined, 0.02);
+    cb(k, g, [0.16, 0.12, L], [0, 0.98, 0], WOOD_D, undefined, 0.02);
+    for (let z = -L / 2 + 0.12; z <= L / 2 - 0.1; z += 0.26) k.mesh(g, taper(0.09, 0.09, 0.06, 0.06, 0.84), WOOD, [0, 0.5, z]);
+    for (const z of [-L / 2 + 0.08, L / 2 - 0.08]) cb(k, g, [0.18, 1.08, 0.18], [0, 0.54, z], WOOD_D, undefined, 0.02);
+  },
+  chapel_bench: (k, g) => {
+    // A chapel's oak bench (along local X, facing +Z): its seat, a panelled back, shaped ends.
+    cb(k, g, [2.2, 0.08, 0.42], [0, 0.46, 0], WOOD_L, undefined, 0.02);
+    cb(k, g, [2.2, 0.5, 0.06], [0, 0.78, -0.2], WOOD, undefined, 0.02);
+    cb(k, g, [2.24, 0.06, 0.1], [0, 1.05, -0.2], WOOD_D, undefined, 0.01);
+    for (const x of [-1.1, 1.1]) cb(k, g, [0.08, 0.92, 0.5], [x, 0.46, -0.02], WOOD_D, undefined, 0.02);
+  },
+  pew: (k, g) => {
+    // The lord's box pew (along local X, facing +Z): panelled oak sides and back, a red cushion, gilt finials.
+    cb(k, g, [2.3, 0.1, 0.55], [0, 0.46, 0], WOOD_L, undefined, 0.02);
+    cb(k, g, [2.2, 0.08, 0.5], [0, 0.55, 0], RUG, undefined, 0.02);
+    cb(k, g, [2.4, 1.3, 0.1], [0, 0.65, -0.32], WOOD_D, undefined, 0.02);
+    for (const x of [-1.2, 1.2]) {
+      cb(k, g, [0.1, 1.1, 0.9], [x, 0.55, 0.1], WOOD_D, undefined, 0.02);
+      cb(k, g, [0.14, 0.14, 0.14], [x, 1.37, -0.32], PAL.gold, undefined, 0.02);
+    }
+    cb(k, g, [2.4, 0.9, 0.08], [0, 0.45, 0.56], WOOD_D, undefined, 0.02);
+    cb(k, g, [2.5, 0.08, 0.2], [0, 0.94, 0.56], WOOD, undefined, 0.02);
+    cb(k, g, [0.9, 0.5, 0.05], [0, 0.95, -0.26], RUG, undefined, 0.01);
+    k.box(g, [0.24, 0.24, 0.03], [0, 0.95, -0.23], RUG_TRIM, [0, 0, Math.PI / 4]);
+  },
   chapel_altar: (k, g) => {
     // The chapel altar (facing +Z): a stone table under a white cloth with a red, gold-edged fall,
     // two tall candles, the dragon sigil on a painted reredos behind.
@@ -1895,6 +2298,44 @@ const FITS: Record<string, FitBuilder> = {
     }
   },
 };
+
+/**
+ * A horse standing in its stall (facing +Z, toward its half-door), in the blocky style of the horses
+ * in the yards (castleProps/bailey.ts, `v` its coat): its chest to the stall's front wall and its neck
+ * stretched out over the half-door, so its head looks out through the doorway.
+ */
+function stallHorse(k: ModelKit, g: Obj, v: number) {
+  const coat = [0x8a5430, 0x4a3024, 0xb8aea2][v], dark = 0x231812, shade = new THREE.Color(coat).multiplyScalar(0.84).getHex(), muzzle = v === 2 ? 0x6a625a : 0x2e2018;
+  const z0 = 0.55;
+  cb(k, g, [0.6, 0.6, 1.5], [-0.15, 1.28, z0], coat, undefined, 0.1);
+  cb(k, g, [0.56, 0.5, 0.34], [-0.15, 1.24, z0 + 0.74], shade, undefined, 0.08);
+  cb(k, g, [0.64, 0.56, 0.5], [-0.15, 1.34, z0 - 0.6], coat, undefined, 0.1);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const x = -0.15 + sx * 0.19, z = z0 + sz * 0.58;
+    cb(k, g, [0.17, 0.5, 0.2], [x, 0.78, z], coat, undefined, 0.03);
+    cb(k, g, [0.14, 0.5, 0.16], [x, 0.32, z], shade, undefined, 0.02);
+    cb(k, g, [0.18, 0.12, 0.22], [x, 0.06, z + 0.02], dark, undefined, 0.02);
+  }
+  cb(k, g, [0.13, 0.78, 0.15], [-0.15, 1.16, z0 - 0.86], dark, [0.26, 0, 0], 0.03);
+  // The neck carried forward and up from the shoulders over the half-door, the mane along it.
+  const nb: [number, number, number] = [-0.15, 1.5, z0 + 0.62], nt: [number, number, number] = [-0.15, 1.95, z0 + 1.62];
+  const nl = Math.hypot(nt[1] - nb[1], nt[2] - nb[2]), na = Math.atan2(nt[2] - nb[2], nt[1] - nb[1]);
+  const nc: [number, number, number] = [-0.15, (nb[1] + nt[1]) / 2, (nb[2] + nt[2]) / 2];
+  cb(k, g, [0.28, nl + 0.2, 0.36], nc, coat, [na, 0, 0], 0.08);
+  cb(k, g, [0.1, nl, 0.1], [-0.15, nc[1] + 0.2, nc[2] - 0.08], dark, [na, 0, 0], 0.02);
+  const hd = new THREE.Group();
+  hd.position.set(-0.15, nt[1] + 0.02, nt[2] + 0.12);
+  hd.rotation.x = 0.55;
+  g.add(hd);
+  cb(k, hd, [0.28, 0.3, 0.62], [0, 0, 0.14], coat, undefined, 0.06);
+  cb(k, hd, [0.26, 0.24, 0.18], [0, -0.03, 0.48], muzzle, undefined, 0.05);
+  if (v === 0) k.box(hd, [0.08, 0.02, 0.36], [0, 0.155, 0.22], 0xf0e6d8);
+  for (const sx of [-1, 1]) {
+    cb(k, hd, [0.07, 0.16, 0.06], [sx * 0.08, 0.21, -0.1], coat, [0, 0, sx * 0.15], 0.02);
+    k.box(hd, [0.03, 0.05, 0.06], [sx * 0.145, 0.06, 0.04], dark);
+  }
+  cb(k, hd, [0.14, 0.06, 0.16], [0, 0.17, 0.0], dark, undefined, 0.02);
+}
 
 /** Every furnishing kind (tests build them all). */
 export const FIT_KINDS = Object.keys(FITS);
