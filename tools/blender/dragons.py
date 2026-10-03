@@ -214,7 +214,7 @@ def crack(parent, origin, u, n, length, w, rng, steps=5, branches=1, color=0xFFB
 
 def oct_ring(c, xd, yd, w, h, k=0.28):
     """Eight points round centre `c` in the plane of the unit directions `xd` (across) and `yd` (up): a w x h rectangle
-    with its corners cut by k of its smaller side, in order round the ring."""
+    with its corners cut by k of its smaller side, in order round the ring (k = 0: just the rectangle's four corners)."""
     c, xd, yd = Vector(c), Vector(xd).normalized(), Vector(yd).normalized()
     a, b, e = w / 2, h / 2, k * min(w, h)
     if not k:   # square corners: just the four
@@ -270,8 +270,8 @@ def carve(base, *cutters):
 
 def talon(parent, root, fwd, w, h, reach, ground, color):
     """Hooked claw growing out of a toe's front face, pointing along the level direction `fwd`: `root` is the middle of
-    its underside where it leaves the toe. A blocky wedge `w` wide and `h` tall there, its top curving down to a point on
-    the ground (y = `ground`) `reach` ahead. Its sections stand square to `fwd`, so every face is flat."""
+    its underside where it leaves the toe. A blocky wedge `w` wide and `h` tall there, its top curving down to a blunt
+    tip on the ground (y = `ground`) `reach` ahead. Its sections stand square to `fwd`, so every face is flat."""
     root, f = Vector(root), Vector(fwd).normalized()
     x, up = Vector((0, 1, 0)).cross(f).normalized(), Vector((0, 1, 0))
     at = lambda d, y: Vector((root.x, ground + y, root.z)) + f * d
@@ -296,7 +296,9 @@ def paw(l, g, z, r, main, toe, claw, claw_k=1.0):
         c = Vector((k * pw * 0.33, g + th / 2, front + tl * (0.56 if k == 0 else 0.46) - tl / 2))
         box(l, (tw, th, tl), tuple(c), toe, rot=(0, a, 0), bevel=0, taper=(0.8, 0.55))   # knuckle: top drawn in
         foot = c + f * (0.3 * tl)   # the claw's root, back inside the toe's sloping front
-        talon(l, (foot.x, g + th * 0.1, foot.z), f, tw * 0.72 * claw_k, th * 0.5 * claw_k, th * 0.7 * claw_k + 0.2 * tl, g, claw)
+        # Never wider than the toe where the claw's top leaves it (the toe narrows toward its top).
+        talon(l, (foot.x, g + th * 0.1, foot.z), f, tw * min(0.72 * claw_k, 0.8), th * 0.5 * claw_k, th * 0.7 * claw_k + 0.2 * tl,
+              g, claw)
     return ph
 
 
@@ -311,8 +313,8 @@ def level_band(l, a, b, y, w, d, taper, color, length):
 
 
 def band(parent, a, b, t, w, d, color, length=0.07):
-    """Collar `length` long round the beam a->b at fraction t, `w` x `d` across in the beam's own frame (gilt horn
-    bands, ankle bands, the tail's cuff)."""
+    """Collar `length` long round the beam a->b at fraction t, `w` x `d` across in the beam's own frame (the gilt bands
+    on Cinderwing's horns and cheek spikes)."""
     a, b = Vector(a), Vector(b)
     c, u = a.lerp(b, t), (b - a).normalized()
     return beam(parent, c - u * (length / 2), c + u * (length / 2), w, d, color)

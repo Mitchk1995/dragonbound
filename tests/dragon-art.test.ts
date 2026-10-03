@@ -112,11 +112,17 @@ describe('Cinderwing', () => {
 });
 
 describe('drakeling', () => {
-  it('has a skull of one solid piece, nothing stuck on its cheeks or snout, its eyes sunk inside its outline', () => {
+  it('has a skull of one solid piece, nothing stuck on its cheeks or snout, its eyes sunk in sockets in its sides', () => {
     const head = part(raw.get('drakeling')!, 'head');
     const skull = pieces(head, DRAKE.main);
     expect(skull.length).toBe(1);
-    const halfWidth = size(localBox(skull[0])).x / 2;
+    // The skull's vertices on the authored axes, in the head's frame.
+    skull[0].updateMatrix();
+    const pos = skull[0].geometry.attributes.position, v = new THREE.Vector3();
+    const verts = Array.from({ length: pos.count }, (_, i) => {
+      v.fromBufferAttribute(pos, i).applyMatrix4(skull[0].matrix);
+      return new THREE.Vector3(v.x, -v.z, v.y);
+    });
     const glows = (c: THREE.Object3D): c is THREE.Mesh => {
       const m = c instanceof THREE.Mesh ? (c.material as THREE.MeshStandardMaterial) : null;
       return !!m && m.emissiveIntensity > 0 && m.emissive.getHex() !== 0;
@@ -125,14 +131,18 @@ describe('drakeling', () => {
     expect(eyes.length).toBe(2);
     for (const e of eyes) {
       const b = localBox(e);
-      expect(Math.max(Math.abs(b.min.x), Math.abs(b.max.x)), 'eye inside the skull').toBeLessThan(halfWidth);
+      // The side of the skull round the eye: its widest point no higher than the eye and near it fore and aft (the
+      // cranium's side and the socket's rim, not the brow overhanging above).
+      const mid = (b.min.z + b.max.z) / 2;
+      const side = Math.max(...verts.filter((p) => p.y <= b.max.y && Math.abs(p.z - mid) < 0.15).map((p) => Math.abs(p.x)));
+      expect(Math.max(Math.abs(b.min.x), Math.abs(b.max.x)), 'eye sunk inside the side of the skull').toBeLessThan(side);
     }
   });
 });
 
 describe('dragons, animated as the game does', () => {
   afterEach(() => vi.restoreAllMocks());
-  /** The model posed `secs` into an animation, its rig started at `phase` (0..1) of the idle sway's clock. */
+  /** The model posed `secs` into an animation, its rig's clock started at `phase` (0..1) of its 10 s random start window. */
   const pose = (name: string, st: Partial<AnimState>, secs: number, phase = 0) => {
     const m = makeModel(name);
     const holder = new THREE.Group();

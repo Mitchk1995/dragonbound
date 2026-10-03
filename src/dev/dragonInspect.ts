@@ -19,10 +19,7 @@ export async function dragonSuite(g: Game, shot: (n: string) => Promise<void>) {
     holder.add(m.root);
     // Every model starts its sway at the same moment (the rig would pick one at random), so the sheets repeat run to
     // run, and at rest the tail lies out behind toward the camera's side, as on the concept sheet.
-    const random = Math.random;
-    Math.random = () => 0.825;
-    const rig = new Rig(m.root);
-    Math.random = random;
+    const rig = fixedStart(() => new Rig(m.root));
     const s = { ...newAnimState(), ...a };
     rig.update(0, s);
     for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, s);
@@ -177,6 +174,17 @@ export async function dragonSuite(g: Game, shot: (n: string) => Promise<void>) {
   g.camZoom = 1;
   document.body.classList.remove('inspect-clean');
 }
+
+/** Build a rig with its clock started at a fixed moment instead of a random one (the rig draws it from Math.random). */
+const fixedStart = <T>(make: () => T) => {
+  const random = Math.random;
+  Math.random = () => 0.825;
+  try {
+    return make();
+  } finally {
+    Math.random = random;
+  }
+};
 
 const frames = async (n: number) => {
   for (let i = 0; i < n; i++) await new Promise<void>((r) => requestAnimationFrame(() => r()));
