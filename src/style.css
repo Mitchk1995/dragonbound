@@ -103,7 +103,8 @@ svg { display: block; }
 
 /* ── Splash ───────────────────────────────────────────────────── */
 #splash { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; background: radial-gradient(circle, #2a1830, #08060c); transition: opacity 0.7s; z-index: 50; }
-#splash h1 { font-family: var(--serif); font-weight: 800; font-size: 64px; letter-spacing: 12px; margin: 0; color: var(--gold); text-shadow: 0 0 30px #ff6a1a88; }
+#splash h1 { margin: 0 0 6px; line-height: 0; }
+#splash h1 img { width: clamp(260px, 42vw, 640px); height: auto; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 30px rgba(255, 106, 26, 0.35)); }
 #splash p { color: var(--dim); }
 #splash.hide { opacity: 0; pointer-events: none; }
 
@@ -121,17 +122,16 @@ svg { display: block; }
     radial-gradient(ellipse at 62% 48%, transparent 48%, rgba(4, 2, 10, 0.6) 100%);
 }
 .title .logo { position: absolute; left: clamp(28px, 6vw, 110px); top: 15%; text-align: left; }
+.title { --logo-w: clamp(280px, 31vw, 600px); }
 .logo-main {
-  font-family: var(--serif); font-weight: 800; font-size: clamp(32px, 3.9vw, 66px); letter-spacing: 0.1em; white-space: nowrap; line-height: 1;
-  background: linear-gradient(#fff4d0, #e8b654 45%, #8a5a1a 75%, #e8b654);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 4px 0 #1a0e04) drop-shadow(0 0 22px rgba(255, 110, 30, 0.35));
+  display: block; width: var(--logo-w); height: auto; user-select: none;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 22px rgba(255, 110, 30, 0.3));
 }
 .logo-rule { display: flex; align-items: center; gap: 10px; color: var(--gold); font-size: 11px; margin: 14px 0 8px; }
 .logo-rule span { width: 150px; height: 1px; background: linear-gradient(90deg, var(--gold), transparent); }
 .logo-rule span:first-child { width: 36px; background: var(--gold); }
 .logo-sub { font-family: var(--serif); font-size: 16px; letter-spacing: 5px; color: #d8c8a8; text-shadow: 0 2px 4px #000; }
-.title .menu { position: absolute; left: clamp(28px, 6vw, 110px); top: calc(15% + clamp(32px, 3.9vw, 66px) + 112px); width: 320px; display: flex; flex-direction: column; gap: 2px; }
+.title .menu { position: absolute; left: clamp(28px, 6vw, 110px); top: calc(15% + var(--logo-w) * 0.1905 + 112px); width: 320px; display: flex; flex-direction: column; gap: 2px; }
 .mbtn {
   position: relative; text-align: left; padding: 9px 0 9px 22px; background: none; border: none; border-radius: 0;
   font-family: var(--serif); font-weight: 600; font-size: 20px; letter-spacing: 3px; color: #cfc2a6; text-shadow: 0 2px 4px #000;
