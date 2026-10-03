@@ -30,7 +30,8 @@ Visual jobs also start from "The look" in [ART_CONTRACT.md](ART_CONTRACT.md). Th
 
 One line per area; the area's file holds the decisions themselves, in Mitchell's words where he gave them.
 
-- **Castle:** castle v4, the great keep, is built to the approved plan in one cream, hand-painted chunky stone (accepted October 3). It grows 1.3× with the stone blocks kept their size and stairs, tables and rooms sized to the hero, and his round 6 notes on the hall, chapel, stables and barracks are being fixed at the new size. Everything must make structural sense: real stairs, retaining walls, interiors that fit their outsides.
+- **Rethinking everything (October 3, evening):** the castle and every area are being rethought; none of today's areas is precious. **Buildings are built from LEGO-style pieces** at the hero's minifigure scale (real LEGO proportions, one scale); ground, trees and rocks stay painted. The order: the brick kit proven on one town house, then the **hub town on the ground below the castle** (the hub: bank, smithy, shop, portals, quest givers), then the castle, then the very large levels 1–10 areas.
+- **Castle:** the king's seat: the king, his royal guards, quests and little else for now. It is not a town or a hub. Grand to look at but walkable, with only the rooms it needs. Castle 1.3× was rejected (interiors, stairs, stone and the court buildings all failed). It will be redesigned and rebuilt from the brick kit after the hub town, with layouts shown to Mitchell as in-game options first. Everything must make structural sense: real stairs that lead somewhere, and interiors that fit their outsides.
 - **Characters:** blocky and modular, like LEGO. The five redesigned sheets (hero, Goblin Grunt, Kobold Slinger, Ember Cultist, Cinder Priest) are built; every gear piece must fit the new hero. Hands are one-piece LEGO hands with no thumbs, and arms get elbows.
 - **Dragons:** the redrawn drakeling and Cinderwing are built; round 3 (paws, Cinderwing's chest scutes and tapered tail, the drakeling's one-piece skull) is in the game awaiting Mitchell's verdict.
 - **Trees:** natural, true-size trees grown as one piece, in the woodcutting ladder (tree, oak, willow, maple, yew, magic). The oak and the common tree are approved; the rest grow in the game's woods, with roots that flare into the ground, awaiting his verdict.
@@ -42,10 +43,12 @@ One line per area; the area's file holds the decisions themselves, in Mitchell's
 
 ### Order of work
 
-1. Build the home island, then the castle.
-2. Polish the castle, then the rest of the home island, and the characters, one area at a time, each judged by Mitchell from pictures before moving on (October 2).
-3. Blueprint the levels 1–10 region.
-4. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
+1. The brick kit, proven on one hub-town house (October 3).
+2. The hub town on the ground below the castle: layout options in-game first, then one agent per building.
+3. The castle as the king's seat, the same way.
+4. The very large levels 1–10 areas, then the long-term world.
+5. Characters, one area at a time, each judged by Mitchell from pictures before moving on (October 2).
+6. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 
