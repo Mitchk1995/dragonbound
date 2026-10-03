@@ -112,9 +112,10 @@ function brassPlate() {
   const W = 512, H = 64;
   const [c, ctx] = canvas(W, H);
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#5e4726');
-  g.addColorStop(0.45, '#3c2d18');
-  g.addColorStop(1, '#221809');
+  // A gentle top-to-bottom fall-off, even enough that no lighter band reads along the top edge.
+  g.addColorStop(0, '#47361e');
+  g.addColorStop(0.5, '#3a2b17');
+  g.addColorStop(1, '#261b0c');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
   // Horizontal brushing: thin translucent streaks of varying length and tone.
@@ -127,12 +128,7 @@ function brassPlate() {
     ctx.lineTo(x + len, y + (rng() - 0.5) * 0.6);
     ctx.stroke();
   }
-  // Soft sheen across the top third and a worn darker rim toward the edges.
-  const sheen = ctx.createLinearGradient(0, 0, 0, H * 0.45);
-  sheen.addColorStop(0, 'rgba(255,225,160,0.18)');
-  sheen.addColorStop(1, 'rgba(255,225,160,0)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(0, 0, W, H * 0.45);
+  // A worn darker rim toward the ends.
   const rim = ctx.createLinearGradient(0, 0, W, 0);
   rim.addColorStop(0, 'rgba(0,0,0,0.35)');
   rim.addColorStop(0.12, 'rgba(0,0,0,0)');
