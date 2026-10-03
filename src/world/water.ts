@@ -248,15 +248,16 @@ export function fallingWaterMaterial(time: { value: number }, seed: number, len:
 /**
  * Two crossed ribbons along a curve of points (a jet or a stream from a jaw): one flat across the
  * curve's horizontal side, one turned a quarter about it, so the stream has body from any side.
- * `w0` and `w1` are its width at the start and the end. UV v is 1 at the start, 0 at the end.
+ * `w0` and `w1` are its width at the start and the end. UV v is 1 at the start, 0 at the end. A
+ * broad fall (a sheet wider than it is thick) takes the flat ribbon alone (`sheets` 1).
  */
-export function crossedRibbons(pts: THREE.Vector3[], w0: number, w1: number) {
+export function crossedRibbons(pts: THREE.Vector3[], w0: number, w1: number, sheets = 2) {
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   const lens = [0];
   for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + pts[i].distanceTo(pts[i - 1]));
   const total = lens[lens.length - 1];
   const up = new THREE.Vector3(0, 1, 0), t = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();
-  for (const sheet of [0, 1]) {
+  for (let sheet = 0; sheet < sheets; sheet++) {
     const base = pos.length / 3;
     pts.forEach((p, i) => {
       t.subVectors(pts[Math.min(i + 1, pts.length - 1)], pts[Math.max(i - 1, 0)]).normalize();
@@ -318,14 +319,16 @@ export function mistTexture() {
 }
 
 /**
- * A mirror of the scene about a water plane, rendered into a half-resolution HDR target just
+ * A mirror of the scene about a water plane, rendered into a reduced-resolution HDR target just
  * before the water draws (three.js Reflector's oblique-clip method, so nothing under the surface
  * is mirrored). Only for perspective cameras; the water hides itself while the mirror renders.
  * `level` is the plane's height (or reads it each frame, for water that stands on a prop); with
  * `layer` the mirror draws only the objects on that layer (and every light), a cheap reflection of
- * one close subject such as a fountain's statue.
+ * one close subject such as a fountain's statue; `coarse` divides the screen's resolution for it
+ * (rippled water hides a coarser mirror). A `lazy` mirror of still things (a moat's walls) is drawn
+ * again only when the camera has moved, and while it moves on every other frame.
  */
-export function planarReflection(level: number | (() => number), layer?: number) {
+export function planarReflection(level: number | (() => number), layer?: number, coarse = 2, lazy = false) {
   let y = typeof level === 'number' ? level : 0;
   let lit = false;
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
@@ -335,8 +338,21 @@ export function planarReflection(level: number | (() => number), layer?: number)
   const rot = new THREE.Matrix4(), plane = new THREE.Plane(), clip = new THREE.Vector4(), qv = new THREE.Vector4();
   const size = new THREE.Vector2(), clearC = new THREE.Color();
   const on = { value: 0 };
-  let busy = false;
+  let busy = false, drawnFor: THREE.Camera | null = null, waited = 0;
+  const drawnAt = new THREE.Matrix4(), drawnProj = new THREE.Matrix4();
   const render = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, self: THREE.Object3D) => {
+    if (lazy && on.value && drawnFor === camera && !busy) {
+      renderer.getDrawingBufferSize(size);
+      const a = drawnAt.elements, b = camera.matrixWorld.elements;
+      const still = drawnAt.equals(camera.matrixWorld) && drawnProj.equals(camera.projectionMatrix);
+      // (A step of the following camera, not a cut to somewhere else.)
+      const near = drawnProj.equals(camera.projectionMatrix) && Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]) < 0.3 && [0, 1, 2, 4, 5, 6, 8, 9, 10].every((k) => Math.abs(a[k] - b[k]) < 0.01);
+      const fits = rt.width === Math.max(64, Math.round(size.x / coarse)) && rt.height === Math.max(64, Math.round(size.y / coarse));
+      if (fits && (still || (near && waited < 1))) {
+        if (!still) waited++;
+        return;
+      }
+    }
     on.value = 0;
     if (busy || !(camera as THREE.PerspectiveCamera).isPerspectiveCamera) return;
     if (typeof level !== 'number') y = level();
@@ -372,7 +388,7 @@ export function planarReflection(level: number | (() => number), layer?: number)
     pm[10] = clip.z + 1 - 0.003;
     pm[14] = clip.w;
     renderer.getDrawingBufferSize(size);
-    const W = Math.max(64, Math.round(size.x / 2)), H = Math.max(64, Math.round(size.y / 2));
+    const W = Math.max(64, Math.round(size.x / coarse)), H = Math.max(64, Math.round(size.y / coarse));
     if (rt.width !== W || rt.height !== H) rt.setSize(W, H);
     busy = true;
     self.visible = false;
@@ -388,7 +404,11 @@ export function planarReflection(level: number | (() => number), layer?: number)
     renderer.setRenderTarget(rt);
     renderer.state.buffers.depth.setMask(true);
     if (renderer.autoClear === false) renderer.clear();
+    // (The scene's matrices were brought up to date by the frame this mirror draws in.)
+    const prevAuto = scene.matrixWorldAutoUpdate;
+    scene.matrixWorldAutoUpdate = false;
     renderer.render(scene, vcam);
+    scene.matrixWorldAutoUpdate = prevAuto;
     scene.background = bg;
     renderer.setClearColor(clearC, prevAlpha);
     renderer.xr.enabled = prevXr;
@@ -399,6 +419,10 @@ export function planarReflection(level: number | (() => number), layer?: number)
     self.visible = true;
     busy = false;
     on.value = 1;
+    drawnFor = camera;
+    drawnAt.copy(camera.matrixWorld);
+    drawnProj.copy(camera.projectionMatrix);
+    waited = 0;
   };
   return { texture: rt.texture, texMat, on, render, dispose: () => rt.dispose() };
 }

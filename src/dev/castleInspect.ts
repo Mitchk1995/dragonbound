@@ -205,6 +205,11 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
   await view('falls-west', [4, y0 + 6, 92], [20.8, y0 - 4, 81], 24);
   // The fields at the rock's foot, low across the plots.
   await view('farm', [P.gate.x - 4, 2.6, P.gate.z + 56], [P.gate.x - 12, 0.2, P.gate.z + 38], 20);
+  // The lookout's knoll from the meadow under it, and the moat's west spring behind the keep and the
+  // turf round the landing from above.
+  await view('lookout-rock', [14, 3, 140], [30, 8, 117], 22);
+  await view('spring', [54, y0 + 13, 22], [59.5, y0 - 1.5, 6.5], 12);
+  await view('landing-turf', [142, y0 + 9, 101], [129, y0, 111], 14);
   if (rockOnly) return finish();
 
   // The whole castle: from high in the south-east (the plan's overview), as a plan from almost

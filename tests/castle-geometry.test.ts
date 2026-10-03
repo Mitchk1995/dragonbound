@@ -6,7 +6,8 @@ import { ASHLAR, ASHLAR_B, BASE, DOORS, DRESS, HERO_HEIGHT, type CourseRecord } 
 import { COURSE, onCourse } from '../src/render/masonry';
 import { castleScene, CASTLE_AREA, type Piece } from './castleScene';
 import { contains, corners, overlap, type Solid } from './geometry';
-import { CURTAIN_WALL } from '../src/data/castle';
+import { CURTAIN_WALL, GATEHOUSE } from '../src/data/castle';
+import { CROWN_Y, GATE, MOAT, TOWERS } from '../src/world/castle/plan';
 
 /**
  * The castle's geometry audit: the keep is built as the game builds it, every prop and building in
@@ -40,6 +41,8 @@ const JOINTS: { a: string[]; b: string[]; why: string; rule?: (a: Piece, b: Piec
   { a: ['round_tower', 'corner_tower'], b: ['tower_flag'], why: 'the flagpole is stepped into the tower\'s platform' },
   { a: ['fence'], b: ['gate_piers'], why: 'a fence runs into its gate pier' },
   { a: ['stream_stone'], b: ['stream_stone'], why: 'stones heaped together in the stream' },
+  { a: ['moat_plinth', 'moat_plinth_run'], b: ['moat_plinth', 'moat_plinth_run', 'moat_bridge'], why: "the battered plinths of the curtain, its towers and the gate's drums are one footing in the moat, the bridge's abutment built against them" },
+  { a: ['ramp_wall'], b: ['moat_plinth'], why: "under the turf the terrace's retaining wall is founded beside a tower's plinth" },
 ];
 
 const listed = (a: Piece, b: Piece) => JOINTS.find((j) => (j.a.includes(kindOf(a)) && j.b.includes(kindOf(b))) || (j.a.includes(kindOf(b)) && j.b.includes(kindOf(a))));
@@ -127,6 +130,29 @@ describe('castle geometry', () => {
       if (o instanceof THREE.InstancedMesh && o.userData.rock) rock += o.count;
     });
     expect(rock).toBeGreaterThan(100);
+  });
+
+  it('the moat: its water two metres under the turf all round, nothing of its banks above the water in front of their masonry, every drum on a plinth from its bed', () => {
+    const { layout: L, view } = S, bad: string[] = [];
+    let cells = 0;
+    for (let z = 0; z < L.h; z++) for (let x = 0; x < L.w; x++) {
+      const i = z * L.w + x;
+      if (!L.fluid[i] || !inArea(x, z) || (L.level?.[i] ?? 0) < CROWN_Y - 3) continue;
+      cells++;
+      for (const [fx, fz] of [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]]) {
+        const y = view.heightAt(x + fx, z + fz);
+        if (y > MOAT.surface + 0.2) bad.push(`the moat's bank stands ${(y - MOAT.surface).toFixed(2)} out of the water at (${(x + fx).toFixed(1)}, ${(z + fz).toFixed(1)})`);
+      }
+    }
+    // (Its whole ring, the basin behind the keep and the sluice's channel included.)
+    expect(cells).toBeGreaterThan(1800);
+    const drums = [...TOWERS.map((t) => ({ x: t.x, z: t.z })), ...[-1, 1].map((sx) => ({ x: GATE.x + sx * GATEHOUSE.cx, z: GATE.z }))];
+    for (const d of drums) {
+      const pl = P.find((p) => p.kind === 'moat_plinth' && Math.hypot(p.spawn!.x - d.x, p.spawn!.z - d.z) < 0.01);
+      if (!pl) bad.push(`no plinth under the drum at (${d.x}, ${d.z})`);
+      else if (Math.min(...pl.solids.map((s) => s.lo.y)) > MOAT.bed + 0.3 || Math.max(...pl.solids.map((s) => s.hi.y)) < CROWN_Y - 0.01) bad.push(`${pl.name} does not reach from the moat's bed to the turf`);
+    }
+    expect(bad, bad.slice(0, 30).join('\n')).toEqual([]);
   });
 
   it('no piece clips through another (pieces built into each other are listed joints, each with its reason)', () => {
@@ -334,7 +360,7 @@ describe('castle geometry', () => {
   it('the wall walks are clear: nothing of another piece crosses a curtain\'s walk', () => {
     const bad: string[] = [];
     const { T, H } = CURTAIN_WALL, z0 = -T / 2 + 0.66, z1 = T / 2 + 0.85 - 0.6;
-    const own = new Set(['round_tower', 'corner_tower', 'outer_gatehouse']);
+    const own = new Set(['round_tower', 'corner_tower', 'outer_gatehouse', 'moat_plinth']);
     for (const w of P.filter((p) => p.kind === 'castle_wall')) {
       const L = w.spawn!.len!, m = w.obj.matrixWorld;
       const c = new THREE.Vector3(0, H + 1.06, (z0 + z1) / 2).applyMatrix4(m);
@@ -417,7 +443,12 @@ describe('castle geometry', () => {
       const foot = s.r
         ? Array.from({ length: 16 }, (_, i) => [s.c.x + Math.sin((i / 16) * Math.PI * 2) * s.r, s.c.z + Math.cos((i / 16) * Math.PI * 2) * s.r])
         : corners(s).filter((k) => k.y < s.c.y).map((k) => [k.x, k.z]);
-      const under = foot.filter(([x, z]) => S.ground(x, z) < s.lo.y - 0.6);
+      // (Standing in the moat, a base stands on its plinth founded on the moat's bed.)
+      const plinth = (x: number, z: number) => {
+        const at = new THREE.Vector3(x, s.lo.y - 0.1, z);
+        return S.grid.near(at, at, 0.2).some((j) => /^moat_(plinth|plinth_run|bridge)$/.test(P[S.solids[j].piece].kind) && contains(S.solids[j], at, 0.2));
+      };
+      const under = foot.filter(([x, z]) => S.ground(x, z) < s.lo.y - 0.6 && !plinth(x, z));
       if (under.length) bad.push(`${p.name}: its ${s.part.color.toString(16)} base at ${fmt(s.c)} hangs out over a drop at (${under[0][0].toFixed(1)}, ${under[0][1].toFixed(1)})`);
     }
     expect([...new Set(bad)], [...new Set(bad)].slice(0, 60).join('\n')).toEqual([]);

@@ -878,11 +878,11 @@ export function buildKeep(seed: number): ZoneLayout {
   const canopy = (G.l.canopy = new Uint8Array(w * h).fill(4));
   for (let i = 0; i < w * h; i++) if (nearCastle((i % w) + 0.5, Math.floor(i / w) + 0.5)) canopy[i] = 0;
   // A full grass carpet on every grassy cell: clipped lawns inside the curtain and on the crown
-  // round it, meadow elsewhere.
+  // round it, meadow elsewhere (the rim of rock beyond the moat included).
   const lawn = (G.l.lawn = new Uint8Array(w * h));
   for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
     const i = G.idx(x, z);
-    lawn[i] = lawnCell(G.l.cells[i], G.l.ground[i], G.l.fluid[i], castleBailey.inCastle(x + 0.5, z + 0.5) || (level[i] >= CROWN_Y && onCrown(x + 0.5, z + 0.5)));
+    lawn[i] = lawnCell(G.l.cells[i], G.l.ground[i], G.l.fluid[i], castleBailey.inCastle(x + 0.5, z + 0.5) || (level[i] >= CROWN_Y && onCrown(x + 0.5, z + 0.5) && !castleGround.onRim(x + 0.5, z + 0.5)));
   }
   // The private gardens and the paddock grow a longer garden lawn with daisies and clover; the
   // formal lawns stay clipped and striped.

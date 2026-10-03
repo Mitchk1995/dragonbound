@@ -4,6 +4,7 @@ import { addPatch } from '../render/surface';
 import { noiseTexture } from '../render/textures';
 import { Cell, Ground, Lawn, type ZoneLayout } from './layout';
 import { strandField } from './strands';
+import { isRelief, smoothNoise } from './terrain';
 
 /**
  * A full grass carpet over every lawn cell (layout.lawn): shell layers lifted off the terrain, each
@@ -253,8 +254,11 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
   // grass grows long at its foot).
   const weight = new Float32Array(VW * (h + 1)), garden = new Float32Array(VW * (h + 1)), foot = new Float32Array(VW * (h + 1));
   const blocked = (x: number, z: number) => x >= 0 && z >= 0 && x < w && z < h && layout.cells[z * w + x] === Cell.Blocked && !!kind(x, z);
+  // Where the turf meets rock or the island's edge it thins out short of it along a wandering line
+  // (a few tens of centimetres here, more than a metre there), never on the cells' square steps.
+  const brink = brinkDistance(layout, theme), wander = smoothNoise(91);
   for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
-    let wt = 1;
+    let wt = Math.max(0, Math.min(1, 0.5 + (brink[z * VW + x] - 0.3 - 1.1 * wander(x * 0.3, z * 0.3)) * 1.6));
     for (const c of layout.lawnCut ?? []) wt = Math.min(wt, Math.max(0, Math.min(1, 0.5 + (Math.hypot(x - c.x, z - c.z) - c.r) * 0.5)));
     if (sf) {
       const v = z * VW + x;
@@ -328,4 +332,38 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
     meshes.push(mesh);
   }
   return meshes;
+}
+
+/**
+ * The distance (in metres, along the grid) from every grid corner to the nearest corner of a cell of
+ * rock or of the void beyond the land's edge, out to a few metres (beyond that, far).
+ */
+function brinkDistance(layout: ZoneLayout, theme: ZoneTheme) {
+  const { w, h } = layout, VW = w + 1, d = new Float32Array(VW * (h + 1)).fill(8);
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    const c = layout.cells[z * w + x];
+    if (c === Cell.Void || isRelief(c, theme)) for (const v of [z * VW + x, z * VW + x + 1, (z + 1) * VW + x, (z + 1) * VW + x + 1]) d[v] = 0;
+  }
+  const relax = (k: number, j: number, c: number) => {
+    if (d[j] + c < d[k]) d[k] = d[j] + c;
+  };
+  for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
+    const k = z * VW + x;
+    if (x > 0) relax(k, k - 1, 1);
+    if (z > 0) {
+      relax(k, k - VW, 1);
+      if (x > 0) relax(k, k - VW - 1, Math.SQRT2);
+      if (x < w) relax(k, k - VW + 1, Math.SQRT2);
+    }
+  }
+  for (let z = h; z >= 0; z--) for (let x = w; x >= 0; x--) {
+    const k = z * VW + x;
+    if (x < w) relax(k, k + 1, 1);
+    if (z < h) {
+      relax(k, k + VW, 1);
+      if (x < w) relax(k, k + VW + 1, Math.SQRT2);
+      if (x > 0) relax(k, k + VW - 1, Math.SQRT2);
+    }
+  }
+  return d;
 }
