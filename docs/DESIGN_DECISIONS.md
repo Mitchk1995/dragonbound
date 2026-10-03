@@ -151,6 +151,7 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 4. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
 
 Where things stand (October 3):
+- **Castle v4 built (October 3):** all six stages of the approved plan are merged (PRs #78, #81, #82, #83, #85, #86): the ground plan, the great keep, the moat and the rock, the approach and gate front, the north range and the bailey's buildings, and the bailey's grounds. `docs/CASTLE_DESIGN.md` describes it as built and where it departs from the plan. Awaiting Mitchell's look, one area at a time from pictures.
 - **Castle:** after the fifth round of notes (see "The new look and the great keep" above), three jobs run side by side:
   the stone finish on the castle as it stands (now reworked for flat-stone towers and stones that stand out), the
   castle-v4 blueprint around the great keep (approved October 3), and the
