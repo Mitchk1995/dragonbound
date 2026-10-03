@@ -58,9 +58,11 @@ castle is being moved to this finish now: until it lands, the old painted stone 
 Texture scale is consistent: a few block sizes laid in courses that line up across every wall and tower, nothing
 stretched, squeezed or bent round a corner or a curve.
 
-**Structure.** Everything is built as a mason would build it: where the way climbs it is real stairs (flights,
-landings, cheek walls, a parapet over every drop), never a tilted ramp; every terrace edge is a retaining wall, every
-bridge stands on arches or piers, every door opens onto a floor at its own level.
+**Structure.** Everything is built as a mason would build it (the owner: "it all has to make structural sense"): where
+the way climbs it is real stairs (flights, landings, cheek walls, a parapet over every drop), not a tilted ramp; every
+built terrace edge is a retaining wall, while natural rock edges stay rock; every bridge stands on arches or piers; every
+door opens onto a floor at its own level; and every building's inside fits its outside (rooms, floors, stairs and
+windows agree, and the play camera works in every room).
 
 **The castle and the island.** The castle is becoming a grand royal castle round a dominant great keep (castle v4, in
 planning) in cream limestone, its trim cut from the same stone; royal blue slate spires banded in gold, royal blue and gold

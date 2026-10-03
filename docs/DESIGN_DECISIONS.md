@@ -37,11 +37,14 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   look are fine, and Mitchell is unsure what is best, so one oak is grown in the game in three looks (natural, cartoony
   and a mix) for him to choose from before the rest follow. Everything else should get a nice texture too (the crops and
   plants). He judged the first natural oak "decent".
-- **Everything must make structural sense** (October 3). Where the way climbs, it is built as real stairs (flights,
-  landings, cheek walls, a parapet over every drop), never a tilted ramp; first the walled ramp up from the landing,
-  which "doesnt make sense the way it is built". The ledge road has walls on both sides. Every terrace edge is a
-  retaining wall, every bridge stands on arches or piers, and every door opens onto a floor at its own level. The
-  castle-v4 blueprint is revised for this before he approves it.
+- **Everything must make structural sense** (October 3): "it all has to make structural sense". His examples: the walled
+  climb up to the landing "doesnt make sense the way it is built" and should have stairs, and the ledge road needs a wall
+  on its other side too. He added that the insides of the buildings must work with their outsides, so the interiors are
+  no problem to design. Our reading of it: where the way climbs, real stairs (flights, landings, cheek walls, a parapet
+  over every drop) rather than a tilted ramp; every built terrace edge a retaining wall (natural rock edges stay rock);
+  every bridge on arches or piers; every door onto a floor at its own level; and rooms, floors, stairs and windows that
+  fit each building's outside, with the play camera working in every room. The castle-v4 blueprint is revised for this
+  before he approves it.
 - **Characters stay blocky and modular, like Lego.** Mitchell knows complex organic shapes are Claude's weak spot when
   built from pieces; trees are where we leave blocks behind, grown as one piece.
 - **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
@@ -166,7 +169,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - Recognisable plants in the beds (tulips, rose bushes, lavender, delphiniums and daisies; cabbages, lettuces, carrots and leeks), blocky horses, a neater champion's helm comb, the training yard centred between matching towers, wider kitchen-garden lanes, the orchard bench clear of the tower, one continuous spring fall, and real lawn instead of loose grass tufts on the island.
 - **Castle review notes, third round: no clipping, nothing floating, things stitched into real shapes** (Mitchell, October 2). He found clipping and placement problems everywhere, "shapes placed together instead of stitched into a shape that makes sense". Decided and built (this supersedes the round-two door, window and mullion entries above):
   - Every tower meets the curtain's wall walk at a real doorway (a single blue door in a dressed frame); a stair tower with its own door replaces the square turret that clipped the north-east wall; the gatehouse's drums stand on the wall's line, each with its doorway; the ward gates carry the walk over them.
-  - Continuous things are one built shape: the fountain basin and coping are turned rings, box borders are one mitred outline per bed (no clumps), each building's plinth and base courses run as one band round its footprint, the climb's kerb walls and paving each run unbroken from the court to the landing, fence rails run post to post, each gate is one arched wall, arches close on one apex stone.
+  - Continuous things are one built shape: the fountain basin and coping are turned rings, box borders are one mitred outline per bed (no clumps), each building's plinth and base courses run as one band round its footprint, the climb's kerb walls and paving each run unbroken from the court to the landing (superseded October 3: the climb gets real stairs), fence rails run post to post, each gate is one arched wall, arches close on one apex stone.
   - Doors by purpose, one size each, all tall beside the hero (about 2.1): a building's door is a pair of pointed leaves 2 wide reaching 4 high; towers, the stair tower and the roof houses take one single pointed leaf 1.3 by 3; every leaf carries an iron ring at hand height (1.05); no gold straps. The kitchen garden's door is a single door.
   - Windows are clear glass tinted blue with one soft sheen of the sky over a dim room, no mullion.
   - Banners and flags are one blue all over. Arrow loops are framed cross loops, regular, on the towers' outer faces only; the curtain's faces stay plain between banners. The verge outside the walls is lawn like inside.
