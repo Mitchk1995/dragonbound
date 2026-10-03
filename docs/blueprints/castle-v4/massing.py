@@ -1,6 +1,6 @@
 """Massing renders of castle v4, built from design.json (Blender 5.2, headless):
 
-    blender -b --python massing.py -- <output folder> [overview] [camera] [climb] [extra]
+    blender -b --python massing.py -- <output folder> [overview] [camera] [climb] [lookout] [north] [extra]
 
 castle-v4-massing.png is the overview angle of the bailey suite (src/dev/castleInspect.ts), framed on
 today's curtain exactly as the review picture v5-overview.jpg. camera-*.png are the game's own camera
@@ -216,7 +216,6 @@ for (ax, az, bx, bz) in ((44, 126, 58.4, 126), (58.4, 126, 58.4, 138.4), (58.4, 
 
 # ── the approach ───────────────────────────────────────────────────────────
 A = D['approach']
-ms = mo['south_z']
 
 
 def parapet(ax, az, bx, bz, h=1.1):

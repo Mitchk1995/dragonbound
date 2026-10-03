@@ -3,7 +3,7 @@
     python plan.py [render folder]
 
 Draws castle-v4-plan.png. Given the folder massing.py rendered into, it also copies the overview
-massing (castle-v4-massing.png) and lays the four play-camera renders out as castle-v4-massing-camera.png.
+massing (castle-v4-massing.png) and lays the play-camera renders and the view from the north out as castle-v4-massing-camera.png.
 """
 import json, math, os, sys
 from PIL import Image, ImageDraw, ImageFont
@@ -599,11 +599,6 @@ def door(v, dd, wall, upper):
             v.box([x - dd['w'] / 2, z - t, x + dd['w'] / 2, z + t], col)
         else:
             v.box([x - t, z - dd['w'] / 2, x + t, z + dd['w'] / 2], col)
-
-
-def room_label(v, r, txt, size):
-    x0, z0, x1, z1 = r['rect']
-    v.text((x0 + x1) / 2, (z0 + z1) / 2, txt, size)
 
 
 def nice(s):
