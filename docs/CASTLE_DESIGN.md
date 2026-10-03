@@ -1,5 +1,7 @@
 # Dragonspire Castle (castle v3) as built
 
+Mitchell's October 3 decisions change this castle: a great keep (castle v4, being planned in `docs/blueprints/`), trim and kerbs cut from the same stone as the walls, round towers laid in flat stones that stand out, real stairs wherever the way climbs, and new grown trees. See "The new look and the great keep" in [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md).
+
 The castle stands on the home island's crown. Its plan is in `src/data/zoneMaps.ts`: `KEEP_BUILDINGS` for the enterable buildings, and the castle constants (`CURTAIN`, `SCREEN`, `GATE`, `POSTERN`, `WARD_GATES`, `TOWERS`, `DONJON`, `FOUNTAIN`, exported for the dev tools as `CASTLE_PLAN`) for the walls, towers, gates and the centrepiece. The same doors, partitions, stairs and furniture footprints drive rendering and collision. Coordinates are island cells; north is negative Z. A range "x a..b" gives cell edges, so the cells are a to b − 1.
 
 ## The idea
