@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { RESTORATION_BY_ID } from '../src/data/keep';
 import { CASTLE_PLAN, KEEP_BUILDINGS } from '../src/data/zoneMaps';
 import { ZONES } from '../src/data/zones';
-import { cellRole, fitBlocks, fitsOf, flightsOf, inRoom, partitionRuns, raisedAt, sideLen, stairDest, stairProblems, stairRect, stairSteps, wallCell, wallRuns, type BuildingSpec, type Floor, type Stair } from '../src/world/building';
+import { cellRole, fitBlocks, fitsOf, flightsOf, inRoom, partitionRuns, raisedAt, sideLen, stairDest, stairProblems, stairRect, stairSteps, STAIR_RULE, wallCell, wallRuns, type BuildingSpec, type Floor, type Stair } from '../src/world/building';
+import { CURTAIN_WALL } from '../src/data/castle';
 import { BRIDGE, CLIMB, CROWN_Y, CURTAIN_RUNS, MIRROR_CELL, mx, RANGE, TERRACE_STAIRS, TERRACE_Y, TOWERS } from '../src/world/castle/plan';
 import { climbFlights, flightGround, headOf, treadTop } from '../src/world/castle/approach';
+import { TERRACE_STAIR_RISERS } from '../src/world/castle/bailey';
 import { newSave } from '../src/save/save';
 import { buildBuilding, FIT_KINDS } from '../src/world/buildingModel';
 import { buildKeep } from '../src/world/castle/keepModel';
@@ -82,7 +84,7 @@ describe('building specs (pure)', () => {
     expect(cellRole(t, 16, 23, 1)).toBe('wall');
   });
   it('a stair that turns: the first flight\'s foot goes up, the last flight\'s head comes down, the rest is solid', () => {
-    const t: BuildingSpec = { ...b, w: 12, d: 12, storeyH: 5, wallH: 10, upper: { voids: [[6, 1, 11, 11]] }, stairs: [{ x: 5, z: 8, w: 2, len: 4, dir: 'w', land0: [9, 8], land1: [1, 3], turns: [{ landing: [1, 8, 5, 10], flight: { x: 1, z: 4, w: 2, len: 4, dir: 'n' } }] }] };
+    const t: BuildingSpec = { ...b, w: 12, d: 12, storeyH: 6, wallH: 12, upper: { voids: [[6, 1, 11, 11]] }, stairs: [{ x: 5, z: 8, w: 2, len: 4, dir: 'w', land0: [9, 8], land1: [1, 3], turns: [{ landing: [1, 8, 5, 10], flight: { x: 1, z: 4, w: 2, len: 4, dir: 'n' } }] }] };
     // Climbing west along z 8..9 from its foot at x 8, round the landing, north up x 1..2 to its head at z 4.
     expect(cellRole(t, 18, 28, 0)).toBe('stair');
     expect(cellRole(t, 16, 28, 0)).toBe('wall');
@@ -90,12 +92,12 @@ describe('building specs (pure)', () => {
     expect(cellRole(t, 11, 25, 0)).toBe('wall');
     expect(cellRole(t, 11, 24, 1)).toBe('stair');
     expect(cellRole(t, 18, 28, 1)).toBe('wall');
-    expect(stairDest(t, 18.5, 28.5, 0)).toEqual({ x: 11.5, z: 23.5, floor: 1, y: 5 });
+    expect(stairDest(t, 18.5, 28.5, 0)).toEqual({ x: 11.5, z: 23.5, floor: 1, y: 6 });
     expect(stairDest(t, 11.5, 24.5, 1)).toEqual({ x: 19.5, z: 28.5, floor: 0, y: 0 });
-    // Thirty risers of 16.7 cm, fifteen to each flight, the landing half way up.
-    const steps = stairSteps(t.stairs![0], 5);
+    // Thirty risers of 20 cm (the hero's stride), fifteen to each flight, the landing half way up.
+    const steps = stairSteps(t.stairs![0], 6);
     expect(steps.map((q) => q.risers)).toEqual([15, 15]);
-    expect(steps[1].y0).toBeCloseTo(2.5, 6);
+    expect(steps[1].y0).toBeCloseTo(3, 6);
     expect(stairProblems(t)).toEqual([]);
     // The same climb in one flight breaks the rule: 30 risers between landings.
     expect(stairProblems({ ...t, stairs: [{ ...t.stairs![0], turns: undefined }] }).length).toBeGreaterThan(0);
@@ -141,8 +143,8 @@ describe('Dragonspire Keep', () => {
   it('the great keep is two storeys round a throne hall open to its battlements, its galleries at the wall walk', () => {
     const k = B.keep;
     expect(k.storeyH).toBeLessThan(k.wallH - 10);
-    expect(k.wallH + TERRACE_Y).toBeGreaterThan(CROWN_Y + 26);
-    expect(Math.abs(TERRACE_Y + k.storeyH! - (CROWN_Y + 7.06))).toBeLessThan(0.1);
+    expect(k.wallH + TERRACE_Y).toBeGreaterThan(CROWN_Y + 33);
+    expect(Math.abs(TERRACE_Y + k.storeyH! - (CROWN_Y + CURTAIN_WALL.walkY))).toBeLessThan(0.1);
     expect(k.windows.some((w) => w.floor === 1)).toBe(true);
     expect(k.upper?.voids?.length).toBeGreaterThan(0);
     const p = buildKeep(k, TERRACE_Y), box = new THREE.Box3().setFromObject(p.obj);
@@ -150,31 +152,31 @@ describe('Dragonspire Keep', () => {
   });
   it('the castle stands level on the crown, the north range and the keep on the terrace; the way in climbs the stair, crosses the bridge and runs up the avenue to the great door', () => {
     let inside = 0;
-    for (const [cx, cz] of [[60, 90], [92, 90]]) for (let z = cz - 5; z <= cz + 5; z++) for (let x = cx - 5; x <= cx + 5; x++) {
+    for (const [cx, cz] of [[65, 118], [107, 118]]) for (let z = cz - 5; z <= cz + 5; z++) for (let x = cx - 5; x <= cx + 5; x++) {
       const i = z * L.w + x;
       if (L.cells[i] !== Cell.Ground) continue;
       expect(L.level![i], `${x},${z}`).toBe(CROWN_Y);
       inside++;
     }
     expect(inside).toBeGreaterThan(100);
-    for (const [x, z] of [[50, 40], [100, 40], [76, 44]]) expect(L.level![z * L.w + x], `terrace ${x},${z}`).toBe(TERRACE_Y);
-    const k = B.keep, great = k.doors.find((d) => d.side === 's' && d.w === 4)!;
+    for (const [x, z] of [[52, 52], [120, 52], [86, 60]]) expect(L.level![z * L.w + x], `terrace ${x},${z}`).toBe(TERRACE_Y);
+    const k = B.keep, great = k.doors.find((d) => d.side === 's' && d.w === 6)!;
     const door = { x: k.x + great.at + great.w / 2, z: k.z + k.d + 0.5 };
     const path = nav.findPath(L.entry.x, L.entry.z, door.x, door.z)!;
     expect(path).not.toBeNull();
     // On the way in it climbs the stair, crosses the bridge, passes through the gate and up the avenue.
     const near = (g: { x: number; z: number }) => Math.min(...path.slice(1).map((q, i) => distToPoly(g.x, g.z, [path[i], q]).d));
-    for (const g of [{ x: 131, z: 128 }, { x: 125, z: 118 }, { x: 76, z: 105 }, { x: 76, z: 100 }, { x: 76, z: 62 }, { x: 76, z: 50 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(2.6);
+    for (const g of [{ x: 157.5, z: 168 }, { x: 151, z: 155.5 }, { x: 86, z: 138 }, { x: 86, z: 131 }, { x: 86, z: 80 }, { x: 86, z: 68 }]) expect(near(g), `${g.x},${g.z}`).toBeLessThan(3.4);
     // The curtain is shut elsewhere: a step through its north and west runs is blocked.
-    expect(nav.isWalkable(50, 21)).toBe(false);
-    expect(nav.isWalkable(32, 60)).toBe(false);
+    expect(nav.isWalkable(50, 28)).toBe(false);
+    expect(nav.isWalkable(29, 80)).toBe(false);
   });
   it('the castle is laid out on one axis: the great door, the gate and the dragon fountain', () => {
-    const k = B.keep, great = k.doors.find((d) => d.side === 's' && d.w === 4)!;
+    const k = B.keep, great = k.doors.find((d) => d.side === 's' && d.w === 6)!;
     const gate = L.props.find((p) => p.kind === 'outer_gatehouse')!, fountain = L.props.find((p) => p.kind === 'dragon_fountain')!;
     expect(k.x + great.at + great.w / 2).toBe(CASTLE_PLAN.gate.x);
     expect(gate.x).toBeCloseTo(CASTLE_PLAN.gate.x, 6);
-    expect([fountain.x, fountain.z]).toEqual([76, 70]);
+    expect([fountain.x, fountain.z]).toEqual([86, 92]);
     expect(fountain.x).toBe(CASTLE_PLAN.gate.x);
   });
   it('the plan is a mirror image about the axis: the curtain, the towers, the buildings and the stairs', () => {
@@ -189,7 +191,7 @@ describe('Dragonspire Keep', () => {
       expect(rect(B[r]), `${l} / ${r}`).toEqual([MIRROR_CELL + 1 - x1, z0, MIRROR_CELL + 1 - x0, z1]);
     }
     expect(B.keep.x + B.keep.w / 2).toBe(CASTLE_PLAN.gate.x);
-    expect(RANGE.stables[3] - RANGE.stables[1]).toBe(10);
+    expect(RANGE.stables[3] - RANGE.stables[1]).toBe(13);
     const [, k, p] = TERRACE_STAIRS;
     expect([p.x0, p.x1]).toEqual([mx(k.x1), mx(k.x0)]);
     // The stables' and the barracks' gable doors face each other on the cross axis.
@@ -222,14 +224,20 @@ describe('Dragonspire Keep', () => {
       expect(a - c, `${st.id} at ${z}`).toBeLessThan(0.7);
     }
   });
-  it('the climb is built in real steps: risers of 16 to 17 cm, no flight over 17, a comfortable going, the ground laid under every tread', () => {
+  it('the stairs down from the terrace keep the stair rule: risers of 18 to 20 cm, no flight over 17', () => {
+    const riser = (TERRACE_Y - CROWN_Y) / TERRACE_STAIR_RISERS;
+    expect(TERRACE_STAIR_RISERS).toBeLessThanOrEqual(STAIR_RULE.perFlight);
+    expect(riser).toBeGreaterThanOrEqual(STAIR_RULE.riserMin);
+    expect(riser).toBeLessThanOrEqual(STAIR_RULE.riserMax);
+  });
+  it('the climb is built in real steps sized to the hero: risers of 18 to 20 cm, no flight over 17, an easy going, the ground laid under every tread', () => {
     for (const f of climbFlights()) {
-      expect(f.risers).toBeLessThanOrEqual(17);
-      expect(f.riser).toBeGreaterThanOrEqual(0.16);
-      expect(f.riser).toBeLessThanOrEqual(0.17);
-      // (Two risers and a tread make a pace: 60 to 65 cm.)
-      expect(2 * f.riser + f.tread).toBeGreaterThanOrEqual(0.6);
-      expect(2 * f.riser + f.tread).toBeLessThanOrEqual(0.65);
+      expect(f.risers).toBeLessThanOrEqual(STAIR_RULE.perFlight);
+      expect(f.riser).toBeGreaterThanOrEqual(STAIR_RULE.riserMin);
+      expect(f.riser).toBeLessThanOrEqual(STAIR_RULE.riserMax);
+      // (Two risers and a tread make the hero's pace, a fifth longer than a man's: 72 to 80 cm.)
+      expect(2 * f.riser + f.tread).toBeGreaterThanOrEqual(0.72);
+      expect(2 * f.riser + f.tread).toBeLessThanOrEqual(0.8);
       // The head's landing runs on past the last riser at least a tread deep, to the flight's end.
       expect(f.run - headOf(f)).toBeGreaterThanOrEqual(f.tread);
       // The ground under the flight runs straight from one cell edge to the next (the last edge at the
@@ -258,10 +266,10 @@ describe('Dragonspire Keep', () => {
       expect(L.fluid[i], `${x},${z}`).toBeGreaterThan(0);
     }
     // The deck is walkable from the gate's passage to the terrace, the parapets' cells either side blocked.
-    for (let z = 100; z < BRIDGE.z1 + 1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(true);
+    for (let z = CASTLE_PLAN.gate.z; z < BRIDGE.z1 + 1; z++) for (let x = BRIDGE.deck[0]; x < BRIDGE.deck[1]; x++) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(true);
     for (let z = a0; z < a1; z++) for (const x of [BRIDGE.deck[0] - 1, BRIDGE.deck[1]]) expect(nav.isWalkable(x + 0.5, z + 0.5), `${x},${z}`).toBe(false);
     // (Its box covers the bridge alone: not the gate's passage nor the terrace's banners.)
-    expect(deck!.box[1]).toBeGreaterThanOrEqual(100.5);
+    expect(deck!.box[1]).toBeGreaterThanOrEqual(CASTLE_PLAN.gate.z + 0.5);
     expect(deck!.box[3]).toBeLessThanOrEqual(BRIDGE.z1);
   });
   it('a save made anywhere, the old castle included, loads with the hero on the walkable arrival dais', () => {
@@ -352,7 +360,7 @@ describe('Dragonspire Keep', () => {
       }
     }
   });
-  it('every stair keeps the house rules: at most 17 risers of 16 to 17 cm between landings, inside its walls', () => {
+  it('every stair keeps the house rules: at most 17 risers of 18 to 20 cm between landings, inside its walls', () => {
     for (const b of KEEP_BUILDINGS) expect(stairProblems(b), b.id).toEqual([]);
   });
   it('every stair connects the floor below to every upper-floor room and back without retriggering', () => {

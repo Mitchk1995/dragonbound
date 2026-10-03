@@ -31,7 +31,7 @@ describe('lawn', () => {
     // The parterre's lawn is clipped, the meadow by the farm is not.
     const at = (x: number, z: number) => lawn[z * L.w + x];
     expect(at(CASTLE_PLAN.zones.parterre.x - 4, Math.floor(CASTLE_PLAN.zones.parterre.z) - 1)).toBe(Lawn.Clipped);
-    expect(at(80, 150)).toBe(Lawn.Meadow);
+    expect(at(60, 192)).toBe(Lawn.Meadow);
   });
 
   it('ends the parterre in a circle round the fountain, with paving out to it', () => {

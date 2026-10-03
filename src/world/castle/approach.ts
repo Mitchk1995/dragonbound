@@ -1,7 +1,7 @@
 import type { Vec2 } from '../../types';
 import { COURSE } from '../../render/masonry';
 import { Cell, Ground } from '../layout';
-import { APPROACH, BRIDGE, CLIMB, CROWN_Y, CURTAIN, MOAT, type Box } from './plan';
+import { APPROACH, BRIDGE, CLIMB, CROWN_Y, CURTAIN, GROW, MOAT, type Box } from './plan';
 import { inBox, runRot, type Site } from './site';
 
 /**
@@ -10,6 +10,9 @@ import { inBox, runRot, type Site } from './site';
  * terrace on its bastion and the bridge over the moat to the gate, the landing at the stair's head
  * and the ledge walk on west to the lookout on the knoll.
  */
+
+/** How high the climb's walls' copings stand over the stair beside them: a parapet at the hero's chest. */
+const COPING = 1.4;
 
 /** How far the climb's stones stand over the ground laid under them (so their faces never lie in one plane). */
 export const LIFT = 0.015;
@@ -73,7 +76,7 @@ export function flightGround(f: Flight, j: number) {
 /** The line a flight's walls take their copings from: its foot's level up to its head's at the last riser. */
 const walkLine = (f: Flight, s: number) => f.y0 + (f.y1 - f.y0) * Math.max(0, Math.min(1, s / headOf(f)));
 
-/** The level a wall's coping stands 1.1 over at a point on the stair (a flight or a landing), or null off it. */
+/** The level a wall's coping stands COPING over at a point on the stair (a flight or a landing), or null off it. */
 function stairLevel(x: number, z: number): number | null {
   for (const f of climbFlights()) {
     const s = alongFlight(f, x, z);
@@ -105,7 +108,7 @@ export function levels(s: Site) {
       const px = x + 0.5, pz = z + 0.5, L2 = (qx - ax) ** 2 + (qz - az) ** 2, t = Math.max(0, Math.min(1, ((px - ax) * (qx - ax) + (pz - az) * (qz - az)) / L2));
       if (Math.hypot(px - ax - (qx - ax) * t, pz - az - (qz - az) * t) > 1.3 || s.G.l.cells[i] === Cell.Void) return;
       if (stair.some(([x0, z0, x1, z1]) => x >= x0 - 1 && x < x1 + 1 && z >= z0 - 1 && z < z1 + 1)) return;
-      if (px > bx0 - spread && px < bx1 + spread && pz > 118) return;
+      if (px > bx0 - spread && px < bx1 + spread && pz > b.rect[1]) return;
       if (s.G.reserved[i] !== 1) s.open(i, CROWN_Y, Ground.Grass);
     });
   }
@@ -120,9 +123,9 @@ export function levels(s: Site) {
   // The ore lane past the stair's foot and the lane between the stair and the smelter stay open, and
   // so does the ground at the foot of the stair's outer walls (no rock heaped against them) and round
   // the rock's corner east of the turning landing (no lone column of rock left standing there).
-  s.ground([123, 120, 128, 132], 0, Ground.Grass);
-  s.ground([112, 121, 123, 126], 0, Ground.Grass);
-  s.ground([134, 113, 137, 132], 0, Ground.Grass);
+  s.ground([148, 159, 154, 173], 0, Ground.Grass);
+  s.ground([134, 159, 148, 165], 0, Ground.Grass);
+  s.ground([161, 150, 165, 173], 0, Ground.Grass);
   // The bastion stands on the rock at the cliff's foot: its top is the terrace's edge, and its battered
   // faces and their footing take the cells round it down to the foot, kept clear of rock, the pool and
   // the stream.
@@ -146,7 +149,7 @@ export function walls(s: Site) {
   bastion(s);
   bridge(s);
   parapets(s);
-  for (const [x, z, rot] of APPROACH.benches) s.prop('stone_bench', x, z, rot, 0.9, { y: CROWN_Y });
+  for (const [x, z, rot] of APPROACH.benches) s.prop('stone_bench', x, z, rot, 1.2, { y: CROWN_Y, s: GROW });
   for (const [x, z] of APPROACH.banners) s.prop('banner_pole', x, z, 0, 0.35, { y: CROWN_Y });
 }
 
@@ -159,6 +162,8 @@ const shortLanding = (x: number, z: number) =>
 
 /** The height of the battered talus the tall south wall of the climb stands on. */
 const TALUS = 3;
+/** The line of the tall south wall along the outer side of the upper flights (its walls' corner on the west run). */
+const SOUTH_WALL = CLIMB.walls[0][2][1] - 0.5;
 
 /** The climb's stone: its flights, landings, walls and their piers, buttresses and the rock face over it. */
 function climb(s: Site) {
@@ -171,7 +176,7 @@ function climb(s: Site) {
   for (const { rect: [x0, z0, x1, z1], y } of CLIMB.landings) paving(s, [x0, Math.max(z0, CLIMB.face.z + 0.5), x1, z1], y);
   const f1 = flights[0];
   paving(s, [f1.foot.x - f1.width / 2, f1.foot.z, f1.foot.x + f1.width / 2, f1.foot.z + 0.45], f1.y0);
-  // The walls: a run between each two piers, its coping 1.1 over the stair beside it, raking with a
+  // The walls: a run between each two piers, its coping COPING over the stair beside it, raking with a
   // flight and level over a landing; a pier wherever a coping changes, standing on the lane (the west
   // run's last ends in the ledge road's pier at the stair's head).
   type Pier = { x: number; z: number; xRun: boolean; zRun: boolean; lx: number; lz: number; top: number; end: boolean; crown: boolean };
@@ -180,8 +185,8 @@ function climb(s: Site) {
     const nb = [pts[k - 1], pts[k + 1]].filter(Boolean);
     const p: Pier = piers.get(key([x, z])) ?? { x, z, xRun: false, zRun: false, lx: 0, lz: 0, top: 0, end: k === 0 || k === pts.length - 1, crown: w === 0 && k === pts.length - 1 };
     for (const q of nb) (q[1] === z ? (p.xRun = true) : (p.zRun = true));
-    // (Along its walls a pier is 1.2 long, 1.6 over a short landing; across them the wall's own thickness.)
-    const len = p.crown ? 0.6 : shortLanding(x, z) ? 1.6 : 1.2;
+    // (Along its walls a pier is 1.2 long, 1.8 over a short landing; across them the wall's own thickness.)
+    const len = p.crown ? 0.6 : shortLanding(x, z) ? 1.8 : 1.2;
     p.lx = p.xRun && !p.zRun ? len : p.crown ? 0.6 : 1;
     p.lz = p.zRun && !p.xRun ? len : p.crown ? 0.6 : 1;
     piers.set(key([x, z]), p);
@@ -193,7 +198,7 @@ function climb(s: Site) {
     const pa = { x: a.x + (dx * a.lx) / 2, z: a.z + (dz * a.lz) / 2 }, pb = { x: b.x - (dx * b.lx) / 2, z: b.z - (dz * b.lz) / 2 };
     // (The stair lies to one side: the coping is read a metre into it.)
     const m = { x: (pa.x + pb.x) / 2, z: (pa.z + pb.z) / 2 }, side = stairLevel(m.x - dz, m.z + dx) !== null ? 1 : -1;
-    const lv = (p: Vec2) => (stairLevel(p.x - dz * side, p.z + dx * side) ?? CROWN_Y) + 1.1;
+    const lv = (p: Vec2) => (stairLevel(p.x - dz * side, p.z + dx * side) ?? CROWN_Y) + COPING;
     const ta = lv(pa), tb = lv(pb);
     a.top = Math.max(a.top, ta);
     b.top = Math.max(b.top, tb);
@@ -202,7 +207,7 @@ function climb(s: Site) {
     const fwd = Math.abs(rot - Math.atan2(-(pb.z - pa.z), pb.x - pa.x)) < 1e-6, L = Math.hypot(pb.x - pa.x, pb.z - pa.z);
     const [l, r] = fwd ? [ta, tb] : [tb, ta];
     // The tall south wall along the outer side of the upper flights stands on a battered talus.
-    const talus = dz === 0 && a.z > 120;
+    const talus = dz === 0 && a.z > SOUTH_WALL;
     // (Its talus stops short of a corner's inside, where the wall turning there stands on the lane.)
     const corner = (q: Pier) => q.xRun && q.zRun && !q.crown, trim: [number, number] = fwd ? [corner(a) ? 0.1 : 0, corner(b) ? 0.1 : 0] : [corner(b) ? 0.1 : 0, corner(a) ? 0.1 : 0];
     s.prop('climb_wall', m.x, m.z, rot, 0, { y: 0, opt: { pts: [[-L / 2, 0, l], [L / 2, 0, r]], w: 1, base: true, talus: talus ? TALUS : 0, trim } });
@@ -219,9 +224,9 @@ function climb(s: Site) {
     const out = (outer(-1, 0) ? 1 : 0) | (outer(1, 0) ? 2 : 0) | (outer(0, -1) ? 4 : 0) | (outer(0, 1) ? 8 : 0);
     // (Against the rock face its cap stops flush.)
     const flush = p.z - p.lz / 2 <= CLIMB.face.z + 0.51 ? 4 : 0;
-    s.prop('climb_pier', p.x, p.z, 0, 0, { y: 0, v: p.end ? 2 : 0, opt: { lx: p.lx, lz: p.lz, top: p.top + 0.3, out, flush, talus: p.xRun && p.z > 120 ? TALUS : 0 } });
+    s.prop('climb_pier', p.x, p.z, 0, 0, { y: 0, v: p.end ? 2 : 0, opt: { lx: p.lx, lz: p.lz, top: p.top + 0.3, out, flush, talus: p.xRun && p.z > SOUTH_WALL ? TALUS : 0 } });
     // (Its cells, out to its outer faces and the foot of its talus, are its own.)
-    const reach = (bit: number) => (out & bit ? (bit === 8 && p.xRun && p.z > 120 ? 0.85 : 0.15) : 0);
+    const reach = (bit: number) => (out & bit ? (bit === 8 && p.xRun && p.z > SOUTH_WALL ? 0.85 : 0.15) : 0);
     s.cells([p.x - p.lx / 2 - reach(1), p.z - p.lz / 2 - reach(4), p.x + p.lx / 2 + reach(2), p.z + p.lz / 2 + reach(8)], (i) => {
       s.block(i, 0);
       s.G.l.ground[i] = Ground.Cave;
@@ -229,9 +234,9 @@ function climb(s: Site) {
   }
   // Buttresses on the tall south wall's outer face, each rising to a weathering under its coping.
   for (const x of CLIMB.buttresses) {
-    const top = (stairLevel(x, 118) ?? CROWN_Y) + 1.1;
-    s.prop('climb_buttress', x, 121, 0, 0, { y: 0, opt: { h: top - 1.6 } });
-    s.cells([x - 0.6, 121, x + 0.6, 122.6], (i) => s.block(i, 0));
+    const top = (stairLevel(x, SOUTH_WALL - 2.5) ?? CROWN_Y) + COPING;
+    s.prop('climb_buttress', x, SOUTH_WALL + 1, 0, 0, { y: 0, opt: { h: top - 1.6 } });
+    s.cells([x - 0.6, SOUTH_WALL + 1, x + 0.6, SOUTH_WALL + 2.6], (i) => s.block(i, 0));
   }
   // The rock face over the last two flights and the turning landing is dressed straight: a wall a
   // cell thick from just under the treads up to the crown, its foot following the stair.
@@ -333,12 +338,12 @@ function parapets(s: Site) {
   // (Each run's outer face looks away from the paving it guards: the bridge's deck, the gate
   // terrace, the lookout, the landing, or the ledge's middle beside it.)
   const ledge = (m: Vec2): Vec2 =>
-    m.x > 65 && m.x < 87 && m.z > 116 ? { x: 76, z: 114 } : m.x < 34 ? { x: 32, z: 113 } : m.x > 114 ? { x: 122, z: 111 } : { x: m.x, z: 112 };
+    m.x > 72 && m.x < 100 && m.z > 151 ? { x: 86, z: 150.4 } : m.x < 31.4 ? { x: 28.6, z: 146.6 } : m.x > 136.4 ? { x: 145.8, z: 143.6 } : { x: m.x, z: 145.6 };
   const runs: { pts: [number, number][]; inside: (m: Vec2) => Vec2 }[] = [
     { pts: P.innerWest, inside: ledge },
     { pts: P.innerEast, inside: ledge },
-    { pts: [[BRIDGE.x0, BRIDGE.z0], [BRIDGE.x0, P.innerWest[1][1]]], inside: () => ({ x: deck, z: 105 }) },
-    { pts: [[BRIDGE.x1, BRIDGE.z0], [BRIDGE.x1, P.innerEast[0][1]]], inside: () => ({ x: deck, z: 105 }) },
+    { pts: [[BRIDGE.x0, BRIDGE.z0], [BRIDGE.x0, P.innerWest[1][1]]], inside: () => ({ x: deck, z: 138 }) },
+    { pts: [[BRIDGE.x1, BRIDGE.z0], [BRIDGE.x1, P.innerEast[0][1]]], inside: () => ({ x: deck, z: 138 }) },
     { pts: P.outerWest, inside: ledge },
     { pts: P.outerEast, inside: ledge },
     { pts: P.landing, inside: ledge },

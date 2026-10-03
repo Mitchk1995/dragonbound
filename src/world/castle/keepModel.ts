@@ -11,7 +11,7 @@ import {
 } from '../props';
 import { carved, drumDoorway, glazedWindow, paved, type Span, type WindowRoom } from '../castleProps/curtain';
 import { FRONTISPIECE, GREAT_DOOR, KEEP_H, KEEP_WINDOWS, RANGE_ON_FLANK, TURRET, TURRETS, WALK_DOOR_U, type KeepWindow } from './keepSpec';
-import { CURTAIN, RANGE } from './plan';
+import { CURTAIN, GROW, KEEP, RANGE } from './plan';
 
 /**
  * The great keep's model (castle v4, stage 2), built from its spec (keepSpec.ts) in the castle's
@@ -26,7 +26,7 @@ import { CURTAIN, RANGE } from './plan';
  *    corbelled crown and a blue spire (its quarter inside the keep cut away: the hall's corner is the
  *    keep's), the front pair's spiral stairs lit by slit lights stepping up round them, a door from
  *    each onto the leads;
- *  - on the axis the frontispiece between two pinnacles: the 8 m great door's arch through it (the
+ *  - on the axis the frontispiece between two pinnacles: the 10.5 m great door's arch through it (the
  *    doorway's square head under a tympanum carved with the lord's crest), the showpiece window over it
  *    (plate tracery: two tall lights and one in the head), the crest under its crenellated top;
  *  - the back half standing out of the moat on a battered plinth stepped down to the moat's bed;
@@ -50,7 +50,7 @@ type Put = (k: ModelKit, p: Obj, y0: number, y1: number) => void;
  * The keep's size (its walls' outer faces) and its walls' thickness (a hair over the metre of its grid's
  * wall cells, so the great hall's and the chapel's walls, which run on into its flanks, end inside them).
  */
-const S = 24, T = 1.02;
+const S = KEEP.rect[2] - KEEP.rect[0], T = 1.02;
 const UP = KEEP_H.gallery + CUT_H;
 const OFF = 1e5;
 const FLOOR = 0x7e776c;
@@ -59,6 +59,8 @@ const PLANKS = [0x8a6440, 0x7a5636, 0x94704a];
 const RUG = 0x7a2020, RUG_TRIM = 0xc8a040;
 /** How far the deep base course stands proud of the walls, and each step of the plinth under it. */
 const BAND_OUT = 0.3, STEP_OUT = 0.15;
+/** How far out from the front the pinnacles at the frontispiece's corners stand (their middles). */
+const PIN = 1.3;
 
 /** Clean horizontal cut, as buildingModel's: fragments above world height `u` are cut away. */
 function cutPatch(mat: THREE.Material, u: { value: number }) {
@@ -151,7 +153,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   /** One real window on a face (or two lights under one hood for a pair), its opening `T` deep through the wall. */
   const glaze = (side: Side, wi: KeepWindow) => {
     const x = fu(side, wi.u), kp = atOn(side, wi.sill - 0.2), f = frame(side, kp[1]);
-    const lights: [number, number][] = wi.kind === 'pair' ? [[x - 0.8, 0.95], [x + 0.8, 0.95]] : [[x, wi.w]];
+    const lw = (wi.w - 0.3) / 2, lights: [number, number][] = wi.kind === 'pair' ? [[x - lw / 2 - 0.325, lw], [x + lw / 2 + 0.325, lw]] : [[x, wi.w]];
     for (const [lx, lw] of lights) {
       // (A great chamber light's lit room stands in the closed chamber behind the wall.)
       holes.get(side)!.push(glazedWindow(kp[0], f, lx, wi.sill, 0, { w: lw, h: wi.h, T, stone: ASHLAR_B, room: roomOf(wi) }).hole);
@@ -159,16 +161,16 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     if (wi.kind === 'pair') {
       // One hood over both lights: a drip stone along their heads, dropping a little at each end.
       const top = wi.sill + wi.h + 0.34;
-      fbox(side, kp, [3.5, 0.16, 0.2], [x, top + 0.08, 0.1], DRESS, 0.02);
-      for (const s of [-1, 1]) fbox(side, kp, [0.18, 0.5, 0.2], [x + s * 1.66, top - 0.25 + 0.08, 0.1], DRESS, 0.02);
+      fbox(side, kp, [wi.w + 1.3, 0.16, 0.2], [x, top + 0.08, 0.1], DRESS, 0.02);
+      for (const s of [-1, 1]) fbox(side, kp, [0.18, 0.5, 0.2], [x + s * ((wi.w + 1.3) / 2 - 0.09), top - 0.25 + 0.08, 0.1], DRESS, 0.02);
     }
   };
   for (const wi of KEEP_WINDOWS) if (wi.kind !== 'showpiece') glaze(wi.side, wi);
 
-  // The lord's doors into the great hall's dais and the chapel's west end: a pointed doorway two wide
+  // The lord's doors into the great hall's dais and the chapel's west end: a pointed doorway three wide
   // through the shared wall, one ring of dressed stone round it on both faces, the lord's blue leaves
   // in the middle of the wall. (The same door from both sides.)
-  const LORD = { w: 2, h: 4.05 }, lordRise = Math.min(LORD.w * 0.62, 1.7);
+  const LORD = { w: 3, h: 5.05 }, lordRise = Math.min(LORD.w * 0.62, 1.7 * GROW);
   for (const side of ['w', 'e'] as Side[]) {
     const dr = b.doors.find((d) => d.side === side);
     if (!dr) continue;
@@ -203,28 +205,29 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
       f.add(face);
       archRing(k, face, 0, y, 0, WD.w, WD.h, { n: 4, t: 0.2, p: 0.06, dep: 0.02, rise: wdRise, jamb: true });
     }
-    fbox(side, [k, built], [WD.w - 0.02, 0.1, T + 0.06], [x, y - 0.02, -T / 2], DRESS, 0.02);
+    // (Its top a hair over the walk's deck, never in its plane.)
+    fbox(side, [k, built], [WD.w - 0.02, 0.1, T + 0.06], [x, y, -T / 2], DRESS, 0.02);
     const d = new THREE.Group();
     d.position.set(x, y, -T / 2);
     f.add(d);
     pointedDoor(k, d, WD.w, WD.h, wdRise, 'single', false, 0.06);
   }
 
-  // The great door: in the wall behind the frontispiece's porch, the doorway four wide under a square
+  // The great door: in the wall behind the frontispiece's porch, the doorway six wide under a square
   // head (the leaves stand open inside: the great_doors prop), its lintel one course of dressed stone,
   // the tympanum over it carved with the lord's crest.
   {
-    const x = 12, hw = GREAT_DOOR.w / 2;
+    const x = S / 2, hw = GREAT_DOOR.w / 2;
     holes.get('s')!.push({ x0: x - hw, x1: x + hw, y0: 0, y1: GREAT_DOOR.head, z0: -T - 0.01, z1: 0.01 });
     band(true, GREAT_DOOR.head, GREAT_DOOR.head + 0.5, (kk, pp, y0, y1) => cb(kk, frame('s', pp), [GREAT_DOOR.arch, y1 - y0, 0.1], [x, (y0 + y1) / 2, 0.05], DRESS, undefined, 0.02));
     fbox('s', [ik, floorG], [GREAT_DOOR.w + 0.2, 0.08, T + FRONTISPIECE.out], [x, 0.04, (FRONTISPIECE.out - T) / 2], DRESS, 0.02);
-    crest(ek, frame('s', edge), x, 5.15, 0.0, 0.85);
+    crest(ek, frame('s', edge), x, GREAT_DOOR.head + 1.6, 0.0, 1.1);
   }
 
   // ─── The frontispiece ───────────────────────────────────────────────────────
   const F = FRONTISPIECE, fx0 = F.x0, fx1 = F.x1, fz = F.out, fc = (fx0 + fx1) / 2;
   const porchRise = riseOf(GREAT_DOOR.arch, GREAT_DOOR.apex);
-  /** The showpiece: an arch 4.2 by 7.9 sunk 0.3 into the frontispiece, two tall lights and one in its head (plate tracery). */
+  /** The showpiece: an arch 5.5 by 10 sunk 0.3 into the frontispiece, two tall lights and one in its head (plate tracery). */
   const show = KEEP_WINDOWS.find((w) => w.kind === 'showpiece')!;
   const SINK = 0.3, showRise = riseOf(show.w, show.h);
   const fHoles: Span[] = [
@@ -243,7 +246,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     archRing(sk, frame('s', sp), fc, show.sill, fz, show.w, show.h, { n: 6, t: 0.42, p: 0.12, dep: SINK + 0.02, jamb: true });
     cb(sk, frame('s', sp), [show.w + 0.9, 0.5, 0.12], [fc, show.sill - 0.25, fz + 0.06], DRESS, undefined, 0.02);
     const T2 = fz - SINK + T;
-    for (const [lx, lw, ly, lh] of [[fc - 1.0, 1.4, show.sill + 0.1, 6.0], [fc + 1.0, 1.4, show.sill + 0.1, 6.0], [fc, 0.8, show.sill + 6.62, 0.95]]) {
+    for (const [lx, lw, ly, lh] of [[fc - 1.3, 1.8, show.sill + 0.1, 7.6], [fc + 1.3, 1.8, show.sill + 0.1, 7.6], [fc, 1.05, show.sill + 8.25, 1.2]]) {
       const { hole } = glazedWindow(sk, frame('s', sp), lx, ly, fz - SINK, { w: lw, h: lh, T: T2, stone: ASHLAR_B });
       fHoles.push(hole);
       holes.get('s')!.push(hole);
@@ -258,7 +261,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   {
     const [ck, cp] = at(true, KEEP_H.chamber), cf = frame('s', cp), fw = fx1 - fx0 - 1.6;
     cb(ck, cf, [fw, 0.5, 0.1], [fc, KEEP_H.chamber + 0.25, fz + 0.05], DRESS, undefined, 0.02);
-    crest(ck, cf, fc, 19.6, fz, 1.25);
+    crest(ck, cf, fc, 25.5, fz, 1.6);
     ck.box(cf, [fw, 0.14, 0.02], [fc, F.top - 0.75, fz + 0.01], GILT);
     cb(ck, cf, [fw, 0.5, 0.16], [fc, F.top - 0.25, fz + 0.08], DRESS, undefined, 0.02);
     cb(ck, cf, [fx1 - fx0 + 0.1, 0.12, fz + 0.1], [fc, fTop + 0.06, fz / 2], DRESS, undefined, 0.02);
@@ -267,7 +270,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   // The pinnacles on its front corners: slender octagonal shafts in the same stone rising from their
   // own base course past the frontispiece's merlons to a cap course and a little spire.
   for (const px of [fx0, fx1]) {
-    const pz = S + 1.0, r = F.pinnacle.r, n = 8;
+    const pz = S + PIN, r = F.pinnacle.r, n = 8;
     const ring = (y0: number, y1: number, rr: number, color: number, course?: number) =>
       band(true, y0, y1, (kk, pp, a, e) => drum(kk, pp, { r: rr, y0: a, y1: e, n, course, turn: Math.PI / n, bond: false }, color, px, pz));
     ring(0, BASE_COURSE, r + 0.25, BASE);
@@ -287,7 +290,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   // flanks inside the great hall and the chapel, nor across the great door), and the string courses.
   const [r0] = RANGE_ON_FLANK, R = TURRET.r;
   // (Each run ends against the turrets' and the pinnacles' own base courses.)
-  const bt = Math.sqrt((R + BAND_OUT) ** 2 - BAND_OUT ** 2) - 0.01, bp = Math.sqrt((F.pinnacle.r + 0.25) ** 2 - (1 - BAND_OUT) ** 2);
+  const bt = Math.sqrt((R + BAND_OUT) ** 2 - BAND_OUT ** 2) - 0.01, bp = Math.sqrt((F.pinnacle.r + 0.25) ** 2 - (PIN - BAND_OUT) ** 2);
   const runs: Record<Side, [number, number][]> = {
     n: [[bt, S - bt]],
     s: [[bt, fx0 - bp], [fx1 + bp, S - bt]],
@@ -358,18 +361,18 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     // The great flag over the middle of the roof: a navy pole on a dressed plinth, a gold ball on top,
     // and the long flag flying east. (Over the middle of the keep its shadow falls on its own leads and
     // behind it, never on the court in front.)
-    const fx = S / 2, fzz = S / 2, top = 38;
+    const fx = S / 2, fzz = S / 2, top = KEEP_H.deck + 18;
     cb(fk, lifted, [1.0, 0.5, 1.0], [fx, ly + 0.3, fzz], DRESS, undefined, 0.04);
     cb(fk, lifted, [0.24, top - ly - 0.5, 0.24], [fx, (ly + 0.5 + top) / 2, fzz], LAMP_NAVY, undefined, 0.03);
     fk.mesh(lifted, new THREE.OctahedronGeometry(0.22, 1), PAL.gold, [fx, top + 0.18, fzz]);
-    flag(fk, lifted, fx, top - 0.25, fzz, 6, 3.6, 1);
+    flag(fk, lifted, fx, top - 0.25, fzz, 7.8, 4.7, 1);
   }
 
   // ─── The turrets ────────────────────────────────────────────────────────────
   for (const t of TURRETS) turret(t);
 
   function turret(t: (typeof TURRETS)[number]) {
-    const lift = t.front, r = TURRET.r, n = drumStones(r), N = 24, top = TURRET.shaft;
+    const lift = t.front, r = TURRET.r, n = drumStones(r), N = 30, top = TURRET.shaft;
     // Toward the keep's inside along x and z.
     const sx = t.x > S / 2 ? -1 : 1, sz = t.z > S / 2 ? -1 : 1;
     // The quarter of the drum inside the keep is cut away up to the deck (the hall's corner is the
@@ -380,9 +383,9 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     // on the back turrets one to each storey on the side away from the keep.
     const out = Math.atan2(-sx, -sz);
     const slits: { a: number; y: number }[] = t.front
-      ? [3.0, 8.0, 11.5, 15.0, 19.5, 24.8, 27.5].map((y, i) => ({ a: (sx > 0 ? 1 : -1) * (0.7 - i * 0.4), y }))
-      : [8.0, 15.0, 19.5, 26.5].map((y, i) => ({ a: out + (i % 2 ? 0.3 : -0.3), y }));
-    const SLIT = { w: 0.5, h: 1.6, T: 0.8 };
+      ? [4, 10.5, 15, 19.5, 25.5, 32, 35.5].map((y, i) => ({ a: (sx > 0 ? 1 : -1) * (0.7 - i * 0.4), y }))
+      : [10.5, 19.5, 25.5, 34.5].map((y, i) => ({ a: out + (i % 2 ? 0.3 : -0.3), y }));
+    const SLIT = { w: 0.65, h: 2, T: 0.8 };
     const slitNotch = (s: { a: number; y: number }): DrumNotch => ({ a: s.a, o: 0, half: SLIT.w / 2 + 0.32, back: 0.02, y0: s.y - 0.25, y1: s.y + SLIT.h + 0.4 });
     // The door onto the leads, from the turret's stair, facing the middle of the roof.
     const lead = { a: Math.atan2(sx, sz), y: KEEP_H.deck + 0.2 };
@@ -448,7 +451,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     if (t.front) {
       const lx = sx > 0 ? T : S - T, landing = stairSteps(b.stairs![0], storeyH)[1].y0;
       const dg = new THREE.Group();
-      dg.position.set(lx, 0, t.z + sz * 2);
+      dg.position.set(lx, 0, t.z + sz * 2.5);
       dg.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
       built.add(dg);
       singleDoor(k, dg, 0, landing, 0);
@@ -471,11 +474,11 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   }
 
   // ─── The lord's banners ──────────────────────────────────────────────────────
-  // Two long banners in the front's side bays, twelve metres from under the great chamber's lights to
+  // Two long banners in the front's side bays, fifteen metres from under the great chamber's lights to
   // just over the lower string course, clear of the small lancets under them.
-  for (const u of [5.8, 18.2]) {
-    const [bk, bp] = at(true, 18.9), f = frame('s', bp), w = 1.6, L = 12;
-    livery(bk, f, u, 18.9, 0.1, w, L - w * 0.6);
+  for (const u of [7.7, S - 7.7]) {
+    const [bk, bp] = at(true, 24.6), f = frame('s', bp), w = 2.1, L = 15.6;
+    livery(bk, f, u, 24.6, 0.1, w, L - w * 0.6);
   }
 
   // ─── Inside: the throne hall ────────────────────────────────────────────────
@@ -486,7 +489,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     // (Each step stands right down on the floor, a lower step only its tread showing round the one over
     // it, laid along the step; every top as far over its walking height as the floor's flags stand over
     // the ground, never in the plane of the ground raised under it.)
-    const [dx0, dz0, dx1, dz1] = dais.rect, n = Math.max(1, Math.ceil(dais.h / 0.17 - 1e-6)), TR = 0.32, open = dz0 > T;
+    const [dx0, dz0, dx1, dz1] = dais.rect, n = Math.max(1, Math.ceil(dais.h / 0.2 - 1e-6)), TR = 0.4, open = dz0 > T;
     for (let i = 0; i < n; i++) {
       const o = TR * (n - 1 - i), y0 = 0.04, y1 = ((i + 1) * dais.h) / n + 0.05;
       const ax = dx0 - o, ex = dx1 + o, az = open ? dz0 - o : dz0, ez = dz1 + o;
@@ -500,16 +503,16 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
       if (open) step(ax + TR, ex - TR, az, az + TR, DRESS);
       step(ax + TR, ex - TR, ez - TR, ez, DRESS);
     }
-    const rz0 = dz1 + 0.32 * n + 0.1, rz1 = S - T;
-    ik.box(ground, [2.2, 0.03, rz1 - rz0], [S / 2, 0.065, (rz0 + rz1) / 2], RUG);
-    for (const s of [-1, 1]) ik.box(ground, [0.1, 0.012, rz1 - rz0 - 0.1], [S / 2 + s * 0.98, 0.086, (rz0 + rz1) / 2], RUG_TRIM);
+    const rz0 = dz1 + TR * n + 0.1, rz1 = S - T;
+    ik.box(ground, [2.9, 0.03, rz1 - rz0], [S / 2, 0.065, (rz0 + rz1) / 2], RUG);
+    for (const s of [-1, 1]) ik.box(ground, [0.1, 0.012, rz1 - rz0 - 0.1], [S / 2 + s * 1.3, 0.086, (rz0 + rz1) / 2], RUG_TRIM);
   }
   // The lord's banners on the north wall behind the high seat, under the council gallery.
-  for (const x of [9.2, 14.8]) {
+  for (const x of [S / 2 - 3.7, S / 2 + 3.7]) {
     const f = new THREE.Group();
     f.position.set(x, 0, T);
     ground.add(f);
-    livery(ik, f, 0, storeyH - 0.5, 0.08, 1.2, 2.6);
+    livery(ik, f, 0, storeyH - 0.5, 0.08, 1.6, 3.4);
   }
   // The piers carrying the galleries: a stepped base, the shaft, a capital under the beams; over the
   // galleries' floor they rise on to the great chamber's floor (going with the galleries when cut).
@@ -518,11 +521,11 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     // (Its capital carries the gallery's beam, 0.4 deep under the boards; over them the shaft rises to a
     // capital under the ceiling's beams.)
     const cap = storeyH - 0.7;
-    cb(ik, ground, [1.4, 0.4, 1.4], [p.x, 0.2, p.z], DRESS, undefined, 0.05);
-    cb(ik, ground, [1.0, cap - 0.7, 1.0], [p.x, 0.4 + (cap - 0.7) / 2, p.z], ASHLAR_B, undefined, 0.04);
-    cb(ik, ground, [1.3, 0.3, 1.3], [p.x, cap - 0.15, p.z], DRESS, undefined, 0.04);
-    cb(uk, mid, [0.9, KEEP_H.chamber - storeyH - 1.1, 0.9], [p.x, storeyH + (KEEP_H.chamber - storeyH - 1.1) / 2, p.z], ASHLAR_B, undefined, 0.04);
-    cb(uk, mid, [1.2, 0.5, 1.2], [p.x, KEEP_H.chamber - 0.85, p.z], DRESS, undefined, 0.04);
+    cb(ik, ground, [1.8, 0.4, 1.8], [p.x, 0.2, p.z], DRESS, undefined, 0.05);
+    cb(ik, ground, [1.3, cap - 0.7, 1.3], [p.x, 0.4 + (cap - 0.7) / 2, p.z], ASHLAR_B, undefined, 0.04);
+    cb(ik, ground, [1.7, 0.3, 1.7], [p.x, cap - 0.15, p.z], DRESS, undefined, 0.04);
+    cb(uk, mid, [1.2, KEEP_H.chamber - storeyH - 1.1, 1.2], [p.x, storeyH + (KEEP_H.chamber - storeyH - 1.1) / 2, p.z], ASHLAR_B, undefined, 0.04);
+    cb(uk, mid, [1.6, 0.5, 1.6], [p.x, KEEP_H.chamber - 0.85, p.z], DRESS, undefined, 0.04);
   }
   // The stairs: solid steps of the dressed stone with pale nosings, the half landing a solid block, a
   // cheek wall of the same stone along each open side from the floor to the handrail's height.
@@ -585,15 +588,16 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
     // Each run on the edge's own line: a newel post at each end (one post where two runs meet), the
     // plinth and the handrail between the posts, balusters between them; the beam under it on the side
     // of the boards.
-    const posts = new Set<string>(), PH = 1.04, PW = 0.28;
+    // (At the hero's chest: a balustrade grown with the castle.)
+    const posts = new Set<string>(), PH = 1.35, PW = 0.28;
     for (const along of ['x', 'z'] as const) for (const run of runsOf(along)) {
       const boards = open(along === 'x' ? Math.floor(run.a) : run.at, along === 'x' ? run.at : Math.floor(run.a)) ? -1 : 1;
       const c = run.at, L = run.e - run.a - PW, m = (run.a + run.e) / 2;
       const box = (len: number, h: number, dep: number, y0: number, color: number, u = m, cc = c, ch = 0.02) => cb(uk, mid, along === 'x' ? [len, h, dep] : [dep, h, len], along === 'x' ? [u, y0 + h / 2, cc] : [cc, y0 + h / 2, u], color, undefined, ch);
       box(L, 0.12, 0.26, storeyH, DRESS);
-      box(L, 0.12, 0.3, storeyH + 0.86, DRESS);
+      box(L, 0.12, 0.3, storeyH + PH - 0.18, DRESS);
       const nb = Math.max(2, Math.round(L / 0.36));
-      for (let i = 0; i < nb; i++) box(0.12, 0.74, 0.12, storeyH + 0.12, ASHLAR_L, m - L / 2 + 0.2 + ((L - 0.4) * i) / (nb - 1));
+      for (let i = 0; i < nb; i++) box(0.12, PH - 0.3, 0.12, storeyH + 0.12, ASHLAR_L, m - L / 2 + 0.2 + ((L - 0.4) * i) / (nb - 1));
       for (const e of [run.a, run.e]) {
         const key = along === 'x' ? `${e},${c}` : `${c},${e}`;
         if (posts.has(key)) continue;
@@ -637,7 +641,8 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   let lamp: THREE.PointLight | undefined;
   for (const f of fitsOf(b)) {
     if (f.kind === 'pillar') continue;
-    const fp = buildFitProp(f.kind, f.len);
+    const fp = buildFitProp(f.kind, f.len, f.s);
+    if (f.s) fp.obj.scale.setScalar(f.s);
     fp.obj.userData.furnishing = true;
     fp.obj.position.set(f.x, raisedAt(b, b.x + Math.floor(f.x), b.z + Math.floor(f.z)), f.z);
     fp.obj.rotation.y = f.rot ?? 0;
@@ -668,7 +673,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
   };
   apply();
   // (Standing at the great hall's dais or the chapel's west end, the camera would stand in a front turret.)
-  const ends: [number, number, number, number][] = [[RANGE.hall[2] - 6, RANGE.hall[1] + 1, RANGE.hall[2], RANGE.hall[3] - 1], [RANGE.chapel[0], RANGE.chapel[1] + 1, RANGE.chapel[0] + 6, RANGE.chapel[3] - 1]];
+  const ends: [number, number, number, number][] = [[RANGE.hall[2] - 8, RANGE.hall[1] + 1, RANGE.hall[2], RANGE.hall[3] - 1], [RANGE.chapel[0], RANGE.chapel[1] + 1, RANGE.chapel[0] + 8, RANGE.chapel[3] - 1]];
   return {
     obj: g,
     spec: b,
@@ -710,7 +715,7 @@ export function buildKeep(b: BuildingSpec, baseY = 0): BuildingProp {
    * coping; built as one outline each, extruded.
    */
   function cheeks(st: NonNullable<BuildingSpec['stairs']>[number], steps: ReturnType<typeof stairSteps>) {
-    const RAIL = 0.95, TH = 0.22;
+    const RAIL = 1.25, TH = 0.22;
     const [f1, f2] = steps, land = st.turns![0].landing;
     // Along the first flight and the landing's open side (z = its north edge), x from the flight's foot
     // to the landing's far side; along the second flight's open side (x = its edge toward the hall).

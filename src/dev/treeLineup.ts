@@ -45,7 +45,7 @@ const VIEWS: { zone: string; label: string; x: number; z: number; zoom?: number 
   { zone: 'foothills', label: 'edge', x: 70.5, z: 154.5 },
   { zone: 'foothills', label: 'forest', x: 0, z: 0 },
   { zone: 'foothills', label: 'rim', x: 0, z: 0 },
-  { zone: 'keep', label: 'lawn', x: 114.5, z: 28.5 },
+  { zone: 'keep', label: 'lawn', x: 68.5, z: 80.5 },
   { zone: 'keep', label: 'rim', x: 0, z: 0 },
   { zone: 'ruin', label: 'grove', x: 0, z: 0 },
 ];

@@ -5,10 +5,10 @@ import { APPROACH, AXIS, BRIDGE, CROWN_OUTLINE, CROWN_Y, CURTAIN, CURTAIN_RUNS, 
 import { inPoly, type Site } from './site';
 
 /**
- * The castle's ground and water: the crown it stands on, the moat round it two metres under the
- * turf (its dressed outer bank, the plinths the walls and towers rise from it on, the springs that
- * feed it, the sluice and the fall from the outfall that drain it) and the water below the
- * rock (the south fall's pool and the stream from it, the west fall off the brink).
+ * The castle's ground and water: the crown it stands on, the moat round it two and a half metres
+ * under the turf (its dressed outer bank, the plinths the walls and towers rise from it on, the
+ * springs that feed it, the sluice and the fall from the outfall that drain it) and the water below
+ * the rock (the south fall's pool and the stream from it, the west fall off the brink).
  */
 
 /**
@@ -18,22 +18,22 @@ import { inPoly, type Site } from './site';
  * beyond the moat's outer bank and stays on the island.
  */
 const NORTH_AND_EAST: [number, number][] = [
-  [21.4, 11], [23.8, 9.0], [26.6, 10.2], [29.5, 8.0], [33, 7.0], [36.2, 5.4], [40.5, 7.4], [44, 5.0], [47.6, 3.4], [51.5, 4.8], [54.5, 2.4],
-  [58.5, 1.8], [62, 2.9], [66, 1.5], [70.5, 1.2], [74, 2.5], [78, 1.1], [82.5, 1.5], [86, 2.8], [90, 1.7], [94, 2.4], [97.5, 3.3], [100.5, 6.4],
-  [104, 6.6], [107.5, 8.9], [111.5, 7.4], [115, 9.4], [118.5, 8.2], [122, 10.2], [126, 10.4], [129, 12.4], [130.5, 12.6],
-  [132.4, 16], [131.2, 19.5], [133.0, 23], [135.8, 26.5], [137.2, 31], [135.4, 35], [132.0, 38.5], [132.6, 42], [135.4, 45.5], [138.4, 49],
-  [138.0, 54], [135.2, 57], [132.0, 60.5], [131.4, 64.5], [133.6, 68], [134.0, 72.5], [131.8, 76], [131.4, 80], [133.8, 83], [137.6, 86.5],
-  [138.6, 91], [136.4, 95.5], [133.0, 98.5], [133.2, 105],
+  [15, 15], [18.1, 12.4], [21.8, 14], [25.5, 11.1], [30.1, 9.8], [34.3, 7.7], [39.9, 10.3], [44.4, 7.2], [49.1, 5.1], [54.2, 6.9], [58.1, 3.8],
+  [63.3, 3], [67.8, 4.5], [73, 2.6], [78.9, 2.3], [83.4, 3.9], [88.6, 2.1], [94.5, 2.6], [99, 4.3], [104.2, 2.9], [109.4, 3.8], [114, 5],
+  [117.9, 9], [122.4, 9.3], [127, 12.3], [132.2, 10.3], [136.7, 12.9], [141.3, 11.4], [145.8, 14], [151, 14.2], [154.9, 16.8], [156.9, 17.1],
+  [159.3, 21.5], [157.8, 26.1], [160.1, 30.6], [163.7, 35.2], [165.6, 41], [163.2, 46.2], [158.8, 50.8], [159.6, 55.3], [163.2, 59.9], [167.1, 64.4],
+  [166.6, 70.9], [163, 74.8], [158.8, 79.4], [158, 84.6], [160.9, 89.1], [161.4, 95], [158.5, 99.5], [158, 104.7], [161.1, 108.6], [166.1, 113.2],
+  [167.4, 119], [164.5, 124.9], [160.1, 128.8], [160.4, 137.2],
 ];
 const WEST: [number, number][] = [
-  [19.6, 103.5], [17.6, 100.5], [16.6, 97], [18.0, 93], [20.6, 90.5], [19.6, 87], [20.6, 84], [20.3, 81], [20.4, 78.5], [18.6, 76.5], [16.4, 73.5],
-  [14.6, 69.5], [15.2, 66.5], [17.6, 64], [19.8, 60.5], [20.9, 56], [21.0, 52], [20.4, 48], [21.2, 44], [20.8, 40], [20.3, 36], [21.2, 32],
-  [20.0, 27], [20.6, 23], [20.6, 20],
+  [12.7, 135.3], [10.1, 131.4], [8.8, 126.8], [10.6, 121.6], [14, 118.4], [12.7, 113.8], [14, 109.9], [13.6, 106], [13.7, 102.8], [11.4, 100.2], [8.5, 96.3],
+  [6.2, 91.1], [7, 87.2], [10.1, 83.9], [12.9, 79.4], [14.4, 73.5], [14.5, 68.3], [13.7, 63.1], [14.8, 57.9], [14.2, 52.7], [13.6, 47.5], [14.8, 42.3],
+  [13.2, 35.8], [14, 30.6], [14, 26.7],
 ];
-/** The plan's south brink, from the landing round to the lookout's knoll (its points [132.6, 111] to [21.4, 107]). */
+/** The plan's south brink, from the landing round to the lookout's knoll (its points [159.6, 145] to [15, 139.8]). */
 const SOUTH = CROWN_OUTLINE.slice(
-  CROWN_OUTLINE.findIndex(([x, z]) => x === 132.6 && z === 111),
-  CROWN_OUTLINE.findIndex(([x, z]) => x === 21.4 && z === 107) + 1,
+  CROWN_OUTLINE.findIndex(([x, z]) => x === 159.6 && z === 145),
+  CROWN_OUTLINE.findIndex(([x, z]) => x === 15 && z === 139.8) + 1,
 );
 export const CROWN_EDGE: [number, number][] = [...NORTH_AND_EAST, ...SOUTH, ...WEST];
 
@@ -57,7 +57,7 @@ export function crown(s: Site) {
   };
   const xs = CROWN_EDGE.map((p) => p[0]), ys = CROWN_EDGE.map((p) => p[1]), drop: number[] = [];
   s.cells([Math.min(...xs) - 3, Math.min(...ys) - 3, Math.max(...xs) + 3, Math.max(...ys) + 3], (i, x, z) => {
-    if (l.cells[i] === Cell.Void || z > 104 || onCrown(x + 0.5, z + 0.5)) return;
+    if (l.cells[i] === Cell.Void || z > 136 || onCrown(x + 0.5, z + 0.5)) return;
     if (near(x, z, (j) => l.cells[j] === Cell.Void) && near(x, z, (_, cx, cz) => onCrown(cx + 0.5, cz + 0.5))) drop.push(i);
   });
   for (const i of drop) l.cells[i] = Cell.Void;
@@ -67,9 +67,9 @@ export function crown(s: Site) {
  * The moat's outer bank as built: the plan's outer bank (MOAT.counterscarp) set out on the cell
  * grid, its straight runs on cell edges and its splays on true diagonals through cell corners (none
  * more than half a metre off the plan's lines), so the water's edge steps exactly along the bank's
- * dressed face and no step of the bank's earth shows in front of it. Closed along the ledge at z 109.
+ * dressed face and no step of the bank's earth shows in front of it. Closed along the ledge at z 142.
  */
-const MOAT_EDGE: [number, number][] = [[24, 109], [24, 16], [27, 13], [51, 13], [58, 6], [94, 6], [101, 13], [125, 13], [128, 16], [128, 109]];
+const MOAT_EDGE: [number, number][] = [[19, 142], [19, 22], [23, 18], [53, 18], [62, 9], [110, 9], [119, 18], [149, 18], [153, 22], [153, 142]];
 /** Does a cell's middle lie inside the moat's outer bank (its splays pass through cells' middles: those stay bank)? */
 const inMoat = (x: number, z: number) => {
   const px = x + 0.5, pz = z + 0.5;
@@ -90,7 +90,7 @@ const MOAT_LEVEL = MOAT.surface - WATER_Y;
 /** The foot of the masonry founded on the moat's bed (on a course line, a hair into the bed). */
 const MOAT_FOOT = Math.floor(MOAT.bed + 0.2);
 /** The two springs behind the keep, spilling into the basin either side of the axis. */
-const SPRINGS = [AXIS - 16.5, AXIS + 16.5];
+const SPRINGS = [AXIS - 21.5, AXIS + 21.5];
 /** The west sluice and the channel from it across the rim to the brink: its middle and its rows (cell edges). */
 const SLUICE = { z: WATER.westFall.z, z0: WATER.westFall.z - 1, z1: WATER.westFall.z + 1 };
 /** The moat's masonry's frame (see castleProps/water.ts): from its foot up to the turf and to the water. */

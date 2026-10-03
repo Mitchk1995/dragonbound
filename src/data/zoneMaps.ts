@@ -30,7 +30,7 @@ export const KEEP_ARCHES: { id: string; angle: number; dormant?: string }[] = [
 ];
 
 /** Open plaza spot in the keep used to stage the hero (character creation, pose tools). */
-export const KEEP_STAGE: Vec2 = { x: 145, z: 149 };
+export const KEEP_STAGE: Vec2 = { x: 171, z: 189 };
 
 /** Camera offsets from KEEP_STAGE used by character creation and the pose tools (x/z only). */
 export const STAGE_CAMERAS: Vec2[] = [{ x: -1.4, z: 5.2 }, { x: 0, z: 4.2 }, { x: 4.2, z: 0 }, { x: -4.2, z: 0 }];
@@ -65,7 +65,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
     // comes in by cart through the east door to the bin beside the furnace (coal heaped next to it);
     // the furnace stands against the back wall with its bellows; the melt is poured at the crucible
     // stand to the west; finished bars are racked by the south door, which opens onto the anvil yard.
-    id: 'smelter', style: 'timber', interior: 'smelter', x: 106, z: 126, w: 17, d: 13, wallH: 3.9, roof: ROOF.terracotta,
+    id: 'smelter', style: 'timber', interior: 'smelter', x: 132, z: 166, w: 17, d: 13, wallH: 3.9, roof: ROOF.terracotta,
     doors: [{ side: 's', at: 7, w: 3 }, { side: 'e', at: 5, w: 3 }],
     // (No south window west of the door: the forge yard's lean-to stands against that stretch.)
     windows: [{ side: 's', at: 13.5 }, { side: 'n', at: 3 }, { side: 'n', at: 14 }, { side: 'w', at: 6.5 }, { side: 'e', at: 10.5 }],
@@ -95,7 +95,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   {
     // The bank: a stone counting hall. Tellers' counter across the room, the vault door behind,
     // clerks' desks and ledger shelves on the tellers' side, benches and candle stands out front.
-    id: 'bank', style: 'stone', interior: 'bank', x: 172, z: 122, w: 20, d: 15, wallH: 4.6, roof: ROOF.darkSlate,
+    id: 'bank', style: 'stone', interior: 'bank', x: 198, z: 162, w: 20, d: 15, wallH: 4.6, roof: ROOF.darkSlate,
     doors: [{ side: 's', at: 8, w: 4 }, { side: 'e', at: 9, w: 3 }],
     windows: [{ side: 's', at: 3.5 }, { side: 's', at: 16.5 }, { side: 'n', at: 4 }, { side: 'n', at: 16 }, { side: 'w', at: 7.5 }],
     fits: [
@@ -116,7 +116,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   },
   {
     // The side vault off the bank (Expand the Vault): collapsed until restored, then a strongroom.
-    id: 'vault', style: 'stone', interior: 'vault', x: 191, z: 125, w: 10, d: 11, wallH: 4.0, roof: ROOF.darkSlate, roofKind: 'flat',
+    id: 'vault', style: 'stone', interior: 'vault', x: 217, z: 165, w: 10, d: 11, wallH: 4.0, roof: ROOF.darkSlate, roofKind: 'flat',
     shared: ['w'], restore: 'vault_expanded',
     doors: [{ side: 'w', at: 6, w: 3 }],
     windows: [{ side: 's', at: 5 }, { side: 'e', at: 4 }],
@@ -135,7 +135,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   {
     // The Quartermaster's shop: a timber shopfront. Counters run wall to wall (the Quartermaster
     // serves from behind them, stock shelves at his back); customers browse the front of the room.
-    id: 'shop', style: 'timber', interior: 'shop', x: 162, z: 150, w: 15, d: 11, wallH: 3.7, roof: ROOF.moss,
+    id: 'shop', style: 'timber', interior: 'shop', x: 188, z: 190, w: 15, d: 11, wallH: 3.7, roof: ROOF.moss,
     doors: [{ side: 's', at: 6, w: 3 }],
     windows: [{ side: 's', at: 2.5 }, { side: 's', at: 12 }, { side: 'n', at: 3 }, { side: 'n', at: 12 }, { side: 'w', at: 5.5 }, { side: 'e', at: 5.5 }],
     fits: [
@@ -157,7 +157,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   },
   {
     // Chapter 2: the alchemy lab (herb garden and pond beside it).
-    id: 'alchemy_plot', style: 'timber', interior: 'alchemy', x: 100, z: 172, w: 13, d: 10, wallH: 3.6, roof: ROOF.teal, restore: 'alchemy_lab',
+    id: 'alchemy_plot', style: 'timber', interior: 'alchemy', x: 126, z: 212, w: 13, d: 10, wallH: 3.6, roof: ROOF.teal, restore: 'alchemy_lab',
     doors: [{ side: 's', at: 5, w: 3 }],
     windows: [{ side: 's', at: 2.5 }, { side: 's', at: 10.5 }, { side: 'n', at: 6.5 }, { side: 'e', at: 5 }, { side: 'w', at: 5 }],
     fits: [
@@ -176,7 +176,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   },
   {
     // Chapter 3: the rune altar house, at the end of the east lane past the orchard.
-    id: 'rune_plot', style: 'stone', interior: 'rune', x: 244, z: 74, w: 11, d: 10, wallH: 4.0, roof: ROOF.violet, restore: 'rune_altar',
+    id: 'rune_plot', style: 'stone', interior: 'rune', x: 270, z: 114, w: 11, d: 10, wallH: 4.0, roof: ROOF.violet, restore: 'rune_altar',
     doors: [{ side: 'w', at: 4, w: 3 }],
     windows: [{ side: 's', at: 3 }, { side: 's', at: 8 }, { side: 'n', at: 5.5 }, { side: 'e', at: 5 }],
     fits: [
@@ -192,7 +192,7 @@ export const KEEP_BUILDINGS: BuildingSpec[] = [
   },
   {
     // Chapter 4: the dragon hatchery, a timber roost barn up on the north-east upland.
-    id: 'hatch_plot', style: 'timber', interior: 'hatchery', x: 180, z: 30, w: 14, d: 12, wallH: 4.2, roof: ROOF.rust, restore: 'hatchery',
+    id: 'hatch_plot', style: 'timber', interior: 'hatchery', x: 206, z: 70, w: 14, d: 12, wallH: 4.2, roof: ROOF.rust, restore: 'hatchery',
     doors: [{ side: 'e', at: 5, w: 3 }],
     windows: [{ side: 's', at: 3.5 }, { side: 's', at: 10.5 }, { side: 'n', at: 4 }, { side: 'n', at: 10 }, { side: 'w', at: 6 }],
     fits: [
@@ -217,36 +217,36 @@ const inB = (id: string, x: number, z: number) => ({ x: BUILDING[id].x + x, z: B
  * The forge yard south of the smelter: the lean-to against its south wall (west of the door), the
  * hearth (the Emberforge) under it and the anvil out in front.
  */
-export const FORGE = { canopy: { x: 109.2, z: 140.5 }, hearth: { x: 108.9, z: 140.1 }, anvil: { x: 109.4, z: 145.8 } };
+export const FORGE = { canopy: { x: 135.2, z: 180.5 }, hearth: { x: 134.9, z: 180.1 }, anvil: { x: 135.4, z: 185.8 } };
 
 /**
  * Inspect views of the island's districts and landmarks and the castle's yards (label, centre, zoom).
  * The harness frames each one through the gameplay camera.
  */
 export const KEEP_VIEWS: { label: string; x: number; z: number; zoom: number }[] = [
-  { label: 'court', x: 150, z: 138, zoom: 1.35 },
-  { label: 'forge-yard', x: 114.6, z: 148, zoom: 1.05 },
-  { label: 'anvil-close', x: 109.4, z: 147.2, zoom: 0.65 },
-  { label: 'craft-quarter', x: 120, z: 136, zoom: 1.35 },
-  { label: 'green', x: 120, z: 158, zoom: 1.15 },
-  { label: 'stream-bridge', x: 97, z: 153, zoom: 1.0 },
-  { label: 'farm', x: 58, z: 140, zoom: 1.35 },
-  { label: 'falls-pool', x: 78, z: 128, zoom: 1.0 },
-  { label: 'climb', x: 131, z: 128, zoom: 1.2 },
-  { label: 'castle-gate', x: 76, z: 106, zoom: 1.35 },
-  { label: 'castle-bailey', x: 76, z: 72, zoom: 1.6 },
-  { label: 'castle-fountain', x: 76, z: 70, zoom: 0.9 },
-  { label: 'castle-cour', x: 76, z: 55, zoom: 1.2 },
-  { label: 'castle-terrace', x: 76, z: 42, zoom: 1.2 },
-  { label: 'castle-stables', x: 50, z: 61, zoom: 1.1 },
-  { label: 'castle-training', x: 108, z: 87, zoom: 1.2 },
-  { label: 'orchard', x: 218, z: 84, zoom: 1.35 },
-  { label: 'market-lane', x: 162, z: 162, zoom: 1.15 },
-  { label: 'alchemy-pond', x: 100, z: 180, zoom: 1.2 },
-  { label: 'memorial', x: 150.5, z: 189, zoom: 1.15 },
-  { label: 'lookout', x: 153, z: 206, zoom: 1.0 },
-  { label: 'upland', x: 192, z: 44, zoom: 1.35 },
-  { label: 'east-shelf', x: 236, z: 130, zoom: 1.5 },
+  { label: 'court', x: 176, z: 178, zoom: 1.35 },
+  { label: 'forge-yard', x: 140.6, z: 188, zoom: 1.05 },
+  { label: 'anvil-close', x: 135.4, z: 187.2, zoom: 0.65 },
+  { label: 'craft-quarter', x: 146, z: 176, zoom: 1.35 },
+  { label: 'green', x: 146, z: 198, zoom: 1.15 },
+  { label: 'stream-bridge', x: 123, z: 193, zoom: 1.0 },
+  { label: 'farm', x: 68, z: 178, zoom: 1.35 },
+  { label: 'falls-pool', x: 88, z: 167, zoom: 1.0 },
+  { label: 'climb', x: 157.5, z: 167, zoom: 1.2 },
+  { label: 'castle-gate', x: 86, z: 138.5, zoom: 1.35 },
+  { label: 'castle-bailey', x: 86, z: 94.3, zoom: 1.6 },
+  { label: 'castle-fountain', x: 86, z: 92, zoom: 0.9 },
+  { label: 'castle-cour', x: 86, z: 72, zoom: 1.2 },
+  { label: 'castle-terrace', x: 86, z: 55, zoom: 1.2 },
+  { label: 'castle-stables', x: 52, z: 80, zoom: 1.1 },
+  { label: 'castle-training', x: 127.6, z: 113.8, zoom: 1.2 },
+  { label: 'orchard', x: 244, z: 124, zoom: 1.35 },
+  { label: 'market-lane', x: 188, z: 202, zoom: 1.15 },
+  { label: 'alchemy-pond', x: 126, z: 220, zoom: 1.2 },
+  { label: 'memorial', x: 176.5, z: 229, zoom: 1.15 },
+  { label: 'lookout', x: 179, z: 246, zoom: 1.0 },
+  { label: 'upland', x: 218, z: 84, zoom: 1.35 },
+  { label: 'east-shelf', x: 262, z: 170, zoom: 1.5 },
 ];
 
 /**
@@ -268,32 +268,36 @@ export const KEEP_VIEWS: { label: string; x: number; z: number; zoom: number }[]
  * The east shelf, the north-east upland and the south-west terrace are kept open for later.
  */
 const ISLAND = {
-  w: 296, h: 228,
+  w: 322, h: 268,
   // The land's outline (clockwise from the north-west tear); t = fresh tear face, o = old weathered
   // edge. The north-west and north stand out far enough for the castle's crown and the rock round
   // its moat behind the keep.
   outline: [
-    [20, 40, 't'], [19, 22, 't'], [21, 8, 't'], [40, 3.5, 't'], [56, 0.5, 't'], [76, -0.5, 't'], [96, 1, 't'], [104, 5.5, 't'], [118, 6, 't'], [132, 12, 't'],
-    [138, 10, 't'], [141, 30, 't'], [144, 46, 't'], [147, 30, 't'], [150, 10, 't'], [166, 8, 't'], [186, 14, 't'], [204, 10, 't'],
-    [222, 20, 't'], [236, 18, 'o'], [250, 30, 'o'], [262, 46, 'o'], [272, 64, 'o'], [278, 86, 'o'], [276, 104, 'o'], [282, 122, 'o'],
-    [280, 142, 'o'], [270, 158, 'o'], [256, 166, 'o'], [248, 178, 'o'], [252, 192, 'o'], [240, 204, 'o'], [222, 206, 'o'], [204, 198, 'o'],
-    [190, 200, 'o'], [176, 206, 'o'], [164, 214, 'o'], [154, 220, 'o'], [146, 214, 'o'], [140, 204, 'o'], [126, 200, 'o'], [112, 204, 'o'],
-    [96, 198, 'o'], [74, 190, 'o'], [60, 184, 'o'], [46, 170, 'o'], [34, 158, 't'], [28, 140, 't'], [20, 124, 't'], [20, 108, 't'],
-    [14, 96, 't'], [18, 80, 't'], [12, 66, 't'], [20, 54, 't'],
+    [13.2, 52.7, 't'], [11.9, 29.3, 't'], [14.5, 11.1, 't'], [39.2, 5.3, 't'], [60, 1.3, 't'], [86, 0.1, 't'], [112, 2, 't'], [122.4, 7.8, 't'],
+    [140.6, 8.5, 't'], [158.8, 16.3, 't'], [166.6, 13.7, 't'], [170.5, 39.7, 't'], [174, 54, 't'], [177.5, 40, 't'], [176, 30, 't'], [192, 28, 't'],
+    [212, 34, 't'], [230, 30, 't'], [248, 40, 't'], [262, 38, 'o'], [276, 58, 'o'], [288, 80, 'o'], [298, 104, 'o'], [304, 126, 'o'], [302, 144, 'o'],
+    [308, 162, 'o'], [306, 182, 'o'], [296, 198, 'o'], [282, 206, 'o'], [274, 218, 'o'], [278, 232, 'o'], [266, 244, 'o'], [248, 246, 'o'],
+    [230, 238, 'o'], [216, 240, 'o'], [202, 246, 'o'], [190, 254, 'o'], [180, 260, 'o'], [172, 254, 'o'], [166, 244, 'o'], [152, 240, 'o'],
+    [138, 244, 'o'], [122, 238, 'o'], [100, 230, 'o'], [86, 224, 'o'], [72, 210, 'o'], [52, 204, 'o'], [36, 194, 't'], [24, 182, 't'], [16, 170, 't'],
+    [11, 158, 't'], [13.2, 141.1, 't'], [5.4, 125.5, 't'], [10.6, 104.7, 't'], [2.8, 86.5, 't'], [13.2, 70.9, 't'],
   ] as [number, number, string][],
   // Ground levels below the crown, lowest first (each overrides what lies under it; the crown, its
   // edge drawn as the rock's own, is laid over them by the castle's ground).
   levels: [
-    { h: 3, poly: [[206, 104], [262, 100], [270, 130], [256, 156], [214, 160], [206, 132]] },
+    { h: 3, poly: [[232, 144], [288, 140], [296, 170], [282, 196], [240, 200], [232, 172]] },
     // (On the east the shoulder runs close under the crown and fans out unevenly, so its cliff and
     // the crown's merge into one broken massif instead of two parallel ribs.)
-    { h: 5, poly: [[25, 46], [30, 26], [46, 16], [60, 8], [84, 7], [100, 11.5], [118, 10], [134, 18], [130, 32], [127.5, 42], [133, 50], [142, 58], [139, 66], [131, 72], [127.5, 80], [129, 90], [124, 100], [100, 108], [66, 108], [44, 106], [30, 100], [22, 90], [20, 66]] },
+    {
+      h: 5,
+      poly: [[19.7, 60.5], [26.2, 34.5], [47, 21.5], [65.2, 11.1], [96.4, 9.8], [117.2, 15.7], [140.6, 13.7], [161.4, 24.1], [156.2, 42.3], [153, 55.3], [160.1, 65.7], [171.8, 76.1],
+        [167.9, 86.5], [157.5, 94.3], [153, 104.7], [154.9, 117.7], [148.4, 130.7], [117.2, 141.1], [73, 141.1], [44.4, 138.5], [26.2, 130.7], [15.8, 117.7], [13.2, 86.5]],
+    },
     // A knoll rising off that spur, higher than it and set at its own angle (the second outcrop).
-    { h: 8, poly: [[125, 50], [131, 53], [136, 58.5], [132.5, 63], [125, 62]] },
-    { h: 7, poly: [[156, 20], [186, 20], [220, 28], [232, 40], [226, 58], [200, 64], [170, 60], [156, 44]] },
+    { h: 8, poly: [[149.7, 65.7], [157.5, 69.6], [164, 76.8], [159.5, 82.6], [149.7, 81.3]] },
+    { h: 7, poly: [[182, 40], [212, 40], [246, 52], [258, 70], [252, 98], [226, 104], [196, 100], [182, 84]] },
   ],
-  court: { x: 150, z: 135 },
-  landing: { x: 150, z: 141 },
+  court: { x: 176, z: 175 },
+  landing: { x: 176, z: 181 },
 };
 
 const P = (pts: number[][]): Vec2[] => pts.map(([x, z]) => ({ x, z }));
@@ -307,22 +311,24 @@ export const CASTLE_PLAN = {
   keep: KEEP.rect,
   zones: {
     parterre: { x: (ZONES.parterre[0][0] + ZONES.parterre[0][2]) / 2, z: (ZONES.parterre[0][1] + ZONES.parterre[0][3]) / 2 },
-    cour: { x: AXIS, z: 55 },
-    terrace: { x: AXIS, z: 42 },
-    kitchenGarden: { x: 43.5, z: 51 }, privyGarden: { x: mx(43.5), z: 51 },
-    stableYard: { x: 43.5, z: 61 }, musterYard: { x: mx(43.5), z: 61 },
-    paddock: { x: 43.5, z: 88 }, training: { x: mx(43.5), z: 88 },
-    forecourt: { x: AXIS, z: 92 },
+    cour: { x: AXIS, z: 69 },
+    terrace: { x: AXIS, z: 55 },
+    kitchenGarden: { x: 44, z: 66 }, privyGarden: { x: mx(44), z: 66 },
+    stableYard: { x: 44, z: 80 }, musterYard: { x: mx(44), z: 80 },
+    paddock: { x: 44, z: 114.5 }, training: { x: mx(44), z: 114.5 },
+    forecourt: { x: AXIS, z: 121.5 },
   },
 };
 
 /** Is a point inside a polygon (even-odd rule)? */
 const inPoly = (x: number, z: number, poly: number[][]) => inPolygon(x, z, poly);
 
-/** The farm's vegetable plots and the field lane, moved south with the farm. */
-const FIELD_LANE = [[81, 140.2], [54.6, 140.2], [52.4, 139.7], [51.2, 138.8]];
+/** The field lane from the end of the farm road west between the vegetable plots to the hay paddock's gate. */
+const FIELD_LANE = [[91, 178.2], [60.6, 178.2], [58.4, 177.7], [57.2, 176.8]];
 /** The round viewing bay at the end of the spring path, on the pool's south-west bank. */
-const POOL_BAY = { x: 70.6, z: 127.6 };
+const POOL_BAY = { x: 80.6, z: 165.6 };
+/** Where the spring path comes into the viewing bay. */
+const BAY_PATH = { x: 82.6, z: 167.6 };
 
 export function buildKeep(seed: number): ZoneLayout {
   const { w, h } = ISLAND;
@@ -358,19 +364,19 @@ export function buildKeep(seed: number): ZoneLayout {
   };
   // The ore lane runs west from the court along the foot of the castle rock past the foot of the
   // castle's stair to the smelter's ore door.
-  road('ore_lane', [[137, 132], [126, 132.5], [123, 132.5]], 2.5, Ground.Path, 0);
-  road('smithy', [[138, 139], [124, 142.5], [114.5, 142.5], [114.5, 139]], 3.4, Ground.Stone, 0.2);
-  road('farm', [[118, 142.5], [104, 151], [97, 152], [84, 148], [72, 146]], 2.4, Ground.Path, 0);
-  // The spring path leaves the farm lane and climbs to the viewing bay by the pool under the
-  // castle's fall; the field lane from it runs west between the vegetable plots to the hay paddock's gate.
-  road('spring', [[84, 148], [80, 142], [76, 135], [72.6, 129.6]], 2.0, Ground.Path, 0);
+  road('ore_lane', [[163, 172], [152, 172.5], [149, 172.5]], 2.5, Ground.Path, 0);
+  road('smithy', [[164, 179], [150, 182.5], [140.5, 182.5], [140.5, 179]], 3.4, Ground.Stone, 0.2);
+  road('farm', [[144, 182.5], [130, 191], [123, 192], [110, 188], [98, 183], [91, 178.2]], 2.4, Ground.Path, 0);
+  // Where the farm lane ends the spring path climbs to the viewing bay by the pool under the castle's
+  // fall, and the field lane runs on west between the vegetable plots to the hay paddock's gate.
+  road('spring', [[91, 178.2], [87.5, 172.5], [BAY_PATH.x, BAY_PATH.z]], 2.0, Ground.Path, 0);
   road('field', FIELD_LANE, 2.0, Ground.Path, 0);
-  road('bank', [[163, 137], [174, 141], [182, 141], [182, 137]], 3.4, Ground.Stone, 0.2);
-  road('market', [[155, 147], [158, 164], [169.5, 164], [169.5, 161]], 3.0, Ground.Stone, 0.2);
-  road('alchemy', [[141, 145], [130, 160], [118, 180], [116, 186], [106.5, 186], [106.5, 182]], 2.6, Ground.Path, 0);
-  road('memorial', [[150, 147], [150, 170], [151, 186], [153, 205]], 2.4, Ground.Path, 0);
-  road('east', [[166, 138.1], [167, 118], [198, 100], [218, 94], [230, 84], [240, 79.5], [244, 79.5]], 2.6, Ground.Path, 0);
-  road('upland', [[198, 100], [197, 84], [194, 74], [192, 56], [198, 44], [198, 36.5], [194, 36.5]], 2.4, Ground.Path, 0);
+  road('bank', [[189, 177], [200, 181], [208, 181], [208, 177]], 3.4, Ground.Stone, 0.2);
+  road('market', [[181, 187], [184, 204], [195.5, 204], [195.5, 201]], 3.0, Ground.Stone, 0.2);
+  road('alchemy', [[167, 185], [156, 200], [144, 220], [142, 226], [132.5, 226], [132.5, 222]], 2.6, Ground.Path, 0);
+  road('memorial', [[176, 187], [176, 210], [177, 226], [179, 245]], 2.4, Ground.Path, 0);
+  road('east', [[192, 178.1], [193, 158], [224, 140], [244, 134], [256, 124], [266, 119.5], [270, 119.5]], 2.6, Ground.Path, 0);
+  road('upland', [[224, 140], [223, 124], [220, 114], [218, 96], [224, 84], [224, 76.5], [220, 76.5]], 2.4, Ground.Path, 0);
 
   // The castle's approach: the stair's flights and landings up the rock, the ledge, the gate terrace,
   // the bridge's deck, the landing and the lookout, laid before the rock is cut round them.
@@ -408,10 +414,10 @@ export function buildKeep(seed: number): ZoneLayout {
   castleGround.moat(site);
   const { poly: stream, pool } = castleGround.stream(site, [roads.farm, roads.alchemy]);
   strands.push({ pts: stream, hw: 1.45, kind: 'water', ground: Ground.Dirt });
-  G.l.pools = [pool, { x: 90, z: 176, r: 5 }];
-  G.lake(90, 176, 5, Fluid.Water, 0);
+  G.l.pools = [pool, { x: 116, z: 216, r: 5 }];
+  G.lake(116, 216, 5, Fluid.Water, 0);
   // The stream spills off the old south edge into the void.
-  for (let z = 192; z < h; z++) for (let x = 74; x < 86; x++) if (G.l.fluid[G.idx(x, z)] && !inPoly(x + 0.5, z + 0.5, outline)) G.l.cells[G.idx(x, z)] = Cell.Void;
+  for (let z = 232; z < h; z++) for (let x = 100; x < 112; x++) if (G.l.fluid[G.idx(x, z)] && !inPoly(x + 0.5, z + 0.5, outline)) G.l.cells[G.idx(x, z)] = Cell.Void;
 
   // ─── Cliffs where two levels meet ────────────────────────────────────────────
   // A band of rock rises from the lower ground to just above the higher one: two cells thick, and
@@ -493,13 +499,13 @@ export function buildKeep(seed: number): ZoneLayout {
       if (!G.reserved[i]) G.reserved[i] = 3;
     }
   };
-  G.verge(120, 158, 7);
-  G.clearing(120, 158, 6, undefined, 1);
-  keepOpen([[140, 178], [160, 178], [161, 196], [141, 196]]);
-  keepOpen([[42, 124], [84, 124], [84, 160], [42, 160]]);
-  keepOpen([[209, 108], [258, 104], [265, 130], [253, 152], [216, 155], [209, 132]]);
-  keepOpen([[46, 162], [82, 162], [84, 178], [66, 182], [56, 172]]);
-  const look = { x: 153, z: 208 };
+  G.verge(146, 198, 7);
+  G.clearing(146, 198, 6, undefined, 1);
+  keepOpen([[166, 218], [186, 218], [187, 236], [167, 236]]);
+  keepOpen([[48, 162], [94, 162], [94, 198], [48, 198]]);
+  keepOpen([[235, 148], [284, 144], [291, 170], [279, 192], [242, 195], [235, 172]]);
+  keepOpen([[72, 202], [108, 202], [110, 218], [92, 222], [82, 212]]);
+  const look = { x: 179, z: 248 };
   G.floor(look.x, look.z, 4.6, 2.6, 0, Ground.Stone);
 
   // ─── The castle: the curtain, then the terrace and the bailey's grounds ─────
@@ -525,10 +531,10 @@ export function buildKeep(seed: number): ZoneLayout {
   st('furnace', 'furnace', inB('smelter', 8.5, 2.6));
   st('shop', 'shop', inB('shop', 7.5, 4.5));
   // The Restoration Board stands in the arrival court with the Warden.
-  st('restore', 'board', { x: 143.5, z: 141.5 }, 0, 0.6);
+  st('restore', 'board', { x: 169.5, z: 181.5 }, 0, 0.6);
   st('anvil', 'anvil', FORGE.anvil, 0, 1.0);
   st('restore', 'emberforge', FORGE.hearth, 0, 1.3);
-  st('npc', 'warden', { x: 156.5, z: 141 }, -Math.PI * 0.6, 0.5);
+  st('npc', 'warden', { x: 182.5, z: 181 }, -Math.PI * 0.6, 0.5);
   st('npc', 'quartermaster', inB('shop', 7.5, 3.3), 0, 0.4);
   blockRect(G, inB('bank', 10, 6.5).x, inB('bank', 10, 6.5).z, 3.1, 0.6, 0);
   blockRect(G, inB('shop', 7.5, 4.5).x, inB('shop', 7.5, 4.5).z, 2.6, 0.6, 0);
@@ -545,8 +551,8 @@ export function buildKeep(seed: number): ZoneLayout {
   // ─── Dressing ──────────────────────────────────────────────────────────────
   // Real lights only at the court, the castle's gate terrace and the two busiest doors; lamp posts
   // elsewhere.
-  for (const [x, z] of [[court.x - 12.5, court.z + 0.5], [court.x + 12.5, court.z + 0.5], [70, 118.4], [82, 118.4], [inB('bank', 6, 17).x, inB('bank', 6, 17).z], [inB('shop', 4.5, 15.2).x, inB('shop', 4.5, 15.2).z]]) G.prop('lamp', x, z, 0, 1, 0.4);
-  for (const p of [{ x: 126, z: 140 }, { x: 140.6, z: 129 }, { x: 160.4, z: 146 }, { x: 132, z: 154 }, { x: 147.6, z: 160 }, { x: 170, z: 128 }]) G.prop('lamp_post', p.x, p.z, 0, 1, 0.4);
+  for (const [x, z] of [[court.x - 12.5, court.z + 0.5], [court.x + 12.5, court.z + 0.5], [78.2, 154.6], [93.8, 154.6], [inB('bank', 6, 17).x, inB('bank', 6, 17).z], [inB('shop', 4.5, 15.2).x, inB('shop', 4.5, 15.2).z]]) G.prop('lamp', x, z, 0, 1, 0.4);
+  for (const p of [{ x: 152, z: 180 }, { x: 166.6, z: 169 }, { x: 186.4, z: 186 }, { x: 158, z: 194 }, { x: 173.6, z: 200 }, { x: 196, z: 168 }]) G.prop('lamp_post', p.x, p.z, 0, 1, 0.4);
   // The forge yard, as the work flows from west to east (see FORGE): under the lean-to against the
   // smelter's south wall the Emberforge (its bellows and chimney built on) and the coal bin; the bars come out of
   // the smelter door onto their pallet. Out in front of the fire: the anvil, the quench trough at the
@@ -566,12 +572,12 @@ export function buildKeep(seed: number): ZoneLayout {
   fit('fit_ore_bin', inB('smelter', 20.0, 3.0), 0, 1, 0.8);
   fit('fit_woodpile', inB('smelter', -1.4, 6.0), Math.PI / 2, 1, 0.8);
   // The market: stalls along the lane down to the shop.
-  G.prop('stall', 153.8, 158, Math.PI / 2, 1, 1.6).len = 0;
-  G.prop('stall', 161, 168, Math.PI / 2 - 0.3, 1, 1.6).len = 2;
-  G.prop('stall', 175, 167.5, -Math.PI / 2, 1, 1.6).len = 1;
+  G.prop('stall', 179.8, 198, Math.PI / 2, 1, 1.6).len = 0;
+  G.prop('stall', 187, 208, Math.PI / 2 - 0.3, 1, 1.6).len = 2;
+  G.prop('stall', 201, 207.5, -Math.PI / 2, 1, 1.6).len = 1;
   // Fingerposts where the smithy and bank roads leave the court.
-  G.prop('signpost', 135.6, 141.2, 0, 1, 0.3);
-  G.prop('signpost', 164.6, 138.2, 0, 1, 0.3);
+  G.prop('signpost', 161.6, 181.2, 0, 1, 0.3);
+  G.prop('signpost', 190.6, 178.2, 0, 1, 0.3);
 
   // ─── District and roadside dressing ──────────────────────────────────────────
   // Everything here keeps off the roads, the station approaches and the stage (any cell it would
@@ -627,50 +633,50 @@ export function buildKeep(seed: number): ZoneLayout {
   };
 
   // The village green: an open lawn round the old well, a pair of shade trees and benches.
-  dress('well', 120.6, 158.4, 0.12, 1.1);
-  for (const [x, z] of [[122.5, 154.2], [125.5, 155.5]]) plant(x, z);
-  dress('fit_bench', 119.4, 154.6, 0.08, 0.5);
-  dress('fit_bench', 125.2, 159.4, Math.PI / 2 + 0.1, 0.5);
+  dress('well', 146.6, 198.4, 0.12, 1.1);
+  for (const [x, z] of [[148.5, 194.2], [151.5, 195.5]]) plant(x, z);
+  dress('fit_bench', 145.4, 194.6, 0.08, 0.5);
+  dress('fit_bench', 151.2, 199.4, Math.PI / 2 + 0.1, 0.5);
 
   // The vegetable plots in a true grid either side of the field lane, the scarecrow between them
   // (the hay paddock at the lane's end, below). Each plot
   // grows one crop, the five crops turning through the grid so no two plots side by side match.
-  // (Moved 8 m south with the farm, and 2 m west, clear of the pool under the castle's fall.)
+  // (West of the pool under the castle's fall.)
   for (const [xi, x] of FARM.plotsX.entries()) for (const [zi, z] of FARM.plotsZ.entries()) {
     const plot = dress('veg_patch', x, z, 0, 1.5);
     if (plot) plot.v = (xi + 2 * zi) % 5;
   }
-  dress('scarecrow', 68.0, 141.6, 0, 0.4);
+  dress('scarecrow', 78.0, 179.6, 0, 0.4);
 
   // The bank forecourt: planters either side of the door, a bench facing the square.
   dress('planter', inB('bank', 6.2, 16).x, inB('bank', 6.2, 16).z, 0, 0.7, { paved: true });
   dress('planter', inB('bank', 13.8, 16).x, inB('bank', 13.8, 16).z, 0, 0.7, { paved: true });
   dress('fit_bench', inB('bank', 15.6, 21.2).x, inB('bank', 15.6, 21.2).z, -Math.PI / 2, 0.5);
   // The market: each stall's stock stacked at its back corner.
-  dress('fit_sacks', 152.6, 155.6, 0.4, 0.5);
-  dress('crates', 159.4, 170.6, 0.6, 0.9);
-  dress('barrels', 176.4, 165.0, 0.2, 0.9);
+  dress('fit_sacks', 178.6, 195.6, 0.4, 0.5);
+  dress('crates', 185.4, 210.6, 0.6, 0.9);
+  dress('barrels', 202.4, 205.0, 0.2, 0.9);
   // The alchemy lab's front garden and a bench by the pond.
-  for (const [x, z] of [[102.4, 186.2], [102.4, 189.4], [111.0, 186.2], [111.0, 189.4]]) dress('herb_bed', x, z, 0, 1.2);
-  dress('fit_bench', 96.6, 181.4, -0.5, 0.5);
+  for (const [x, z] of [[128.4, 226.2], [128.4, 229.4], [137.0, 226.2], [137.0, 229.4]]) dress('herb_bed', x, z, 0, 1.2);
+  dress('fit_bench', 122.6, 221.4, -0.5, 0.5);
   // The memorial garden: hedges on three sides, open to the lookout path; planters and benches.
-  line('hedge', 141.0, 178.6, 148.4, 178.6);
-  line('hedge', 152.6, 178.6, 159.4, 178.6);
-  line('hedge', 141.0, 179.4, 141.0, 195.6);
-  line('hedge', 160.0, 179.4, 160.0, 195.6);
-  G.prop('memorial', 150.6, 187.0, 0, 1.35, 1.9);
-  for (const [x, z] of [[146.6, 184.2], [154.6, 184.2]]) dress('planter', x, z, 0, 0.7, { paved: true });
-  dress('fit_bench', 154.4, 191.4, 0, 0.5);
-  dress('fit_bench', 146.6, 191.4, 0, 0.5, { paved: true });
+  line('hedge', 167.0, 218.6, 174.4, 218.6);
+  line('hedge', 178.6, 218.6, 185.4, 218.6);
+  line('hedge', 167.0, 219.4, 167.0, 235.6);
+  line('hedge', 186.0, 219.4, 186.0, 235.6);
+  G.prop('memorial', 176.6, 227.0, 0, 1.35, 1.9);
+  for (const [x, z] of [[172.6, 224.2], [180.6, 224.2]]) dress('planter', x, z, 0, 0.7, { paved: true });
+  dress('fit_bench', 180.4, 231.4, 0, 0.5);
+  dress('fit_bench', 172.6, 231.4, 0, 0.5, { paved: true });
   // The lookout on the old south headland: a parapet on the edge, a bench and a lamp.
   G.prop('parapet', look.x, look.z + 2.6, 0).len = 9;
   blockRect(G, look.x, look.z + 2.6, 4.6, 0.5, 0);
   G.prop('fit_bench', look.x - 2.8, look.z + 1.0, 0, 1, 0.5);
   G.prop('lamp_post', look.x + 3.6, look.z + 1.0, 0, 1, 0.4);
   // The orchard by the east lane: fruit trees in rows, a cart and crates for the picking.
-  for (let x = 206.5; x <= 230.5; x += 4) for (let z = 73.5; z <= 89.5; z += 4) if (inPoly(x, z, [[200, 68], [236, 70], [238, 92], [222, 96], [202, 90]])) plant(x, z);
-  dress('cart', 214.4, 96.6, -0.3, 1.1);
-  dress('crates', 218.0, 97.2, 0.3, 0.9);
+  for (let x = 232.5; x <= 256.5; x += 4) for (let z = 113.5; z <= 129.5; z += 4) if (inPoly(x, z, [[226, 108], [262, 110], [264, 132], [248, 136], [228, 130]])) plant(x, z);
+  dress('cart', 240.4, 136.6, -0.3, 1.1);
+  dress('crates', 244.0, 137.2, 0.3, 0.9);
 
   /** A piece of dressing: blocking a disc of radius `block`, or a turned rectangle [hw, hd]. */
   const place = (kind: string, x: number, z: number, rot = 0, opt: { s?: number; len?: number; v?: number; block?: number | [number, number] } = {}) => {
@@ -726,16 +732,16 @@ export function buildKeep(seed: number): ZoneLayout {
   {
     const c = POOL_BAY, fall = { x: WATER.pool.x, z: WATER.pool.z - 3 };
     G.clearing(c.x, c.z, 2.0, Ground.Stone, 0);
-    G.prop('round_terrace', c.x, c.z, toward(c.x, c.z, 72.6, 129.6)).len = 2.2;
+    G.prop('round_terrace', c.x, c.z, toward(c.x, c.z, BAY_PATH.x, BAY_PATH.z)).len = 2.2;
     const ux = (fall.x - c.x) / Math.hypot(fall.x - c.x, fall.z - c.z), uz = (fall.z - c.z) / Math.hypot(fall.x - c.x, fall.z - c.z);
     const bx = c.x + ux * 1.15, bz = c.z + uz * 1.15;
     G.prop('stone_bench', bx, bz, toward(bx, bz, fall.x, fall.z));
     blockRect(G, bx, bz, 0.9, 0.3, toward(bx, bz, fall.x, fall.z));
-    const px = 72.6 - c.x, pz = 129.6 - c.z, pl = Math.hypot(px, pz), tx = px / pl, tz = pz / pl;
+    const px = BAY_PATH.x - c.x, pz = BAY_PATH.z - c.z, pl = Math.hypot(px, pz), tx = px / pl, tz = pz / pl;
     for (const sx of [-1, 1]) G.prop('lamp_post', c.x + tx * 2.4 - tz * sx * 1.4, c.z + tz * 2.4 + tx * sx * 1.4, 0, 1, 0.4);
   }
   // Reeds along the pool's west shore and the pond's.
-  for (const [x, z, a] of [[73.2, 124.4, 0.4], [73.6, 122.2, 1.6], [86.0, 172.0, 0.6], [85.6, 175.8, 2.2], [86.4, 179.6, 4.0]]) G.prop('reeds', x, z, a);
+  for (const [x, z, a] of [[82.4, 162.2, 0.4], [82.9, 159.3, 1.6], [112.0, 212.0, 0.6], [111.6, 215.8, 2.2], [112.4, 219.6, 4.0]]) G.prop('reeds', x, z, a);
   // A few rounded stones breaking the stream's surface below the pool, foam trailing from them.
   for (const [n, t] of [[1, 0.35], [2, 0.62], [3, 0.88], [4, 1.5], [5, 2.3]] as const) {
     const k = Math.floor(t), a = stream[k], b = stream[k + 1], f = t - k;
@@ -744,7 +750,7 @@ export function buildKeep(seed: number): ZoneLayout {
     G.prop('stream_stone', x + (nx / l) * side, z + (nz / l) * side, Math.atan2(b.x - a.x, b.z - a.z)).len = n;
   }
   // Where the stream leaves the island over its old south edge, it falls away into the Veil.
-  G.prop('edge_fall', 80.6, 191.6, Math.atan2(79 - 84, 194 - 186));
+  G.prop('edge_fall', 106.6, 231.6, Math.atan2(105 - 110, 234 - 226));
   // The hero is staged here for character creation and the pose tools; keep every camera spot
   // around it clear, or the near plane slices whatever prop sits there.
   for (const c of STAGE_CAMERAS) G.reserve(KEEP_STAGE.x + c.x, KEEP_STAGE.z + c.z, 2);
@@ -753,7 +759,7 @@ export function buildKeep(seed: number): ZoneLayout {
   // ─── Rock: outcrops, and crags along the fresh tear faces ─────────────────────
   // Rock rises only on open, unclaimed ground (never a road, yard, building or lawn kept open), and
   // never on the castle's crown or by its stair.
-  const nearCastle = (x: number, z: number) => onCrown(x, z) || (x > 108 && x < 140 && z > 108 && z < 136) || Math.hypot(x - WATER.pool.x, z - WATER.pool.z) < 9;
+  const nearCastle = (x: number, z: number) => onCrown(x, z) || (x > 133 && x < 166 && z > 141 && z < 176) || Math.hypot(x - WATER.pool.x, z - WATER.pool.z) < 11;
   const rock = (i: number, height: number) => {
     if (G.l.cells[i] !== Cell.Ground || G.l.fluid[i] || G.reserved[i] === 1 || G.reserved[i] === 3) return;
     if (nearCastle((i % w) + 0.5, Math.floor(i / w) + 0.5)) return;
@@ -761,7 +767,7 @@ export function buildKeep(seed: number): ZoneLayout {
     G.l.ground[i] = Ground.Cave;
     G.l.elev[i] = Math.max(0.9, height);
   };
-  for (const [x, z, r, hgt] of [[242, 150, 3.0, 2.2], [236, 186, 2.4, 1.8], [30, 116, 2.6, 2.0], [266, 120, 2.6, 2.4], [178, 182, 2.2, 1.6]]) {
+  for (const [x, z, r, hgt] of [[268, 190, 3.0, 2.2], [262, 226, 2.4, 1.8], [26.2, 151.5, 2.6, 2.0], [292, 160, 2.6, 2.4], [204, 222, 2.2, 1.6]]) {
     G.blob(x, z, r, 1.0, (i, _x, _z, t) => rock(i, hgt * (1.1 - t * 0.5)));
   }
   // Buttresses: at irregular intervals along the foot of every tall face (the castle rock, the
@@ -824,13 +830,13 @@ export function buildKeep(seed: number): ZoneLayout {
   // ─── Woods ─────────────────────────────────────────────────────────────────
   // Block-canopy woods on the rim belts and toward the edges; small groves break up the lawns.
   const belts = [
-    [[240, 26], [252, 38], [264, 56], [270, 80], [262, 96], [250, 70], [238, 40]],
-    [[236, 166], [250, 166], [246, 190], [234, 198], [214, 196], [206, 188], [224, 178]],
-    [[96, 190], [124, 192], [136, 198], [112, 200], [98, 196]],
-    [[22, 124], [34, 128], [42, 132], [36, 146], [26, 144]],
+    [[266, 52], [278, 70], [290, 96], [296, 120], [288, 136], [276, 110], [264, 72]],
+    [[262, 206], [276, 206], [272, 230], [260, 238], [240, 236], [232, 228], [250, 218]],
+    [[122, 230], [150, 232], [162, 238], [138, 240], [124, 236]],
+    [[22, 166], [36, 168], [46, 174], [40, 188], [28, 184]],
   ];
-  for (const [gx, gz, r] of [[176, 112, 3.4], [186, 160, 3.0], [124, 176, 2.8], [192, 186, 3.2], [270, 140, 3.0], [230, 140, 3.4],
-    [140, 112, 2.6], [182, 102, 2.8], [196, 132, 3.2], [204, 166, 2.8], [168, 186, 3.0], [128, 190, 2.4], [70, 164, 3.0], [84, 168, 2.6], [212, 116, 2.6], [244, 120, 2.8], [160, 34, 2.6], [214, 44, 3.0]]) {
+  for (const [gx, gz, r] of [[202, 152, 3.4], [212, 200, 3.0], [150, 216, 2.8], [218, 226, 3.2], [296, 180, 3.0], [256, 180, 3.4],
+    [166, 152, 2.6], [208, 142, 2.8], [222, 172, 3.2], [230, 206, 2.8], [194, 226, 3.0], [154, 230, 2.4], [80, 202, 3.0], [94, 206, 2.6], [238, 156, 2.6], [270, 160, 2.8], [186, 74, 2.6], [240, 84, 3.0]]) {
     G.blob(gx, gz, r, 1, (i) => {
       if (G.l.cells[i] === Cell.Ground && !G.reserved[i] && G.rng() < 0.6) G.l.cells[i] = Cell.Tree;
     });
@@ -868,7 +874,7 @@ export function buildKeep(seed: number): ZoneLayout {
     const set = new Uint8Array(w * h);
     for (const p of G.l.props) if (G.inside(Math.floor(p.x), Math.floor(p.z))) set[G.idx(Math.floor(p.x), Math.floor(p.z))] = 1;
     const near = G.distance((i) => !open(i) || !!set[i]);
-    for (let z = 118; z < 160; z++) for (let x = 40; x < 116; x++) {
+    for (let z = 152; z < 200; z++) for (let x = 40; x < 142; x++) {
       const i = G.idx(x, z);
       if (!open(i) || onCrown(x + 0.5, z + 0.5) || level[i] >= CROWN_Y) continue;
       const ease = Math.min(1, Math.max(0, (near[i] - 1) / 3));

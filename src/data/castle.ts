@@ -6,12 +6,12 @@
 export const CURTAIN_WALL = {
   /** The curtain's thickness and the height of its wall walk's deck. */
   T: 2.2,
-  H: 7,
+  H: 9,
   /** The top of the walk's deck, where a tower's doorway onto it has its sill. */
-  walkY: 7.06,
+  walkY: 9.06,
   /** How far the middle of the walk lies from the wall's centre line, toward the bailey. */
   walkOff: 0.445,
 };
 
 /** The gatehouse's two drums on the curtain's line: their centres either side of the axis, their radius. */
-export const GATEHOUSE = { cx: 6, R: 2.6 };
+export const GATEHOUSE = { cx: 7.8, R: 3.4 };

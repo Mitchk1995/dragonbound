@@ -15,16 +15,16 @@ import { RANGE_SPECS } from '../src/world/castle/rangeSpecs';
  * half-door. (The castle's geometry audit tests their blocks against each other and the rest.)
  */
 const B = Object.fromEntries(RANGE_SPECS.map((b) => [b.id, b as CastleSpec]));
-const floorOf = (b: CastleSpec) => (b.z < 44 ? TERRACE_Y : CROWN_Y);
+const floorOf = (b: CastleSpec) => (b.z < 58 ? TERRACE_Y : CROWN_Y);
 const UP = TERRACE_Y - CROWN_Y;
 
 describe('the north range and the bailey\'s buildings', () => {
-  it('the great hall and the chapel take steep slate roofs: eaves at +12, ridges at +20.9 under the keep\'s lights, the lantern to +24.6 and the flèche to +27', () => {
+  it('the great hall and the chapel take steep slate roofs: eaves at +15.5, ridges at +27.2 under the keep\'s lights, the lantern to +32 and the flèche to +35', () => {
     for (const id of ['great_hall', 'chapel']) {
       const b = B[id], R = b.look!.roof!;
-      expect(b.wallH + UP, id).toBe(12);
-      expect(R.ridge + UP, id).toBeCloseTo(20.9, 6);
-      // (Under the keep's small lights over them, which start at +21.36.)
+      expect(b.wallH + UP, id).toBe(15.5);
+      expect(R.ridge + UP, id).toBeCloseTo(27.2, 6);
+      // (Under the keep's small lights over them, which start at +27.36.)
       expect(R.ridge + UP, id).toBeLessThan(TERRACE_Y - CROWN_Y + KEEP_H.chamber + 1.36);
       const P = pitchOf(b.d, b.wallH, R.ridge);
       // Steep: over fifty degrees.
@@ -35,8 +35,8 @@ describe('the north range and the bailey\'s buildings', () => {
       expect(box.max.y - floorOf(b), id).toBeGreaterThan(tip - 0.3);
       expect(box.max.y - floorOf(b), id).toBeLessThan(tip + 0.6);
     }
-    expect(B.great_hall.look!.roof!.lantern!.tip + UP).toBeCloseTo(24.6, 6);
-    expect(B.chapel.look!.roof!.fleche!.tip + UP).toBeCloseTo(27, 6);
+    expect(B.great_hall.look!.roof!.lantern!.tip + UP).toBeCloseTo(32, 6);
+    expect(B.chapel.look!.roof!.fleche!.tip + UP).toBeCloseTo(35, 6);
     // The lantern stands over the open hearth, on the ridge.
     const hearth = fitsOf(B.great_hall).find((f) => f.kind === 'open_hearth')!, R = B.great_hall.look!.roof!;
     expect(hearth.x).toBe(R.lantern!.u);
@@ -74,7 +74,7 @@ describe('the north range and the bailey\'s buildings', () => {
         // Clear of the doors in its wall (a window over a door stands over its arch).
         for (const d of b.doors.filter((dr) => dr.side === w.side)) {
           const across = w.u + w.w / 2 > d.at - 0.4 && w.u - w.w / 2 < d.at + d.w + 0.4;
-          if (across) expect(w.sill - (w.kind === 'oriel' ? 0.9 : 0), name).toBeGreaterThan(4.55);
+          if (across) expect(w.sill - (w.kind === 'oriel' ? 0.9 : 0), name).toBeGreaterThan(5.55);
         }
         for (const o of ws) if (o !== w && o.side === w.side && Math.abs(o.u - w.u) < (o.w + w.w) / 2 + 0.3) {
           expect(o.sill > head || w.sill > o.sill + o.h, `${name} and ${o.kind}@${o.u}`).toBe(true);
@@ -108,7 +108,7 @@ describe('the north range and the bailey\'s buildings', () => {
       expect(Math.abs(((f.rot ?? 0) - (side === 'n' ? Math.PI : 0)) % (2 * Math.PI))).toBeLessThan(1e-6);
     }
     // The aisle between the rows runs from the feed bay to the tack room, every cell of it floor.
-    for (let x = s.x + 5; x < s.x + 15; x++) for (const z of [s.z + 4, s.z + 5]) expect(cellRole(s, x, z), `${x},${z}`).toBe('floor');
+    for (let x = s.x + 6; x < s.x + 19; x++) for (const z of [s.z + 5, s.z + 6, s.z + 7]) expect(cellRole(s, x, z), `${x},${z}`).toBe('floor');
     // The barracks mirror the stables: the gable doors face each other, the lofts at one height.
     expect(B.barracks.look!.loft!.y).toBe(s.look!.loft!.y);
     expect(B.barracks.wallH).toBe(s.wallH);

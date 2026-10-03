@@ -28,13 +28,17 @@ export function curtain(s: Site) {
       G.reserved[i] = 1;
     });
   };
-  /** A straight stretch of curtain from a to b; `ends` flags what it meets (1 / 2 a tower at a / b). */
+  /**
+   * A straight stretch of curtain from a to b; `ends` flags what it meets (1 / 2 a tower at a / b; 16 /
+   * 32 the curtain's corner at a / b, where its walk turns onto the next run's).
+   */
+  const nearCorner = (p: Vec2) => CURTAIN_CORNERS.some((c) => Math.hypot(p.x - c.x, p.z - c.z) < 6);
   const wallSeg = (a: Vec2, b: Vec2, ends: number) => {
     const L = Math.hypot(b.x - a.x, b.z - a.z), rot = Math.atan2(-(b.z - a.z), b.x - a.x);
     if (L < 0.2) return;
     const p = G.prop('castle_wall', (a.x + b.x) / 2, (a.z + b.z) / 2, rot);
     p.len = L;
-    p.v = ends;
+    p.v = ends | (nearCorner(a) ? 16 : 0) | (nearCorner(b) ? 32 : 0);
   };
   for (const [a, b] of CURTAIN_RUNS) {
     const L = Math.hypot(b.x - a.x, b.z - a.z), ux = (b.x - a.x) / L, uz = (b.z - a.z) / L, rot = Math.atan2(-uz, ux);

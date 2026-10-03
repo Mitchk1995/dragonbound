@@ -3,12 +3,13 @@ import { ModelKit, PAL } from '../render/kit';
 import { addPatch } from '../render/surface';
 import { hash01, octagon, prism, taper, wedge } from '../render/blocks';
 import {
-  fitsOf, flightsOf, inRoom, raisedAt, isVoid, partitionRuns, partitionsOf, sideLen, stairParts, stairRect, stairSteps, wallRuns,
+  fitsOf, flightsOf, inRoom, raisedAt, isVoid, partitionRuns, partitionsOf, sideLen, stairParts, stairRect, stairSteps, STAIR_RULE, wallRuns,
   type BuildingSpec, type Fit, type FlightSteps, type Floor, type Side, type Window,
 } from './building';
 import { CURTAIN_WALL } from '../data/castle';
 import { COURSE, STONE as STONE_LEN, type MasonGrid } from '../render/masonry';
 import { glazedWindow } from './castleProps/curtain';
+import { GROW } from './castle/plan';
 import { BACK_PARAPET, fleche, hangingLamp, lantern, LEAD, RIDGE as RIDGE_LEAD, roseRing, rosePlate, slateRoof, SLATES } from './castle/rangeParts';
 import {
   archDressing, archInset, archPane, archRing, glassMat, roomMaterial, roomPlate, spread, ASHLAR_B, ASHLAR_L, audit, BASE, BASE_COURSE, BUILDING_FLOOR_LINE, crownFoot, DRESS, frieze, pointedDoor, windowGlass, BLOCKS, BRICK, BRICK_D, cb, chunk, COAL, DARK, DECK, finishProp, flag, flame, DOOR_STAIN, IRON, IRON_L, lancet, light, livery, masonry, oneStone, PLASTER,
@@ -44,7 +45,7 @@ const DRESS_T = 0.48;
 /** How much further a long block of a square window's jamb reaches along the face than a short one. */
 const JAMB_LONG = 0.24;
 /** A shared keep door's square head, on a course line (its lintel is the course over it). */
-const GREAT_DOOR_H = 8 * COURSE;
+const GREAT_DOOR_H = 10 * COURSE;
 /** The flags of the castle buildings' floors. */
 export const FLOOR_STONE = 0x7e776c;
 const PLANKS = [0x8a6440, 0x7a5636, 0x94704a];
@@ -253,7 +254,9 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   const CAP = timber ? TIMBER : STONE_D;
   const FRAME = timber ? TIMBER : S.light;
   // (A castle doorway's pointed head; its leaves hang inside it a hand clear of the stone.)
-  const doorH = keep ? 4.05 : hall ? 3.8 : timber ? 2.8 : 3.1;
+  const doorH = keep ? 5.05 : hall ? 3.8 : timber ? 2.8 : 3.1;
+  /** The castle's buildings grew 1.3× round the hero: their fittings (lanterns, rails, the porch) grew with them. */
+  const grow = keep ? GROW : 1;
   // The two cut thresholds (world heights: OFF = nothing cut) and the glass for each band.
   const uMid = { value: OFF }, uTop = { value: OFF };
   const glass = { still: glassMats(), mid: glassMats(), top: glassMats() };
@@ -329,7 +332,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
   // none lies in the plane of the ground raised under it.)
   const FLAGS = 0.05;
   for (const { rect: [x0, z0, x1, z1], h } of b.raised ?? []) {
-    const n = Math.max(1, Math.ceil(h / 0.17 - 1e-6)), T = 0.32;
+    const n = Math.max(1, Math.ceil(h / (keep ? 0.2 : 0.17) - 1e-6)), T = 0.32 * grow;
     const ow = x0 > 1, oe = x1 < w - 1, on = z0 > 1, os = z1 < d - 1;
     for (let i = 0; i < n; i++) {
       const out = T * (n - 1 - i), y1 = ((i + 1) * h) / n + FLAGS, y0 = 0.04;
@@ -454,7 +457,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // (A door in a wall shared with the great keep has a square head on a course line, its lintel the
       // course over it.)
       const dH = castle || !keep ? doorH : GREAT_DOOR_H, lintel = keep ? COURSE : 0.36;
-      const rise = Math.min(dr.w * 0.62, 1.7), sp = castle ? doorH - rise : dH;
+      const rise = Math.min(dr.w * 0.62, 1.7 * grow), sp = castle ? doorH - rise : dH;
       // (A castle door's jambs stand just outside the opening, right under the voussoir ring's feet, so
       // the ring springs straight off them over moulded imposts and the two share one span.)
       // (Its inner face a hair inside the opening, never in the plane of the wall's end behind it.)
@@ -477,16 +480,17 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
           W.shape(dk2, dp2, st.geo, DRESS, uc, 0, face, undefined, 0, true);
         }
         if (!inner && !hooded) for (const s of [-1, 1]) {
-          const [lk, lp] = at(fade, 2.4);
+          // (Hung as much higher as the door grew taller, the lantern itself the same.)
+          const lift = doorH - 4.05, [lk, lp] = at(fade, 2.4 + lift);
           // A navy wall lantern with warm glass and a gold finial, on the plain wall beside the door,
           // midway between its hood and the next window's (clear of both); the stables' the same.
-          const lu = uc + s * (dr.w / 2 + 1.06);
-          W.box(lk, lp, 0.2, 0.3, 0.08, lu, 3.1, face + 0.04, LAMP_NAVY, 0, 0.01);
-          W.box(lk, lp, 0.07, 0.07, 0.5, lu, 3.2, face + 0.25, LAMP_NAVY, 0, 0.01);
-          W.box(lk, lp, 0.26, 0.36, 0.26, lu, 2.8, face + 0.5, 0xffcf86, 0, 0.01, 0xffa038, 1.4);
-          W.box(lk, lp, 0.32, 0.08, 0.32, lu, 3.02, face + 0.5, LAMP_NAVY, 0, 0.02);
-          W.box(lk, lp, 0.32, 0.06, 0.32, lu, 2.6, face + 0.5, LAMP_NAVY, 0, 0.02);
-          W.box(lk, lp, 0.1, 0.1, 0.1, lu, 3.12, face + 0.5, PAL.gold, Math.PI / 4, 0.01);
+          const lu = uc + s * (dr.w / 2 + 1.06 * grow), ly = (y: number) => y + lift;
+          W.box(lk, lp, 0.2, 0.3, 0.08, lu, ly(3.1), face + 0.04, LAMP_NAVY, 0, 0.01);
+          W.box(lk, lp, 0.07, 0.07, 0.5, lu, ly(3.2), face + 0.25, LAMP_NAVY, 0, 0.01);
+          W.box(lk, lp, 0.26, 0.36, 0.26, lu, ly(2.8), face + 0.5, 0xffcf86, 0, 0.01, 0xffa038, 1.4);
+          W.box(lk, lp, 0.32, 0.08, 0.32, lu, ly(3.02), face + 0.5, LAMP_NAVY, 0, 0.02);
+          W.box(lk, lp, 0.32, 0.06, 0.32, lu, ly(2.6), face + 0.5, LAMP_NAVY, 0, 0.02);
+          W.box(lk, lp, 0.1, 0.1, 0.1, lu, ly(3.12), face + 0.5, PAL.gold, Math.PI / 4, 0.01);
         }
         if (!stable && !inner && !hooded && !under) {
           // The house banner over the door, above the floor-line course (clear of it and of the hood), so
@@ -668,7 +672,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     // (A ground-floor partition stops a hair under the boards over it, never in their plane.)
     const base = floor ? storeyH : 0, top = floor ? wallH : look?.partitionTop ?? (multi ? storeyH - 0.02 : Math.min(storeyH, wallH));
     /** A doorway's head in an interior wall (under a low ceiling, its lintel the wall's top course). */
-    const head = Math.min(2.9, top - base - 0.32);
+    const head = Math.min(2.9 * grow, top - base - 0.32);
     const [sk, sp]: [ModelKit, Obj] = floor ? [mk, mid] : [k, ground];
     const [hk, hp]: [ModelKit, Obj] = floor ? [fk, lifted] : [mk, mid];
     for (const pt of partitionsOf(b, floor)) {
@@ -735,12 +739,13 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
         // stops at its inner face, so the two never lie in each other.)
         const turn = (sz: number) => (!along && lz + sz >= 1 && lz + sz <= d - 2 && open(lx, lz + sz) && !headOf(lx, lz + sz) ? 0.12 : 0);
         const z0 = -0.5 + turn(-1), z1 = 0.5 - turn(1);
-        cb(gk, gp, along ? [1.0, 0.1, 0.12] : [0.12, 0.1, z1 - z0], [ex, storeyH + 0.95, ez + (along ? 0 : (z0 + z1) / 2)], WOOD_D, undefined, 0.02);
-        cb(gk, gp, [0.12, 0.95, 0.12], [ex - (along ? 0.45 : 0), storeyH + 0.47, ez - (along ? 0 : 0.45)], WOOD_D, undefined, 0.02);
+        const rail = 0.95 * grow;
+        cb(gk, gp, along ? [1.0, 0.1, 0.12] : [0.12, 0.1, z1 - z0], [ex, storeyH + rail, ez + (along ? 0 : (z0 + z1) / 2)], WOOD_D, undefined, 0.02);
+        cb(gk, gp, [0.12, rail, 0.12], [ex - (along ? 0.45 : 0), storeyH + rail / 2, ez - (along ? 0 : 0.45)], WOOD_D, undefined, 0.02);
         if (look?.gallery) {
           // A gallery's front: oak panels between the posts, and a deep beam under its edge.
           const zc = ez + (along ? 0 : (z0 + z1) / 2);
-          cb(gk, gp, along ? [1.0, 0.72, 0.05] : [0.05, 0.72, z1 - z0], [ex, storeyH + 0.46, zc], PLANKS[0], undefined, 0.01);
+          cb(gk, gp, along ? [1.0, rail - 0.23, 0.05] : [0.05, rail - 0.23, z1 - z0], [ex, storeyH + (rail - 0.03) / 2, zc], PLANKS[0], undefined, 0.01);
           cb(gk, gp, along ? [1.0, 0.38, 0.24] : [0.24, 0.38, z1 - z0], [ex - dx * 0.1, storeyH - 0.42, zc - dz * 0.1], TIMBER, undefined, 0.02);
         }
       }
@@ -945,8 +950,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       for (let x = x0 + 0.9; x < x1 - 0.5; x += 1.4) cb(uk, mid, [0.18, 0.22, z1 - z0 + 0.06], [x, y - 0.19, zc], TIMBER, undefined, 0.01);
       const edge = x0 > 1.01 ? x0 + 0.08 : x1 < w - 1.01 ? x1 - 0.08 : null;
       if (edge !== null) {
-        cb(uk, mid, [0.1, 0.1, z1 - z0 - 0.04], [edge, y + 0.95, zc], WOOD_D, undefined, 0.02);
-        for (let z = z0 + 0.3; z < z1 - 0.1; z += 1.0) cb(uk, mid, [0.1, 0.92, 0.1], [edge, y + 0.46, z], WOOD_D, undefined, 0.02);
+        cb(uk, mid, [0.1, 0.1, z1 - z0 - 0.04], [edge, y + 0.95 * grow, zc], WOOD_D, undefined, 0.02);
+        for (let z = z0 + 0.3; z < z1 - 0.1; z += 1.0) cb(uk, mid, [0.1, 0.95 * grow - 0.03, 0.1], [edge, y + (0.95 * grow - 0.03) / 2, z], WOOD_D, undefined, 0.02);
       }
     }
     // Buttresses on the south front: a broad lower stage to the sill course, a weathered set-off, a
@@ -967,8 +972,8 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
     // lantern hung under it.
     const pdr = look.porch ? b.doors.find((x) => x.side === 's') : undefined;
     if (pdr) {
-      const [kk, pp] = at(true, doorH), f = S2.frame(pp, pdr.at + pdr.w / 2, face), HW = 1.95, D = 1.35, y0 = doorH + 0.95, rise = 1.25;
-      for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(kk, f, [0.42, 0.3, 0.42 * (i + 1)], [sx * 1.7, y0 - 0.75 + 0.3 * i, 0.21 * (i + 1) - 0.02], DRESS, undefined, 0.03);
+      const [kk, pp] = at(true, doorH), f = S2.frame(pp, pdr.at + pdr.w / 2, face), HW = 1.95 * grow, D = 1.35 * grow, y0 = doorH + 0.95, rise = 1.25 * grow;
+      for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cb(kk, f, [0.42, 0.3, 0.42 * (i + 1)], [sx * (HW - 0.25), y0 - 0.75 + 0.3 * i, 0.21 * (i + 1) - 0.02], DRESS, undefined, 0.03);
       cb(kk, f, [2 * HW, 0.18, 0.24], [0, y0 - 0.06, D - 0.12], TIMBER, undefined, 0.02);
       const A = Math.atan2(rise, HW), Ls = Math.hypot(HW + 0.12, rise + 0.09);
       for (const sx of [-1, 1]) cb(kk, f, [Ls, 0.16, D + 0.12], [sx * ((HW + 0.12) / 2 + 0.05), y0 + rise / 2 + 0.06, D / 2 + 0.04], SLATES, [0, 0, -sx * A], 0.03);
@@ -1094,6 +1099,7 @@ export function buildBuilding(b: BuildingSpec, baseY = 0): BuildingProp {
       // (On a raised part of the floor, a dais, it stands on the platform.)
       fg.position.set(f.x, floor ? storeyH : raisedAt(b, b.x + Math.floor(f.x), b.z + Math.floor(f.z)), f.z);
       fg.rotation.y = f.rot ?? 0;
+      if (f.s) fg.scale.setScalar(f.s);
       const gallery = floor && look?.gallery;
       (gallery ? built : floor ? mid : ground).add(fg);
       const res = FITS[f.kind]?.(gallery ? k : floor ? uk : ik, fg, f, b, floor);
@@ -2233,7 +2239,12 @@ const FITS: Record<string, FitBuilder> = {
     for (const x of [-1.5, 1.5]) cb(k, g, [0.16, 1.5, 0.16], [x, 0.75, -1.45], TIMBER, undefined, 0.02);
     for (let i = 0; i < 4; i++) cb(k, g, [0.66, 1.1, 0.06], [-1.05 + i * 0.7, 0.62, -1.45], PLANKS[i % 3], undefined, 0.01);
     cb(k, g, [3.1, 0.1, 0.14], [0, 1.22, -1.45], WOOD_D, undefined, 0.01);
-    stallHorse(k, g, (f.len ?? 0) % 3);
+    // (The horse keeps its own size in a stall grown with the castle, standing up to its half-door.)
+    const s = f.s ?? 1, hg = new THREE.Group();
+    hg.scale.setScalar(1 / s);
+    hg.position.z = 1.45 - 1.45 / s;
+    g.add(hg);
+    stallHorse(k, hg, (f.len ?? 0) % 3);
   },
   stall_boards: (k, g, f) => {
     // The boarded wall between two stalls (along local Z, `len` long): oak boards to shoulder height
@@ -2261,14 +2272,15 @@ const FITS: Record<string, FitBuilder> = {
   loft_stair: (k, g, f, b) => {
     // A steep timber stair up to a loft (along local +Z, climbing toward +Z, `len` long): solid oak
     // steps of one riser each from the floor to the loft's boards, and a handrail on posts.
-    const H = (b as CastleSpec).look?.loft?.y ?? 2.9, L = f.len ?? 4, n = Math.ceil(H / 0.17), rise = H / n, t = L / n;
+    // (House-rule risers in one straight flight, past the rule's 17 between landings; 1.2 wide, rail at hand.)
+    const H = (b as CastleSpec).look?.loft?.y ?? 2.9, L = f.len ?? 4, n = Math.ceil(H / STAIR_RULE.riserMax - 1e-6), rise = H / n, t = L / n, W = 1.2, R = 1.2;
     for (let i = 0; i < n; i++) {
       const top = (i + 1) * rise;
-      cb(k, g, [0.9, top, t + 0.01], [0, top / 2, -L / 2 + (i + 0.5) * t], i % 2 ? WOOD : WOOD_L, undefined, 0.01);
+      cb(k, g, [W, top, t + 0.01], [0, top / 2, -L / 2 + (i + 0.5) * t], i % 2 ? WOOD : WOOD_L, undefined, 0.01);
     }
     const A = Math.atan2(H, L), Lr = Math.hypot(L, H);
-    cb(k, g, [0.08, 0.08, Lr], [0.47, H / 2 + 0.95, 0], WOOD_D, [-A, 0, 0], 0.01);
-    for (const z of [-L / 2 + 0.2, 0, L / 2 - 0.2]) cb(k, g, [0.08, 0.95, 0.08], [0.47, ((z + L / 2) / L) * H + 0.48, z], WOOD_D, undefined, 0.01);
+    cb(k, g, [0.08, 0.08, Lr], [W / 2 + 0.02, H / 2 + R, 0], WOOD_D, [-A, 0, 0], 0.01);
+    for (const z of [-L / 2 + 0.2, 0, L / 2 - 0.2]) cb(k, g, [0.08, R, 0.08], [W / 2 + 0.02, ((z + L / 2) / L) * H + R / 2, z], WOOD_D, undefined, 0.01);
   },
   chancel_rail: (k, g, f) => {
     // The chancel's rail (along local Z, `len` long): an oak rail on turned balusters over a kneeling step.
@@ -2366,9 +2378,9 @@ const OUTDOORS: BuildingSpec = { id: 'outdoors', style: 'timber', interior: 'sho
  * A furnishing as a free-standing world prop (layout props named `fit_<kind>`), so yards and
  * roadsides share the workshop furniture: benches, sacks, woodpiles, grindstones, bar stacks…
  */
-export function buildFitProp(kind: string, len?: number): Prop {
+export function buildFitProp(kind: string, len?: number, s?: number): Prop {
   const k = new ModelKit(), g = new THREE.Group();
-  const res = FITS[kind]?.(k, g, { kind, x: 0, z: 0, len }, OUTDOORS);
+  const res = FITS[kind]?.(k, g, { kind, x: 0, z: 0, len, s }, OUTDOORS);
   finishProp(g, [k]);
   return { obj: g, tick: res?.tick, light: res?.light };
 }

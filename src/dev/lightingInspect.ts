@@ -194,7 +194,7 @@ export async function lightingSuite(g: Game, shot: (name: string) => Promise<voi
     };
     await measure('overview', () => view('overview', [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70));
     await measure('centre', () => play('centre', P.fountain.x, P.fountain.z + 6.2, 1.2));
-    await measure('orchard', () => play('orchard', 218, 84, 1.35));
+    await measure('orchard', () => play('orchard', 244, 124, 1.35));
     g.travel('mine', true);
     await settle();
     g.debug.timeScale = 0;
@@ -207,20 +207,20 @@ export async function lightingSuite(g: Game, shot: (name: string) => Promise<voi
   }
   // The engine test's views.
   await view('overview', [c.x + 70, y0 + 92, c.z + 92], [c.x - 2, y0, c.z + 4], 70);
-  await view('keep-front', [P.door.x, y0 + 12, 70], [P.door.x, y0 + 10, 40], 24);
+  await view('keep-front', [P.door.x, y0 + 15.6, 91.7], [P.door.x, y0 + 13, 52.7], 31);
   await play('centre', P.fountain.x, P.fountain.z + 6.2, 1.2);
   // The castle from the island's lawns, low, so the sky and the haze show.
-  await view('skyline', [P.gate.x + 60, y0 + 40, P.gate.z + 80], [P.gate.x, y0 + 12, 50], 70);
+  await view('skyline', [P.gate.x + 78, y0 + 52, P.gate.z + 104], [P.gate.x, y0 + 15.6, 65.7], 91);
   // The play camera round the castle, inside it and out on the island.
   await play('door', P.door.x, P.door.z + 6, 1.0);
-  await play('hall', 52, 32.5, 1.35);
+  await play('hall', 54.8, 43, 1.35);
   const keepB = g.zone.layout.buildings?.find((b) => b.id === 'keep');
-  if (keepB) await play('throne', keepB.x + 12, keepB.z + 12, 1.2);
-  await play('gate', 76, 106, 1.35);
-  await play('court', 150, 138, 1.35);
-  await play('green', 120, 158, 1.15);
-  await play('upland', 192, 44, 1.35);
-  await play('orchard', 218, 84, 1.35);
+  if (keepB) await play('throne', keepB.x + keepB.w / 2, keepB.z + keepB.d / 2, 1.2);
+  await play('gate', P.gate.x, P.gate.z + 7.8, 1.35);
+  await play('court', 176, 178, 1.35);
+  await play('green', 146, 198, 1.15);
+  await play('upland', 218, 84, 1.35);
+  await play('orchard', 244, 124, 1.35);
   // The title screen's slow orbit round the island.
   {
     const mode = g.mode, fog = g.scene.fog as THREE.Fog, keep = [fog.near, fog.far];
