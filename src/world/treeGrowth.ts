@@ -707,8 +707,8 @@ function buttress(roots: number[], a: number, y: number) {
 /**
  * The tree's wood as one connected mesh (see the file comment). Attributes besides position and
  * normal: `color` (a painted shade: the damp foot, the crotch of every fork and the shaded inner
- * crown darker), `aWood` (the wind's weight, and how much bark detail shows: none over a collar,
- * whose bark turns from the parent's to the branch's), and where the bark lies for the bark shader
+ * crown darker), `aWood` (the wind's weight, and how much the limb's own bark wrap shows: none over
+ * a collar, where the bark is laid on from the sides instead), and where the bark lies for the bark shader
  * (foliage.ts): `aBarkA` = the cosine and sine of the point's angle round its limb, the whole bark
  * tiles round that limb and the surface's distance from the centreline, `aBarkB` = the
  * centreline's tangent and the arc length along it.

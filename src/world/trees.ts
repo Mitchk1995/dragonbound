@@ -376,10 +376,10 @@ interface Grown {
   look: GrownLook;
 }
 
-/** An oak's bark: long, deep fissures between warm grey-brown ridges. */
-const OAK_BARK: BarkLook = { kind: 'oak', tile: 1.2, relief: 0.05, furrow: [0.06, 0.05, 0.043], plate: [[0.2, 0.18, 0.155], [0.34, 0.32, 0.29]], moss: [0.25, 0.33, 0.13] };
+/** An oak's bark: long, deep furrows between warm grey-brown ridges. */
+const OAK_BARK: BarkLook = { kind: 'oak', width: OAK.bark, tile: 1.1, relief: 1.2, gain: 1.6, moss: [0.12, 0.16, 0.06] };
 /** The common tree's bark: shallower, finer furrows in a smoother, lighter grey-brown. */
-const TREE_BARK: BarkLook = { kind: 'tree', tile: 0.9, relief: 0.03, furrow: [0.1, 0.085, 0.072], plate: [[0.25, 0.23, 0.205], [0.37, 0.355, 0.33]], moss: [0.27, 0.35, 0.15] };
+const TREE_BARK: BarkLook = { kind: 'tree', width: TREE.bark, tile: 0.8, relief: 1.0, gain: 1.6, moss: [0.13, 0.17, 0.07] };
 
 export const GROWN: Record<GrownKind, Grown> = {
   // Fresh mid greens, now and then a yellower one or one turning gold.

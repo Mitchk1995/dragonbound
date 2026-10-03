@@ -2,10 +2,9 @@ import * as THREE from 'three';
 import { shareResource } from './resources';
 import { clamp, mulberry32, type Rng } from '../core/rng';
 import { addPatch } from './surface';
-import { fbm, SIZE, tileNoise } from './textures';
 
 /**
- * Grown trees' surfaces (treeGrowth.ts): painted leaf atlases, painted bark, and the bark and leaf
+ * Grown trees' surfaces (treeGrowth.ts): painted leaf atlases, sourced bark, and the bark and leaf
  * materials that use them, both swaying in the wind.
  *
  * - Leaves: each leaf kind has its own atlas of nine painted sprays (oak: lobed leaves in rosettes
@@ -15,11 +14,8 @@ import { fbm, SIZE, tileNoise } from './textures';
  *   pale midrib and a soft shadow on the leaves under it. The colours are multipliers (the instance
  *   colour gives the tree its green or gold), and the mipmaps keep the leaves' coverage, so a crown
  *   never thins out at a distance.
- * - Bark: long ridges running up the limb between deep fissures that wander, close over now and
- *   then where two ridges merge, and are cut across into long plates, each its own tone, with fine
- *   striations and moss in patches. The bark shader wraps it round every limb in whole tiles (so
- *   the ridges never seam, and converge as the limb tapers, as an oak's furrows do) and lights its
- *   relief from the painted height, so the fissures read deep.
+ * - Bark: a sourced, tileable bark for each kind (public/textures/bark/), its colour and its relief,
+ *   wrapped round every limb (see grownBark).
  */
 
 /** The world's wind clock (worldView.ts advances it). */
@@ -394,93 +390,37 @@ export function leafAtlas(kind: LeafKind) {
 /** The bark kinds: an oak's deep furrows, and a common broadleaf's shallower ones. */
 export type BarkKind = 'oak' | 'tree';
 
-/** Bark texture size (px): one tile, wrapped round a limb a whole number of times. */
-export const BARK_SIZE = 512;
+export const BARK_KINDS: BarkKind[] = ['oak', 'tree'];
 
-/** How a bark is painted (paintBark). */
-interface BarkPaint {
-  seed: number;
-  /** Ridges across a tile, and plates along a ridge per tile (whole numbers, so the tile repeats). */
-  ridges: number;
-  plates: [number, number];
-  /** How far ridges wander across (in ridge widths), the fissures' width (a share of a ridge's pitch) and how often one closes over (0 never). */
-  wander: number;
-  fissure: number;
-  merge: number;
-  /** How deep the cracks cutting a ridge into plates are (0..1). */
-  crack: number;
+/** A bark's maps (public/textures/bark/, made by tools/bark_textures.py): its colour and its relief. */
+interface BarkMaps {
+  map: THREE.Texture;
+  normal: THREE.Texture;
 }
 
-const BARK_PAINT: Record<BarkKind, BarkPaint> = {
-  oak: { seed: 801, ridges: 5, plates: [1, 3], wander: 0.8, fissure: 0.36, merge: 0.3, crack: 0.5 },
-  tree: { seed: 821, ridges: 6, plates: [2, 3], wander: 0.4, fissure: 0.22, merge: 0.35, crack: 0.3 },
-};
+const barkMaps = new Map<BarkKind, BarkMaps>();
 
-/**
- * A bark texture's channels (tileable, BARK_SIZE², V up the limb): R the height (0 deep in a
- * fissure, 1 on a ridge's crown), G each plate's tone, B the moss. Long rounded ridges run up the
- * tile between fissures that wander and widen and narrow along their length, pinching shut where
- * two ridges merge; ragged splits break some ridges across into long staggered plates, and the
- * ridges are lumpy along their length and finely striated.
- */
-export function paintBark(kind: BarkKind) {
-  const { seed, ridges, plates, wander, fissure, merge, crack } = BARK_PAINT[kind];
-  const N = BARK_SIZE, P = N / ridges;
-  // (The noises tile on a SIZE torus: sampled at half the bark's pixels, they tile on the bark's.)
-  const warp = fbm(seed + 2, 2, 3), wobble = fbm(seed + 3, 8, 2);
-  const width = tileNoise(seed + 4, ridges, 7), close = tileNoise(seed + 5, ridges, 5);
-  const striae = tileNoise(seed + 6, 64, 6), jag = tileNoise(seed + 9, 16, 16), tone = fbm(seed + 7, 4, 3), moss = fbm(seed + 8, 3, 3);
-  const lumps = tileNoise(seed + 10, 10, 9), split = tileNoise(seed + 11, 24, 10);
-  const rng = mulberry32(seed);
-  const cols = Array.from({ length: ridges }, () => {
-    const n = plates[0] + Math.floor(rng() * (plates[1] - plates[0] + 1));
-    return { n, off: rng(), slant: (rng() - 0.5) * 0.8, tones: Array.from({ length: n }, () => rng()), cracked: Array.from({ length: n }, () => rng() > 0.2) };
-  });
-  const data = new Uint8Array(N * N * 4);
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const hx = x / 2, hy = y / 2;
-    // Across: the ridge this point is on, and how far it is from the nearer fissure.
-    const u = x + (warp(hx, hy) - 0.5) * P * wander * 2 + (wobble(hx, hy) - 0.5) * P * 0.3;
-    const ph = u / P, ci = Math.floor(ph), f = ph - ci, c = ((ci % ridges) + ridges) % ridges;
-    const k = f < 0.5 ? c : (c + 1) % ridges, e = Math.min(f, 1 - f), kx = (k * SIZE) / ridges;
-    // (Where two ridges merge, the fissure between them pinches to a seam.)
-    const hw = 0.5 * fissure * (0.6 + 0.8 * width(kx, hy)) * (1 - 0.85 * smooth(1 - merge, 1 - merge + 0.15, close(kx, hy)));
-    const side = smooth(hw * 0.4, hw + 0.1, e);
-    // A rounded ridge, lumpy along its length.
-    let h = side * (0.62 + 0.38 * smooth(hw, 0.5, e)) * (0.82 + 0.18 * lumps(hx, hy));
-    // Along: ragged splits breaking some ridges across into plates, slanting a little.
-    const col = cols[c];
-    const yy = (y / N) * col.n + col.off + (f - 0.5) * col.slant * 0.25 + (jag(hx, hy) - 0.5) * 0.14;
-    const p = Math.floor(yy), g = yy - p, pi = ((p % col.n) + col.n) % col.n;
-    h -= crack * 0.6 * (1 - smooth(0.01, 0.05, Math.min(g, 1 - g))) * (col.cracked[pi] ? 1 : 0) * side * smooth(0.3, 0.55, split(hx, hy));
-    h += (striae(hx, hy) - 0.5) * 0.16 * side;
-    const t = clamp(0.5 + (col.tones[pi] - 0.5) * 0.55 + (tone(hx, hy) - 0.5) * 0.5, 0, 1);
-    const m = smooth(0.55, 0.7, moss(hx, hy)) * (0.4 + 0.6 * side);
-    const i = (y * N + x) * 4;
-    data[i] = clamp(h * 0.85 + 0.08, 0, 1) * 255;
-    data[i + 1] = (Math.round(t * 5) / 5 * 0.6 + t * 0.4) * 255;
-    data[i + 2] = m * 255;
-    data[i + 3] = 255;
-  }
-  return data;
+/** Load every bark's maps (at startup, before any tree is built). */
+export async function preloadBark() {
+  const loader = new THREE.TextureLoader();
+  const load = async (file: string, srgb: boolean) => {
+    const tex = await loader.loadAsync(`./textures/bark/${file}.jpg`);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    tex.name = `bark-${file}`;
+    return shareResource(tex);
+  };
+  await Promise.all(BARK_KINDS.map(async (kind) => {
+    const [map, normal] = await Promise.all([load(kind, true), load(`${kind}-normal`, false)]);
+    barkMaps.set(kind, { map, normal });
+  }));
 }
 
-const barkTex = new Map<BarkKind, THREE.DataTexture>();
-
-/** A bark kind's painted texture (built once, shared). */
-export function barkTexture(kind: BarkKind) {
-  const made = barkTex.get(kind);
-  if (made) return made;
-  const tex = new THREE.DataTexture(paintBark(kind), BARK_SIZE, BARK_SIZE, THREE.RGBAFormat);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  tex.name = `bark-${kind}`;
-  barkTex.set(kind, shareResource(tex));
-  return tex;
+function barkFor(kind: BarkKind) {
+  const maps = barkMaps.get(kind);
+  if (!maps) throw new Error(`bark ${kind} is not loaded (preloadBark)`);
+  return maps;
 }
 
 // ─── Materials ──────────────────────────────────────────────────────────────
@@ -504,39 +444,42 @@ const SWAY_GLSL = `
     return vec3(lean * 0.07 + bough * 0.05, bough * 0.03, lean * 0.04 + bough * 0.045) * w;
   }`;
 
-/** A grown tree's bark: its painted texture, how it is laid on the wood, and its colours (linear). */
+/** A grown tree's bark: its sourced maps, how they are laid on the wood, and how it is toned. */
 export interface BarkLook {
   kind: BarkKind;
-  /** Metres of bark up the limb per tile, and the relief's depth (a share of a tile's width round the limb). */
+  /** Metres of bark round the limb per tile (the species' bark girth) and up it per tile. */
+  width: number;
   tile: number;
+  /** How strongly the relief lights (1 as sourced), and the colour map's brightness. */
   relief: number;
-  furrow: number[];
-  plate: [number[], number[]];
+  gain: number;
+  /** Moss in the furrows on the limbs' upper sides and round the damp foot (linear colour). */
   moss: number[];
 }
 
 /**
- * Turn a scenery material into a grown tree's bark: smooth shading over the wood's painted shade
- * (vertex colour), the bark texture wrapped round every limb (see the file comment), painted in
- * dark fissures and plates in their own tones, brighter along their crowns and lit in relief from
- * the painted height, with moss on the limbs' upper sides and round the damp foot. Young branches
- * and the collars where branches leave are smoother, even bark. Limbs and branches sway with their
- * weight.
+ * Turn a scenery material into a grown tree's bark: the bark's sourced colour and relief over the
+ * wood's painted shade (vertex colour). Along every limb the maps wrap round it in whole tiles (so
+ * they never seam, and the furrows converge as the limb tapers, as an oak's do) and run up it by
+ * its length. Over a collar, where a branch or root leaves its parent and neither limb's wrap fits,
+ * the same bark is laid on from the sides in the tree's own space and fades into each limb's wrap,
+ * so the bark runs on unbroken through every fork and round the foot. Young branches' relief is
+ * gentler; moss settles in the furrows on upper sides and round the foot. Limbs and branches sway
+ * with their weight.
  */
 export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look: BarkLook) {
   mat.flatShading = false;
   mat.vertexColors = true;
   mat.roughness = 0.95;
   mat.color.setRGB(1, 1, 1);
-  const v3 = (c: number[]) => ({ value: new THREE.Vector3(c[0], c[1], c[2]) });
+  const maps = barkFor(look.kind);
   const uniforms = {
-    uBarkTex: { value: barkTexture(look.kind) },
-    uBarkTile: { value: look.tile },
+    uBarkMap: { value: maps.map },
+    uBarkNormal: { value: maps.normal },
+    uBarkSize: { value: new THREE.Vector2(look.width, look.tile) },
     uBarkRelief: { value: look.relief },
-    uBarkFurrow: v3(look.furrow),
-    uBarkPlateLo: v3(look.plate[0]),
-    uBarkPlateHi: v3(look.plate[1]),
-    uBarkMoss: v3(look.moss),
+    uBarkGain: { value: look.gain },
+    uBarkMoss: { value: new THREE.Vector3(look.moss[0], look.moss[1], look.moss[2]) },
   };
   addPatch(mat, {
     key: 'grown-bark',
@@ -549,65 +492,85 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
           attribute vec2 aWood;
           varying vec4 vBarkA;
           varying vec4 vBarkB;
+          varying vec3 vBarkP;
           varying vec3 vBarkUp;
-          varying vec2 vBarkW;
+          varying float vBarkOwn;
+          varying vec3 vBarkX;
+          varying vec3 vBarkY;
+          varying vec3 vBarkZ;
           ${SWAY_GLSL}`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           {
             vBarkA = aBarkA;
-            vec3 bt = aBarkB.xyz;
+            mat3 toView = mat3(modelViewMatrix);
             #ifdef USE_INSTANCING
-              bt = mat3(instanceMatrix) * bt;
+              toView = toView * mat3(instanceMatrix);
             #endif
-            vBarkB = vec4(normalize(mat3(modelViewMatrix) * bt), aBarkB.w);
+            vBarkB = vec4(normalize(toView * aBarkB.xyz), aBarkB.w);
+            vBarkX = normalize(toView[0]);
+            vBarkY = normalize(toView[1]);
+            vBarkZ = normalize(toView[2]);
+            vBarkP = position;
             vBarkUp = objectNormal;
-            vBarkW = vec2(aWood.y, position.y);
+            vBarkOwn = aWood.y;
           }
           transformed += treeSway(position, aWood.x);`);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
-          uniform sampler2D uBarkTex;
-          uniform float uBarkTile;
+          uniform sampler2D uBarkMap;
+          uniform sampler2D uBarkNormal;
+          uniform vec2 uBarkSize;
           uniform float uBarkRelief;
-          uniform vec3 uBarkFurrow;
-          uniform vec3 uBarkPlateLo;
-          uniform vec3 uBarkPlateHi;
+          uniform float uBarkGain;
           uniform vec3 uBarkMoss;
           varying vec4 vBarkA;
           varying vec4 vBarkB;
+          varying vec3 vBarkP;
           varying vec3 vBarkUp;
-          varying vec2 vBarkW;
-          const float BARK_E = 1.0 / ${BARK_SIZE}.0;`)
+          varying float vBarkOwn;
+          varying vec3 vBarkX;
+          varying vec3 vBarkY;
+          varying vec3 vBarkZ;`)
         .replace('#include <color_fragment>', `#include <color_fragment>
-          // Round the limb: its angle counted in whole tiles (taken from whichever of two seams lies
-          // elsewhere, so the mip level never jumps); along it: its arc length.
+          // Along the limb: round it, its angle counted in whole tiles (taken from whichever of two
+          // seams lies elsewhere, so the mip level never jumps); up it, its arc length.
           float barkAng = atan(vBarkA.y, vBarkA.x) * 0.15915494;
           float barkS1 = barkAng * vBarkA.z, barkS2 = fract(barkAng + 1.0) * vBarkA.z;
-          vec2 barkUv = vec2(fwidth(barkS1) <= fwidth(barkS2) ? barkS1 : barkS2, vBarkB.w / uBarkTile);
-          vec4 bk = texture2D(uBarkTex, barkUv);
-          vec2 barkGrad = vec2(texture2D(uBarkTex, barkUv + vec2(BARK_E, 0.0)).r, texture2D(uBarkTex, barkUv + vec2(0.0, BARK_E)).r) - bk.r;
-          // Young branches are smoother, and the bark gathers into an even collar where a branch
-          // leaves its parent.
-          float barkDetail = (0.3 + 0.7 * smoothstep(0.025, 0.14, vBarkA.w)) * vBarkW.x;
+          vec2 barkUv = vec2(fwidth(barkS1) <= fwidth(barkS2) ? barkS1 : barkS2, vBarkB.w / uBarkSize.y);
+          // From the sides, in the tree's own space (over the collars).
+          vec3 barkTw = pow(abs(normalize(vBarkUp)), vec3(4.0));
+          barkTw /= barkTw.x + barkTw.y + barkTw.z;
+          vec2 barkUvX = vBarkP.zy / uBarkSize, barkUvY = vBarkP.xz / uBarkSize, barkUvZ = vBarkP.xy / uBarkSize;
+          float barkSide = 1.0 - vBarkOwn;
+          vec3 barkCol = texture2D(uBarkMap, barkUv).rgb * vBarkOwn
+            + (texture2D(uBarkMap, barkUvX).rgb * barkTw.x + texture2D(uBarkMap, barkUvY).rgb * barkTw.y + texture2D(uBarkMap, barkUvZ).rgb * barkTw.z) * barkSide;
+          vec3 barkNl = texture2D(uBarkNormal, barkUv).xyz * 2.0 - 1.0;
+          vec3 barkNx = texture2D(uBarkNormal, barkUvX).xyz * 2.0 - 1.0;
+          vec3 barkNy = texture2D(uBarkNormal, barkUvY).xyz * 2.0 - 1.0;
+          vec3 barkNz = texture2D(uBarkNormal, barkUvZ).xyz * 2.0 - 1.0;
+          // Young branches' relief is gentler.
+          float barkDetail = 0.35 + 0.65 * smoothstep(0.02, 0.12, vBarkA.w);
           {
-            vec3 plate = mix(uBarkPlateLo, uBarkPlateHi, bk.g);
-            vec3 bark = mix(uBarkFurrow, plate, smoothstep(0.12, 0.55, bk.r));
-            bark *= 0.92 + 0.18 * smoothstep(0.72, 1.0, bk.r);
-            bark = mix(mix(uBarkPlateLo, uBarkFurrow, 0.4), bark, barkDetail);
-            float moss = bk.b * clamp(smoothstep(0.25, 0.9, normalize(vBarkUp).y) + (1.0 - smoothstep(0.1, 1.3, vBarkW.y)) * 0.8, 0.0, 1.0);
-            bark = mix(bark, uBarkMoss, moss * 0.75);
-            diffuseColor.rgb *= bark * 1.6;
+            float lum = dot(barkCol, vec3(0.2126, 0.7152, 0.0722));
+            float up = smoothstep(0.3, 0.9, normalize(vBarkUp).y), foot = 1.0 - smoothstep(0.1, 1.2, vBarkP.y);
+            float moss = clamp(up * 0.7 + foot * 0.6, 0.0, 1.0) * (1.0 - smoothstep(0.04, 0.12, lum));
+            barkCol = mix(barkCol, uBarkMoss, moss * 0.55);
+            diffuseColor.rgb *= barkCol * uBarkGain;
           }`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           {
-            // Relief: the painted height's slope round the limb (the same at any girth, as the
-            // ridges converge with it) and along it.
+            // Along the limb: the relief round it (u) and up it (v); a thin limb's furrows are as
+            // steep across as the trunk's but shallower along.
             vec3 bt = normalize(vBarkB.xyz - normal * dot(vBarkB.xyz, normal));
             vec3 ba = cross(bt, normal);
             float tileW = 6.2831853 * vBarkA.w / max(vBarkA.z, 1.0);
-            vec2 slope = barkGrad / BARK_E * uBarkRelief * barkDetail;
-            slope.y *= tileW / uBarkTile;
-            normal = normalize(normal - slope.x * ba - slope.y * bt);
+            vec3 own = ba * barkNl.x + bt * barkNl.y * min(tileW / uBarkSize.x, 1.0);
+            // From the sides: each projection's relief along its own two axes.
+            vec3 side = (vBarkZ * barkNx.x + vBarkY * barkNx.y) * barkTw.x
+              + (vBarkX * barkNy.x + vBarkZ * barkNy.y) * barkTw.y
+              + (vBarkX * barkNz.x + vBarkY * barkNz.y) * barkTw.z;
+            vec3 tilt = (own * vBarkOwn + side * barkSide) * uBarkRelief * barkDetail;
+            normal = normalize(normal + tilt - normal * dot(tilt, normal));
           }`);
     },
   });

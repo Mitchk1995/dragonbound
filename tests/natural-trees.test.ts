@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BARK_SIZE, coverageMips, LEAF_ATLAS, oakLeafHalfWidth, ovalLeafHalfWidth, paintBark, paintLeafAtlas, sprayCell, SPRAY_CELLS, type BarkKind, type LeafKind } from '../src/render/foliage';
+import { readFileSync } from 'node:fs';
+import { BARK_KINDS, coverageMips, LEAF_ATLAS, oakLeafHalfWidth, ovalLeafHalfWidth, paintLeafAtlas, sprayCell, SPRAY_CELLS, type LeafKind } from '../src/render/foliage';
 import { mulberry32 } from '../src/core/rng';
 import { GROWN, GROWN_KINDS, thinWood, treeSet, treeTriangles, type GrownLook } from '../src/world/trees';
 import { growTree, leafGeometry, OAK, woodGeometry } from '../src/world/treeGrowth';
@@ -116,6 +117,20 @@ describe('grown trees: every kind', () => {
         expect(Math.hypot(a.getX(i), a.getY(i))).toBeCloseTo(1, 4);
         expect(Number.isInteger(a.getZ(i)) && a.getZ(i) >= 1).toBe(true);
       }
+    }
+  });
+
+  it('lays the bark on from the sides over every collar (rim and first ring) and wraps it everywhere else', () => {
+    for (const { sk, wood } of grown) {
+      const w = wood.getAttribute('aWood');
+      let side = 0;
+      for (let i = 0; i < w.count; i++) {
+        expect([0, 1]).toContain(w.getY(i));
+        if (w.getY(i) === 0) side++;
+      }
+      // At least a rim and a first ring's worth for every branch and root.
+      expect(side).toBeGreaterThanOrEqual((sk.limbs.length - 1) * 6);
+      expect(side).toBeLessThan(w.count * 0.6);
     }
   });
 
@@ -247,39 +262,27 @@ describe('grown trees: painted surfaces', () => {
     expect(dark / clear).toBeLessThan(0.01);
   });
 
-  it.each(['oak', 'tree'] as BarkKind[])('the %s bark tiles without a seam and runs in long ridges up the limb', (kind) => {
-    const SIZE = BARK_SIZE, data = paintBark(kind);
-    const at = (x: number, y: number) => data[(y * SIZE + x) * 4];
-    const col = (a: number, b: number) => {
-      let s = 0;
-      for (let y = 0; y < SIZE; y++) s += Math.abs(at(a, y) - at(b, y));
-      return s / SIZE;
-    };
-    const row = (a: number, b: number) => {
-      let s = 0;
-      for (let x = 0; x < SIZE; x++) s += Math.abs(at(x, a) - at(x, b));
-      return s / SIZE;
-    };
-    let colStep = 0, rowStep = 0;
-    for (let i = 0; i < SIZE - 1; i++) {
-      colStep = Math.max(colStep, col(i, i + 1));
-      rowStep = Math.max(rowStep, row(i, i + 1));
+  it.each(BARK_KINDS)('the %s bark ships as a 1K colour map and normal map, each listed with its source', (kind) => {
+    const notes = readFileSync('public/textures/bark/LICENSES.md', 'utf8');
+    for (const file of [`${kind}.jpg`, `${kind}-normal.jpg`]) {
+      const jpg = readFileSync(`public/textures/bark/${file}`);
+      expect(jpg.readUInt16BE(0)).toBe(0xffd8);
+      expect(jpegSize(jpg)).toEqual({ width: 1024, height: 1024 });
+      expect(jpg.length).toBeLessThan(450_000);
+      expect(notes).toContain(`\`${file}\``);
     }
-    expect(col(SIZE - 1, 0)).toBeLessThan(colStep * 1.05 + 2);
-    expect(row(SIZE - 1, 0)).toBeLessThan(rowStep * 1.05 + 2);
-    // Furrows run up the bark: it changes far faster across than along.
-    let across = 0, alongBark = 0;
-    for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE - 1; x++) across += Math.abs(at(x + 1, y) - at(x, y));
-    for (let y = 0; y < SIZE - 1; y++) for (let x = 0; x < SIZE; x++) alongBark += Math.abs(at(x, y + 1) - at(x, y));
-    expect(across).toBeGreaterThan(alongBark * 2.5);
-    let lo = 255, hi = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      lo = Math.min(lo, data[i]);
-      hi = Math.max(hi, data[i]);
-    }
-    expect(hi - lo).toBeGreaterThan(150);
   });
 });
+
+/** A JPEG's size, from its frame header. */
+function jpegSize(jpg: Buffer) {
+  for (let i = 2; i < jpg.length;) {
+    const marker = jpg.readUInt16BE(i), len = jpg.readUInt16BE(i + 2);
+    if (marker >= 0xffc0 && marker <= 0xffc2) return { width: jpg.readUInt16BE(i + 7), height: jpg.readUInt16BE(i + 5) };
+    i += 2 + len;
+  }
+  return null;
+}
 
 describe('grown trees in the world', () => {
   it('the natural style pairs the wood of each oak with its own leaves; block trees still share one trunk', () => {
