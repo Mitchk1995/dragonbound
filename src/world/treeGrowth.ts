@@ -174,8 +174,6 @@ export interface Joint {
   b: number;
   /** Arc length along this branch where its first own ring stands, past the collar. */
   ring: number;
-  /** Bark: this branch's arc coordinate at its base, carrying on from the parent's. */
-  v0: number;
 }
 
 export interface Limb {
@@ -601,14 +599,18 @@ function planJoints(limbs: Limb[], sprays: Spray[]) {
     for (const ci of [...kids[pi]].sort((a, b) => limbs[b].radius[0] - limbs[a].radius[0])) {
       const C = limbs[ci];
       let hole: Hole | null = null;
-      search: for (const ds of [0, 0.12, -0.12, 0.25, -0.25, 0.45, -0.45, 0.7, -0.7, 1.0, -1.0, 1.4, -1.4]) {
-        for (const dj of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
-          // (Turned at most about 50 degrees: a branch is never swung round to grow down.)
-          if (Math.abs(dj) * ((Math.PI * 2) / sidesAt(P, C.at + ds)) > 0.9) continue;
-          const h = footprint(P, C, ds, dj);
-          if (h && placed.every((o) => apart(o, h, sidesAt(P, h.s)))) {
-            hole = h;
-            break search;
+      // (A hole as wide as the branch where it stands, or a main limb's turned a side round; failing that a narrower one, moved as far as it must be.)
+      search: for (const narrow of [false, true]) {
+        for (const ds of [0, 0.12, -0.12, 0.25, -0.25, 0.45, -0.45, 0.7, -0.7, 1.0, -1.0, 1.4, -1.4]) {
+          for (const dj of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
+            if (!narrow && (ds !== 0 || Math.abs(dj) > (C.order > 1 ? 0 : 1))) continue;
+            // (Turned at most about 50 degrees: a branch is never swung round to grow down.)
+            if (Math.abs(dj) * ((Math.PI * 2) / sidesAt(P, C.at + ds)) > 0.9) continue;
+            const h = footprint(P, C, ds, dj, narrow);
+            if (h && placed.every((o) => apart(o, h, sidesAt(P, h.s)))) {
+              hole = h;
+              break search;
+            }
           }
         }
       }
@@ -618,7 +620,7 @@ function planJoints(limbs: Limb[], sprays: Spray[]) {
       }
       moveSubtree(limbs, sprays, subtree(ci), P, C, hole);
       C.at = hole.at;
-      C.joint = { s: hole.s, h: hole.h, side: hole.side, b: hole.b, ring: hole.ring, v0: hole.v0 };
+      C.joint = { s: hole.s, h: hole.h, side: hole.side, b: hole.b, ring: hole.ring };
       frames(C, tangentOn(P, C.at));
       placed.push(hole);
       queue.push(ci);
@@ -627,14 +629,20 @@ function planJoints(limbs: Limb[], sprays: Spray[]) {
   return { limbs, dead };
 }
 
-/** The hole a branch would cut in its parent if slid ds along it and turned dj sides round it (null if it would not fit on the parent). */
-function footprint(P: Limb, C: Limb, ds: number, dj: number): Hole | null {
+/**
+ * The hole a branch would cut in its parent if slid ds along it and turned dj sides round it (null
+ * if it would not fit on the parent): as wide as the branch where it meets the parent's surface (a
+ * narrower hole pinches the branch's foot into a ring), or `narrow`, as wide as the branch against
+ * the parent's girth at its axis (lower down, where the parent is thicker).
+ */
+function footprint(P: Limb, C: Limb, ds: number, dj: number, narrow: boolean): Hole | null {
   const len = lengthOf(P), at = C.at + ds;
   const d0 = tangentOn(C, Math.min(0.25, lengthOf(C) * 0.3));
   const T0 = tangentOn(P, C.at), N0 = normalOn(P, C.at, T0), B0 = new THREE.Vector3().crossVectors(T0, N0);
   const ct = d0.dot(T0), sinA = Math.max(0.35, Math.sqrt(Math.max(0, 1 - ct * ct)));
   // (A root leaves the trunk through the buttress swelling toward it.)
-  const rp = along(P.radius, P, at) * (C.order < 0 ? buttressSwell(pointOn(P, at).y) : 1), rc = C.radius[0];
+  const girth = (x: number) => along(P.radius, P, x) * (C.order < 0 ? buttressSwell(pointOn(P, x).y) : 1);
+  const rp = girth(at), rc = C.radius[0];
   const exit = rp / sinA, s = at + exit * ct, h = clamp((rc * 1.12) / sinA, rc, rc * 4);
   const start = P.joint ? P.joint.ring + 0.05 : 0.05, end = len - Math.max(0.12, along(P.radius, P, len) * 3);
   if (s - h < start || s + h > end) return null;
@@ -643,10 +651,11 @@ function footprint(P: Limb, C: Limb, ds: number, dj: number): Hole | null {
   const S = sidesAt(P, s), step = (Math.PI * 2) / S;
   const phi = Math.atan2(d0.dot(B0), d0.dot(N0)) + dj * step;
   const side = (((Math.round(phi / step) % S) + S) % S);
-  const b = clamp(Math.round(Math.asin(Math.min(0.92, (rc * 1.15) / rp)) / step), 1, Math.max(1, Math.floor(S / 3)));
-  const v0 = (P.joint ? P.joint.v0 : 0) + s - exit;
+  // Half-width in sides: a little over the branch's radius, rounded up (or, narrow, to the nearest side).
+  const across = (k: number, r: number) => Math.asin(Math.min(0.92, (rc * k) / r)) / step;
+  const b = clamp(narrow ? Math.round(across(1.15, rp)) : Math.ceil(across(1.03, girth(s)) - 0.1), 1, Math.max(1, Math.floor(S / 3)));
   // The first own ring stands clear of the whole rim (a shallow branch's rim runs far along its parent).
-  return { at, s, h, side, b, ring: exit + h * Math.abs(ct) + rc * 0.35, v0, turn: dj * step };
+  return { at, s, h, side, b, ring: exit + h * Math.abs(ct) + rc * 0.35, turn: dj * step };
 }
 
 /** Two holes on one parent keep at least one quad of bark between them. */
@@ -704,36 +713,53 @@ function buttress(roots: number[], a: number, y: number) {
   return 1 + k * Math.min(1, s);
 }
 
+/** A limb's bark: whole tiles round it, the offset round it (tiles), and its coordinate along it (bark metres: `v` at arc `s`, `k` per metre). */
+interface Bark {
+  tiles: number;
+  u: number;
+  v: number;
+  s: number;
+  k: number;
+}
+
 /**
  * The tree's wood as one connected mesh (see the file comment). Attributes besides position and
  * normal: `color` (a painted shade: the damp foot, the crotch of every fork and the shaded inner
- * crown darker), `aWood` (the wind's weight, and how much the limb's own bark wrap shows: none over
- * a collar, where the bark is laid on from the sides instead), and where the bark lies for the bark shader
- * (foliage.ts): `aBarkA` = the cosine and sine of the point's angle round its limb, the whole bark
- * tiles round that limb and the surface's distance from the centreline, `aBarkB` = the
- * centreline's tangent and the arc length along it.
+ * crown darker), and where the bark lies for the bark shader (foliage.ts). Round each limb the
+ * bark is wrapped in whole tiles: `aBarkA` = the cosine and sine of the point's angle round its
+ * limb, the limb's tiles and its offset round (in tiles). Over a collar the branch's own wrap runs
+ * right down to the rim of its hole, turned there so that the rim keeps the parent's bark (but in the crotch):
+ * `aBarkB` = the same angle and tiles in the branch's wrap, and how far the rim point's offset is
+ * turned from the branch's (0 on the branch's first ring; elsewhere `aBarkB` is a copy of
+ * `aBarkA`). `aWood` = the wind's weight, the limb's radius, the bark's coordinate along the limb
+ * (bark metres) and 1 on a branch's first ring, whose collar triangles (each drawn last from that
+ * ring) take `aBarkB`.
  */
 export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   const { limbs, crown } = sk;
   const pos: number[] = [], col: number[] = [], wood: number[] = [], ba: number[] = [], bb: number[] = [], idx: number[] = [];
   const kids: number[][] = limbs.map(() => []);
   limbs.forEach((L, i) => L.parent >= 0 && kids[L.parent].push(i));
-  /** Each limb's rings (vertex indices), and each branch's hole rim in its parent. */
+  /** Each limb's rings (vertex indices) and bark, and each branch's hole rim in its parent with the rim point its bark lines up on. */
   const rings: number[][][] = [];
+  const barks: Bark[] = [];
   const rims: number[][] = [];
+  const rimFoot: number[] = [];
   const P = new THREE.Vector3(), T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), V = new THREE.Vector3();
-  const vertex = (p: THREE.Vector3, a: number, tiles: number, t: THREE.Vector3, r: number, v: number, shade: number, w: number) => {
+  const vertex = (p: THREE.Vector3, a: number, bark: Bark, r: number, s: number, shade: number, w: number) => {
     pos.push(p.x, p.y, p.z);
-    ba.push(Math.cos(a), Math.sin(a), tiles, r);
-    bb.push(t.x, t.y, t.z, v);
+    ba.push(Math.cos(a), Math.sin(a), bark.tiles, bark.u);
+    bb.push(Math.cos(a), Math.sin(a), bark.tiles, bark.u);
     // The damp foot, and the inner crown in the shade of the leaves.
     const foot = 0.68 + 0.32 * THREE.MathUtils.smoothstep(p.y, -0.3, 1.1);
     const inner = 1 - 0.38 * (1 - THREE.MathUtils.smoothstep(crownDepth(crown, p), 0.35, 0.9)) * THREE.MathUtils.smoothstep(p.y, crown.centre.y - crown.down, crown.centre.y);
     const c = foot * inner * shade;
     col.push(c, c, c);
-    wood.push(w, 1);
+    wood.push(w, r, bark.v + (s - bark.s) * bark.k, 0);
     return pos.length / 3 - 1;
   };
+  /** A vertex's place round its limb's bark (tiles). */
+  const uOf = (vi: number) => (Math.atan2(ba[vi * 4 + 1], ba[vi * 4]) / (Math.PI * 2)) * ba[vi * 4 + 2] + ba[vi * 4 + 3];
   const rootSides = kids[0].filter((k) => limbs[k].order < 0).map((k) => (limbs[k].joint!.side / limbs[0].sides) * Math.PI * 2);
 
   limbs.forEach((L, li) => {
@@ -742,9 +768,45 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     const start = L.joint ? L.joint.ring : 0, tipLen = Math.min(len * 0.2, Math.max(0.06, L.radius[L.radius.length - 1] * 2.5));
     const st = stations(L, holes, start, len - tipLen);
     const sides = st.map((s) => sidesAt(L, s));
-    const v0 = L.joint ? L.joint.v0 : 0;
-    // Bark tiles round the limb: as many as fit its girth at its foot (the trunk's at breast height).
-    const tiles = Math.max(1, Math.round((Math.PI * 2 * (L.order === 0 ? along(L.radius, L, arcAtHeight(L, 1.3)) : L.radius[0])) / sk.species.bark));
+    // Bark tiles round the limb: as many as fit its girth at its foot (the trunk's at breast height),
+    // each as long up it as it is wide there, so a thin limb wears the trunk's bark in small.
+    const girth = Math.PI * 2 * (L.order === 0 ? along(L.radius, L, arcAtHeight(L, 1.3)) : L.radius[0]);
+    const tiles = Math.max(1, Math.round(girth / sk.species.bark));
+    const bark: Bark = { tiles, u: 0, v: 0, s: start, k: clamp((sk.species.bark * tiles) / girth, 0.75, 4) };
+    if (L.parent >= 0) {
+      // The collar: the branch's wrap carried down to its hole's rim. Its furrows run on from the
+      // parent's at the rim's foot, and each rim point keeps the parent's bark, its offset unwound
+      // round the rim both ways from the foot (the two meet in the crotch).
+      const pb = barks[L.parent], j = L.joint!, rim = rims[li], n = rim.length, i0 = rimFoot[li];
+      bark.v = pb.v + (j.s + j.h * 0.5 - pb.s) * pb.k;
+      pointOn(L, start, P);
+      tangentOn(L, start, T);
+      normalOn(L, start, T, N);
+      B.crossVectors(T, N);
+      const th = rim.map((vi) => {
+        V.set(pos[vi * 3] - P.x, pos[vi * 3 + 1] - P.y, pos[vi * 3 + 2] - P.z);
+        return Math.atan2(V.dot(B), V.dot(N));
+      });
+      const d = rim.map((vi, i) => uOf(vi) - (th[i] / (Math.PI * 2)) * tiles);
+      const off = new Array<number>(n);
+      off[i0] = d[i0];
+      const half = Math.floor(n / 2);
+      for (let t = 1; t < n; t++) {
+        const i = t <= half ? (i0 + t) % n : (i0 - (t - half) + n) % n;
+        const prev = t <= half ? (i0 + t - 1) % n : (i0 - (t - half) + 1 + n) % n;
+        off[i] = d[i] - Math.round(d[i] - off[prev]);
+      }
+      // Where the two meet, in the crotch, the branch's wrap has gone a whole turn of tiles further
+      // than the parent's bark: over the crotch's half of the rim the branch keeps its own wrap
+      // (meeting the parent's bark in the crease of the fork, as a branch's bark ridge does), not
+      // packing that turn into one sliver of bark.
+      const iF = (i0 + half) % n, iB = (i0 + half + 1) % n, m = Math.max(1, Math.floor(half / 2));
+      const turn = Math.round(off[iB] - off[iF] - (d[iB] - d[iF] - Math.round(d[iB] - d[iF])));
+      for (let t = 0; t < 2 * m; t++) off[(iF - m + 1 + t + n) % n] += (turn * (t + 0.5)) / (2 * m) - (t >= m ? turn : 0);
+      rim.forEach((vi, i) => bb.splice(vi * 4, 4, Math.cos(th[i]), Math.sin(th[i]), tiles, off[i] - d[i0]));
+      bark.u = d[i0];
+    }
+    barks[li] = bark;
     // Rings.
     rings[li] = st.map((s, k) => {
       const S = sides[k];
@@ -757,7 +819,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
         const a = (j / S) * Math.PI * 2;
         const rr = r * (L.order === 0 ? buttress(rootSides, a, P.y) : 1);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
-        return vertex(V.copy(P).addScaledVector(D, rr), a, tiles, T, rr, v0 + s, 1, w);
+        return vertex(V.copy(P).addScaledVector(D, rr), a, bark, rr, s, 1, w);
       });
     });
     const ring = rings[li];
@@ -765,7 +827,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     const nearest = (s: number) => st.reduce((bi, x, i) => (Math.abs(x - s) < Math.abs(st[bi] - s) ? i : bi), 0);
     const cut = kids[li].map((k) => {
       const j = limbs[k].joint!;
-      return { k, k0: nearest(j.s - j.h), k1: Math.max(nearest(j.s - j.h) + 1, nearest(j.s + j.h)), j0: j.side - j.b, w: 2 * j.b, S: sidesAt(L, j.s) };
+      return { k, j, k0: nearest(j.s - j.h), k1: Math.max(nearest(j.s - j.h) + 1, nearest(j.s + j.h)), j0: j.side - j.b, w: 2 * j.b, S: sidesAt(L, j.s) };
     });
     const inHole = (k: number, j: number) => cut.some((c) => k >= c.k0 && k < c.k1 && (((j - c.j0) % c.S) + c.S) % c.S < c.w);
     for (let k = 0; k < st.length - 1; k++) {
@@ -778,6 +840,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       }
       for (let j = 0; j < S; j++) {
         if (inHole(k, j)) continue;
+        // (Each triangle is drawn last from the upper ring, never from a branch's first: see aWood.)
         const a = ring[k][j], b = ring[k][(j + 1) % S], c = ring[k + 1][(j + 1) % S], d = ring[k + 1][j];
         idx.push(a, b, c, a, c, d);
       }
@@ -790,23 +853,24 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       for (let t = c.w; t >= 0; t--) rim.push(at(c.k1, t));
       for (let k = c.k1 - 1; k > c.k0; k--) rim.push(at(k, 0));
       rims[c.k] = rim;
-      // The crotch: the rim sits in the shadow of the fork, its bark gathered into the collar.
-      for (const vi of rim) {
-        for (let e = 0; e < 3; e++) col[vi * 3 + e] *= 0.84;
-        wood[vi * 2 + 1] = 0;
-      }
+      // The branch's bark lines up on the middle of the rim's edge its parent's bark runs in from:
+      // the lower edge under a branch, the upper edge over a root (the trunk runs down into it).
+      const C = limbs[c.k], up = tangentOn(C, C.joint!.ring, D).dot(tangentOn(L, c.j.s, T)) >= 0;
+      rimFoot[c.k] = up ? c.j.b : 2 * c.w + c.k1 - c.k0 - c.j.b;
+      // The crotch: the rim sits in the shadow of the fork.
+      for (const vi of rim) for (let e = 0; e < 3; e++) col[vi * 3 + e] *= 0.84;
     }
     // The tip closes on one point.
-    pointOn(L, len, P);
-    tangentOn(L, len, T);
-    normalOn(L, len, T, N);
-    const tip = vertex(P, 0, tiles, T, 0.001, v0 + len, 1, along(L.sway, L, len));
+    const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len));
     const last = ring[ring.length - 1];
     for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
     // The collar: this branch's first ring stitched to its hole's rim in the parent.
     if (L.parent >= 0) {
       stitch(rims[li], ring[0], pos, idx, tangentOn(L, start, T), normalOn(L, start, T, N), pointOn(L, start, P));
-      for (const vi of ring[0]) wood[vi * 2 + 1] = 0;
+      for (const vi of ring[0]) {
+        wood[vi * 4 + 3] = 1;
+        bb[vi * 4 + 3] = 0;
+      }
     }
   });
 
@@ -822,7 +886,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', pick(pos, 3));
   g.setAttribute('color', pick(col, 3));
-  g.setAttribute('aWood', pick(wood, 2));
+  g.setAttribute('aWood', pick(wood, 4));
   g.setAttribute('aBarkA', pick(ba, 4));
   g.setAttribute('aBarkB', pick(bb, 4));
   g.setIndex(idx.map((i) => keep[i]));

@@ -112,25 +112,46 @@ describe('grown trees: every kind', () => {
 
   it('wraps whole bark tiles round each limb, its angle carried as a unit cosine and sine', () => {
     for (const { wood } of grown) {
-      const a = wood.getAttribute('aBarkA');
-      for (let i = 0; i < a.count; i++) {
-        expect(Math.hypot(a.getX(i), a.getY(i))).toBeCloseTo(1, 4);
-        expect(Number.isInteger(a.getZ(i)) && a.getZ(i) >= 1).toBe(true);
+      for (const name of ['aBarkA', 'aBarkB']) {
+        const a = wood.getAttribute(name);
+        for (let i = 0; i < a.count; i++) {
+          expect(Math.hypot(a.getX(i), a.getY(i))).toBeCloseTo(1, 4);
+          expect(Number.isInteger(a.getZ(i)) && a.getZ(i) >= 1).toBe(true);
+        }
       }
     }
   });
 
-  it('lays the bark on from the sides over every collar (rim and first ring) and wraps it everywhere else', () => {
+  it("carries the parent's bark into every collar: round the rim's half facing down the parent the branch's wrap lands on the parent's bark", () => {
+    const u = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number, off: number) => (Math.atan2(a.getY(i), a.getX(i)) / (Math.PI * 2)) * a.getZ(i) + off;
     for (const { sk, wood } of grown) {
-      const w = wood.getAttribute('aWood');
-      let side = 0;
-      for (let i = 0; i < w.count; i++) {
-        expect([0, 1]).toContain(w.getY(i));
-        if (w.getY(i) === 0) side++;
+      const A = wood.getAttribute('aBarkA'), B = wood.getAttribute('aBarkB'), w = wood.getAttribute('aWood'), idx = wood.index!.array;
+      // A collar triangle is drawn last from its branch's first ring (aWood.w = 1); its other corners on the rim.
+      const rim = new Set<number>(), kept = new Set<number>();
+      let collars = 0, first = 0;
+      for (let i = 0; i < w.count; i++) if (w.getW(i) === 1) first++;
+      for (let t = 0; t < idx.length; t += 3) {
+        const foot = idx[t + 2];
+        if (w.getW(foot) !== 1) continue;
+        collars++;
+        for (const i of [idx[t], idx[t + 1]]) {
+          if (w.getW(i) === 1) continue;
+          rim.add(i);
+          // The branch's wrap, turned at the rim point, lands on the parent's bark (whole tiles apart).
+          const d = u(B, i, A.getW(foot) + B.getW(i)) - u(A, i, A.getW(i));
+          if (Math.abs(d - Math.round(d)) < 1e-3) kept.add(i);
+        }
       }
-      // At least a rim and a first ring's worth for every branch and root.
-      expect(side).toBeGreaterThanOrEqual((sk.limbs.length - 1) * 6);
-      expect(side).toBeLessThan(w.count * 0.6);
+      expect(first).toBeGreaterThanOrEqual((sk.limbs.length - 1) * 3);
+      expect(collars).toBeGreaterThanOrEqual(first);
+      expect(rim.size).toBeGreaterThanOrEqual((sk.limbs.length - 1) * 4);
+      expect(kept.size).toBeGreaterThan(rim.size * 0.4);
+      // Everywhere else the two wraps are one (a first ring's turn is none).
+      for (let i = 0; i < w.count; i++) {
+        if (rim.has(i)) continue;
+        for (const c of ['getX', 'getY', 'getZ'] as const) expect(B[c](i)).toBe(A[c](i));
+        expect(B.getW(i)).toBe(w.getW(i) === 1 ? 0 : A.getW(i));
+      }
     }
   });
 

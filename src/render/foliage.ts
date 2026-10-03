@@ -447,8 +447,7 @@ const SWAY_GLSL = `
 /** A grown tree's bark: its sourced maps, how they are laid on the wood, and how it is toned. */
 export interface BarkLook {
   kind: BarkKind;
-  /** Metres of bark round the limb per tile (the species' bark girth) and up it per tile. */
-  width: number;
+  /** Bark metres up the limb per tile (round it, a tile is the species' bark girth). */
   tile: number;
   /** How strongly the relief lights (1 as sourced), and the colour map's brightness. */
   relief: number;
@@ -459,13 +458,14 @@ export interface BarkLook {
 
 /**
  * Turn a scenery material into a grown tree's bark: the bark's sourced colour and relief over the
- * wood's painted shade (vertex colour). Along every limb the maps wrap round it in whole tiles (so
- * they never seam, and the furrows converge as the limb tapers, as an oak's do) and run up it by
- * its length. Over a collar, where a branch or root leaves its parent and neither limb's wrap fits,
- * the same bark is laid on from the sides in the tree's own space and fades into each limb's wrap,
- * so the bark runs on unbroken through every fork and round the foot. Young branches' relief is
- * gentler; moss settles in the furrows on upper sides and round the foot. Limbs and branches sway
- * with their weight.
+ * wood's painted shade (vertex colour). Every limb wears it wrapped round in whole tiles (so it
+ * never seams, and the furrows converge as the limb tapers, as an oak's do) and running up it by
+ * its length, so the furrows follow each limb from its foot to its tip. Over a collar, where a
+ * branch or root leaves its parent, the branch's own wrap runs down to the rim of its hole, turned
+ * to carry on from the parent's bark there (treeGrowth.ts, woodGeometry): the furrows flow out of
+ * the parent into the branch with no seam or cross-grain patch. The relief follows the wrap.
+ * Young branches' relief is gentler; moss settles in the furrows on upper sides and round the foot.
+ * Limbs and branches sway with their weight.
  */
 export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look: BarkLook) {
   mat.flatShading = false;
@@ -476,7 +476,7 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
   const uniforms = {
     uBarkMap: { value: maps.map },
     uBarkNormal: { value: maps.normal },
-    uBarkSize: { value: new THREE.Vector2(look.width, look.tile) },
+    uBarkTile: { value: look.tile },
     uBarkRelief: { value: look.relief },
     uBarkGain: { value: look.gain },
     uBarkMoss: { value: new THREE.Vector3(look.moss[0], look.moss[1], look.moss[2]) },
@@ -489,67 +489,61 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
         .replace('#include <common>', `#include <common>
           attribute vec4 aBarkA;
           attribute vec4 aBarkB;
-          attribute vec2 aWood;
+          attribute vec4 aWood;
           varying vec4 vBarkA;
           varying vec4 vBarkB;
+          varying vec2 vBarkRV;
+          flat varying float vBarkCollar;
+          flat varying float vBarkFoot;
+          varying float vBarkOut;
           varying vec3 vBarkP;
           varying vec3 vBarkUp;
-          varying float vBarkOwn;
-          varying vec3 vBarkX;
-          varying vec3 vBarkY;
-          varying vec3 vBarkZ;
           ${SWAY_GLSL}`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
-          {
-            vBarkA = aBarkA;
-            mat3 toView = mat3(modelViewMatrix);
-            #ifdef USE_INSTANCING
-              toView = toView * mat3(instanceMatrix);
-            #endif
-            vBarkB = vec4(normalize(toView * aBarkB.xyz), aBarkB.w);
-            vBarkX = normalize(toView[0]);
-            vBarkY = normalize(toView[1]);
-            vBarkZ = normalize(toView[2]);
-            vBarkP = position;
-            vBarkUp = objectNormal;
-            vBarkOwn = aWood.y;
-          }
+          vBarkA = aBarkA;
+          vBarkB = aBarkB;
+          vBarkRV = aWood.yz;
+          vBarkCollar = aWood.w;
+          vBarkFoot = aBarkA.w;
+          vBarkOut = aWood.w;
+          vBarkP = position;
+          vBarkUp = objectNormal;
           transformed += treeSway(position, aWood.x);`);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
           uniform sampler2D uBarkMap;
           uniform sampler2D uBarkNormal;
-          uniform vec2 uBarkSize;
+          uniform float uBarkTile;
           uniform float uBarkRelief;
           uniform float uBarkGain;
           uniform vec3 uBarkMoss;
           varying vec4 vBarkA;
           varying vec4 vBarkB;
+          varying vec2 vBarkRV;
+          flat varying float vBarkCollar;
+          flat varying float vBarkFoot;
+          varying float vBarkOut;
           varying vec3 vBarkP;
-          varying vec3 vBarkUp;
-          varying float vBarkOwn;
-          varying vec3 vBarkX;
-          varying vec3 vBarkY;
-          varying vec3 vBarkZ;`)
+          varying vec3 vBarkUp;`)
         .replace('#include <color_fragment>', `#include <color_fragment>
-          // Along the limb: round it, its angle counted in whole tiles (taken from whichever of two
-          // seams lies elsewhere, so the mip level never jumps); up it, its arc length.
-          float barkAng = atan(vBarkA.y, vBarkA.x) * 0.15915494;
-          float barkS1 = barkAng * vBarkA.z, barkS2 = fract(barkAng + 1.0) * vBarkA.z;
-          vec2 barkUv = vec2(fwidth(barkS1) <= fwidth(barkS2) ? barkS1 : barkS2, vBarkB.w / uBarkSize.y);
-          // From the sides, in the tree's own space (over the collars).
-          vec3 barkTw = pow(abs(normalize(vBarkUp)), vec3(4.0));
-          barkTw /= barkTw.x + barkTw.y + barkTw.z;
-          vec2 barkUvX = vBarkP.zy / uBarkSize, barkUvY = vBarkP.xz / uBarkSize, barkUvZ = vBarkP.xy / uBarkSize;
-          float barkSide = 1.0 - vBarkOwn;
-          vec3 barkCol = texture2D(uBarkMap, barkUv).rgb * vBarkOwn
-            + (texture2D(uBarkMap, barkUvX).rgb * barkTw.x + texture2D(uBarkMap, barkUvY).rgb * barkTw.y + texture2D(uBarkMap, barkUvZ).rgb * barkTw.z) * barkSide;
+          // Round the limb: its angle counted in whole tiles (taken from whichever of two seams lies
+          // elsewhere, so the mip level never jumps) plus the wrap's offset; up it, its bark
+          // coordinate. A collar takes its branch's wrap, turned toward the parent's bark at the rim
+          // (the turn eased in and out, so the furrows bend smoothly from one into the other).
+          bool barkCollar = vBarkCollar > 0.5;
+          vec4 barkW = barkCollar ? vBarkB : vBarkA;
+          float barkOff = barkW.w;
+          if (barkCollar) {
+            float rim = 1.0 - vBarkOut;
+            barkOff = vBarkFoot + (rim > 1e-4 ? barkW.w / rim : 0.0) * rim * rim * (3.0 - 2.0 * rim);
+          }
+          float barkAng = atan(barkW.y, barkW.x) * 0.15915494;
+          float barkS1 = barkAng * barkW.z, barkS2 = fract(barkAng + 1.0) * barkW.z;
+          vec2 barkUv = vec2((fwidth(barkS1) <= fwidth(barkS2) ? barkS1 : barkS2) + barkOff, vBarkRV.y / uBarkTile);
+          vec3 barkCol = texture2D(uBarkMap, barkUv).rgb;
           vec3 barkNl = texture2D(uBarkNormal, barkUv).xyz * 2.0 - 1.0;
-          vec3 barkNx = texture2D(uBarkNormal, barkUvX).xyz * 2.0 - 1.0;
-          vec3 barkNy = texture2D(uBarkNormal, barkUvY).xyz * 2.0 - 1.0;
-          vec3 barkNz = texture2D(uBarkNormal, barkUvZ).xyz * 2.0 - 1.0;
           // Young branches' relief is gentler.
-          float barkDetail = 0.35 + 0.65 * smoothstep(0.02, 0.12, vBarkA.w);
+          float barkDetail = 0.35 + 0.65 * smoothstep(0.02, 0.12, vBarkRV.x);
           {
             float lum = dot(barkCol, vec3(0.2126, 0.7152, 0.0722));
             float up = smoothstep(0.3, 0.9, normalize(vBarkUp).y), foot = 1.0 - smoothstep(0.1, 1.2, vBarkP.y);
@@ -559,17 +553,14 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
           }`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           {
-            // Along the limb: the relief round it (u) and up it (v); a thin limb's furrows are as
-            // steep across as the trunk's but shallower along.
-            vec3 bt = normalize(vBarkB.xyz - normal * dot(vBarkB.xyz, normal));
-            vec3 ba = cross(bt, normal);
-            float tileW = 6.2831853 * vBarkA.w / max(vBarkA.z, 1.0);
-            vec3 own = ba * barkNl.x + bt * barkNl.y * min(tileW / uBarkSize.x, 1.0);
-            // From the sides: each projection's relief along its own two axes.
-            vec3 side = (vBarkZ * barkNx.x + vBarkY * barkNx.y) * barkTw.x
-              + (vBarkX * barkNy.x + vBarkZ * barkNy.y) * barkTw.y
-              + (vBarkX * barkNz.x + vBarkY * barkNz.y) * barkTw.z;
-            vec3 tilt = (own * vBarkOwn + side * barkSide) * uBarkRelief * barkDetail;
+            // The relief along the wrap's own directions on the surface: round the limb (u) and up it (v).
+            vec3 q0 = dFdx(-vViewPosition), q1 = dFdy(-vViewPosition);
+            vec2 st0 = dFdx(barkUv), st1 = dFdy(barkUv);
+            vec3 q1n = cross(q1, normal), q0n = cross(normal, q0);
+            vec3 bu = q1n * st0.x + q0n * st1.x, bv = q1n * st0.y + q0n * st1.y;
+            bu = dot(bu, bu) > 0.0 ? normalize(bu) : vec3(0.0);
+            bv = dot(bv, bv) > 0.0 ? normalize(bv) : vec3(0.0);
+            vec3 tilt = (bu * barkNl.x + bv * barkNl.y) * uBarkRelief * barkDetail;
             normal = normalize(normal + tilt - normal * dot(tilt, normal));
           }`);
     },
