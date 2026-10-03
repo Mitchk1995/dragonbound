@@ -10,7 +10,13 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - **Show, don't tell.** Progress, options and questions go to the owner as pictures (in-game captures, concept images), with a line or two of text at most. No score tables, long lists or walls of text; the owner won't open the game to check. Show progress regularly, not only at the end.
 - **One thing at a time for the owner's eye.** The owner judges one area at a time from pictures before it counts as done. The owner's eye is the judge: visual work goes to the owner straight from the builder, with no separate reviewer or critic stage (owner, October 3, to save usage). Stop and show the owner when progress stalls.
 - **Be honest about style.** Say plainly when a look is or is not achievable with how we build things, and show it. Concept paintings are mood, not blueprints: they tend to be generic, so scrutinise their layout and use your own taste.
-- **Parallel jobs for implementation (October 3).** The owner now has a larger usage allowance, so usage no longer has to be kept low: run parallel jobs (Claude's Workflow tool, or several agents) where they help, partitioned so they never edit the same code, each job in its own worktree on its own branch. Heavy jobs still run one at a time through the shared lock (see "How work lands"). Keep the repo, branches and scratch output clean.
+- **Push back, and own the cohesion.** The owner trusts Claude with the look's cohesion and wants pushback, not agreement: when an idea would hurt the game or how it all fits together, say so briefly and propose something better (owner, October 3).
+- **Parallel jobs for implementation (October 3).** Run parallel jobs (Claude's Workflow tool, or several agents) where they help, partitioned so they never edit the same code, each job in its own worktree on its own branch. Heavy jobs still run one at a time through the shared lock (see "How work lands"). Keep the repo, branches and scratch output clean.
+- **Spend usage carefully (October 3).** Even on the larger allowance, three max-effort jobs used 6% of the week in about two hours. To make it last:
+  - give each job one focused task in a fresh context, and continue an agent by message rather than starting a new one on the same work;
+  - run builders at high effort, keeping max for the hardest design work;
+  - run routine work (doc edits, code reviews, placing things, simple fixes) on Sonnet;
+  - take only the captures needed to judge, and read pictures at the size they need.
 - **How to work through a batch of owner notes.**
   - Export the notes, with marked pictures, to one notes file.
   - Group them by kind (for example masonry; doors and glass; landscaping).

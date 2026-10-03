@@ -24,7 +24,7 @@ depth. It looks hand-made, not like a photograph.
 creatures, statues, horses, props and the castle's architecture; characters stay blocky and modular, like Lego (owner,
 October 3). Chunky and blocky is never a defect there, and a reviewer must not ask for it to be smoothed or sculpted.
 Organic shapes are used where they read better: wings, hair, cloth, flames, rock, water, terrain, and trees and plants.
-Trees are true to size, natural and realistic, grown as one piece rather than built from blocks (owner's pick, October 3); the cartoony, blocky look is kept for characters, enemies and NPCs. They are being redone now: until the new trees are in, today's blocky trees are not a defect in other work.
+Trees are true to size, natural and realistic but softly painted, grown as one piece rather than built from blocks (owner's pick, October 3). They are being redone now: until the new trees are in, today's blocky trees are not a defect in other work. Characters, enemies and NPCs keep the cartoony, blocky look.
 
 **But built, not dumped.** "Blocky" means blocks that are *designed together*: they meet face to face, share edges and
 read as one carved or built object. The owner's standing complaint is "shapes placed together instead of stitched into
