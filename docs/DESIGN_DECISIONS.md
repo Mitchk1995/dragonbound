@@ -66,6 +66,10 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   before he approves it.
 - **Characters stay blocky and modular, like Lego.** Mitchell knows complex organic shapes are Claude's weak spot when
   built from pieces; trees are where we leave blocks behind, grown as one piece.
+- **Castle v4 must make structural sense (October 3, notes on the first v4 pictures).** The ramp up to the ledge becomes
+  stairs (a stone stair of four flights with level landings); the ledge road has a wall on both sides; the whole plan is
+  checked as a mason would build it. Every enterable building's inside must work with its outside, with a simple interior
+  plan for each (`docs/blueprints/castle-v4/castle-v4-interiors.png`).
 - **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
   no flag shadow from nowhere, the fountain dragon's front legs, more variety in the small garden trees, the sunken tree
   and the grass seam by the landing.

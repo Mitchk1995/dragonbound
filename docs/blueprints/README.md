@@ -4,9 +4,9 @@ Each folder holds the finished plan pictures and the design data a builder follo
 
 ## castle-v4: the great keep (proposal)
 
-The owner's pick B, "Great keep", made into a plan of our own. A massive square keep with four spired corner turrets (28 m, spires 44 m) stands on the north brink on the gate's axis, with the great hall and a chapel lower either side on a raised terrace. Below it is one symmetric bailey: walled kitchen and privy gardens, the stables and the barracks facing each other across the dragon fountain, the paddock and the training yard. Twelve evenly spaced towers project into a moat on three sides. The moat falls to the stream under the gate terrace, and the ledge road runs between two walls.
+The owner's pick B, "Great keep", made into a plan of our own. A massive square keep with four spired corner turrets (28 m, spires 44 m) stands on the north brink on the gate's axis, with the great hall and a chapel lower either side on a raised terrace. Below it is one symmetric bailey: walled kitchen and privy gardens, the stables and the barracks facing each other across the dragon fountain, the paddock and the training yard. Twelve evenly spaced towers project into a moat on three sides. The moat falls to the stream under the gate terrace, the ledge road runs between two walls, and a stone stair of four flights climbs the rock to it. Every building has a simple interior plan that fits its outside.
 
-Pictures: `castle-v4-plan.png`, `castle-v4-massing.png` (today's overview angle) and `castle-v4-massing-camera.png` (the play camera). The owner's choices are in its `README.md`. `design.json` holds every element and the build stages. `plan.py` (Pillow) draws the plan from it and lays out the camera sheet; `massing.py` (Blender 5.2, run through the heavy-job lock) renders the blocks.
+Pictures: `castle-v4-plan.png`, `castle-v4-interiors.png` (inside every building), `castle-v4-massing.png` (today's overview angle) and `castle-v4-massing-camera.png` (the play camera, including the stair). The owner's choices are in its `README.md`. `design.json` holds every element and the build stages. `plan.py` (Pillow) draws the plan and the interiors from it and lays out the camera sheet; `massing.py` (Blender 5.2, run through the heavy-job lock) renders the blocks.
 
 ## castle-v2: Dragonspire Keep redesign
 

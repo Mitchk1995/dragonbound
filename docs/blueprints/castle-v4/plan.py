@@ -69,9 +69,7 @@ def line(pts, fill, w):
 
 
 # the island's lowland and the crown on its rock
-island = [(14, 96), (18, 80), (12, 66), (20, 54), (21, 40), (19.5, 22), (23, 6), (40, 3.5), (58, 4), (84, 4), (100, 10), (118, 6), (132, 12),
-          (138, 10), (141, 30), (144, 46), (147, 30), (150, 10), (170, 9), (170, 150), (126, 200), (112, 204), (96, 198), (74, 190), (60, 184),
-          (46, 170), (34, 158), (28, 140), (20, 124), (24, 108)]
+island = [tuple(p) for p in D['island']['outline']]
 d.polygon([P(*p) for p in island], fill=C['meadow'])
 crown = [tuple(p) for p in D['crown']['outline']]
 d.polygon([P(*p) for p in crown], fill=C['rock'])
@@ -79,11 +77,17 @@ d.polygon([P(*p) for p in crown], fill=C['rock'])
 inset = [(x - (x - AX) * 1.3 / math.hypot(x - AX, z - 62), z - (z - 62) * 1.3 / math.hypot(x - AX, z - 62)) for x, z in crown]
 d.polygon([P(*p) for p in inset], fill=C['crown'])
 
+# today's neighbours of the climb: the smelter and the ore lane from the portal court
+cx_ = D['context']
+rect(cx_['smelter']['rect'], (196, 186, 170), C['ink'], 1)
+line(cx_['ore_lane'], C['road'], 5.0 * PX)
+
 # the farm, moved south (context)
-for x in (58, 62, 66, 70):
-    for z in (130, 134, 144, 148):
+fm = cx_['farm']
+for x in fm['plots_x']:
+    for z in fm['plots_z']:
         rect([x - 1.5, z - 1.2, x + 1.5, z + 1.2], C['farm'])
-rect([44, 126, 58.4, 138.4], None, C['fence'], 2)
+rect(fm['fence'], None, C['fence'], 2)
 
 # water
 Wt = D['water']
@@ -108,40 +112,65 @@ A = D['approach']
 for key in ('ledge_road', 'ledge_walk', 'landing', 'lookout'):
     rect(A[key]['rect'], C['road'])
 rect(A['gate_terrace']['rect'], C['pave'])
-cl = A['climb']['pts']
-line(cl, C['pave_edge'], 5.4 * PX)
-line(cl, C['road'], 4.4 * PX)
 
 
-def parapet(a, b):
-    line([a, b], C['stone'], 0.7 * PX)
+def parapet(a, b, t=0.6):
+    line([a, b], C['stone'], t * PX)
     line([a, b], C['ink'], 1 * SS)
 
 
-for key in ('ledge_road', 'ledge_walk'):
-    x0, z0, x1, z1 = A[key]['rect']
-    parapet((x0, z0 + 0.3), (x1, z0 + 0.3))
-    parapet((x0, z1 - 0.3), (x1, z1 - 0.3))
-gx0, gz0, gx1, gz1 = A['gate_terrace']['rect']
+def treads(r, up, n, col):
+    """a flight: its outline and one line per riser, across the way it climbs"""
+    x0, z0, x1, z1 = r
+    rect(r, C['pave'], C['ink'], 1)
+    for k in range(1, n):
+        u = k / n
+        if up in 'ns':
+            z = z0 + (z1 - z0) * u
+            line([(x0, z), (x1, z)], col, 1 * SS)
+        else:
+            x = x0 + (x1 - x0) * u
+            line([(x, z0), (x, z1)], col, 1 * SS)
+    # an arrow pointing up the flight
+    cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+    dx, dz = {'n': (0, -1), 's': (0, 1), 'e': (1, 0), 'w': (-1, 0)}[up]
+    L = min(x1 - x0, z1 - z0) * 0.3 if up in 'ns' else min(x1 - x0, z1 - z0) * 0.3
+    tip = (cx + dx * L * 1.6, cz + dz * L * 1.6)
+    line([(cx - dx * L * 1.6, cz - dz * L * 1.6), tip], C['ink'], 1.5 * SS)
+    d.polygon([P(*tip), P(tip[0] - dx * 0.7 - dz * 0.5, tip[1] - dz * 0.7 - dx * 0.5), P(tip[0] - dx * 0.7 + dz * 0.5, tip[1] - dz * 0.7 + dx * 0.5)], fill=C['ink'])
+
+
+# the climb: four flights and their landings, its walls and buttresses
+CL = A['climb']
+for fl in CL['flights']:
+    treads(fl['rect'], fl['up'], CL['risers_per_flight'], C['pave_edge'])
+for ld in CL['landings']:
+    rect(ld['rect'], C['pave'], C['ink'], 1)
+for w in CL['walls']:
+    pts = [(p[0], p[1]) for p in w['pts']]
+    for a, b in zip(pts, pts[1:]):
+        parapet(a, b, CL['wall_t'])
+for x, z in CL['buttresses']:
+    rect([x - 0.6, z - 0.3, x + 0.6, z + 0.9], C['stone'], C['ink'], 1)
+for x, z in CL['lamps']:
+    disc(x, z, 0.4, C['gold'], C['ink'], 1)
+
+# the crown-level parapets: both walls of the ledge, round the bastion, the landing and the lookout, the bridge
+PA = A['parapets']
+for ln in PA['lines'] + PA['bridge']:
+    pts = [tuple(p) for p in ln['pts']]
+    for a, b in zip(pts, pts[1:]):
+        parapet(a, b, PA['t'])
 br = A['bridge']['rect']
-parapet((gx0, gz1 - 0.3), (gx1, gz1 - 0.3))
-for xx in (gx0 + 0.3, gx1 - 0.3):
-    parapet((xx, 115.0), (xx, gz1))
-parapet((gx0, gz0 + 0.3), (br[0], gz0 + 0.3))
-parapet((br[2], gz0 + 0.3), (gx1, gz0 + 0.3))
-lx0, lz0, lx1, lz1 = A['landing']['rect']
-parapet((lx0, lz0 + 0.3), (lx1, lz0 + 0.3))
-parapet((lx1 - 0.3, lz0), (lx1 - 0.3, 114.0))
-parapet((lx0, lz1 - 0.3), (lx1 - 5.5, lz1 - 0.3))
-parapet((lx0 + 0.3, 115.0), (lx0 + 0.3, lz1))
-ox0, oz0, ox1, oz1 = A['lookout']['rect']
-parapet((ox0, oz0 + 0.3), (ox1, oz0 + 0.3))
-parapet((ox0 + 0.3, oz0), (ox0 + 0.3, oz1))
-parapet((ox0, oz1 - 0.3), (ox1, oz1 - 0.3))
-parapet((ox1 - 0.3, 115.0), (ox1 - 0.3, oz1))
 rect(br, C['pave'], C['ink'], 2)
-for xx in (71.0, 81.0):
-    disc(xx, gz0 + 1.2, 0.45, C['flag'])
+for ln in PA['bridge']:
+    pts = [tuple(p) for p in ln['pts']]
+    parapet(pts[0], pts[1], 0.5)
+rect([br[0] - A['bridge']['cutwaters'], A['bridge']['pier'][1], br[2] + A['bridge']['cutwaters'], A['bridge']['pier'][3]], None, C['ink'], 1)
+for x, z in A['gate_terrace']['banner_poles']:
+    disc(x, z, 0.45, C['flag'])
+for x, z in PA['lamps'] + A['gate_terrace']['lamps']:
+    disc(x, z, 0.35, C['gold'], C['ink'], 1)
 
 # the bailey: lawn everywhere a walk, yard or garden does not cover it
 cu = D['curtain']['centre_lines']
@@ -160,8 +189,7 @@ rect(Z['training-yard']['rect'], C['earth'])
 for zid in ('paddock', 'training-yard'):
     x0, z0, x1, z1 = Z[zid]['rect']
     gx, gz = Z[zid]['gate']
-    far, near = (x0 + 0.2, x1 - 0.2) if zid == 'paddock' else (x1 - 0.2, x0 + 0.2)
-    for a, b in (((x0, z1 - 0.2), (x1, z1 - 0.2)), ((far, z0), (far, z1)), ((near, z0), (near, gz - 1.6)), ((near, gz + 1.6), (near, z1))):
+    for a, b in (((gx, z0), (gx, gz - 1.6)), ((gx, gz + 1.6), (gx, z1))):
         line([a, b], C['fence'], 2.5 * SS)
 for (x, z) in ((40, 82), (46, 89), (49.5, 80.5)):
     rect([x - 1.1, z - 0.4, x + 1.1, z + 0.4], C['horse'])
@@ -186,21 +214,16 @@ for zid in ('kitchen-garden', 'privy-garden'):
         disc(cx, cz, 0.9, C['stone'], C['ink'], 1)
     else:
         disc(cx, cz, 1.2, C['water'], C['ink'], 1)
-    # walls, open at the gates
-    t = 0.5
-    gates = Z[zid]['gates']
-    s_gate = next(g for g in gates if g[2] == 's')
-    e_gate = next(g for g in gates if g[2] in 'ew')
-    for a, b in (((x0, z1), (s_gate[0] - 1.2, z1)), ((s_gate[0] + 1.2, z1), (x1, z1))):
-        line([a, b], C['stone'], t * PX)
-        line([a, b], C['ink'], 1 * SS)
-    for xx in (x0 + 0.25, x1 - 0.25):
-        if abs(xx - e_gate[0]) < 1:
-            segs = (((xx, z0), (xx, e_gate[1] - 1.2)), ((xx, e_gate[1] + 1.2), (xx, z1)))
+    # walls on the sides it builds (the curtain and the terrace close the others), open at the gates
+    for side in Z[zid]['walls']:
+        g = next(g for g in Z[zid]['gates'] if g[2] == side)
+        if side == 's':
+            segs = (((x0, z1 - 0.25), (g[0] - 1.2, z1 - 0.25)), ((g[0] + 1.2, z1 - 0.25), (x1, z1 - 0.25)))
         else:
-            segs = (((xx, z0), (xx, z1)),)
+            xx = x1 - 0.25 if side == 'e' else x0 + 0.25
+            segs = (((xx, z0), (xx, g[1] - 1.2)), ((xx, g[1] + 1.2), (xx, z1)))
         for a, b in segs:
-            line([a, b], C['stone'], t * PX)
+            line([a, b], C['stone'], 0.5 * PX)
             line([a, b], C['ink'], 1 * SS)
 
 # parterre round the fountain plaza
@@ -293,7 +316,7 @@ for dr in G['drums']:
 for s in D['stairs']:
     x0, z0, x1, z1 = s['rect']
     rect(s['rect'], C['terrace'], C['ink'], 1)
-    n = s.get('steps', 8)
+    n = s['risers']
     for k in range(1, n):
         z = z0 + (z1 - z0) * k / n
         line([(x0, z), (x1, z)], C['pave_edge'], 1 * SS)
@@ -301,7 +324,21 @@ for side in ('west', 'east'):
     f = F[f'champion-{side}']
     rect([f['x'] - 0.8, f['z'] - 0.8, f['x'] + 0.8, f['z'] + 0.8], C['stone'], C['ink'], 1)
 # the terrace's edge: a retaining wall with a balustrade
-for a, b in (((33.6, 44), (42, 44)), ((46, 44), (60, 44)), ((60, 44), (60, 48)), ((60, 48), (69.5, 48)), ((82.5, 48), (92, 48)), ((92, 48), (92, 44)), ((92, 44), (106, 44)), ((110, 44), (118.4, 44))):
+def edge_segments():
+    """the terrace's edge as segments, broken where the stairs come up"""
+    T = D['terrace']
+    out = []
+    for (xa, za), (xb, zb) in zip(T['edge'], T['edge'][1:]):
+        cuts = sorted(o for o in T['stair_openings'] if za == zb and min(xa, xb) <= o[0] and o[1] <= max(xa, xb))
+        x = min(xa, xb)
+        for o in cuts:
+            out.append(((x, za), (o[0], za)))
+            x = o[1]
+        out.append(((x, za), (max(xa, xb), zb)) if za == zb else ((xa, za), (xb, zb)))
+    return out
+
+
+for a, b in edge_segments():
     line([a, b], C['ink'], 3 * SS)
 
 
@@ -350,10 +387,10 @@ tag(104, 40.2, 'terrace, raised 2 m', 10)
 tag(76, 51.0, 'grand stair', 10)
 tag(44, 53.2, 'KITCHEN GARDEN', 10, True)
 tag(108, 53.2, 'PRIVY GARDEN', 10, True)
-tag(44, 61.5, 'stable yard', 10)
-tag(108, 61.5, 'muster yard', 10)
-tag(44, 70.0, 'STABLES  6.5 m', 10, True)
-tag(108, 70.0, 'BARRACKS  6.5 m', 10, True)
+tag(44, 61.0, 'stable yard', 10)
+tag(108, 61.0, 'muster yard', 10)
+tag(44, 70.0, 'STABLES  7 m', 10, True)
+tag(108, 70.0, 'BARRACKS  7 m', 10, True)
 tag(44, 94.5, 'PADDOCK', 12, True)
 tag(108, 93.0, 'TRAINING YARD', 11, True)
 tag(76, 59.6, 'DRAGON FOUNTAIN', 10, True)
@@ -361,8 +398,8 @@ tag(76, 92.0, 'forecourt', 10)
 tag(76, 113.5, 'GATE TERRACE', 10, True)
 tag(101.5, 112.2, 'LEDGE ROAD', 11, True)
 tag(50.5, 112.2, 'LEDGE WALK', 11, True)
-tag(124, 115.2, 'LANDING', 10, True)
-tag(28, 115.2, 'LOOKOUT', 10, True)
+tag(124.4, 112.4, 'LANDING', 10, True)
+tag(27.6, 112.4, 'LOOKOUT', 10, True)
 tag(124.4, 50, 'MOAT', 12, True, fill=C['blue_tag'])
 tag(27.6, 50, 'MOAT', 12, True, fill=C['blue_tag'])
 tag(76, 105.2, 'bridge', 9, fill=C['blue_tag'])
@@ -370,7 +407,10 @@ tag(86.5, 122.8, 'fall and pool', 10, fill=C['blue_tag'], anchor='lm')
 tag(14.0, 84.6, 'overflow fall', 9, fill=C['blue_tag'], anchor='lm')
 tag(27.5, 7.0, 'spring', 9, fill=C['blue_tag'])
 tag(124.5, 7.0, 'spring', 9, fill=C['blue_tag'])
-tag(132.5, 136.5, 'climb to the portal court', 10)
+tag(139.5, 122.5, 'STAIR', 10, True)
+tag(139.5, 125.6, '4 flights of 17', 9)
+tag(139.5, 136.6, 'to the portal court', 9)
+tag(114.5, 132.5, 'smelter', 9)
 tag(64, 139.0, 'farm (moved 8 m south)', 10)
 htag(22.6, 101.5, 'curtain 8.4')
 for t in D['towers']:
@@ -450,52 +490,219 @@ d.text((SX, ey0 + 18 * SS), 'curtain 8.4, wings 11.5 and 14, keep 28, turrets 34
 d.text((SX, ey0 + 36 * SS), 'the blue post is the 2 m hero', font=font(11), fill=C['text'], anchor='lm')
 
 
-def floorplan(ox, oy, s, upper):
-    rooms = K['rooms']['upper' if upper else 'ground']
-    x0, z0, x1, z1 = K['rect']
+# ── inside the buildings: one drawer for the keep's plans here and the interiors sheet ──
+IN = {b['id']: b for b in D['interiors']['buildings']}
+BLD = {b['id']: b for b in D['buildings']}
+IC = {'wall': (132, 118, 98), 'floor': (244, 236, 218), 'raised': (230, 214, 184), 'below': (206, 198, 184), 'void': (96, 88, 80),
+      'stair': (222, 168, 72), 'door': (52, 74, 128), 'hatch': (196, 150, 84), 'hearth': (150, 66, 44), 'window': (110, 186, 236),
+      'curtain': (196, 184, 160), 'terrace': (229, 222, 207), 'walk': (176, 160, 132), 'yard': (210, 202, 186)}
 
-    def Q(x, dz):
-        return (ox + (x - x0) * s, oy + dz * s)
 
-    def box(r, fill, outline=None):
-        d.rectangle([*Q(r[0], r[1] - z0), *Q(r[2], r[3] - z0)], fill=fill, outline=outline)
+class View:
+    """a plan drawn at s pixels a metre with (x0, z0) at (ox, oy)"""
 
-    d.rectangle([*Q(x0, 0), *Q(x1, z1 - z0)], fill=(232, 222, 200), outline=C['ink'], width=int(3 * SS))
-    for t in K['turrets']:
-        cx, cz = Q(t['x'], t['z'] - z0)
-        r = t['r'] * s
-        d.ellipse([cx - r, cz - r, cx + r, cz + r], fill=(222, 210, 186), outline=C['ink'], width=int(2 * SS))
+    def __init__(self, dr, ox, oy, s, x0, z0):
+        self.dr, self.ox, self.oy, self.s, self.x0, self.z0 = dr, ox, oy, s, x0, z0
+
+    def Q(self, x, z):
+        return (self.ox + (x - self.x0) * self.s, self.oy + (z - self.z0) * self.s)
+
+    def box(self, r, fill, outline=None, w=1):
+        a, b = self.Q(r[0], r[1]), self.Q(r[2], r[3])
+        self.dr.rectangle([min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])], fill=fill, outline=outline, width=int(w * SS) if outline else 0)
+
+    def disc(self, x, z, r, fill, outline=None, w=1):
+        a, b = self.Q(x - r, z - r), self.Q(x + r, z + r)
+        self.dr.ellipse([a[0], a[1], b[0], b[1]], fill=fill, outline=outline, width=int(w * SS) if outline else 0)
+
+    def line(self, pts, fill, w):
+        self.dr.line([self.Q(*p) for p in pts], fill=fill, width=int(w * SS))
+
+    def text(self, x, z, t, size=10, bold=False, col=None, anchor='mm'):
+        self.dr.text(self.Q(x, z), t, font=font(size, bold), fill=col or C['text'], anchor=anchor, align='center')
+
+    def arrow(self, x, z, up, L):
+        dx, dz = {'n': (0, -1), 's': (0, 1), 'e': (1, 0), 'w': (-1, 0)}[up]
+        a, b = (x - dx * L / 2, z - dz * L / 2), (x + dx * L / 2, z + dz * L / 2)
+        self.line([a, b], C['ink'], 1.5)
+        h = min(0.5, L * 0.3)
+        self.dr.polygon([self.Q(*b), self.Q(b[0] - dx * h - dz * h * 0.7, b[1] - dz * h - dx * h * 0.7), self.Q(b[0] - dx * h + dz * h * 0.7, b[1] - dz * h + dx * h * 0.7)], fill=C['ink'])
+
+
+def flight(v, r, up, n):
+    x0, z0, x1, z1 = r
+    v.box(r, IC['stair'], C['ink'], 1)
+    for k in range(1, n):
+        u = k / n
+        if up in 'ns':
+            v.line([(x0, z0 + (z1 - z0) * u), (x1, z0 + (z1 - z0) * u)], C['ink'], 0.6)
+        else:
+            v.line([(x0 + (x1 - x0) * u, z0), (x0 + (x1 - x0) * u, z1)], C['ink'], 0.6)
+    v.arrow((x0 + x1) / 2, (z0 + z1) / 2, up, (z1 - z0 if up in 'ns' else x1 - x0) * 0.6)
+
+
+def stairs_of(b):
+    out = []
+    for st in b.get('stairs', []):
+        fl = st.get('flights')
+        if isinstance(fl, list):
+            n = round(st['risers'] / len(fl))
+            out += [(f['rect'], f['up'], n) for f in fl]
+            out.append((st['landing'], None, 0))
+        else:
+            out.append((st['rect'], st['up'], st['risers']))
+    return out
+
+
+def door(v, dd, wall, upper):
+    lv = dd['level']
+    shown = (lv >= 2.9 and not dd.get('hatch')) if upper else (lv < 2.9 or dd.get('hatch'))
+    if not shown:
+        return
+    col = IC['hatch'] if dd.get('hatch') or dd.get('h', 4) < 2.5 else IC['door']
+    t = dd.get('depth', wall) / 2 + 0.15
+    pts = [(x, dd['z']) for x in dd['xs']] if 'xs' in dd else [tuple(dd['at'])]
+    for x, z in pts:
+        if dd['side'] in 'ns':
+            v.box([x - dd['w'] / 2, z - t, x + dd['w'] / 2, z + t], col)
+        else:
+            v.box([x - t, z - dd['w'] / 2, x + t, z + dd['w'] / 2], col)
+
+
+def room_label(v, r, txt, size):
+    x0, z0, x1, z1 = r['rect']
+    v.text((x0 + x1) / 2, (z0 + z1) / 2, txt, size)
+
+
+def nice(s):
+    return s.replace('-', ' ')
+
+
+def draw_building(v, bid, upper, size=10):
+    """a building's plan at ground level or on its upper floors, its doors, stairs, hearths and windows"""
+    b, ib = BLD[bid], IN[bid]
+    wall = ib['walls']
+    v.box(b['rect'], IC['wall'], C['ink'], 1.5)
+    rooms = ib['rooms']
+    for r in rooms:
+        if r.get('upper'):
+            continue
+        open_up = upper and 'ceiling' not in r
+        fill = IC['void'] if open_up else (IC['below'] if upper else (IC['raised'] if r['floor'] > min(q['floor'] for q in rooms) else IC['floor']))
+        v.box(r['rect'], fill, C['ink'], 0.6)
     if upper:
-        v = next(r for r in rooms if r['id'] == 'void')['rect']
-        box(v, (72, 66, 60))
-        d.text(Q(76, (v[1] + v[3]) / 2 - z0), 'open to\nthe hall', font=font(10), fill=(240, 232, 214), anchor='mm', align='center')
-        d.text(Q(76, 21.5), 'gallery', font=font(10), fill=C['text'], anchor='mm')
-        d.text(Q(76, 3.0), 'council gallery', font=font(10), fill=C['text'], anchor='mm')
+        for r in rooms:
+            if r.get('upper'):
+                v.box(r['rect'], IC['floor'], C['ink'], 0.6)
+    for (r, up, n) in stairs_of(ib):
+        if up is None:
+            v.box(r, IC['stair'], C['ink'], 1)
+        else:
+            flight(v, r, up, n)
+    if not upper:
+        for h in ib.get('hearths', []):
+            v.box(h, IC['hearth'])
+    for dd in ib.get('doors', []):
+        door(v, dd, wall, upper)
+    z1 = b['rect'][3]
+    for w in ib.get('windows', []):
+        for x in w['xs']:
+            hw = 1.1 if w.get('round') or w.get('oriel') else 0.6
+            v.box([x - hw, z1 - 0.35, x + hw, z1 + 0.1], IC['window'], C['ink'], 0.6)
+    # labels
+    for r in rooms:
+        x0, z0, x1, z1_ = r['rect']
+        if upper != bool(r.get('upper')):
+            if upper and 'ceiling' not in r and (x1 - x0) > 4 and r['id'] not in ('dais',):
+                v.text((x0 + x1) / 2, (z0 + z1_) / 2, 'open to\nthe roof', size - 1, col=(236, 228, 210))
+            continue
+        if r['id'] in ('passage', 'dais', 'aisle'):
+            v.text((x0 + x1) / 2, (z0 + z1_) / 2 + (1.2 if r['id'] == 'dais' else 0), nice(r['id']), size - 2)
+            continue
+        txt = nice(r['id']) + ('' if r['floor'] in (0.0, 2.0) or not upper else f"\n+{r['floor']:g}")
+        if r.get('bays'):
+            xs = [x0 + (x1 - x0) * (k + 0.5) / r['bays'] for k in range(r['bays'])]
+            for k in range(1, r['bays']):
+                xx = x0 + (x1 - x0) * k / r['bays']
+                v.line([(xx, z0), (xx, z1_)], C['ink'], 0.8)
+            for xx in xs:
+                v.text(xx, (z0 + z1_) / 2, 'stall', size - 2)
+            continue
+        v.text((x0 + x1) / 2, z0 + 2.2 if r['id'] == 'hall' else (z0 + z1_) / 2, txt, size)
+
+
+def draw_keep(v, upper, size=10):
+    K = D['keep']
+    rooms = K['rooms']['upper' if upper else 'ground']
+    for t in K['turrets']:
+        v.disc(t['x'], t['z'], t['r'], IC['wall'], C['ink'], 1.5)
+    v.box(K['rect'], IC['wall'], C['ink'], 2)
+    v.box(K['frontispiece']['rect'], IC['wall'], C['ink'], 1.5)
+    for t in K['turrets']:
+        front = t['z'] > 30
+        v.disc(t['x'], t['z'], t['r'] - 1.0, IC['stair'] if front else IC['floor'], C['ink'], 1)
+        if front:
+            v.disc(t['x'], t['z'], 0.35, C['ink'])
+    G = {r['id']: r for r in K['rooms']['ground']}
+    if upper:
+        v.box(G['throne-hall']['rect'], IC['below'], C['ink'], 0.6)
+        for r in rooms:
+            v.box(r['rect'], IC['void'] if r['id'] == 'void' else IC['floor'], C['ink'], 0.6)
+        vr = next(r for r in rooms if r['id'] == 'void')['rect']
+        for a, b in (((vr[0], vr[1]), (vr[2], vr[1])), ((vr[0], vr[1]), (vr[0], 31.2)), ((vr[2], vr[1]), (vr[2], 31.2))):
+            v.line([a, b], (230, 220, 200), 2)
+        v.text(76, 29, 'open to +20', size, col=(236, 228, 210))
+        v.text(76, 19, 'council gallery +7.06', size - 1)
+        v.text(68, 26, 'west\ngallery', size - 2)
+        v.text(84, 26, 'east\ngallery', size - 2)
     else:
-        box(next(r for r in rooms if r['id'] == 'dais')['rect'], (200, 180, 140), C['ink'])
-        box([75.2, z0 + 1.6, 76.8, z0 + 3.0], C['gold'])
-        box([75.2, z0 + 4.0, 76.8, z1 - 1.0], (150, 40, 40))
-        for (px, pz) in ((69.5, 9.5), (82.5, 9.5), (69.5, 16.5), (82.5, 16.5)):
-            d.rectangle([*Q(px - 0.9, pz - 0.9), *Q(px + 0.9, pz + 0.9)], fill=(170, 160, 140), outline=C['ink'])
-        d.text(Q(72.2, 13), 'throne\nhall', font=font(11, True), fill=C['text'], anchor='mm', align='center')
-        for (pa, pb) in (((74, 23), (78, 24.2)), ((63.8, 10.5), (65, 12.5)), ((87, 10.5), (88.2, 12.5))):
-            d.rectangle([*Q(*pa), *Q(*pb)], fill=(232, 222, 200))
-        d.text(Q(76, 26.6), 'great door', font=font(10), fill=C['text'], anchor='mm')
-        d.text(Q(61.0, 11.5), 'hall', font=font(10), fill=C['text'], anchor='mm')
-        d.text(Q(91.0, 11.5), 'chapel', font=font(10), fill=C['text'], anchor='mm')
+        v.box(G['throne-hall']['rect'], IC['floor'], C['ink'], 0.6)
+        v.box(G['dais']['rect'], IC['raised'], C['ink'], 0.8)
+        v.box([75.3, 17.6, 76.7, 19.0], C['gold'])
+        v.box([75.3, 21.0, 76.7, 37.0], (160, 48, 48))
+        for px, pz in G['piers']['pts']:
+            v.box([px - 0.9, pz - 0.9, px + 0.9, pz + 0.9], IC['wall'], C['ink'], 1)
+        v.text(72.8, 28.0, 'throne\nhall', size, True)
     for sid in ('stair-west', 'stair-east'):
-        box(next(r for r in K['rooms']['ground'] if r['id'] == sid)['rect'], (214, 155, 57), C['ink'])
+        st = G[sid]
+        for f in st['flights']:
+            flight(v, f['rect'], f['up'], st['risers'] // 2)
+        v.box(st['landing'], IC['stair'], C['ink'], 1)
+    for dd in IN['keep']['doors']:
+        door(v, dd, 2.0, upper)
+
+
+def range_context(v, upper):
+    """the north curtain behind the range, its walk and the terrace in front"""
+    f = D['curtain']['faces']
+    o, i = f['outer'], f['inner']
+    for xa, xb in ((o['west_x'], D['keep']['rect'][0]), (D['keep']['rect'][2], o['east_x'])):
+        v.box([xa, o['north_z'], xb, i['north_z']], IC['curtain'], C['ink'], 1)
+    for xa, xb in ((o['west_x'], i['west_x']), (i['east_x'], o['east_x'])):
+        v.box([xa, o['north_z'], xb, 42.0], IC['curtain'], C['ink'], 1)
+    v.box([i['west_x'], 36.0, i['east_x'], 42.0], IC['terrace'])
+    if upper:
+        for xa, xb in ((32.0, 64.0), (88.0, 120.0)):
+            v.line([(xa, 21.0), (xb, 21.0)], IC['door'], 1.5)
+        for x in (32.0, 120.0):
+            v.line([(x, 21.0), (x, 42.0)], IC['door'], 1.5)
+        v.text(48.0, 20.95, 'wall walk +7.06', 9, col=C['ink'])
+        v.text(104.0, 20.95, 'wall walk +7.06', 9, col=C['ink'])
+    else:
+        v.text(48.0, 39.6, 'terrace +2', 10)
+        v.text(104.0, 39.6, 'terrace +2', 10)
 
 
 fy = TOP + 410 * SS
 d.text((SX, fy), 'Inside the keep', font=font(17, True), fill=C['text'], anchor='lm')
 s = 7.4 * SS
-floorplan(SX + 30 * SS, fy + 46 * SS, s, False)
-floorplan(SX + 30 * SS + 24 * s + 70 * SS, fy + 46 * SS, s, True)
-yy = fy + 46 * SS + 24 * s + 44 * SS
-d.text((SX + 30 * SS + 12 * s, yy), 'ground floor, +2', font=font(12), fill=C['text'], anchor='mm')
-d.text((SX + 30 * SS + 24 * s + 70 * SS + 12 * s, yy), 'upper floor, +8', font=font(12), fill=C['text'], anchor='mm')
-d.text((SX, yy + 30 * SS), 'gold: the two stairs. The storeys above stay closed for now.', font=font(11), fill=C['text'], anchor='lm')
+for k, upper in enumerate((False, True)):
+    ox = SX + k * (34 * s + 36 * SS)
+    v = View(d, ox, fy + 30 * SS, s, 59, 10)
+    draw_keep(v, upper, 9)
+    d.text((ox + 17 * s, fy + 30 * SS + 33 * s + 14 * SS), 'upper floor: galleries +7.06' if upper else 'ground floor +2', font=font(12), fill=C['text'], anchor='mm')
+d.text((SX, fy + 30 * SS + 33 * s + 44 * SS), 'gold: stairs (the front turrets hold spiral stairs); blue: doors.', font=font(11), fill=C['text'], anchor='lm')
+d.text((SX, fy + 30 * SS + 33 * s + 64 * SS), 'Every building inside: castle-v4-interiors.png', font=font(11), fill=C['text'], anchor='lm')
 
 ly = TOP + 990 * SS
 d.text((SX, ly), 'Key', font=font(17, True), fill=C['text'], anchor='lm')
@@ -514,6 +721,82 @@ out = im.resize((WIDTH // SS, HEIGHT // SS), Image.LANCZOS)
 save(out, 'castle-v4-plan.png')
 print('saved castle-v4-plan.png', out.size)
 
+
+# ── the interiors sheet: every building the hero enters, inside its own walls ──
+S2 = 21.0 * SS
+MX, TT = 30 * SS, 84 * SS
+W2 = int(2 * MX + 93 * S2)
+row1, row2 = TT + 56 * SS, TT + 56 * SS + 31 * S2 + 76 * SS
+row3 = row2 + 31 * S2 + 76 * SS
+H2 = int(row3 + 15 * S2 + 150 * SS)
+im2 = Image.new('RGB', (W2, H2), C['paper'])
+d2 = ImageDraw.Draw(im2)
+d2.rectangle([0, 0, W2, TT], fill=C['title'])
+d2.text((MX, TT * 0.5), 'CASTLE v4: INSIDE THE BUILDINGS', font=font(30, True), fill=(248, 236, 210), anchor='lm')
+d2.text((MX + 640 * SS, TT * 0.5), 'every door is one door from both sides; heights above the bailey', font=font(15), fill=(214, 200, 176), anchor='lm')
+for k, (y, upper, title) in enumerate(((row1, False, "The north range at the terrace's level (+2): kitchen, great hall, keep, chapel, solar"),
+                                       (row2, True, "Its upper floors: the minstrels' gallery +5.4, the keep's galleries +7.06 on the wall walk, the solar +6.4"))):
+    d2.text((MX, y - 24 * SS), title, font=font(17, True), fill=C['text'], anchor='lm')
+    v = View(d2, MX, y, S2, 30, 10)
+    range_context(v, upper)
+    for bid in ('kitchen', 'great-hall', 'chapel', 'solar'):
+        draw_building(v, bid, upper, 12)
+    draw_keep(v, upper, 12)
+d2.text((MX, row3 - 24 * SS), 'The stables and the barracks (+0; lofts at +2.9 over the stalls and rooms), the gatehouse and a wall tower', font=font(17, True), fill=C['text'], anchor='lm')
+v = View(d2, MX, row3, S2, 31, 63)
+v.box([31, 63, 56, 64.6], IC['yard'])
+v.text(43.5, 63.8, 'stable yard', 11)
+v.box([31, 75.4, 56, 77], (176, 208, 140))
+v.text(43.5, 76.2, 'paddock', 11)
+v.box([30.9, 63, 33.1, 77], IC['curtain'], C['ink'], 1)
+draw_building(v, 'stables', False, 12)
+v = View(d2, MX + 27 * S2, row3, S2, 96, 63)
+v.box([96, 63, 121, 64.6], IC['yard'])
+v.text(108.5, 63.8, 'muster yard', 11)
+v.box([96, 75.4, 121, 77], (214, 186, 140))
+v.text(108.5, 76.2, 'training yard', 11)
+v.box([118.9, 63, 121.1, 77], IC['curtain'], C['ink'], 1)
+draw_building(v, 'barracks', False, 12)
+# the gatehouse: the passage between the drums, a spiral stair in each
+G = D['gatehouse']
+v = View(d2, MX + 54 * S2, row3 + 1 * S2, S2, 66, 96)
+v.box([66, 98.9, 86, 101.1], IC['curtain'], C['ink'], 1)
+v.box([G['x'] - 6, G['z'] - 1.9, G['x'] + 6, G['z'] + 1.9], IC['wall'], C['ink'], 1.5)
+v.box([G['x'] - 2, G['z'] - 1.9, G['x'] + 2, G['z'] + 1.9], IC['floor'], C['ink'], 0.6)
+for dr_ in G['drums']:
+    v.disc(dr_['x'], dr_['z'], dr_['r'], IC['wall'], C['ink'], 1.5)
+    v.disc(dr_['x'], dr_['z'], dr_['r'] - 0.8, IC['stair'], C['ink'], 1)
+    v.disc(dr_['x'], dr_['z'], 0.3, C['ink'])
+    v.box([dr_['x'] - 0.6, dr_['z'] - dr_['r'] - 0.1, dr_['x'] + 0.6, dr_['z'] - dr_['r'] + 0.9], IC['door'])
+v.box([66, 96, 86, 97.4], IC['terrace'])
+v.text(76, 96.7, 'forecourt', 11)
+v.text(76, 100, 'gate\npassage', 11)
+v.text(76, 103.2, 'gatehouse: spiral stairs in the drums to the walk and the gate chamber (+7.06)', 11)
+# a wall tower at the walk's level
+t = next(t for t in D['towers'] if t['id'] == 'wall-W2')
+v = View(d2, MX + 78 * S2, row3 + 1 * S2, S2, 24, 56)
+v.box([30.9, 56, 33.1, 65], IC['curtain'], C['ink'], 1)
+v.disc(t['x'], t['z'], t['r'], IC['wall'], C['ink'], 1.5)
+v.disc(t['x'], t['z'], t['r'] - 0.9, IC['floor'], C['ink'], 1)
+v.line([(31.6, 56), (31.6, 65)], IC['door'], 1.5)
+hc = math.sqrt((t['r'] - 0.9) ** 2 - (31.6 - t['x']) ** 2)
+for zz in (t['z'] - hc - 0.45, t['z'] + hc + 0.45):
+    v.box([31.0, zz - 0.5, 32.2, zz + 0.5], IC['door'])
+v.disc(t['x'] - 1.3, t['z'], 0.9, IC['stair'], C['ink'], 1)
+v.disc(t['x'] - 1.3, t['z'], 0.2, C['ink'])
+v.text(28.5, 66.2, 'wall tower at +7.06:\nthe walk passes through,\nits spiral to the platform', 11)
+# the key
+ky = row3 + 15 * S2 + 60 * SS
+items = [(IC['floor'], 'floor'), (IC['raised'], 'dais, raised floor'), (IC['void'], 'open to the roof'), (IC['below'], 'the room below'),
+         (IC['stair'], 'stair, arrow up'), (IC['door'], 'door'), (IC['hatch'], 'half-door, hatch'), (IC['hearth'], 'hearth'), (IC['window'], 'window')]
+for k, (col, txt) in enumerate(items):
+    x = MX + k * 220 * SS
+    d2.rectangle([x, ky - 10 * SS, x + 30 * SS, ky + 10 * SS], fill=col, outline=C['ink'])
+    d2.text((x + 40 * SS, ky), txt, font=font(13), fill=C['text'], anchor='lm')
+out2 = im2.resize((W2 // SS, H2 // SS), Image.LANCZOS)
+save(out2, 'castle-v4-interiors.png')
+print('saved castle-v4-interiors.png', out2.size)
+
 # ── the massing pictures, from massing.py's renders ────────────────────────
 if len(sys.argv) > 1:
     src = sys.argv[1]
@@ -521,17 +804,19 @@ if len(sys.argv) > 1:
     views = [('camera-avenue.png', 'On the avenue by the fountain, camera zoomed out: the keep is beyond the top of the screen'),
              ('camera-door.png', 'At the great door: the front turrets and the frontispiece frame the door'),
              ('camera-bridge.png', 'On the bridge: the moat, the gate drums and the gate terrace'),
-             ('camera-yards.png', 'At the stables\' door: stable yard, kitchen garden, paddock, parterre')]
-    tw, th, cap, gap = 960, 540, 40, 12
-    sheet = Image.new('RGB', (2 * tw + 3 * gap, 2 * (th + cap) + 3 * gap + 56), C['paper'])
+             ('camera-yards.png', 'At the stables\' door: stable yard, kitchen garden, paddock, parterre'),
+             ('camera-stair-foot.png', "At the stair's foot: two flights up to the turning landing"),
+             ('camera-stair-head.png', "At the stair's head: the ledge road between its two walls")]
+    tw, th, cap, gap, cols = 800, 450, 40, 12, 3
+    sheet = Image.new('RGB', (cols * tw + (cols + 1) * gap, 2 * (th + cap) + 3 * gap + 56), C['paper'])
     sd = ImageDraw.Draw(sheet)
     sd.rectangle([0, 0, sheet.width, 56], fill=C['title'])
     f1 = ImageFont.truetype('georgiab.ttf', 24)
     f2 = ImageFont.truetype('georgia.ttf', 17)
     sd.text((gap + 4, 28), 'CASTLE v4 from the play camera (massing; the blue post is the 2 m hero)', font=f1, fill=(248, 236, 210), anchor='lm')
     for k, (name, text) in enumerate(views):
-        x = gap + (k % 2) * (tw + gap)
-        y = 56 + gap + (k // 2) * (th + cap + gap)
+        x = gap + (k % cols) * (tw + gap)
+        y = 56 + gap + (k // cols) * (th + cap + gap)
         sheet.paste(Image.open(os.path.join(src, name)).convert('RGB').resize((tw, th), Image.LANCZOS), (x, y))
         sd.text((x + 4, y + th + cap / 2), text, font=f2, fill=C['text'], anchor='lm')
     save(sheet, 'castle-v4-massing-camera.png', True)

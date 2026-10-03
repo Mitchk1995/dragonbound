@@ -1,11 +1,12 @@
 """Massing renders of castle v4, built from design.json (Blender 5.2, headless):
 
-    blender -b --python massing.py -- <output folder> [overview] [camera] [extra]
+    blender -b --python massing.py -- <output folder> [overview] [camera] [climb] [extra]
 
 castle-v4-massing.png is the overview angle of the bailey suite (src/dev/castleInspect.ts), framed on
 today's curtain exactly as the review picture v5-overview.jpg. camera-*.png are the game's own camera
 (game.ts updateCamera: 21 up and 14 back per zoom step, 42 degree field of view) at the avenue, the
-great door, the bridge and the stables' door; plan.py lays them out with captions. `extra` adds check
+great door, the bridge and the stables' door, and with `climb` at the stair's foot and head; plan.py lays
+them out with captions. `extra` adds check
 views (from the farm, the landing, the north, the west, and the play camera at the great hall's dais,
 where it lands inside the keep's front turret). Plain blocks, cylinders and cones in the castle's
 colours (trim in the same stone, a shade darker); the blue post is the 2 m hero.
@@ -17,7 +18,7 @@ D = json.load(open(os.path.join(HERE, 'design.json'), encoding='utf-8'))
 CY = D['conventions']['crown_world_y']
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 OUT = ARGS[0] if ARGS else HERE
-ONLY = set(ARGS[1:]) or {'overview', 'camera'}
+ONLY = set(ARGS[1:]) or {'overview', 'camera', 'climb'}
 
 # ── scene, materials ───────────────────────────────────────────────────────
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -161,11 +162,7 @@ def cut_out(obj, cutter):
 
 
 # ── the island and the crown ───────────────────────────────────────────────
-island = [(21, 40), (19.5, 22), (23, 6), (40, 3.5), (58, 4), (84, 4), (100, 10), (118, 6), (132, 12), (138, 10), (141, 30), (144, 46), (147, 30),
-          (150, 10), (166, 8), (186, 14), (204, 10), (222, 20), (236, 18), (250, 30), (262, 46), (272, 64), (278, 86), (276, 104), (282, 122),
-          (280, 142), (270, 158), (256, 166), (248, 178), (252, 192), (240, 204), (222, 206), (204, 198), (190, 200), (176, 206), (164, 214),
-          (154, 220), (146, 214), (140, 204), (126, 200), (112, 204), (96, 198), (74, 190), (60, 184), (46, 170), (34, 158), (28, 140),
-          (20, 124), (24, 108), (14, 96), (18, 80), (12, 66), (20, 54)]
+island = [tuple(p) for p in D['island']['outline']]
 prism(island, -16, 0, M['rock'], 'island-side')
 flat(island, 0.0, M['meadow'], 'lowland')
 for h, poly in ((3, [[206, 104], [262, 100], [270, 130], [256, 156], [214, 160], [206, 132]]),
@@ -215,57 +212,69 @@ A = D['approach']
 ms = mo['south_z']
 
 
-def parapet(ax, az, bx, bz):
-    obox(ax, az, bx, bz, 0.6, Y(0), Y(1.0), M['curtain'], 'parapet')
-    obox(ax, az, bx, bz, 0.75, Y(1.0), Y(1.18), M['trim'], 'coping')
+def parapet(ax, az, bx, bz, h=1.1):
+    obox(ax, az, bx, bz, 0.6, Y(0), Y(h - 0.15), M['curtain'], 'parapet')
+    obox(ax, az, bx, bz, 0.72, Y(h - 0.15), Y(h), M['trim'], 'coping')
 
 
 for key in ('ledge_road', 'ledge_walk', 'landing', 'lookout', 'gate_terrace'):
     flat(rp(A[key]['rect']), Y(0.04), M['pave'], key)
-for key in ('ledge_road', 'ledge_walk'):
-    x0, z0, x1, z1 = A[key]['rect']
-    parapet(x0, z0 + 0.3, x1, z0 + 0.3)
-    parapet(x0, z1 - 0.3, x1, z1 - 0.3)
-gx0, gz0, gx1, gz1 = A['gate_terrace']['rect']
-br = A['bridge']['rect']
-parapet(gx0, gz1 - 0.3, gx1, gz1 - 0.3)
-for xx in (gx0 + 0.3, gx1 - 0.3):
-    parapet(xx, 115.0, xx, gz1)
-parapet(gx0, gz0 + 0.3, br[0], gz0 + 0.3)
-parapet(br[2], gz0 + 0.3, gx1, gz0 + 0.3)
-lx0, lz0, lx1, lz1 = A['landing']['rect']
-parapet(lx0, lz0 + 0.3, lx1, lz0 + 0.3)
-parapet(lx1 - 0.3, lz0, lx1 - 0.3, 114.0)
-parapet(lx0, lz1 - 0.3, lx1 - 5.5, lz1 - 0.3)
-parapet(lx0 + 0.3, 115.0, lx0 + 0.3, lz1)
-ox0, oz0, ox1, oz1 = A['lookout']['rect']
-parapet(ox0, oz0 + 0.3, ox1, oz0 + 0.3)
-parapet(ox0 + 0.3, oz0, ox0 + 0.3, oz1)
-parapet(ox0, oz1 - 0.3, ox1, oz1 - 0.3)
-parapet(ox1 - 0.3, 115.0, ox1 - 0.3, oz1)
-# the bridge: deck, two low arches on a pier, parapets; banner poles at its foot
-box(br[0], br[1], br[2], br[3], Y(-0.9), Y(0.05), M['curtain'], 'bridge-deck')
-box(br[0] + 0.3, (br[1] + br[3]) / 2 - 0.8, br[2] - 0.3, (br[1] + br[3]) / 2 + 0.8, Y(Wt['moat']['bed']), Y(-0.9), M['curtain'], 'bridge-pier')
-for xx in (br[0] + 0.3, br[2] - 0.3):
-    parapet(xx, br[1] + 1.5, xx, br[3])
-for xx in (71.0, 81.0):
-    cyl(xx, ms + 1.2, 0.12, Y(0), Y(7.5), M['deck'], 8, 'pole')
-    box(xx - 0.05, ms + 0.6, xx + 0.05, ms + 1.8, Y(3.6), Y(7.2), M['flag'], 'banner')
-# the climb: a ramp from the portal court up to the landing
-cl = A['climb']['pts']
-segs = list(zip(cl, cl[1:]))
-total = sum(math.hypot(bx - ax, bz - az) for (ax, az), (bx, bz) in segs)
-acc = 0.0
-for (ax, az), (bx, bz) in segs:
-    L = math.hypot(bx - ax, bz - az)
-    n = max(2, int(L / 1.2))
-    for i in range(n):
-        u0, u1 = i / n, (i + 1) / n
-        h = CY * (acc + L * (u0 + u1) / 2) / total
-        obox(ax + (bx - ax) * u0, az + (bz - az) * u0, ax + (bx - ax) * u1, az + (bz - az) * u1, 4.4, 0, h, M['pave'], 'climb')
-        obox(ax + (bx - ax) * u0, az + (bz - az) * u0, ax + (bx - ax) * u1, az + (bz - az) * u1, 5.4, 0, h + 0.6, M['curtain'], 'climb-wall')
-        obox(ax + (bx - ax) * u0, az + (bz - az) * u0, ax + (bx - ax) * u1, az + (bz - az) * u1, 4.4, h - 0.2, h + 0.62, M['pave'], 'climb-top')
-    acc += L
+PA = A['parapets']
+pt = PA['top_world'] - PA['base_world']
+for ln in PA['lines']:
+    pts = ln['pts']
+    for (ax, az), (bx, bz) in zip(pts, pts[1:]):
+        parapet(ax, az, bx, bz, pt)
+# the bridge: deck on two arches and a pier with cutwaters, parapets; banner poles at its foot
+B_ = A['bridge']
+br = B_['rect']
+box(br[0], br[1], br[2], br[3], Y(B_['soffit_crown']), Y(0.05), M['curtain'], 'bridge-deck')
+for za, zb in B_['arches']:
+    for xx in (br[0], br[2] - 0.5):
+        box(xx, za, xx + 0.5, zb, Y(B_['springing']), Y(B_['soffit_crown']), M['curtain'], 'spandrel')
+pz0, pz1 = B_['pier'][1], B_['pier'][3]
+box(br[0], pz0, br[2], pz1, Y(Wt['moat']['bed']), Y(B_['soffit_crown']), M['curtain'], 'bridge-pier')
+for sgn, xe in ((-1, br[0]), (1, br[2])):
+    prism([(xe, pz0), (xe + sgn * B_['cutwaters'], (pz0 + pz1) / 2), (xe, pz1)], Y(Wt['moat']['bed']), Y(-1.0), M['curtain'], 'cutwater')
+for ln in PA['bridge']:
+    (ax, az), (bx, bz) = ln['pts']
+    obox(ax, az, bx, bz, B_['parapet_t'], Y(0), Y(1.0), M['curtain'], 'parapet')
+for x, z in A['gate_terrace']['banner_poles']:
+    cyl(x, z, 0.12, Y(0), Y(7.5), M['deck'], 8, 'pole')
+    box(x - 0.05, z - 0.6, x + 0.05, z + 0.6, Y(3.6), Y(7.2), M['flag'], 'banner')
+for x, z in PA['lamps'] + A['gate_terrace']['lamps']:
+    cyl(x, z, 0.1, Y(0), Y(3.2), M['deck'], 6, 'lamp')
+
+# the climb: four flights of solid steps and their landings, walls raking with each flight
+CL = A['climb']
+n = CL['risers_per_flight']
+for fl in CL['flights']:
+    x0, z0, x1, z1 = fl['rect']
+    h0, h1 = fl['from_world'], fl['to_world']
+    for k in range(n):
+        top = h0 + (h1 - h0) * (k + 1) / n
+        u0, u1 = k / n, (k + 1) / n
+        if fl['up'] == 'n':     # climbing north: the first step at the south end
+            r = (x0, z1 - (z1 - z0) * u1, x1, z1 - (z1 - z0) * u0)
+        else:                   # climbing west: the first step at the east end
+            r = (x1 - (x1 - x0) * u1, z0, x1 - (x1 - x0) * u0, z1)
+        box(*r, 0.0, top, M['pave'], 'step')
+for ld in CL['landings']:
+    box(*ld['rect'], 0.0, ld['world'], M['pave'], 'landing')
+for w in CL['walls']:
+    for (ax, az, ah), (bx, bz, bh) in zip(w['pts'], w['pts'][1:]):
+        L = math.hypot(bx - ax, bz - az)
+        if L < 0.01:
+            continue
+        m = max(1, int(L / 0.25))
+        for i in range(m):
+            u0, u1 = i / m, (i + 1) / m
+            obox(ax + (bx - ax) * u0, az + (bz - az) * u0, ax + (bx - ax) * u1, az + (bz - az) * u1, CL['wall_t'], CL['wall_base_world'], ah + (bh - ah) * (u0 + u1) / 2, M['curtain'], 'climb-wall')
+for x, z in CL['buttresses']:
+    box(x - 0.6, z - 0.3, x + 0.6, z + 0.9, 0.0, 10.5, M['curtain'], 'buttress')
+for x, z in CL['lamps']:
+    h = max([p[2] for w in CL['walls'] for p in w['pts'] if math.hypot(p[0] - x, p[1] - z) < 0.8] or [CY + 1.1])
+    cyl(x, z, 0.1, h, h + 1.8, M['deck'], 6, 'lamp')
 
 # ── the bailey ─────────────────────────────────────────────────────────────
 cu = D['curtain']['centre_lines']
@@ -283,11 +292,8 @@ flat(rp(Z['training-yard']['rect']), Y(0.06), M['earth'], 'training')
 for zid in ('paddock', 'training-yard'):
     x0, z0, x1, z1 = Z[zid]['rect']
     gx, gz = Z[zid]['gate']
-    far, near = (x0 + 0.2, x1 - 0.2) if zid == 'paddock' else (x1 - 0.2, x0 + 0.2)
-    obox(x0, z1 - 0.2, x1, z1 - 0.2, 0.15, Y(0), Y(1.2), M['fence'], 'fence')
-    obox(far, z0, far, z1, 0.15, Y(0), Y(1.2), M['fence'], 'fence')
-    obox(near, z0, near, gz - 1.6, 0.15, Y(0), Y(1.2), M['fence'], 'fence')
-    obox(near, gz + 1.6, near, z1, 0.15, Y(0), Y(1.2), M['fence'], 'fence')
+    obox(gx, z0, gx, gz - 1.6, 0.15, Y(0), Y(1.2), M['fence'], 'fence')
+    obox(gx, gz + 1.6, gx, z1, 0.15, Y(0), Y(1.2), M['fence'], 'fence')
 for (x, z) in ((40, 82), (46, 89), (49.5, 80.5)):
     box(x - 1.1, z - 0.35, x + 1.1, z + 0.35, Y(0.6), Y(1.6), M['horse'], 'horse')
 for x in (102, 105, 111, 114):
@@ -299,12 +305,15 @@ obox(98.5, 89, 117.5, 89, 0.12, Y(0), Y(0.9), M['fence'], 'shooting-line')
 for zid in ('kitchen-garden', 'privy-garden'):
     x0, z0, x1, z1 = Z[zid]['rect']
     cx_, cz_ = (x0 + x1) / 2, (z0 + z1) / 2
-    for (ax, az, bx, bz) in ((x0, z1, cx_ - 1.2, z1), (cx_ + 1.2, z1, x1, z1), (x0 + 0.25, z0, x0 + 0.25, z1), (x1 - 0.25, z0, x1 - 0.25, z1)):
-        if (zid == 'kitchen-garden' and ax == x1 - 0.25) or (zid == 'privy-garden' and ax == x0 + 0.25):
-            obox(ax, z0, ax, z1 - 2.6, 0.5, Y(0), Y(Z[zid]['wall_top']), M['curtain'], 'garden-wall')
-            obox(ax, z1 - 1.0, ax, z1, 0.5, Y(0), Y(Z[zid]['wall_top']), M['curtain'], 'garden-wall')
+    for side in Z[zid]['walls']:
+        g = next(g for g in Z[zid]['gates'] if g[2] == side)
+        if side == 's':
+            segs = ((x0, z1 - 0.25, g[0] - 1.2, z1 - 0.25), (g[0] + 1.2, z1 - 0.25, x1, z1 - 0.25))
         else:
-            obox(ax, az, bx, bz, 0.5, Y(0), Y(Z[zid]['wall_top']), M['curtain'], 'garden-wall')
+            xx = x1 - 0.25 if side == 'e' else x0 + 0.25
+            segs = ((xx, z0, xx, g[1] - 1.2), (xx, g[1] + 1.2, xx, z1))
+        for seg in segs:
+            obox(*seg, 0.5, Y(0), Y(Z[zid]['wall_top']), M['curtain'], 'garden-wall')
     flat(rp([cx_ - 1.2, z0 + 3, cx_ + 1.2, z1]), Y(0.05), M['pave'], 'garden-walk')
     flat(rp([x0 + 0.5, cz_ - 1.0, x1 - 0.5, cz_ + 1.0]), Y(0.05), M['pave'], 'garden-walk')
     if zid == 'kitchen-garden':
@@ -362,6 +371,7 @@ def building(r, floor, top, m):
         crenels(ax, az, bx, bz, 0.6, Y(top - 1.0), m)
 
 
+IN = {b['id']: b for b in D['interiors']['buildings']}
 for b in D['buildings']:
     building(b['rect'], b['floor'], b['parapet_top'], M['cream'])
     for (x, z, h) in b.get('chimneys', []):
@@ -375,11 +385,19 @@ for b in D['buildings']:
         box(x - 1.0, z - 0.6, x + 1.0, z + 0.6, Y(b['parapet_top'] - 1.0), Y(h - 1.5), M['cream'], 'bellcote')
         cone(x, z, 1.0, Y(h - 1.5), Y(h + 1.0), M['navy'], 8, 'bellcote-spire')
     x0, z0, x1, z1 = b['rect']
+    ib = IN.get(b['id'], {})
+    for w in ib.get('windows', []):
+        for xw in w['xs']:
+            hw = 1.6 if w.get('round') else (1.2 if w.get('oriel') else (0.9 if w['h'] > 4 else 0.6))
+            box(xw - hw, z1, xw + hw, z1 + (0.9 if w.get('oriel') else 0.08), Y(w['sill']), Y(w['sill'] + w['h']), M['glass'], 'window')
+    for dd in ib.get('doors', []):
+        if dd['side'] == 's' and 'at' in dd:
+            box(dd['at'][0] - dd['w'] / 2, z1, dd['at'][0] + dd['w'] / 2, z1 + 0.1, Y(dd['level']), Y(dd['level'] + dd.get('h', 4.0)), M['navy'], 'door')
     if b['role'] in ('hall', 'chapel'):
-        for k in range(3):
-            xw = x0 + (x1 - x0) * (k + 1) / 4
-            box(xw - 0.9, z1, xw + 0.9, z1 + 0.08, Y(b['floor'] + 3.5), Y(b['parapet_top'] - 3.0), M['glass'], 'window')
-            box(xw + 2.1, z1, xw + 2.9, z1 + 0.5, Y(b['floor']), Y(b['parapet_top'] - 2.5), M['cream'], 'buttress')
+        xs = sorted(x for w in ib['windows'] if not w.get('round') for x in w['xs'])
+        for xa, xb in zip(xs, xs[1:]):
+            if xb - xa > 2.5 and not any(xa < dd['at'][0] < xb and abs(dd['at'][0] - (xa + xb) / 2) < 1.5 for dd in ib['doors'] if 'at' in dd):
+                box((xa + xb) / 2 - 0.4, z1, (xa + xb) / 2 + 0.4, z1 + 0.6, Y(b['floor']), Y(b['parapet_top'] - 2.5), M['cream'], 'buttress')
 
 # ── the keep ───────────────────────────────────────────────────────────────
 K = D['keep']
@@ -450,7 +468,7 @@ for dr in G['drums']:
 # stairs (each step from the upper level down to the ground) and the champions
 for s in D['stairs']:
     x0, z0, x1, z1 = s['rect']
-    n = s.get('steps', 8)
+    n = s['risers']
     dz, dh = (z1 - z0) / n, (s['to'] - s['from']) / n
     for k in range(n):
         box(x0, z0 + k * dz, x1, z0 + (k + 1) * dz, Y(0), Y(s['to'] - k * dh), M['pave'], 'step')
@@ -462,9 +480,17 @@ for side in ('west', 'east'):
     box(f['x'] - 0.8, f['z'] - 0.8, f['x'] + 0.8, f['z'] + 0.8, Y(0), Y(2.2), M['curtain'], 'plinth')
     box(f['x'] - 0.45, f['z'] - 0.3, f['x'] + 0.45, f['z'] + 0.3, Y(2.2), Y(f['top']), M['cream'], 'champion')
 # the terrace's balustrade
-tz = 44.0
-for (ax, az, bx, bz) in ((33.6, tz, 42, tz), (46, tz, 60, tz), (60, tz, 60, 48), (60, 48, 69.5, 48), (82.5, 48, 92, 48), (92, 48, 92, tz), (92, tz, 106, tz), (110, tz, 118.4, tz)):
-    obox(ax, az, bx, bz, 0.4, Y(2.0), Y(3.0), M['curtain'], 'balustrade')
+T = D['terrace']
+for (xa, za), (xb, zb) in zip(T['edge'], T['edge'][1:]):
+    segs = [(xa, za, xb, zb)]
+    if za == zb:
+        x, segs = min(xa, xb), []
+        for o in sorted(o for o in T['stair_openings'] if min(xa, xb) <= o[0] and o[1] <= max(xa, xb)):
+            segs.append((x, za, o[0], za))
+            x = o[1]
+        segs.append((x, za, max(xa, xb), za))
+    for (ax, az, bx, bz) in segs:
+        obox(ax, az + (0.2 if za == zb else 0), bx, bz + (0.2 if za == zb else 0), 0.4, Y(T['level']), Y(T['edge_top']), M['curtain'], 'balustrade')
 
 # ── light and cameras ──────────────────────────────────────────────────────
 sun = bpy.data.objects.new('sun', bpy.data.lights.new('sun', 'SUN'))
@@ -510,6 +536,9 @@ if 'camera' in ONLY:
     play('camera-door.png', 76, 46, 2.0, 1.0)
     play('camera-bridge.png', 76, 106, 0.0, 1.0)
     play('camera-yards.png', 56, 72, 0.0, 1.2)
+if 'climb' in ONLY:
+    for name, key in (('camera-stair-foot.png', 'stair_foot'), ('camera-stair-head.png', 'stair_head')):
+        play(name, *D['camera']['views_rendered'][key])
 if 'extra' in ONLY:
     shoot('check-south.png', (80, 152, 3), (80, 109, 9))
     shoot('check-landing.png', (150, 134, Y(10)), (122, 108, Y(0)), 1200, 675)
