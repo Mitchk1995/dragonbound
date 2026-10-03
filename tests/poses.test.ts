@@ -7,7 +7,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Rig, newAnimState, type AnimState, type AttackKind } from '../src/render/anim';
 import { BowDraw } from '../src/render/bowDraw';
 import { HeroDresser, MODEL_FILES, hasModel, makeModel, registerModelScene } from '../src/render/registry';
@@ -253,36 +253,43 @@ for (const [body, style, cap] of [['bronze_platebody', 'Plate', -0.3], ['steel_p
 describe('pose audit: dragons', () => {
   for (const name of ['cinderwing', 'drakeling', 'whelp']) {
     describe(name, () => {
-      const run = (st: Partial<AnimState>, secs: number) => {
+      // Posed `secs` into an animation, the rig's clock started `phase` (0..1) of the way through the window it would
+      // otherwise start in at random, so every sample is the same run to run.
+      const run = (st: Partial<AnimState>, secs: number, phase: number) => {
         const m = makeModel(name);
         const holder = new THREE.Group();
         holder.add(m.root);
+        const random = vi.spyOn(Math, 'random').mockReturnValue(phase);
         const rig = new Rig(m.root);
+        random.mockRestore();
         const s = { ...newAnimState(), ...st };
         for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, s);
         holder.updateMatrixWorld(true);
         return m.root;
       };
       it('grounded: head faces forward, roughly level through the idle sway', () => {
-        // Sample many independent rigs (random idle phase) and moments.
+        // Many rigs, each started at its own moment of the idle sway, sampled at different times.
         for (let k = 0; k < 12; k++) {
-          const root = run({ speed: 0 }, 0.3 + k * 0.37);
+          const root = run({ speed: 0 }, 0.3 + k * 0.37, k / 12);
           const f = partForward(root, 'head')!;
           expect(f.z).toBeGreaterThan(0.7);
           expect(deg(f.y), `head pitch (deg) sample ${k}`).toBeLessThan(25);
           expect(deg(f.y), `head pitch (deg) sample ${k}`).toBeGreaterThan(-35);
         }
       });
-      it('flying: neck extended forward, head level (not craned upward)', () => {
+      it('flying: neck extended forward, head level (not craned upward), at every moment of the sway and flap', () => {
         for (const secs of [0.3, 0.7, 1.1, 1.6, 2.2, 2.9, 3.4]) {
-          const root = run({ fly: 1, speed: 3 }, secs);
-          const f = partForward(root, 'head')!;
-          const head = partCenter(root, 'head')!, body = partCenter(root, 'body')!;
-          expect(deg(f.y), `head pitch at ${secs}s`).toBeLessThan(15);
-          expect(deg(f.y), `head pitch at ${secs}s`).toBeGreaterThan(-30);
-          // The head should lead the body, not tower above it.
-          expect(head.z - body.z, 'head ahead of body').toBeGreaterThan(0);
-          expect((head.y - body.y) / Math.max(0.01, head.z - body.z), 'neck rise per forward unit').toBeLessThan(0.6);
+          for (let k = 0; k < 16; k++) {
+            const root = run({ fly: 1, speed: 3 }, secs, k / 16);
+            const f = partForward(root, 'head')!;
+            const head = partCenter(root, 'head')!, body = partCenter(root, 'body')!;
+            const at = `${secs}s, sway ${k}/16`;
+            expect(deg(f.y), `head pitch at ${at}`).toBeLessThan(15);
+            expect(deg(f.y), `head pitch at ${at}`).toBeGreaterThan(-30);
+            // The head should lead the body, not tower above it.
+            expect(head.z - body.z, `head ahead of body at ${at}`).toBeGreaterThan(0);
+            expect((head.y - body.y) / Math.max(0.01, head.z - body.z), `neck rise per forward unit at ${at}`).toBeLessThan(0.6);
+          }
         }
       });
       if (name !== 'whelp') {

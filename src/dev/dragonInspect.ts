@@ -7,8 +7,8 @@ import { Studio, fit } from './inspect';
 
 /**
  * The drakeling and Cinderwing against their concept sheets (explicit suite: `dragons`): studio sheets of each from
- * the front, side and three-quarter, at rest and through their attacks and flight; head close-ups for the eyes; then
- * both in the world through the gameplay camera, at rest and mid-attack.
+ * the front, side and three-quarter, at rest and through their attacks and flight; head close-ups for the eyes;
+ * close-ups of the paws, chest and tail; then both in the world through the gameplay camera, at rest and mid-attack.
  */
 export async function dragonSuite(g: Game, shot: (n: string) => Promise<void>) {
   document.body.classList.add('inspect-clean');
@@ -17,7 +17,9 @@ export async function dragonSuite(g: Game, shot: (n: string) => Promise<void>) {
     const m = makeModel(name);
     const holder = new THREE.Group();
     holder.add(m.root);
-    const rig = new Rig(m.root);
+    // Every model starts its sway at the same moment (the rig would pick one at random), so the sheets repeat run to
+    // run, and at rest the tail lies out behind toward the camera's side, as on the concept sheet.
+    const rig = fixedStart(() => new Rig(m.root));
     const s = { ...newAnimState(), ...a };
     rig.update(0, s);
     for (let t = 0; t < secs; t += 1 / 60) rig.update(1 / 60, s);
@@ -77,6 +79,25 @@ export async function dragonSuite(g: Game, shot: (n: string) => Promise<void>) {
       const c = box.getCenter(new THREE.Vector3());
       const r = box.getSize(new THREE.Vector3()).length() * 0.55;
       return { label: `${name} head · ${label}`, obj, eye: c.clone().add(d.clone().normalize().multiplyScalar(r * 2.6)), at: c };
+    }), 4, 2);
+    // Close-ups of the paws, the chest and the tail, at rest: points in a rig part's own frame, framed by the build scale.
+    const close: [string, string, [number, number, number], THREE.Vector3, number][] = [
+      ['paw · 3/4', 'legFL', [0, -0.6, 0.12], new THREE.Vector3(0.8, 0.35, 1), 1.3],
+      ['paw · front', 'legFL', [0, -0.6, 0.12], new THREE.Vector3(0, 0.2, 1), 1.3],
+      ['paw · side', 'legFL', [0, -0.6, 0.12], new THREE.Vector3(1, 0.15, 0), 1.3],
+      ['hind paw · 3/4', 'legBL', [0, -0.55, 0.05], new THREE.Vector3(0.9, 0.3, 0.6), 1.5],
+      ['chest · 3/4', 'body', [0, -0.1, 0.6], new THREE.Vector3(0.75, 0.25, 1), 2.6],
+      ['chest · front', 'body', [0, -0.1, 0.6], new THREE.Vector3(0, 0.15, 1), 2.6],
+      ['tail · side', 'tail4|tail2', [0, 0, 0], new THREE.Vector3(1, 0.2, -0.2), 5],
+      ['tail · back 3/4', 'tail4|tail2', [0, 0, 0], new THREE.Vector3(0.8, 0.6, -0.9), 5],
+    ];
+    await sheet(`dragon-${name}-parts`, close.map(([label, part, p, d, dist]) => {
+      const obj = posed(name, {}, 0.6);
+      const k = obj.getObjectByName('body')!.getWorldScale(new THREE.Vector3()).x;
+      // `a|b`: the first of those parts the model has (the drakeling's tail is shorter than Cinderwing's).
+      const node = part.split('|').map((n) => obj.getObjectByName(n)).find((o) => o)!;
+      const at = node.localToWorld(new THREE.Vector3(...p));
+      return { label: `${name} · ${label}`, obj, eye: at.clone().add(d.clone().normalize().multiplyScalar(dist * k)), at };
     }), 4, 2);
   }
 
@@ -153,6 +174,17 @@ export async function dragonSuite(g: Game, shot: (n: string) => Promise<void>) {
   g.camZoom = 1;
   document.body.classList.remove('inspect-clean');
 }
+
+/** Build a rig with its clock started at a fixed moment instead of a random one (the rig draws it from Math.random). */
+const fixedStart = <T>(make: () => T) => {
+  const random = Math.random;
+  Math.random = () => 0.825;
+  try {
+    return make();
+  } finally {
+    Math.random = random;
+  }
+};
 
 const frames = async (n: number) => {
   for (let i = 0; i < n; i++) await new Promise<void>((r) => requestAnimationFrame(() => r()));

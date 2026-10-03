@@ -30,8 +30,8 @@ const V1 = new THREE.Vector3();
 
 /** Dragon head/neck levelling and sword wrist angle; tuned against tests/poses.test.ts. */
 export const HEAD_LEVEL = 0.35;
-export const HEAD_FLY_LEVEL = -0.1;
-export const NECK_FLY_EXTEND = 0.25;
+export const HEAD_FLY_LEVEL = -0.2;
+export const NECK_FLY_EXTEND = 0.3;
 export const SWING_WRIST = 1.23;
 
 /** Where the blow lands in every attack animation (see COMBAT_TUNING.impact). */
@@ -123,7 +123,13 @@ export class Rig {
       for (const leg of ['legFL', 'legFR', 'legBL', 'legBR']) this.offset(leg, 0, lift);
       this.offset('body', 0, Math.abs(sw) * 0.05 * moveAmt + breathe + lift);
       this.rot('body', hurtLean * 0.5);
-      for (let i = 1; i <= 6; i++) this.rot(`tail${i}`, Math.sin(t * 1.3 - i * 0.5) * 0.05, Math.sin(t * 2 - i * 0.7) * (0.12 + i * 0.04) * (1 + moveAmt));
+      // Rearing for the slam tips the body back about its middle; the tail's root lifts a little more than that, so the
+      // tail rides up behind to balance instead of swinging down through the ground.
+      const a = s.attack;
+      const rear = a >= 0 && s.attackKind === 'slam' ? (a < 0.6 ? ease(a / 0.6) : 1 - ease((a - 0.6) / 0.4)) : 0;
+      for (let i = 1; i <= 6; i++) {
+        this.rot(`tail${i}`, Math.sin(t * 1.3 - i * 0.5) * 0.05 + (i === 1 ? rear * 0.6 : 0), Math.sin(t * 2 - i * 0.7) * (0.12 + i * 0.04) * (1 + moveAmt));
+      }
       // The neck is authored curving upward; flatten it in flight so the head leads the body.
       for (let i = 1; i <= 3; i++) this.rot(`neck${i}`, Math.sin(t * 1.6 - i) * 0.04 + s.fly * NECK_FLY_EXTEND, Math.sin(t * 0.9 - i) * 0.06);
       const flapSpeed = s.fly > 0.1 ? 9 : moveAmt > 0.2 ? 4 : 1.6;
@@ -143,15 +149,13 @@ export class Rig {
         this.rot('head', headPitch - 0.2 + 0.3 * (1 - up));
         this.rot('jaw', 0.6);
       }
-      if (s.attack >= 0) {
-        const a = s.attack;
+      if (a >= 0) {
         if (s.attackKind === 'bite') {
           const lunge = a < 0.5 ? -ease(a / 0.5) * 0.5 : -0.5 + ease((a - 0.5) / 0.5) * 0.9;
           this.rot('neck1', lunge * 0.8);
           this.rot('head', headPitch - lunge * 0.4);
           this.rot('jaw', a < 0.55 ? 0.7 : 0.1);
         } else if (s.attackKind === 'slam') {
-          const rear = a < 0.6 ? ease(a / 0.6) : 1 - ease((a - 0.6) / 0.4);
           this.rot('body', -rear * 0.5);
           this.rot('legFL', -rear * 1.2);
           this.rot('legFR', -rear * 1.2);
