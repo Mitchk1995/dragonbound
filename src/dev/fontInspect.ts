@@ -29,7 +29,23 @@ export async function fontSuite(g: Game, shot: (name: string) => Promise<void>) 
   g.text.float('+1 potion', p.x + 1.4, 2.4, p.z - 0.4, 'heal');
   await frames(14);
   await shot('font-gameplay');
+  // Portal titles near the HUD fade out rather than slide under it: record which ones are showing.
+  const titles: string[] = [];
+  g.zone.group.traverse((o) => {
+    if (o.name === 'portal-title') titles.push(`${o.parent?.parent?.name ?? '?'} ${o.visible ? 'shown' : 'hidden'} ${((o as any).material.opacity as number).toFixed(2)}`);
+  });
+  report.titles = titles;
   g.text.clear();
+  // Step left: the title the plaque hid comes back once clear of it, and the Warden's name gives way to the side panel.
+  p.pos.x -= 6;
+  g.camPos.copy(p.pos);
+  await frames(40);
+  const afterStep: string[] = [];
+  g.zone.group.traverse((o) => {
+    if (o.name === 'portal-title') afterStep.push(`${o.visible ? 'shown' : 'hidden'} ${((o as any).material.opacity as number).toFixed(2)}`);
+  });
+  report.titlesAfterStep = afterStep;
+  await shot('font-portals');
 
   // The zone plaque on arrival: every zone name is measured against the ribbon beside it, and the lair's is captured.
   const gaps: string[] = [];
@@ -43,8 +59,8 @@ export async function fontSuite(g: Game, shot: (name: string) => Promise<void>) 
     const text = document.querySelector<HTMLElement>('.zname .ptext')!.getBoundingClientRect();
     const ok = text.right <= plaque.right && text.left >= plaque.left && plaque.right - ribbon.left <= 7;
     gaps.push(`${g.zone.def.name}: text ${text.left.toFixed(0)}-${text.right.toFixed(0)}, plaque ${plaque.left.toFixed(0)}-${plaque.right.toFixed(0)}, ribbon from ${ribbon.left.toFixed(0)}${ok ? '' : '  OVERLAP'}`);
-    if (id === 'lair' || id === 'foothills') {
-      // Pickup words over this ground (grass, the dark lair) beside the plaque.
+    if (id === 'lair' || id === 'foothills' || id === 'mine') {
+      // Pickup words over this ground (the mine's tunnels, grass, the dark lair) beside the plaque.
       g.player.pos.y = 0;
       g.camPos.copy(g.player.pos);
       g.text.float('+30 gold', g.player.x - 1.2, 2.2, g.player.z, 'gold');
