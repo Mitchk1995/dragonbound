@@ -1,5 +1,5 @@
 # Dragonbound design decisions
-*October 2 2026*
+*October 3 2026*
 
 Dragonbound is a long-term action RPG with combat led by Diablo II, some Diablo IV influence, richer active skills, and OSRS-style gathering and progression. The immediate design target is a complete, cohesive levels 1–10 region that makes combat, mining, equipment, quests and exploration feel like one adventure.
 
@@ -8,6 +8,36 @@ This reference brings the agreed direction, working ideas and open choices toget
 **Decision status:** Agreed direction records the intended experience. Working proposals describe ideas still being shaped. Open decisions need a choice or testing. Existing reference values describe the October 1 catalog and are not final balance for the first region.
 
 **This is the single design plan.** Any agent (Claude or Codex) that hears a decision from Mitchell records it here, in the same session; decisions that only live in a chat get lost. Newer direct decisions take precedence over older text, so record what changed, in the section below or in place.
+
+## The new look and the great keep (October 3)
+
+Mitchell's fifth round of castle picture notes (38 notes, kept with their marked pictures in
+`D:\dragonbound-archive\notes\castle-round5`) came down to three things, and he picked from Codex paintings
+(`D:\dragonbound-archive\codex\castle-grand-options.png`, `stone-options.png`, `trees-options.png`):
+
+- **A grand castle: pick B, "Great keep".** The castle must be grand and epic, with the main building the clear star and
+  every other building smaller and lower; the castle may grow ("we can expand the area if needed"). A massive square keep
+  with four corner turrets rising high above the walls and a great hall joined to it; towers evenly and symmetrically
+  spaced; stables with a paddock where the horses have room; a moat round the walls that flows down to the river, with
+  walls on both sides of the approach where it runs along the ledge. Windows should be artistic and varied, never copy-
+  paste, and the glass clear with a cool tint you can see into. Today's donjon and the tower beside the main building go
+  or change. The painting is mood, not a blueprint: Mitchell asked for the layout to be scrutinised and designed with our
+  own taste ("usually they are kind of generic"). The plan comes first as a blueprint (castle v4) for his approval.
+- **Stone: pick B, "Hand-painted chunky".** One stone system for the whole castle instead of spot fixes: real depth
+  (bump-mapped joints and chipped, bevelled edges with a lit top edge), only a few block sizes laid in courses that line
+  up everywhere, truly round towers, and trim, kerbs and borders cut from the same stone rather than stuck-on blocks in
+  another colour (his note on the blue-grey quoins; the dark corbel blocks go too).
+- **Trees: pick B, "Natural".** Redo the trees at true size, no longer blocky, as the woodcutting ladder in RuneScape's
+  order: tree, oak, willow, maple, yew, magic. Proved first with one oak in the game. Everything else should get a nice
+  texture too (the crops and plants).
+- **Characters stay blocky and modular, like Lego.** Mitchell knows complex organic shapes are Claude's weak spot when
+  built from pieces; trees are where we leave blocks behind, grown as one piece.
+- **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
+  no flag shadow from nowhere, the fountain dragon's front legs, more variety in the small garden trees, the sunken tree
+  and the grass seam by the landing.
+- **How we work now:** Mitchell moved to a bigger plan; workflows are used for implementation where they help,
+  partitioned so parallel jobs never edit the same code. He wants regular progress in pictures and an honest answer
+  when a style is or is not achievable.
 
 ## Foundation work (October 2)
 
@@ -65,11 +95,15 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 4. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
 
 Where things stand (October 3):
-- **Castle:** four rounds of Mitchell's picture notes are fixed and merged. He is reviewing the latest pictures on the review page, https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, where he pins notes; a fixed note is marked `status: done` and drops off the page.
+- **Castle:** after the fifth round of notes (see "The new look and the great keep" above), three jobs run side by side:
+  the stone finish on the castle as it stands, the castle-v4 blueprint around the great keep, and one natural oak as the
+  proof for the new trees. The review page, https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins
+  notes and picks options; a fixed note is marked `status: done` and drops off the page. Once the blueprint is approved
+  the castle is rebuilt to it, then the woodcutting trees follow.
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
-  - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided.
-- **Characters** are next once the castle is approved. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
+  - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided (the castle-v4 plan may move it anyway).
+- **Characters** come after the castle and stay blocky and modular. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 
