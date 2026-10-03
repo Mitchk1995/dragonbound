@@ -152,6 +152,7 @@ const ROLE_PAINT: Record<string, CharPaintKind | null> = {
 };
 
 const SCALY = new Set(['drakeling', 'cinderwing', 'kobold', 'whelp']);
+const HARNESSED = new Set(['drakeling', 'cinderwing']);
 
 /**
  * Pattern size per model (1 = hero-sized): scales and blotches stay readable on a boss and
@@ -173,6 +174,9 @@ export function fixedPaint(model: string, c: THREE.Color, metallic: boolean, dou
   if (SCALY.has(model)) {
     if (double) return 'membrane';
     if (l > 0.72) return model === 'whelp' ? 'soft' : 'bone';
+    // The drakeling's and Cinderwing's harness: gilt fittings and brown leather straps, not scales.
+    if (HARNESSED.has(model) && hue >= 34 && hue <= 56 && s > 0.5 && l > 0.4) return 'trim';
+    if (HARNESSED.has(model) && hue >= 18 && hue <= 40 && s < 0.6 && l < 0.4) return 'leather';
     return model === 'whelp' ? 'softScales' : 'scales';
   }
   // The uniques are cut from dragon bone (light and shaded), painted as big bone plates.

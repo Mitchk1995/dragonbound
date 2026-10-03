@@ -76,10 +76,11 @@ describe('pose audit: models loaded', () => {
       });
       return n;
     };
-    // Authored part counts are 86 / 121 / 40; merged they must drop to a few per rig part (measured 18 / 27 / 8), with rig parts intact.
-    // Cinderwing keeps a glowing throat plate on every neck segment and double-sided cheek frills, hence its extra meshes.
+    // Merged, every rig part drops to a few meshes (Cinderwing measured 29), with rig parts intact.
+    // Cinderwing's glowing cracks (on the body, neck and every leg), eyes and molten mouth each keep their own material,
+    // hence its extra meshes.
     expect(count('drakeling')).toBeLessThanOrEqual(20);
-    expect(count('cinderwing')).toBeLessThanOrEqual(28);
+    expect(count('cinderwing')).toBeLessThanOrEqual(31);
     expect(count('goblin')).toBeLessThanOrEqual(9);
     for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
   });
