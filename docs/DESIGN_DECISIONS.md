@@ -27,9 +27,11 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   (bump-mapped joints and chipped, bevelled edges with a lit top edge), only a few block sizes laid in courses that line
   up everywhere, truly round towers, and trim, kerbs and borders cut from the same stone rather than stuck-on blocks in
   another colour (his note on the blue-grey quoins; the dark corbel blocks go too).
-- **Trees: pick B, "Natural".** Redo the trees at true size, no longer blocky, as the woodcutting ladder in RuneScape's
-  order: tree, oak, willow, maple, yew, magic. Proved first with one oak in the game. Everything else should get a nice
-  texture too (the crops and plants).
+- **Trees: pick B, "Natural", loosely.** Redo the trees at true size, no longer blocky, as the woodcutting ladder in
+  RuneScape's order: tree, oak, willow, maple, yew, magic. They need not be realistic: a mix of styles and a more cartoony
+  look are fine, and Mitchell is unsure what is best, so one oak is grown in the game in three looks (natural, cartoony
+  and a mix) for him to choose from before the rest follow. Everything else should get a nice texture too (the crops and
+  plants).
 - **Characters stay blocky and modular, like Lego.** Mitchell knows complex organic shapes are Claude's weak spot when
   built from pieces; trees are where we leave blocks behind, grown as one piece.
 - **Small fixes carried into the build:** the champions' helmets, fewer gold diamond symbols, a longer flag on the keep,
