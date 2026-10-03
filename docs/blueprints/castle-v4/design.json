@@ -1,0 +1,1578 @@
+{
+ "title": "Castle v4: the Great Keep",
+ "status": "proposal for review (design only, nothing built)",
+ "conventions": {
+  "cells": "island cells, 1 cell = 1 m; x east, z south (north is -Z), as src/data/zoneMaps.ts and CASTLE_PLAN",
+  "rects": "[x0, z0, x1, z1] in cell edges",
+  "heights": "metres above the crown (the bailey ground, world y 11) unless a key ends in _world",
+  "crown_world_y": 11
+ },
+ "axes": {
+  "main_x": 76.0,
+  "cross_z": 70.0
+ },
+ "curtain": {
+  "note": "One rectangle, symmetric about the main axis; wall walk at +7 between crenellated parapets. Every tower projects outward into the moat, so the inside faces stay straight and buildings and gardens can stand against them.",
+  "centre_lines": {
+   "west_x": 32.0,
+   "east_x": 120.0,
+   "north_z": 18.0,
+   "south_z": 100.0
+  },
+  "thickness": 2.2,
+  "walk": 7.0,
+  "parapet_top": 8.4,
+  "runs": [
+   {
+    "id": "north-west",
+    "a": [
+     32.0,
+     18.0
+    ],
+    "b": [
+     64,
+     18.0
+    ],
+    "note": "dies into the keep's north-west turret"
+   },
+   {
+    "id": "north-east",
+    "a": [
+     88,
+     18.0
+    ],
+    "b": [
+     120.0,
+     18.0
+    ],
+    "note": "leaves the keep's north-east turret"
+   },
+   {
+    "id": "east",
+    "a": [
+     120.0,
+     18.0
+    ],
+    "b": [
+     120.0,
+     100.0
+    ]
+   },
+   {
+    "id": "south",
+    "a": [
+     120.0,
+     100.0
+    ],
+    "b": [
+     32.0,
+     100.0
+    ],
+    "note": "the gatehouse on the axis"
+   },
+   {
+    "id": "west",
+    "a": [
+     32.0,
+     100.0
+    ],
+    "b": [
+     32.0,
+     18.0
+    ]
+   }
+  ],
+  "wall_walk_access": "through the gatehouse's drums (a door at the foot of each, inside the gate); every tower opens onto the walk"
+ },
+ "towers": [
+  {
+   "id": "corner-NW",
+   "kind": "corner",
+   "x": 30.0,
+   "z": 16.0,
+   "r": 3.8,
+   "platform": 13.4,
+   "parapet_top": 14.6,
+   "spire_tip": 21.5
+  },
+  {
+   "id": "corner-NE",
+   "kind": "corner",
+   "x": 122.0,
+   "z": 16.0,
+   "r": 3.8,
+   "platform": 13.4,
+   "parapet_top": 14.6,
+   "spire_tip": 21.5
+  },
+  {
+   "id": "corner-SW",
+   "kind": "corner",
+   "x": 30.0,
+   "z": 102.0,
+   "r": 3.8,
+   "platform": 13.4,
+   "parapet_top": 14.6,
+   "spire_tip": 21.5
+  },
+  {
+   "id": "corner-SE",
+   "kind": "corner",
+   "x": 122.0,
+   "z": 102.0,
+   "r": 3.8,
+   "platform": 13.4,
+   "parapet_top": 14.6,
+   "spire_tip": 21.5
+  },
+  {
+   "id": "wall-W1",
+   "kind": "wall",
+   "x": 29.8,
+   "z": 37.5,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  },
+  {
+   "id": "wall-E1",
+   "kind": "wall",
+   "x": 122.2,
+   "z": 37.5,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  },
+  {
+   "id": "wall-W2",
+   "kind": "wall",
+   "x": 29.8,
+   "z": 59.0,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  },
+  {
+   "id": "wall-E2",
+   "kind": "wall",
+   "x": 122.2,
+   "z": 59.0,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  },
+  {
+   "id": "wall-W3",
+   "kind": "wall",
+   "x": 29.8,
+   "z": 80.5,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  },
+  {
+   "id": "wall-E3",
+   "kind": "wall",
+   "x": 122.2,
+   "z": 80.5,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  },
+  {
+   "id": "wall-S1",
+   "kind": "wall",
+   "x": 53.0,
+   "z": 102.2,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  },
+  {
+   "id": "wall-S2",
+   "kind": "wall",
+   "x": 99.0,
+   "z": 102.2,
+   "r": 3.2,
+   "platform": 12.6,
+   "parapet_top": 13.8
+  }
+ ],
+ "tower_spacing": "about 21 to 23 m on every face: corner, three wall towers, corner on the west and east; corner, wall tower, gatehouse, wall tower, corner on the south; the keep breaks the north",
+ "gatehouse": {
+  "x": 76.0,
+  "z": 100.0,
+  "note": "today's gatehouse unchanged, moved onto the new axis: two D-towers 6 either side, a passage 4 wide under the ceremonial arch, the block a storey over the curtain, flags on the drums and the lord's banner over the arch. Its drums stay flat so the keep's spires rise over the gate front seen from below the rock",
+  "drums": [
+   {
+    "x": 70.0,
+    "z": 100.0,
+    "r": 2.6
+   },
+   {
+    "x": 82.0,
+    "z": 100.0,
+    "r": 2.6
+   }
+  ],
+  "passage_w": 4,
+  "block_top": 12.6,
+  "drum_parapet": 13.4,
+  "drum_flag_top": 17.5
+ },
+ "keep": {
+  "rect": [
+   64,
+   15,
+   88,
+   39
+  ],
+  "floor": 2.0,
+  "note": "A massive square keep on the axis, standing on the terrace with its back three metres beyond the north curtain at the brink of the tear face; its front turrets are the hinges between its face and the wings' fronts, which die into their drums. Four round corner turrets rise a stage above its parapet to blue spires; a projecting frontispiece on the axis carries the great door and the showpiece window between two slender pinnacles.",
+  "storeys": [
+   {
+    "floor": 2.0,
+    "what": "ground: the throne hall, two storeys high"
+   },
+   {
+    "floor": 8.0,
+    "what": "upper: galleries round the throne hall"
+   },
+   {
+    "floor": 14.0,
+    "what": "second: the lord's great chamber (closed for now)"
+   },
+   {
+    "floor": 20.0,
+    "what": "third: the map room and the treasury (closed for now)"
+   }
+  ],
+  "roof_deck": 26.5,
+  "parapet_top": 28.0,
+  "parapet": "machicolated and crenellated, cut from the same cream stone as the walls (no stuck-on trim in another colour), a plain gilt band under it",
+  "turrets": [
+   {
+    "x": 64,
+    "z": 15,
+    "r": 3.6,
+    "deck": 33.0,
+    "parapet_top": 34.5,
+    "spire_tip": 44.0
+   },
+   {
+    "x": 88,
+    "z": 15,
+    "r": 3.6,
+    "deck": 33.0,
+    "parapet_top": 34.5,
+    "spire_tip": 44.0
+   },
+   {
+    "x": 64,
+    "z": 39,
+    "r": 3.6,
+    "deck": 33.0,
+    "parapet_top": 34.5,
+    "spire_tip": 44.0
+   },
+   {
+    "x": 88,
+    "z": 39,
+    "r": 3.6,
+    "deck": 33.0,
+    "parapet_top": 34.5,
+    "spire_tip": 44.0
+   }
+  ],
+  "frontispiece": {
+   "rect": [
+    72,
+    39,
+    80,
+    40.5
+   ],
+   "top": 30.5,
+   "pinnacles": [
+    {
+     "x": 72,
+     "z": 40.0,
+     "r": 0.9,
+     "top": 32.5,
+     "spire_tip": 35.5
+    },
+    {
+     "x": 80,
+     "z": 40.0,
+     "r": 0.9,
+     "top": 32.5,
+     "spire_tip": 35.5
+    }
+   ],
+   "crest": "the lord's shield, carved and gilt, between the showpiece window and the parapet"
+  },
+  "great_door": {
+   "x": 76.0,
+   "z": 40.5,
+   "w": 5.0,
+   "h": 8.0,
+   "note": "the ceremonial arch scaled up: a deep ring of voussoirs and a hood mould cut from the same stone, oak leaves with gilt hinges; the lord's crest in the tympanum instead of the gold diamond"
+  },
+  "windows_south": [
+   {
+    "where": "ground storey side bays",
+    "what": "blank but for one small lancet high in each bay",
+    "w": 0.9,
+    "h": 2.4,
+    "sill": 5.5
+   },
+   {
+    "where": "frontispiece",
+    "what": "the showpiece: one great window with stone tracery over the door, lighting the throne hall",
+    "w": 4.2,
+    "h": 8.5,
+    "sill": 11.0
+   },
+   {
+    "where": "upper storey side bays",
+    "what": "two tall lancets in each bay under hood moulds",
+    "w": 1.4,
+    "h": 4.4,
+    "sill": 9.5
+   },
+   {
+    "where": "second storey side bays",
+    "what": "a pair of lights under one hood in each bay",
+    "w": 2.2,
+    "h": 2.8,
+    "sill": 15.5
+   },
+   {
+    "where": "third storey side bays",
+    "what": "small square-headed lights under the parapet",
+    "w": 1.0,
+    "h": 1.4,
+    "sill": 21.0
+   },
+   {
+    "where": "front turrets",
+    "what": "slit lights stepping up round each drum with the spiral stair inside",
+    "w": 0.5,
+    "h": 1.6
+   }
+  ],
+  "window_rule": "sizes fall storey by storey (tall, paired, small) on two axes per side bay; one showpiece only; glass clear and lightly tinted so the room shows through",
+  "banners": [
+   {
+    "x": 70.5,
+    "top": 21.0,
+    "bottom": 9.0
+   },
+   {
+    "x": 81.5,
+    "top": 21.0,
+    "bottom": 9.0
+   }
+  ],
+  "great_flag": {
+   "x": 76.0,
+   "z": 27,
+   "pole_top": 40.0,
+   "flag": [
+    6.0,
+    3.6
+   ]
+  },
+  "rooms": {
+   "ground": [
+    {
+     "id": "throne-hall",
+     "rect": [
+      65,
+      16,
+      87,
+      38
+     ],
+     "note": "the throne on a three-step dais against the north wall on the axis, the lord's banners behind and braziers either side; a crimson runner from the great door; four great piers carry the galleries"
+    },
+    {
+     "id": "dais",
+     "rect": [
+      72,
+      16,
+      80,
+      19
+     ]
+    },
+    {
+     "id": "stair-west",
+     "rect": [
+      66,
+      36,
+      71,
+      37
+     ],
+     "note": "straight flight along the south wall, climbing west from beside the door"
+    },
+    {
+     "id": "stair-east",
+     "rect": [
+      81,
+      36,
+      86,
+      37
+     ],
+     "note": "its mirror, climbing east"
+    },
+    {
+     "id": "door-hall",
+     "side": "w",
+     "at_z": 26.5,
+     "w": 2,
+     "note": "the lord's door onto the great hall's dais"
+    },
+    {
+     "id": "door-chapel",
+     "side": "e",
+     "at_z": 26.5,
+     "w": 2,
+     "note": "onto the chapel's west end (the lord's pew)"
+    }
+   ],
+   "upper": [
+    {
+     "id": "void",
+     "rect": [
+      69,
+      20,
+      83,
+      34
+     ],
+     "note": "open over the throne hall"
+    },
+    {
+     "id": "south-gallery",
+     "rect": [
+      65,
+      34,
+      87,
+      38
+     ],
+     "note": "behind the showpiece window; the two stairs arrive at its ends"
+    },
+    {
+     "id": "west-gallery",
+     "rect": [
+      65,
+      20,
+      69,
+      34
+     ]
+    },
+    {
+     "id": "east-gallery",
+     "rect": [
+      83,
+      20,
+      87,
+      34
+     ]
+    },
+    {
+     "id": "council-gallery",
+     "rect": [
+      65,
+      16,
+      87,
+      20
+     ],
+     "note": "over the throne, looking down the hall"
+    }
+   ]
+  }
+ },
+ "terrace": {
+  "level": 2.0,
+  "note": "The upper court: a raised terrace along the whole north range, a dressed retaining wall with an open balustrade on its edge; the keep's podium projects on the axis to carry the grand stair.",
+  "parts": [
+   [
+    33.6,
+    36,
+    64,
+    44
+   ],
+   [
+    88,
+    36,
+    118.4,
+    44
+   ],
+   [
+    60,
+    39,
+    92,
+    48
+   ]
+  ],
+  "edge_top": 3.0
+ },
+ "stairs": [
+  {
+   "id": "grand-stair",
+   "rect": [
+    70,
+    48,
+    82,
+    54
+   ],
+   "from": 0.0,
+   "to": 2.0,
+   "steps": 12,
+   "note": "on the axis, 12 wide, between cheek walls ending in pedestals that carry the two champions"
+  },
+  {
+   "id": "stair-west",
+   "rect": [
+    42,
+    44,
+    46,
+    47
+   ],
+   "from": 0.0,
+   "to": 2.0,
+   "steps": 8,
+   "note": "from the terrace down into the kitchen garden on its axis"
+  },
+  {
+   "id": "stair-east",
+   "rect": [
+    106,
+    44,
+    110,
+    47
+   ],
+   "from": 0.0,
+   "to": 2.0,
+   "steps": 8,
+   "note": "its mirror, down into the privy garden"
+  }
+ ],
+ "buildings": [
+  {
+   "id": "kitchen",
+   "rect": [
+    34,
+    20,
+    43,
+    36
+   ],
+   "floor": 2.0,
+   "parapet_top": 11.5,
+   "role": "service",
+   "note": "today's kitchen at the hall's service end, open to its roof: two hearths, the buttery and pantry along its south end; two tall chimneys",
+   "windows": "small square lights set high",
+   "chimneys": [
+    [
+     37,
+     23,
+     15.0
+    ],
+    [
+     40,
+     23,
+     15.0
+    ]
+   ]
+  },
+  {
+   "id": "great-hall",
+   "rect": [
+    43,
+    20,
+    64,
+    36
+   ],
+   "floor": 2.0,
+   "parapet_top": 14.0,
+   "role": "hall",
+   "note": "today's residence range turned round: the screens and the stair to the minstrel gallery at the west end, the hall open to its roof with its central hearth and long tables, the high table on the dais at the keep end; galleries on its north and east sides",
+   "windows": "three tall paired windows between buttresses; the hall door under a porch at the screens end",
+   "lantern": [
+    56,
+    28,
+    17.0
+   ]
+  },
+  {
+   "id": "chapel",
+   "rect": [
+    88,
+    20,
+    109,
+    36
+   ],
+   "floor": 2.0,
+   "parapet_top": 14.0,
+   "role": "chapel",
+   "note": "the chapel, open to its roof, the altar at its east end and the lord's pew at the keep end; a slender bellcote",
+   "windows": "tall lancets between buttresses and one rose window over its south door",
+   "bellcote": [
+    96,
+    28,
+    19.0
+   ]
+  },
+  {
+   "id": "solar",
+   "rect": [
+    109,
+    20,
+    118,
+    36
+   ],
+   "floor": 2.0,
+   "parapet_top": 11.5,
+   "role": "lodging",
+   "note": "the lord's lodging: a day room below, the solar above; chimneys",
+   "windows": "an oriel window on the upper floor over the terrace and the privy garden",
+   "chimneys": [
+    [
+     112,
+     23,
+     15.0
+    ],
+    [
+     115,
+     23,
+     15.0
+    ]
+   ]
+  },
+  {
+   "id": "stables",
+   "rect": [
+    34,
+    66,
+    54,
+    74
+   ],
+   "floor": 0.0,
+   "parapet_top": 6.5,
+   "role": "service",
+   "note": "six stalls off a central aisle and a tack room, the hay loft over them; the arched door in its east gable closes the cross walk on the axis; stall half-doors onto the stable yard, a back door into the paddock",
+   "windows": "half-doors with horses looking out, a loft door with a hoist beam over the gable door"
+  },
+  {
+   "id": "barracks",
+   "rect": [
+    98,
+    66,
+    118,
+    74
+   ],
+   "floor": 0.0,
+   "parapet_top": 6.5,
+   "role": "service",
+   "note": "the stables' mirror: the guardroom and the armory off a central passage, the dormitory in the loft; the arched door in its west gable closes the cross walk; a back door into the training yard",
+   "windows": "small square windows with shutters, a loft door over the gable door"
+  }
+ ],
+ "zones": [
+  {
+   "id": "kitchen-garden",
+   "kind": "garden-walled",
+   "rect": [
+    34,
+    44,
+    54,
+    57
+   ],
+   "wall_top": 2.6,
+   "note": "four boxed quarters of vegetables round a well on its own axis; the stair comes down into it from the terrace; gates onto the north walk and into the stable yard; fruit trees trained flat on its walls",
+   "gates": [
+    [
+     44,
+     57,
+     "s"
+    ],
+    [
+     54,
+     55.5,
+     "e"
+    ]
+   ]
+  },
+  {
+   "id": "privy-garden",
+   "kind": "garden-walled",
+   "rect": [
+    98,
+    44,
+    118,
+    57
+   ],
+   "wall_top": 2.6,
+   "note": "the lord's flower garden: lawn, four flower beds round a small basin, the rose arbour against the east wall and two shade trees; the stair comes down into it from the terrace; gates onto the north walk and into the muster yard",
+   "gates": [
+    [
+     108,
+     57,
+     "s"
+    ],
+    [
+     98,
+     55.5,
+     "w"
+    ]
+   ]
+  },
+  {
+   "id": "stable-yard",
+   "kind": "yard",
+   "rect": [
+    34,
+    57,
+    54,
+    66
+   ],
+   "note": "setts between the kitchen garden and the stables: the stall doors, the trough against the stable wall, a mounting block; open to the side walk"
+  },
+  {
+   "id": "muster-yard",
+   "kind": "yard",
+   "rect": [
+    98,
+    57,
+    118,
+    66
+   ],
+   "note": "the stable yard's mirror before the barracks: weapon racks against the wall and the well"
+  },
+  {
+   "id": "paddock",
+   "kind": "paddock",
+   "rect": [
+    34,
+    74,
+    54,
+    98.9
+   ],
+   "note": "grass behind a post-and-rail fence, its gate on the side walk, the stables' back door opening into it: 20 by 25, three times today's",
+   "gate": [
+    54,
+    86
+   ]
+  },
+  {
+   "id": "training-yard",
+   "kind": "training",
+   "rect": [
+    98,
+    74,
+    118,
+    98.9
+   ],
+   "note": "the paddock's mirror: the lists (pells either side of a lane) and the archery butts behind a shooting line, fenced, its gate on the side walk",
+   "gate": [
+    98,
+    86
+   ]
+  },
+  {
+   "id": "cour",
+   "kind": "paved",
+   "rect": [
+    62,
+    48,
+    90,
+    57
+   ],
+   "note": "the cour d'honneur at the grand stair's foot, lawns with clipped yews either side, a pair of lamps"
+  },
+  {
+   "id": "forecourt",
+   "kind": "paved",
+   "rect": [
+    64,
+    86,
+    88,
+    98.9
+   ],
+   "note": "the arrival court inside the gate between lawns and clipped yews, two lamps"
+  },
+  {
+   "id": "fountain-plaza",
+   "kind": "plaza",
+   "centre": [
+    76.0,
+    70.0
+   ],
+   "r": 9.0,
+   "note": "the dragon fountain at the crossing of the axes"
+  },
+  {
+   "id": "parterre",
+   "kind": "parterre",
+   "panels": [
+    [
+     57,
+     57,
+     73,
+     68
+    ],
+    [
+     57,
+     72,
+     73,
+     83
+    ],
+    [
+     79,
+     57,
+     95,
+     68
+    ],
+    [
+     79,
+     72,
+     95,
+     83
+    ]
+   ],
+   "note": "four box-edged lawn panels round the plaza, each cut back in an arc to the basin; flower borders, clipped cones and a blossom tree in each outer corner; no statues"
+  },
+  {
+   "id": "lawns",
+   "kind": "lawn",
+   "note": "everything else inside the curtain is clipped lawn: either side of the cour (with yews) and of the forecourt (with yews)"
+  }
+ ],
+ "walks": [
+  {
+   "id": "avenue",
+   "rect": [
+    73,
+    54,
+    79,
+    101.1
+   ],
+   "note": "from the stair foot through the plaza to the gate"
+  },
+  {
+   "id": "cross-walk",
+   "rect": [
+    54,
+    68,
+    98,
+    72
+   ],
+   "note": "from the stables' door through the plaza to the barracks' door"
+  },
+  {
+   "id": "north-walk",
+   "rect": [
+    54,
+    54,
+    98,
+    57
+   ]
+  },
+  {
+   "id": "south-walk",
+   "rect": [
+    54,
+    83,
+    98,
+    86
+   ]
+  },
+  {
+   "id": "side-walk-west",
+   "rect": [
+    54,
+    54,
+    57,
+    86
+   ]
+  },
+  {
+   "id": "side-walk-east",
+   "rect": [
+    95,
+    54,
+    98,
+    86
+   ]
+  }
+ ],
+ "features": [
+  {
+   "id": "dragon-fountain",
+   "x": 76.0,
+   "z": 70.0,
+   "basin_r": 5.5,
+   "top": 11.0,
+   "note": "today's bronze dragon (pick A) on its pedestal, moved with the axis"
+  },
+  {
+   "id": "champion-west",
+   "x": 69.0,
+   "z": 53.2,
+   "top": 4.6,
+   "note": "on the grand stair's west cheek pedestal, with a new helmet"
+  },
+  {
+   "id": "champion-east",
+   "x": 83.0,
+   "z": 53.2,
+   "top": 4.6
+  },
+  {
+   "id": "kitchen-well",
+   "x": 44.0,
+   "z": 50.5
+  },
+  {
+   "id": "garden-basin",
+   "x": 108.0,
+   "z": 50.5
+  },
+  {
+   "id": "rose-arbour",
+   "x": 116.0,
+   "z": 50.5,
+   "note": "today's rose pergola, against the east wall"
+  },
+  {
+   "id": "shade-trees",
+   "pts": [
+    [
+     102.5,
+     47.5
+    ],
+    [
+     113.5,
+     47.5
+    ]
+   ]
+  },
+  {
+   "id": "blossom-trees",
+   "pts": [
+    [
+     58.5,
+     58.5
+    ],
+    [
+     93.5,
+     58.5
+    ],
+    [
+     58.5,
+     81.5
+    ],
+    [
+     93.5,
+     81.5
+    ]
+   ]
+  },
+  {
+   "id": "yews",
+   "pts": [
+    [
+     64.8,
+     88
+    ],
+    [
+     87.2,
+     88
+    ],
+    [
+     64.8,
+     91
+    ],
+    [
+     87.2,
+     91
+    ],
+    [
+     64.8,
+     94
+    ],
+    [
+     87.2,
+     94
+    ],
+    [
+     64.8,
+     97
+    ],
+    [
+     87.2,
+     97
+    ],
+    [
+     59.5,
+     49.5
+    ],
+    [
+     92.5,
+     49.5
+    ],
+    [
+     59.5,
+     52.5
+    ],
+    [
+     92.5,
+     52.5
+    ]
+   ]
+  },
+  {
+   "id": "lamps",
+   "pts": [
+    [
+     72.3,
+     55.5
+    ],
+    [
+     79.7,
+     55.5
+    ],
+    [
+     72.3,
+     84.5
+    ],
+    [
+     79.7,
+     84.5
+    ],
+    [
+     72.3,
+     90
+    ],
+    [
+     79.7,
+     90
+    ],
+    [
+     72.3,
+     96
+    ],
+    [
+     79.7,
+     96
+    ]
+   ]
+  }
+ ],
+ "water": {
+  "note": "Two springs spill from the moat's head walls beside the north corner towers. The moat rings the west, south and east walls at one level two metres below the turf (the north stands on the brink of the tear face). It leaves over a weir under the gate terrace on the axis and falls down the south face into a pool, from which the stream runs on to the pond; on the west it also overflows off the buttress into the Veil (today's west fall).",
+  "moat": {
+   "poly": [
+    [
+     24.4,
+     11.0
+    ],
+    [
+     30.9,
+     11.0
+    ],
+    [
+     30.9,
+     101.1
+    ],
+    [
+     121.1,
+     101.1
+    ],
+    [
+     121.1,
+     11.0
+    ],
+    [
+     127.6,
+     11.0
+    ],
+    [
+     127.6,
+     109.0
+    ],
+    [
+     24.4,
+     109.0
+    ]
+   ],
+   "outer": {
+    "west_x": 24.4,
+    "east_x": 127.6,
+    "south_z": 109.0,
+    "north_z": 11.0
+   },
+   "width_sides": 6.5,
+   "width_south": 7.9,
+   "surface": -2.0,
+   "bed": -4.2,
+   "banks": "a dressed stone revetment with a coping of the same stone on the outer side; the curtain and towers rise straight out of the water on battered plinths"
+  },
+  "springs": [
+   {
+    "x": 25.6,
+    "z": 11.0,
+    "note": "out of a mossy cleft in the west arm's head wall, spilling down two metres into the moat"
+   },
+   {
+    "x": 126.4,
+    "z": 11.0,
+    "note": "its mirror at the east arm's head"
+   }
+  ],
+  "outlet": {
+   "x": 76.0,
+   "z0": 109.0,
+   "z1": 119.5,
+   "note": "a weir and an arched culvert under the gate terrace; the water pours from an arch in the bastion's face"
+  },
+  "falls": [
+   {
+    "id": "south-fall",
+    "x": 76.0,
+    "z": 119.5,
+    "top": -2.2,
+    "bottom": -11.0,
+    "w": 4.0,
+    "note": "on the axis below the gate terrace, into the pool"
+   },
+   {
+    "id": "west-fall",
+    "x": 18.5,
+    "z": 81.0,
+    "top": -2.1,
+    "bottom": -60.0,
+    "w": 2.5,
+    "note": "the moat's overflow, by a slot through the lip of the west buttress, into the Veil (today's west fall)"
+   }
+  ],
+  "pool": {
+   "x": 76.0,
+   "z": 123.5,
+   "r": 3.6,
+   "surface_world": 0.0
+  },
+  "stream": [
+   [
+    76.0,
+    123.5
+   ],
+   [
+    83,
+    126
+   ],
+   [
+    91,
+    128.5
+   ],
+   [
+    96.5,
+    133
+   ],
+   [
+    98,
+    138
+   ],
+   [
+    97,
+    152
+   ],
+   [
+    94,
+    166
+   ],
+   [
+    90,
+    176
+   ]
+  ],
+  "stream_note": "from the pool along the foot of the rock to rejoin today's course at (98, 138); the pond is unchanged"
+ },
+ "approach": {
+  "note": "The climb arrives at the landing outside the moat's south-east corner; the ledge road runs west along the south front between two walls, the moat on its castle side, to the gate terrace on the axis; the bridge crosses the moat to the gate. A matching walled walk runs west from the terrace to a lookout at the south-west corner, so the south front is symmetric.",
+  "gate_terrace": {
+   "rect": [
+    66,
+    109.0,
+    86,
+    119.5
+   ],
+   "note": "a bastion out over the cliff: two lamps, two banner poles at the bridge's foot, the moat's outlet under it"
+  },
+  "bridge": {
+   "rect": [
+    73.5,
+    101.1,
+    78.5,
+    109.0
+   ],
+   "deck": 0.0,
+   "note": "two low stone arches over the water and a lowered drawbridge span at the gate end, parapets both sides"
+  },
+  "ledge_road": {
+   "rect": [
+    86,
+    109.0,
+    117,
+    115.0
+   ],
+   "walls": "an inner parapet on the moat side and an outer parapet on the cliff side, one coping line; lamps inside the outer wall"
+  },
+  "ledge_walk": {
+   "rect": [
+    35,
+    109.0,
+    66,
+    115.0
+   ],
+   "note": "the road's mirror west of the terrace"
+  },
+  "landing": {
+   "rect": [
+    117,
+    109.0,
+    131,
+    119.5
+   ],
+   "note": "walled all round except where the road leaves it and the climb comes in"
+  },
+  "lookout": {
+   "rect": [
+    21,
+    109.0,
+    35,
+    119.5
+   ],
+   "note": "the landing's mirror: a walled terrace over the farm and the Veil, a bench and two lamps"
+  },
+  "climb": {
+   "pts": [
+    [
+     137,
+     136
+    ],
+    [
+     140.5,
+     126
+    ],
+    [
+     134.5,
+     119.5
+    ],
+    [
+     128.5,
+     116.5
+    ]
+   ],
+   "note": "today's climb with one bend, so it keeps its grade up to the moved landing"
+  }
+ },
+ "crown": {
+  "note": "The crown grows to carry the moat: north to the tear edge (the keep's back on the brink), about six metres at the north-west corner (new land on the tear), the north-east shoulder raised to the crown, about four metres on the east and five to nine on the south (the moat, the ledge and its bastions).",
+  "outline": [
+   [
+    21,
+    9
+   ],
+   [
+    40,
+    6.5
+   ],
+   [
+    60,
+    6.0
+   ],
+   [
+    92,
+    6.0
+   ],
+   [
+    112,
+    8.0
+   ],
+   [
+    130.5,
+    9.5
+   ],
+   [
+    131.5,
+    60
+   ],
+   [
+    131.5,
+    119.5
+   ],
+   [
+    117,
+    119.5
+   ],
+   [
+    117,
+    116.0
+   ],
+   [
+    86,
+    116.0
+   ],
+   [
+    86,
+    119.5
+   ],
+   [
+    66,
+    119.5
+   ],
+   [
+    66,
+    116.0
+   ],
+   [
+    35,
+    116.0
+   ],
+   [
+    35,
+    119.5
+   ],
+   [
+    21,
+    119.5
+   ],
+   [
+    20.5,
+    60
+   ]
+  ],
+  "island_outline_change": "north-west corner: (22,40) (30,22) (44,14) (58,6) becomes (21,40) (19.5,22) (23,6) (40,3.5) (58,4)",
+  "level_world": 11
+ },
+ "from_today": {
+  "stay": [
+   "the gatehouse, as built (moved 10 m east onto the new axis)",
+   "the dragon fountain (moved with the axis)",
+   "the parterre (narrower, four panels, no statues)",
+   "curtain kit, drum towers, the banners on every run",
+   "the kitchen and today's residence range (re-planned as the great hall and kitchen)",
+   "the rose arbour (into the privy garden)",
+   "the ledge road, the climb and the landing (moved)",
+   "the west fall"
+  ],
+  "shrink_or_change": [
+   "the stables grow into a range of six stalls with a hay loft",
+   "the barracks shrink to a one-storey range with a loft, the stables' mirror",
+   "the kitchen garden is walled and moves under the terrace",
+   "the training yard moves to the south-east, the paddock's mirror",
+   "the champions: two instead of seven, at the grand stair"
+  ],
+  "go": [
+   "the west wing (its chapel moves next to the keep, its armory to the barracks)",
+   "the donjon",
+   "the door turret",
+   "the two pavilions",
+   "the stair tower",
+   "the inner curtain, its two towers and the two ward gates",
+   "the field shelter",
+   "the orchard",
+   "the postern and the belvedere (the west moat takes their ground)",
+   "the west niche champion"
+  ],
+  "new": [
+   "the great keep",
+   "the terrace and the grand stair",
+   "the chapel and the solar",
+   "the moat, its springs and the south fall",
+   "the bridge, the gate terrace, the ledge walk and the lookout",
+   "the privy garden and the muster yard"
+  ]
+ },
+ "camera": {
+  "facts": "game.ts updateCamera: 21 up and 14 back from the hero per zoom step (0.65 to 1.35), looking 1 m over the hero, 42 degree field of view: it looks down at 55 degrees and shows about 17 m ahead of the hero and 9 m behind, 33 m across, at zoom 1 (23 m ahead at 1.35)",
+  "keep": "the keep is never seen whole in play: from the fountain it is beyond the top of the screen even zoomed out; from the grand stair the turrets' feet and the frontispiece fill the top of the screen; at the great door the turrets frame an 8 m door. Its height shows from the approach, the island, the title screen and the overview",
+  "moat": "from the bridge and the ledge road the moat fills the middle of the screen, two metres down between its coping and the drums",
+  "inside_mass": "standing at the great hall's dais (x 60..62) or the chapel's west end (x 90..92), the camera lands inside a front turret of the keep: the north range must open as one building (hall, keep and chapel cut away together), as the range and kitchen do today",
+  "views_rendered": {
+   "avenue": [
+    76,
+    60,
+    0,
+    1.35
+   ],
+   "great_door": [
+    76,
+    46,
+    2,
+    1.0
+   ],
+   "bridge": [
+    76,
+    106,
+    0,
+    1.0
+   ],
+   "yards": [
+    56,
+    72,
+    0,
+    1.2
+   ]
+  }
+ },
+ "walking": {
+  "speed": 4.8,
+  "portal_to_great_door": "about 160 m, 33 s (today about 170 m)",
+  "gate_to_great_door": "59 m, 12 s",
+  "across_the_bailey": "86 m, 18 s",
+  "fountain_to_stables_door": "22 m, 5 s",
+  "climb": "about 26 m for its 11 m rise, a little steeper than today (one hairpin would restore today's grade)"
+ },
+ "owner_notes": [
+  {
+   "note": "castle more grand and epic, stand out from the other buildings",
+   "answer": "the great keep: 28 m to its parapet, turrets 34.5, spires 44; everything else 14 m or lower (wings 11.5 and 14, curtain 8.4, towers 13.8 and 21.5 with spires, stables and barracks 6.5)"
+  },
+  {
+   "note": "main building: window placement boring, copy-paste",
+   "answer": "one showpiece window over the great door; sizes fall storey by storey (tall lancets, paired lights, small lights); slit lights stepping up the turrets; every other building its own window type (hall: paired windows between buttresses, chapel: lancets and a rose window, kitchen: small high lights, solar: an oriel, stables: half-doors)"
+  },
+  {
+   "note": "donjon repetitive; the cylinder beside the building does not fit",
+   "answer": "the donjon and the door turret go; the round forms are the keep's own four corner turrets, one composition"
+  },
+  {
+   "note": "one too many towers (south-east)",
+   "answer": "the inner curtain and its towers go; twelve towers and the gatehouse, mirrored"
+  },
+  {
+   "note": "the other side has almost no towers, unbalanced, not centred",
+   "answer": "west and east faces mirror each other: three wall towers each at the quarter points, 21.5 m apart; the south face 23 m apart"
+  },
+  {
+   "note": "the tower door is crammed in",
+   "answer": "the stair tower goes; the wall walk is reached through the gatehouse's drums"
+  },
+  {
+   "note": "stables: weird spot for the trough and the cones; horses need room",
+   "answer": "a working stable yard (no ornaments) with the trough against the stable wall; the paddock 20 by 25 behind the stables, three times today's"
+  },
+  {
+   "note": "kitchen garden: weird door and pillar; disconnected corner",
+   "answer": "walled square under the terrace on its own axis: the stair comes down into it, gates on the walk and the stable yard; no tower in it, every bed reached"
+  },
+  {
+   "note": "landing: wall on the other side of the path, a moat flowing to the river; needs wall; grass discontinuity",
+   "answer": "the moat runs between the castle and the road; the road has walls on both sides; the moat falls to the stream under the gate terrace; the landing is walled all round but its two openings; the crown's turf runs unbroken to the moat's coping"
+  },
+  {
+   "note": "sunken tree; little trees need variety",
+   "answer": "for the trees work: trees seated on their ground; in the castle yews, blossom trees, shade trees and fruit trees on the kitchen garden walls"
+  },
+  {
+   "note": "helmets, too many gold diamonds, flag short, flag shadow, dragon forelegs",
+   "answer": "carried into the build: new champion helmets (two champions only), the diamond only on banners and flags, the keep's banners 12 m long, the great flag on the keep (its shadow falls behind the keep), the dragon's forelegs reworked"
+  }
+ ],
+ "build_stages": [
+  {
+   "stage": 0,
+   "name": "ground plan",
+   "builders": 1,
+   "first": true,
+   "what": "the castle's plan moves out of buildKeep into its own module split by area (plan constants, ground and water, approach, bailey dressing, building specs) so later stages edit separate files; the new axis, curtain, towers, gatehouse position, terrace levels with built edges, moat cells, crown and island outline, the approach cells and climb, the farm and stream moves; today's kit placed at the new positions (curtain, drum towers, gatehouse, fountain, parterre), the keep and the wings as plain enterable buildings in today's style; tests (symmetry, connected walks, geometry audit) and the inspect views updated",
+   "files": [
+    "src/data/zoneMaps.ts",
+    "src/data/castle plan module (new)",
+    "src/dev/castleInspect.ts",
+    "tests/keep.test.ts",
+    "tests/castle-geometry.test.ts"
+   ]
+  },
+  {
+   "stage": "A",
+   "name": "the great keep",
+   "parallel": true,
+   "what": "its own model: frontispiece, pinnacles, showpiece window, storey-by-storey windows, machicolated parapet, four turrets with stair lights and spires, great door, banners, great flag; interior: throne hall, dais, piers, two stairs, galleries; the north range opens as one round the hero",
+   "files": [
+    "src/world/keep model (new)",
+    "the keep's building spec"
+   ]
+  },
+  {
+   "stage": "B",
+   "name": "moat and water",
+   "parallel": true,
+   "what": "moat surface and revetment with its coping, the springs at its heads, the weir, culvert and outlet arch, the south fall and pool, the west overflow fall, the stream's new head",
+   "files": [
+    "src/world/water.ts",
+    "src/world/moat props (new)"
+   ]
+  },
+  {
+   "stage": "C",
+   "name": "approach and gate front",
+   "parallel": true,
+   "what": "the ledge road's two walls, the gate terrace bastion with lamps and banner poles, the bridge (two arches and a drawbridge span), the landing and the lookout, the ledge walk, the climb's bend",
+   "files": [
+    "src/world/approach props (new)",
+    "the approach part of the castle plan module"
+   ]
+  },
+  {
+   "stage": "D",
+   "name": "bailey grounds",
+   "parallel": true,
+   "what": "the narrower parterre, the walled kitchen and privy gardens (walls, gates, beds, well, basin, arbour), stable and muster yards, paddock and training yard (fences, gates, pells, butts, horses), trees, lamps, kerbs",
+   "files": [
+    "the bailey dressing part of the castle plan module",
+    "garden props"
+   ]
+  },
+  {
+   "stage": "E",
+   "name": "the other buildings",
+   "parallel": true,
+   "what": "the great hall (today's range turned round), the kitchen moved, the chapel and the solar, the stables and barracks; each its own window scheme",
+   "files": [
+    "src/world/buildingModel.ts",
+    "their building specs"
+   ]
+  },
+  {
+   "stage": "F",
+   "name": "carried details",
+   "parallel": true,
+   "what": "champion helmets, fewer gold diamonds, long banners, the dragon's forelegs, clear tinted glass (with the stone work)",
+   "files": [
+    "src/world/props.ts",
+    "tools/blender (the dragon)"
+   ]
+  },
+  {
+   "stage": "G",
+   "name": "together",
+   "builders": 1,
+   "last": true,
+   "what": "CASTLE_DESIGN.md, the inspect suite's views, the owner's picture review",
+   "files": [
+    "docs/CASTLE_DESIGN.md",
+    "src/dev/castleInspect.ts"
+   ]
+  }
+ ],
+ "painting_departures": [
+  "flat roofs behind parapets on every castle building (the standing rule) instead of the painting's steep slate roofs",
+  "one fall on the axis under the gate terrace instead of two either side of the bridge: the water has one way out to the stream",
+  "the approach keeps today's climb and ledge road instead of a straight causeway up the cliff",
+  "the keep's back stands on the north brink and the hall and the chapel are mirrored either side of it, where the painting has a hall on one side only",
+  "no cottage houses round the forecourt: the service buildings stand along the side walls, so the axis stays open",
+  "the gate drums stay flat with flags; only the corner towers and the keep carry spires (the painting gives every tower one)",
+  "the moat lies two metres down between built banks rather than brimming at the foot of the walls"
+ ]
+}
