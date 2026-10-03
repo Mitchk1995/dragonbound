@@ -32,11 +32,22 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   many-sided and no brick bends. And the stones must clearly stand out from the play camera: deeper joints and stronger
   shading, and real blocks standing proud of the wall wherever its outline shows the stones (tops, corners, arches,
   tower outlines), since painted depth cannot change an outline.
-- **Trees: pick B, "Natural", loosely.** Redo the trees at true size, no longer blocky, as the woodcutting ladder in
-  RuneScape's order: tree, oak, willow, maple, yew, magic. They need not be realistic: a mix of styles and a more cartoony
-  look are fine, and Mitchell is unsure what is best, so one oak is grown in the game in three looks (natural, cartoony
-  and a mix) for him to choose from before the rest follow. Everything else should get a nice texture too (the crops and
-  plants). He judged the first natural oak "decent".
+- **Trees: pick B, "Natural".** Redo the trees at true size, no longer blocky, as the woodcutting ladder in RuneScape's
+  order: tree, oak, willow, maple, yew, magic. After seeing the first grown oak he chose the natural, realistic look
+  ("i kinda like the realistic one") and dropped the cartoony and mixed versions planned for comparison. The rest of the
+  ladder follows in the same style. Cartoony and blocky stay for the characters, enemies and NPCs, because that is what
+  Claude models well. Each species is grown from one recipe in three or four shapes, and every placed tree is turned
+  and sized a little differently. That way a wood never looks copy-pasted, yet an oak still reads as an oak at a glance,
+  which woodcutting needs (Claude's proposal, October 3; Mitchell had wondered whether they should all be the same).
+  Everything else should get a nice texture too, the crops and plants included.
+- **A more natural world, not photoreal** (October 3). Mitchell asked about going more realistic for the plants, water,
+  lighting and sky ("we dont need to go crazy right away, i do want it looking nice") and left the cohesion to Claude.
+  The direction is natural proportions, materials and light, still softly painted, so the blocky characters belong in
+  it, as they do in the LEGO games. Photoreal is out of reach with how we build, and it would make them look pasted in.
+  It comes in small steps, each shown to him as before-and-after pictures, starting once the stone and the trees land:
+  1. Light and sky: a warmer sun, softer shadows, a little haze in the distance, and a real sky with clouds.
+  2. Water: reflections, depth and foam on the moat, the falls and the streams.
+  3. Ground, grass, plants and crops, grown like the oak.
 - **Everything must make structural sense** (October 3): "it all has to make structural sense". His examples: the walled
   climb up to the landing "doesnt make sense the way it is built" and should have stairs, and the ledge road needs a wall
   on its other side too. He added that the insides of the buildings must work with their outsides, so the interiors are
@@ -112,10 +123,12 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 
 Where things stand (October 3):
 - **Castle:** after the fifth round of notes (see "The new look and the great keep" above), three jobs run side by side:
-  the stone finish on the castle as it stands, the castle-v4 blueprint around the great keep, and one natural oak as the
-  proof for the new trees. The review page, https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins
-  notes and picks options; a fixed note is marked `status: done` and drops off the page. Once the blueprint is approved
-  the castle is rebuilt to it, then the woodcutting trees follow.
+  the stone finish on the castle as it stands (now reworked for flat-stone towers and stones that stand out), the
+  castle-v4 blueprint around the great keep (now revised for stairs, walls, structural sense and interiors), and the
+  woodcutting trees (the natural oak is done; the other five follow in its style). The review page,
+  https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, is where Mitchell pins notes and picks options; a fixed note is
+  marked `status: done` and drops off the page. Once the blueprint is approved the castle is rebuilt to it; the new
+  trees then replace the forests and garden trees.
 - **Castle, open points:**
   - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
   - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided (the castle-v4 plan may move it anyway).
@@ -157,7 +170,7 @@ Later: the Ashen Crown redesign, reinforcement, slower levelling (after the regi
   - Every castle window is a plain window: dark or softly lit glass in the lancet frame with its stone surround, no stained-glass patterns (Mitchell, October 2: "they shouldn't have random designs on them, it should be windows"). Ivy and climbing roses on ten chosen wall faces, mirrored where the plan is; dressed blue-grey kerbs wherever a lawn or gravel meets the paving; cooler paving and a dark blue-grey castle rock so the cream walls stand off both. (Superseded October 3: kerbs are cut from the same stone as the walls, and the glass is clear with a cool tint you can see into.)
   - Building roofs are designed surfaces seen from the play camera: blue lead in a two-tone diamond chequer inside a pale stone band and a gilt fillet, glazed lanterns with slate caps, roof gardens of box in planters on the two wings. The buildings take a paler cream than the curtain and towers; every curtain run carries the lord's banner on its outer face, and a gilt diamond frieze rings the gatehouse and corner towers.
   - The approach climbs to a level landing and turns through an outer gate (crenellated, portcullis, bartizans with spires, the lord's banner) onto the ledge road; the spring now breaks out of a mossy cleft in the rock and falls in two drops.
-  - The garden trees are built in the same leafy blocks as the island's trees, one foliage language everywhere. (Superseded October 3: the island's trees are being redone as grown trees in the look Mitchell picks from the oak test, and the garden trees follow that look.)
+  - The garden trees are built in the same leafy blocks as the island's trees, one foliage language everywhere. (Superseded October 3: the island's trees are being redone as natural, realistic grown trees, Mitchell's pick after the first oak, and the garden trees follow that look.)
 - **Castle review notes from pictures, two rounds** (Mitchell, October 2; docs/CASTLE_DESIGN.md). Decided and built:
   - The fountain's dragon is pick A: a chunky, blocky bronze sentinel sitting upright like a guardian lion, wings folded, head high, thick block legs carrying it, gold horns, spines and claws, water pouring from its open jaws.
   - Seeing the hero behind walls is pick D: a soft-edged upright rounded-rectangle window round the hero, feathered into the wall, the rest of the wall solid (replacing the round cut-away).
