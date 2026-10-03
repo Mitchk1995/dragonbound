@@ -2,9 +2,10 @@
 
 Every model is a Python script in `tools/blender/` using `_common.py`, exported to `public/models/<file>.glb`.
 Scripts read and write the checkout named by the `DRAGONBOUND_ROOT` environment variable (else the one two folders
-above the script, else `D:\gameplanning`), so set it when working in a worktree. Headless re-export, e.g.:
-`blender -b --python-expr "exec(open(r'<root>\tools\blender\minions.py').read())"`; for gear, set
-`DB_ONLY = ['staff_oak']` before the `exec` to export only those models.
+above the script, else `D:\gameplanning`), so set it when working in a worktree. Headless re-export goes through the
+heavy-job lock in AGENTS.md, e.g.
+`node tools/heavy.cjs D:/pokemon/tools/blender-5.2.2/blender.exe -b --python-expr "exec(open(r'<root>\tools\blender\minions.py').read())"`;
+for gear, set `DB_ONLY = ['staff_oak']` before the `exec` to export only those models.
 Scripts author inside a root rotated +90° about X, so **all coordinates are three.js: Y up, +Z forward**.
 Characters face **+Z**. A +Z-facing character's **right hand is at −X**.
 
@@ -14,15 +15,16 @@ Every builder, critic and reviewer works from this section. Judge work against t
 or smoothness. The owner's specific picks are recorded in `docs/DESIGN_DECISIONS.md`; read the entries for the area
 you are working on.
 
-**What Dragonbound looks like.** A chunky, stylized, low-poly fantasy world in the line of Warcraft 3 and Torchlight,
-seen from a Diablo-style three-quarter overhead camera. It is bright and colourful, with bold silhouettes that read at
-play distance and a handful of strong colours per object rather than fine detail. It looks like hand-made toy-like
-craft, not a photograph.
+**What Dragonbound looks like.** A chunky, stylized fantasy world in the line of Warcraft and Torchlight, seen from a
+Diablo-style three-quarter overhead camera. It is bright and colourful, with bold silhouettes that read at play distance
+and a handful of strong colours per object rather than fine detail, finished with hand-painted textures that have real
+depth. It looks hand-made, not like a photograph.
 
 **Blocky on purpose.** Chamfered blocks, slabs, wedges and tapered beams are the house language for characters, gear,
-creatures, statues, horses, props, trees (leafy blocks) and the castle. Chunky and blocky is never a defect, and a
-reviewer must not ask for it to be smoothed or sculpted. Organic shapes are used where they read better: wings, hair,
-cloth, flames, rock, water and terrain.
+creatures, statues, horses, props and the castle's architecture; characters stay blocky and modular, like Lego (owner,
+October 3). Chunky and blocky is never a defect there, and a reviewer must not ask for it to be smoothed or sculpted.
+Organic shapes are used where they read better: wings, hair, cloth, flames, rock, water, terrain, and trees and plants.
+Trees are true to size and grown as one piece rather than built from blocks (owner's pick, October 3); they can be natural or more cartoony, and need not be realistic. They are being redone now: until the new trees are in, today's blocky trees are not a defect in other work.
 
 **But built, not dumped.** "Blocky" means blocks that are *designed together*: they meet face to face, share edges and
 read as one carved or built object. The owner's standing complaint is "shapes placed together instead of stitched into
@@ -42,19 +44,24 @@ handles at hand height, towers that you can walk into from the wall walk, paths 
 water that comes from somewhere and goes somewhere. "Realistic" in owner notes means *believable and well made*, not
 photoreal.
 
-**Surfaces.** Flat or soft stylized shading with painted textures, plus a few accents of real material:
+**Surfaces.** Soft stylized shading, and every surface carries a hand-painted texture: stone, wood, bark, leaves, crops,
+cloth. Dressed stone is the owner's pick B (October 3): chunky blocks with recessed dark joints, bevelled and slightly
+chipped edges, a lit top edge and a little tone variation block to block, its relief drawn in the shader rather than
+modelled stone by stone. The castle is being moved to this finish now: until it lands, the old painted stone is not a defect in other work. A few accents of real material:
 - forged metal;
-- glass that genuinely looks see-through and blue-tinted;
+- clear glass with a cool tint that you can genuinely see into;
 - running water.
 
-Texture scale is consistent: one brick or block size on every face, nothing stretched.
+Texture scale is consistent: a few block sizes laid in courses that line up across every wall and tower, nothing
+stretched, squeezed or bent round a corner or a curve.
 
-**The castle and the island.** The castle is in cream limestone with blue-grey trim, royal blue and gold livery, flat
-crenellated roofs and spires in a hierarchy, and lush gardens. The rock is dark blue-grey, natural, weathered and mossy.
-Grass is full lawn, never scattered tufts. Clutter is never random; everything is placed on purpose.
+**The castle and the island.** The castle is becoming a grand royal castle round a dominant great keep (castle v4, in
+planning) in cream limestone, its trim cut from the same stone; royal blue slate spires banded in gold, royal blue and gold
+livery, flat crenellated roofs and lush gardens. The rock is dark blue-grey, natural, weathered and mossy. Grass is full
+lawn, never scattered tufts. Clutter is never random; everything is placed on purpose.
 
-**Characters.** Oversized hands, weapons and pauldrons, with one or two accent colours. Keep each model under about 3k
-triangles.
+**Characters.** Blocky and modular. Oversized hands, weapons and pauldrons, with one or two accent colours. Keep each
+model under about 3k triangles.
 
 **Reviewing.** A critic first states the style above in one line, then looks for construction defects and departures
 from the owner's picks. A critic never proposes a different style.
