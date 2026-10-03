@@ -66,6 +66,11 @@ export async function dragonSuite(g: Game, shot: (n: string) => Promise<void>) {
       const obj = posed(name, a, secs);
       return { label: `${name} · ${label}`, obj, ...near(obj, new THREE.Vector3(0.05, 0.3, 1)) };
     }), 4, 2);
+    // And from behind the other flank, where the tail, the hind legs and the far side of the wings show.
+    await sheet(`dragon-${name}-anims-back`, attack(name).map(([label, a, secs]) => {
+      const obj = posed(name, a, secs);
+      return { label: `${name} · ${label}`, obj, ...near(obj, new THREE.Vector3(-0.8, 0.4, -0.8)) };
+    }), 4, 2);
     // The head close up: the eye from every side (it must read on the side only, under the brow).
     const head: [string, THREE.Vector3, Partial<AnimState>][] = [
       ['side', new THREE.Vector3(1, 0.05, 0.05), {}], ['front', new THREE.Vector3(0, 0.08, 1), {}], ['3/4 front', new THREE.Vector3(0.7, 0.2, 0.7), {}],

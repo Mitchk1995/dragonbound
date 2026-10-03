@@ -268,6 +268,16 @@ def carve(base, *cutters):
     return base
 
 
+def inflate(parent, keep, k):
+    """Grow every mesh built on `parent` since `keep` (its children before) by k = (x, y, z) about the parent's origin,
+    baking it into the meshes: the assembly grows as one built thing, every part still meeting the next."""
+    S = Matrix.Diagonal((k[0], k[1], k[2], 1.0))
+    for o in parent.children:
+        if o not in keep and o.type == 'MESH':
+            o.data.transform(S @ o.matrix_basis)
+            o.matrix_basis = Matrix.Identity(4)
+
+
 def talon(parent, root, fwd, w, h, reach, ground, color):
     """Hooked claw growing out of a toe's front face, pointing along the level direction `fwd`: `root` is the middle of
     its underside where it leaves the toe. A blocky wedge `w` wide and `h` tall there, its top curving down to a blunt
@@ -320,11 +330,25 @@ def band(parent, a, b, t, w, d, color, length=0.07):
     return beam(parent, c - u * (length / 2), c + u * (length / 2), w, d, color)
 
 
-def dorsal(parent, base, up, back, w, d, color):
+def chest_band(parent, C, face, top, bottom, front, side, color, lift=(0.015, 0.06), thick=0.07, shrink=0.94):
+    """Band wrapping round a chest's front between the heights `top` and `bottom` of the chest's frame (`C(x, y, z)` is a
+    point in it, its front face at z `face`): a flat front `front` wide with its ends turned back at 45 degrees for `side`
+    more each way. Its outer face stands `lift[0]` off the chest at the top and `lift[1]` at the bottom, so a scute's
+    lower edge stands proud over the next one; the lower edge is the upper one scaled by `shrink`, so every face stays
+    flat."""
+    def ring(y, n0, k):
+        b, a, t = front / 2, front / 2 + side, thick
+        pts = ((-a, -side), (-b, 0), (b, 0), (a, -side), (a - 0.7 * t, -side - 0.7 * t), (b - 0.4 * t, -t),
+               (0.4 * t - b, -t), (0.7 * t - a, -side - 0.7 * t))
+        return [C(k * u, y, n0 + k * n) for u, n in pts]
+    return loft(parent, [ring(top, face + lift[0], 1.0), ring(bottom, face + lift[1], shrink)], color)
+
+
+def dorsal(parent, base, up, back, w, d, color, taper=(0.2, 0.08)):
     """Wedge spike or crystal standing on `base` (sunk a little into it), `up` high with its tip leaning `back` toward the
-    tail, `w` thick across the body and `d` long along it at the foot."""
+    tail, `w` thick across the body and `d` long along it at the foot; a blunter `taper` makes it a plate."""
     base = Vector(base)
-    return beam(parent, base - Vector((0, 0.03, 0)), base + Vector((0, up, -back)), w, d, color, taper=(0.2, 0.08))
+    return beam(parent, base - Vector((0, 0.03, 0)), base + Vector((0, up, -back)), w, d, color, taper=taper)
 
 
 def almond(head, s, x, y, z, h, l, depth, color, glow=None, strength=1.0, k=0.3, slant=-0.12):
@@ -362,18 +386,18 @@ RW_TIPS = ((0.96, 0.36, -0.42), (0.86, 0.06, -0.76), (0.54, -0.04, -0.94))
 
 
 def raised_wing(body, side, pos, span, bone, skin, cap, claw, root_at, thick=1.0, tilt=0.3, raise_=0.0,
-                scallop_depth=0.2, edge=None, lift=0.8):
+                scallop_depth=0.2, edge=None, lift=0.8, tips=RW_TIPS):
     """Bat wing raised off the shoulder blade: box arm bones to a gilt wrist cap with a thumb claw, three box fingers with
     gilt tip caps, one membrane slab per gap with a scalloped trailing edge. The membrane's inner edge runs from the
     shoulder back to `root_at` (a point on the back, in the body's space), so it is joined to the body all the way.
     `edge` (a colour) gilds the trailing edge and the outer finger. `tilt` turns the whole wing forward (positive) about
     the shoulder; the rig flaps it about its own Z. `lift` is a faint glow in the membrane's own colour, so its shaded
-    underside still reads as wing and not as a black hole."""
+    underside still reads as wing and not as a black hole. `tips` (in units of span) places the finger tips."""
     s = 1 if side == 'L' else -1
     wing = pivot(body, f'wing{side}', pos, (tilt, 0, s * raise_))
     P = lambda p: Vector((s * p[0] * span, p[1] * span, p[2] * span))
     S, E, W = Vector((0, 0, 0)), P(RW_ELBOW), P(RW_WRIST)
-    tips = [P(t) for t in RW_TIPS]
+    tips = [P(t) for t in tips]
     root = Matrix.Rotation(-tilt, 3, 'X') @ (Vector(root_at) - Vector(pos))
     r = span * thick
     beam(wing, S, E, 0.12 * r, 0.11 * r, bone, taper=(0.8, 0.8), over=0.05 * r, bevel=0.015 * r)
@@ -404,37 +428,41 @@ def raised_wing(body, side, pos, span, bone, skin, cap, claw, root_at, thick=1.0
     return wing
 
 
-def limb(inner, name, pos, main, pad, claw, r=1.0, back=False, toe=None, gilt=None, glow=None, rng=None, claw_k=1.0):
+def limb(inner, name, pos, main, pad, claw, r=1.0, back=False, toe=None, gilt=None, glow=None, rng=None, claw_k=1.0,
+         girth=1.0, paw_r=None):
     """Blocky leg on a hip/shoulder pivot, standing in a paw on the ground (y = -pos.y in pivot space): a dark pad on the
     outside of the elbow or knee, the paw with its toes (`toe`, a colour, else the leg's) and claws (`claw_k` sizes them),
     and optionally a gilt band round the leg just above the paw (`gilt`) and a glowing crack down the outside of the
-    upper leg (`glow`)."""
+    upper leg (`glow`). `r` sets the leg's build; `girth` thickens its blocks on top of that and `paw_r` sizes the paw
+    (default `r`), so a heavy leg still stands in a paw bigger than the leg."""
     l = pivot(inner, name, pos)
     g = -pos[1]
     s = 1 if pos[0] > 0 else -1
+    q, pr = r * girth, paw_r or r   # the blocks' thickness and the paw's size
+    lift = max(0.13, 0.068 * pr)    # the ankle, inside the top of the paw
     if back:   # a heavy thigh slab forward to the knee, shin back to the hock, then straight down to the paw
         top, joint = Vector((0, 0.12, -0.02 * r)), Vector((0, -0.24, 0.13 * r))
         low = Vector((0, g + 0.3 + 0.06 * (r - 1), -0.08 * r))
-        ankle = Vector((0, g + 0.13, low.z))
-        beam(l, top, joint, 0.34 * r, 0.42 * r, main, taper=(0.62, 0.55), over=0.06, bevel=0.03)
-        beam(l, joint, low, 0.18 * r, 0.17 * r, main, taper=(0.85, 0.85), over=0.08, bevel=0.02)
-        beam(l, low, ankle, 0.15 * r, 0.14 * r, main, taper=(0.95, 0.95), over=0.06)
-        uw = 0.34 * r * 0.62
+        ankle = Vector((0, g + lift, low.z))
+        beam(l, top, joint, 0.34 * q, 0.42 * q, main, taper=(0.62, 0.55), over=0.06, bevel=0.03)
+        beam(l, joint, low, 0.18 * q, 0.17 * q, main, taper=(0.85, 0.85), over=0.08, bevel=0.02)
+        beam(l, low, ankle, 0.15 * q, 0.14 * q, main, taper=(0.95, 0.95), over=0.06)
+        uw = 0.34 * q * 0.62
     else:      # upper arm back to the elbow, forearm straight down to the wrist
         top, joint, low = Vector((0, 0.08, 0.02)), Vector((0, -0.28, -0.05 * r)), None
-        ankle = Vector((0, g + 0.13, 0.03 * r))
-        beam(l, top, joint, 0.28 * r, 0.3 * r, main, taper=(0.68, 0.62), over=0.06, bevel=0.03)
-        beam(l, joint, ankle, 0.19 * r, 0.19 * r, main, taper=(0.9, 0.9), over=0.08, bevel=0.02)
-        uw = 0.28 * r * 0.68
-    box(l, (0.05 * r, 0.14 * r, 0.17 * r), (s * (uw / 2 + 0.02 * r), joint.y, joint.z), pad, bevel=0)  # pad
-    ph = paw(l, g, ankle.z, r, main, toe or main, claw, claw_k)
+        ankle = Vector((0, g + lift, 0.03 * r))
+        beam(l, top, joint, 0.28 * q, 0.3 * q, main, taper=(0.68, 0.62), over=0.06, bevel=0.03)
+        beam(l, joint, ankle, 0.19 * q, 0.19 * q, main, taper=(0.9, 0.9), over=0.08, bevel=0.02)
+        uw = 0.28 * q * 0.68
+    box(l, (0.05 * q, 0.14 * q, 0.17 * q), (s * (uw / 2 + 0.02 * q), joint.y, joint.z), pad, bevel=0)  # pad
+    ph = paw(l, g, ankle.z, pr, main, toe or main, claw, claw_k)
     if gilt is not None:   # a level bracelet round the leg a little above the paw, with the leg showing between them
         if back:
-            level_band(l, low, ankle, g + ph + 0.065, 0.15 * r, 0.14 * r, 0.95, gilt, 0.045 * r)
+            level_band(l, low, ankle, g + ph + 0.065, 0.15 * q, 0.14 * q, 0.95, gilt, 0.045 * r)
         else:
-            level_band(l, joint, ankle, g + ph + 0.12, 0.19 * r, 0.19 * r, 0.9, gilt, 0.055 * r)
+            level_band(l, joint, ankle, g + ph + 0.12, 0.19 * q, 0.19 * q, 0.9, gilt, 0.055 * r)
     if glow is not None:   # a crack across the outer face of the upper leg, near its top
-        w0 = 0.34 * r * 0.88 if back else 0.28 * r * 0.9
+        w0 = 0.34 * q * 0.88 if back else 0.28 * q * 0.9
         p = top.lerp(joint, 0.25)
         crack(l, (s * (w0 / 2 + 0.006), p.y, p.z - 0.1 * r), (0, -0.35, 1), (s, 0, 0), 0.22 * r, 0.03 * r, rng, steps=4, color=glow)
     return l
@@ -447,94 +475,122 @@ MOUTH = 0x3A0E0A
 # ─── Drakeling (docs/concepts/drakeling.jpg) ──────────────────────────────────
 
 def drakeling():
-    """A young red dragon in a harness: bright red chamfered blocks, a cream jaw, throat and belly, dark red brow lines,
-    spikes, pads and wing bones, cream horns and claws, a leather girth and breast collar with gilt buckles and hexagonal gilt
-    shoulder plates, a pouch on the left flank, raised wings with gilt caps and an arrowhead tail with a gilt band."""
+    """A young red dragon in a harness, as chunky as its sheet: a short, deep head, a thick neck, a broad barrel body on
+    short thick legs, in bright red chamfered blocks; a cream jaw, throat, chest scutes and belly, dark red brow lines,
+    plates, pads and wing bones, cream horns and claws, a leather girth and breast collar with gilt buckles and hexagonal
+    gilt shoulder plates, a pouch on the left flank, raised wings with gilt caps and an arrowhead tail with a gilt band."""
     main, dark, cream, horn_col = 0xCF3826, 0x861E1A, 0xE8C48E, 0xF2E2C4
     skin, gold, leather, pouch = 0xB42A20, 0xE6A83A, 0x5E3B26, 0x7A5036
     scene, root = fresh_scene('DB_drakeling')
     inner = pivot(root, 'inner')
     inner.scale = (0.8, 0.8, 0.8)
-    for name, x, z, back in (('legFL', 0.27, 0.36, False), ('legFR', -0.27, 0.36, False), ('legBL', 0.29, -0.42, True), ('legBR', -0.29, -0.42, True)):
-        limb(inner, name, (x, 0.68, z), main, dark, horn_col, r=1.0, back=back, claw_k=1.25)   # big cream claws, as on its sheet
+    # Short, thick legs under a deep barrel: heavy shoulders and thighs, chunky forearms and shins, big paws with big
+    # cream claws, as on its sheet. The forelegs stand at the chest's sides, so the cream breast shows between them.
+    for name, x, z, back in (('legFL', 0.34, 0.3, False), ('legFR', -0.34, 0.3, False), ('legBL', 0.33, -0.44, True), ('legBR', -0.33, -0.44, True)):
+        limb(inner, name, (x, 0.88, z), main, dark, horn_col, r=1.0, back=back, claw_k=1.2, girth=1.6, paw_r=1.5)
 
-    body = pivot(inner, 'body', (0, 0.92, 0))
-    box(body, (0.6, 0.54, 0.46), (0, 0.03, -0.46), main, bevel=0.06)                     # hips
-    box(body, (0.7, 0.62, 0.58), (0, 0.04, -0.04), main, bevel=0.07)                     # belly block
-    box(body, (0.7, 0.7, 0.46), (0, 0.08, 0.38), main, rot=(-0.15, 0, 0), bevel=0.07)   # deep chest
-    box(body, (0.5, 0.44, 0.32), (0, 0.25, 0.66), main, rot=(-0.38, 0, 0), bevel=0.05)  # withers into the neck
-    # Cream underside: a breast plate on the chest's front face and a belly plate under the belly block.
-    obox(body, (0.44, 0.56, 0.05), (0, 0.08 + 0.036, 0.38 + 0.233), (1, 0, 0), (0, 0.989, -0.149), cream, bevel=0.02)
-    box(body, (0.46, 0.06, 0.8), (0, -0.285, 0.0), cream, bevel=0.02)
-    for z, y, h in ((0.44, 0.42, 0.17), (0.14, 0.36, 0.15), (-0.18, 0.35, 0.14), (-0.46, 0.3, 0.12)):  # dorsal spikes
-        dorsal(body, (0, y, z), h, 0.1, 0.08, 0.18, dark)
+    body = pivot(inner, 'body', (0, 1.12, 0))
+    box(body, (0.74, 0.66, 0.5), (0, 0.05, -0.47), main, bevel=0.08)                    # hips
+    box(body, (0.86, 0.78, 0.62), (0, 0.03, -0.05), main, bevel=0.09)                   # belly barrel
+    box(body, (0.86, 0.88, 0.5), (0, 0.1, 0.34), main, rot=(-0.15, 0, 0), bevel=0.09)   # deep chest
+    # Cream underside: scutes down the chest's front below the throat, the last turning under it, and a belly plate.
+    yd = Vector((0, 0.989, -0.149))   # the chest's local Y (it is turned -0.15 about X); its front face is at local z 0.25
+    zd = Vector((0, 0.149, 0.989))
+    C = lambda x, y, z: Vector((x, 0.1, 0.34)) + yd * y + zd * z
+    wrap = lambda *a, **k: chest_band(body, C, 0.25, *a, **k)
+    wrap(-0.03, -0.21, 0.52, 0.06, cream)
+    wrap(-0.17, -0.33, 0.46, 0.05, cream)
+    wrap(-0.29, -0.44, 0.4, 0.03, cream, lift=(0.03, -0.1))
+    box(body, (0.5, 0.06, 0.74), (0, -0.37, -0.07), cream, bevel=0.02)
+    for z, y, h in ((0.28, 0.53, 0.2), (0.04, 0.44, 0.19), (-0.2, 0.43, 0.18), (-0.44, 0.39, 0.17), (-0.66, 0.34, 0.15)):
+        dorsal(body, (0, y, z), h, 0.1, 0.1, 0.26, dark, taper=(0.6, 0.42))                             # dark plates down the back
 
     # Harness: a girth behind the forelegs, a breast collar across the chest and straps between them along the sides,
     # gilt buckles where they meet, a hexagonal gilt shoulder plate each side and a pouch hanging on the left flank.
-    box(body, (0.74, 0.72, 0.1), (0, 0.04, 0.0), leather, bevel=0.015)                                     # girth
-    obox(body, (0.74, 0.09, 0.04), (0, 0.08 + 0.119 + 0.04, 0.38 - 0.018 + 0.262), (1, 0, 0), (0, 0.989, -0.149), leather)  # collar
-    obox(body, (0.12, 0.12, 0.05), (0, 0.08 + 0.119 + 0.042, 0.38 - 0.018 + 0.272), (1, 0, 0), (0, 0.989, -0.149), gold)  # buckle
-    obox(body, (0.06, 0.06, 0.05), (0, 0.08 + 0.119 + 0.044, 0.38 - 0.018 + 0.284), (1, 0, 0), (0, 0.989, -0.149), leather)
+    box(body, (0.9, 0.84, 0.11), (0, 0.03, 0.02), leather, bevel=0.02)                                    # girth
+    wrap(0.0, -0.1, 0.62, 0.12, leather, lift=(0.075, 0.075), thick=0.06, shrink=1.0)                       # collar
+    obox(body, (0.15, 0.15, 0.05), C(0, -0.05, 0.34), (1, 0, 0), yd, gold)                                 # buckle
+    obox(body, (0.07, 0.07, 0.05), C(0, -0.05, 0.355), (1, 0, 0), yd, leather)
     for s in (-1, 1):
-        box(body, (0.03, 0.09, 0.64), (s * 0.364, 0.235, 0.3), leather, bevel=0)                          # side strap
-        box(body, (0.03, 0.12, 0.13), (s * 0.378, 0.235, 0.05), gold, bevel=0)                            # strap buckle
-        box(body, (0.03, 0.06, 0.06), (s * 0.386, 0.235, 0.05), leather, bevel=0)
-        hex_plate(body, (s * 0.35, 0.2, 0.42), (s, 0.2, 0), 0.17, gold, dark)                            # shoulder plate
-    box(body, (0.07, 0.2, 0.2), (0.39, -0.08, -0.16), pouch, bevel=0)                                     # pouch
-    box(body, (0.08, 0.07, 0.21), (0.395, 0.035, -0.16), leather, bevel=0)                               # its flap
-    box(body, (0.03, 0.07, 0.07), (0.432, -0.02, -0.16), gold, bevel=0)                                  # gilt clasp
-    box(body, (0.03, 0.035, 0.035), (0.438, -0.02, -0.16), leather, bevel=0)
+        box(body, (0.03, 0.1, 0.58), (s * 0.44, 0.08, 0.25), leather, bevel=0)                             # side strap
+        box(body, (0.03, 0.14, 0.15), (s * 0.455, 0.08, 0.02), gold, bevel=0)                              # strap buckle
+        box(body, (0.03, 0.07, 0.07), (s * 0.463, 0.08, 0.02), leather, bevel=0)
+        hex_plate(body, (s * 0.43, 0.24, 0.4), (s, 0.2, 0), 0.19, gold, dark)                             # shoulder plate
+    box(body, (0.08, 0.22, 0.22), (0.47, -0.1, -0.2), pouch, bevel=0)                                      # pouch
+    box(body, (0.09, 0.08, 0.23), (0.475, 0.025, -0.2), leather, bevel=0)                                 # its flap
+    box(body, (0.03, 0.08, 0.08), (0.516, -0.04, -0.2), gold, bevel=0)                                    # gilt clasp
+    box(body, (0.03, 0.04, 0.04), (0.522, -0.04, -0.2), leather, bevel=0)
 
     def neck(n, i):
-        beam(n, (0, 0, -0.1), (0, 0, 0.36), 0.4, 0.4, main, taper=(0.9, 0.9), bevel=0.04)
-        box(n, (0.27, 0.06, 0.34), (0, -0.19, 0.13), cream, bevel=0)                         # cream throat
-        dorsal(n, (0, 0.18, 0.12), 0.15, 0.1, 0.07, 0.16, dark)
-    # The neck rises steeply from the chest, so the head is carried high over the cream breast (the rig levels it).
-    last = segments(body, 'neck', 2, (0, 0.3, 0.66), (0.3, 0.3), (-0.7, -0.4), neck)
+        beam(n, (0, 0, -0.14), (0, 0, 0.34), 0.56, 0.58, main, taper=(0.92, 0.92), bevel=0.06)
+        box(n, (0.4, 0.09, 0.44), (0, -0.265, 0.1), cream, bevel=0.015)                      # cream throat plate
+        for z, h in ((-0.02, 0.21), (0.22, 0.19)):
+            dorsal(n, (0, 0.27, z), h, 0.1, 0.1, 0.24, dark, taper=(0.6, 0.42))                            # dark plates up the neck
+    # A thick neck rising steeply out of the chest, its cream throat running down into the cream breast, so the head is
+    # carried high over the chest.
+    last = segments(body, 'neck', 2, (0, 0.34, 0.37), (0.28,), (-1.05, -0.15), neck)
 
-    head = pivot(last, 'head', (0, 0.02, 0.32), (0.75, 0, 0))
-    # The head after its sheet, one solid with nothing stuck on: a deep cranium under a heavy brow that overhangs the
-    # eyes, and a long squared snout stepping down from it with two square nostrils cut into its front. An eye socket is
-    # sunk into each side under the brow, so the eye reads from the side only (the cranium's side stands in front of
-    # it); a dark brow line runs along the top of the socket. A deep cream jaw closes under the snout.
+    # The head sits forward on the neck's end, so the neck's top runs into the back of the skull, behind the jaw.
+    head = pivot(last, 'head', (0, -0.09, 0.42), (0.85, 0, 0))
+    # The head after its sheet, one solid with nothing stuck on: a short, deep wedge. A tall cranium under a heavy
+    # brow block, and a snout whose top slopes down from the brow to a blunt nose with two square nostrils cut into its
+    # front, its top edges cut back in broad facets. An eye socket is sunk into each side under the brow, so the eye
+    # reads from the side only (the cranium's side stands in front of it); a dark brow line runs along the top of the
+    # socket. A deep cream jaw closes under the snout and runs back under the cheek into the throat.
     X, Y = Vector((1, 0, 0)), Vector((0, 1, 0))
-    skull = box(head, (0.44, 0.36, 0.5), (0, 0.12, -0.01), main, bevel=0.035)                       # cranium
-    brow = box(head, (0.5, 0.095, 0.37), (0, 0.2575, 0.115), main, bevel=0.03)                     # brow over the eyes
-    snout = loft(head, [oct_ring((0, 0.1, 0.2), X, Y, 0.36, 0.24, 0.14), oct_ring((0, 0.07, 0.74), X, Y, 0.31, 0.18, 0.14)], main)
-    union(skull, brow, snout)
-    carve(skull, *[box(head, (0.2, 0.127, 0.17), (s * 0.295, 0.1485, 0.12), main, bevel=0) for s in (-1, 1)],       # sockets
-          *[box(head, (0.05, 0.045, 0.08), (s * 0.07, 0.105, 0.74), main, bevel=0) for s in (-1, 1)])               # nostrils
-    box(head, (0.26, 0.009, 0.44), (0, -0.0255, 0.5), MOUTH, bevel=0)                    # roof of the mouth
-    for s in (-1, 1):
-        box(head, (0.05, 0.045, 0.012), (s * 0.07, 0.105, 0.706), MOUTH, bevel=0)        # in the nostril
-        box(head, (0.012, 0.105, 0.17), (s * 0.201, 0.1375, 0.12), 0x3A0C08, bevel=0)     # socket floor, dark
-        box(head, (0.04, 0.034, 0.18), (s * 0.215, 0.195, 0.12), dark, bevel=0.006)     # brow line along its top
-        prism(head, [(-0.046, -0.026), (-0.046, 0.026), (-0.024, 0.05), (0.024, 0.05), (0.046, 0.026), (0.046, -0.026),
-                     (0.024, -0.05), (-0.024, -0.05)], 0.012, (s * 0.211, 0.133, 0.122), 0xF6BA38,
-              rot=(0, s * PI / 2, 0), emissive=0xF0A020, strength=0.5)                   # the eye
-        prism(head, [(0, 0.044), (0.01, 0), (0, -0.044), (-0.01, 0)], 0.008, (s * 0.219, 0.133, 0.13), 0x1A0A06,
-              rot=(0, s * PI / 2, 0))                                                  # its slit pupil
-        horn(head, [(s * 0.12, 0.27, -0.06), (s * 0.17, 0.44, -0.28), (s * 0.21, 0.58, -0.5)], 0.12, horn_col, tip=0.12)
-    jaw = pivot(head, 'jaw', (0, -0.035, 0.16))
-    loft(jaw, [oct_ring((0, -0.075, -0.38), X, Y, 0.42, 0.16, 0.16), oct_ring((0, -0.0675, 0.12), X, Y, 0.34, 0.145, 0.16),
-               oct_ring((0, -0.06, 0.56), X, Y, 0.28, 0.13, 0.16)], cream)
-    box(jaw, (0.24, 0.008, 0.42), (0, 0.01, 0.32), MOUTH, bevel=0)                      # floor of the mouth
+    K = 1.15   # the head's build, in the units below
+    k3 = lambda *p: tuple(K * c for c in p)
 
-    # Tail: three thinning segments with a spike each, then a dark cuff, a gilt band and a red arrowhead.
-    def tail(t, i):
-        w = 0.2 - (i - 1) * 0.04
-        beam(t, (0, 0, 0.1), (0, 0, -0.4), 2 * (w + 0.02), 2 * (w + 0.02), main, taper=((w - 0.03) / (w + 0.02),) * 2, bevel=0.03)
-        dorsal(t, (0, w, -0.14), 0.13 - i * 0.015, 0.09, 0.07, 0.15, dark)
-    last = segments(body, 'tail', 3, (0, 0.03, -0.62), (-0.36, -0.36), (0.16, 0.04, -0.1), tail)
-    box(last, (0.17, 0.15, 0.12), (0, 0, -0.44), dark, bevel=0)                                    # cuff
-    box(last, (0.2, 0.18, 0.05), (0, 0, -0.37), gold, bevel=0)                                     # gilt band
-    beam(last, (0, 0, -0.48), (0, 0.03, -0.86), 0.22, 0.12, main, taper=(0.04, 0.1))              # arrowhead
+    def wedge(z, w, y0, y1, c):   # snout section: straight sides, flat underside, its top corners cut by c
+        a = w / 2
+        return [Vector(k3(*p)) for p in ((-a, y0, z), (a, y0, z), (a, y1 - c, z), (a - c, y1, z), (c - a, y1, z), (-a, y1 - c, z))]
+    skull = box(head, k3(0.5, 0.38, 0.46), k3(0, 0.17, -0.05), main, bevel=0.05)                    # cranium
+    brow = box(head, k3(0.56, 0.14, 0.34), k3(0, 0.34, 0.03), main, bevel=0.045, taper=(0.96, 0.62))  # brow block
+    snout = loft(head, [wedge(0.1, 0.42, -0.01, 0.29, 0.1), wedge(0.52, 0.32, 0.0, 0.19, 0.07)], main)
+    union(skull, brow, snout)
+    carve(skull, *[box(head, k3(0.2, 0.15, 0.14), k3(s * 0.3, 0.2, 0.07), main, bevel=0) for s in (-1, 1)],     # sockets
+          *[box(head, k3(0.05, 0.045, 0.08), k3(s * 0.07, 0.12, 0.52), main, bevel=0) for s in (-1, 1)])          # nostrils
+    box(head, k3(0.3, 0.009, 0.42), k3(0, -0.005, 0.3), MOUTH, bevel=0)                   # roof of the mouth
     for s in (-1, 1):
-        beam(last, (s * 0.06, 0, -0.46), (s * 0.19, 0.0, -0.6), 0.07, 0.06, dark, taper=(0.2, 0.3))   # its barbs
+        box(head, k3(0.05, 0.045, 0.012), k3(s * 0.07, 0.12, 0.486), MOUTH, bevel=0)      # in the nostril
+        box(head, k3(0.012, 0.15, 0.14), k3(s * 0.206, 0.2, 0.07), 0x3A0C08, bevel=0)    # socket floor, dark
+        box(head, k3(0.05, 0.03, 0.15), k3(s * 0.225, 0.26, 0.07), dark, bevel=0.007)   # brow line along its top
+        prism(head, [(-0.064, -0.036), (-0.064, 0.036), (-0.034, 0.07), (0.034, 0.07), (0.064, 0.036), (0.064, -0.036),
+                     (0.034, -0.07), (-0.034, -0.07)], 0.014, k3(s * 0.216, 0.195, 0.072), 0xF6BA38,
+              rot=(0, s * PI / 2, 0), emissive=0xF0A020, strength=0.5)                   # the eye
+        prism(head, [(0, 0.06), (0.014, 0), (0, -0.06), (-0.014, 0)], 0.009, k3(s * 0.224, 0.195, 0.082), 0x1A0A06,
+              rot=(0, s * PI / 2, 0))                                                  # its slit pupil
+        horn(head, [k3(s * 0.16, 0.36, -0.1), k3(s * 0.21, 0.51, -0.29), k3(s * 0.26, 0.64, -0.49)], 0.15 * K, horn_col, tip=0.12)
+    jaw = pivot(head, 'jaw', k3(0, 0.0, 0.06))
+    loft(jaw, [oct_ring(k3(0, -0.1, -0.32), X, Y, 0.5 * K, 0.26 * K, 0.16), oct_ring(k3(0, -0.075, 0.12), X, Y, 0.42 * K, 0.17 * K, 0.16),
+               oct_ring(k3(0, -0.06, 0.42), X, Y, 0.32 * K, 0.13 * K, 0.16)], cream)
+    box(jaw, k3(0.28, 0.008, 0.38), k3(0, 0.004, 0.2), MOUTH, bevel=0)                   # floor of the mouth
+
+    # Tail: three thick segments tapering from the hips, a cream underside and dark plates along the top, then a dark
+    # cuff, a gilt band and a red arrowhead.
+    TW = (0.56, 0.45, 0.35, 0.27)   # width at each joint, root to the cuff
+    TL = (0.36, 0.34, 0.32)
+
+    def tail(t, i):
+        w0, w1, L = TW[i - 1], TW[i], TL[i - 1]
+        beam(t, (0, 0, 0.12), (0, 0, -L - 0.04), w0, w0 * 0.92, main, taper=(w1 / w0, w1 / w0), bevel=0.04)
+        beam(t, (0, -w0 * 0.43, 0.08), (0, -w1 * 0.43, -L - 0.04), w0 * 0.62, 0.06, cream, taper=(w1 / w0, 1))  # cream underside
+        for k in (0.22, 0.68):
+            dorsal(t, (0, w0 * 0.43 - (w0 - w1) * 0.4 * k, -k * L), 0.17 - i * 0.025 - 0.02 * k, 0.08, 0.09, 0.2, dark, taper=(0.6, 0.42))
+    # It droops from the hips and lifts toward the arrowhead.
+    last = segments(body, 'tail', 3, (0, 0.06, -0.62), [-v for v in TL[:-1]], (-0.4, 0.15, 0.3), tail)
+    e = -TL[-1]
+    box(last, (0.24, 0.22, 0.12), (0, 0, e - 0.1), dark, bevel=0.01)                                # cuff
+    box(last, (0.29, 0.26, 0.05), (0, 0, e - 0.03), gold, bevel=0)                                  # gilt band
+    beam(last, (0, 0, e - 0.14), (0, 0.03, e - 0.58), 0.32, 0.17, main, taper=(0.04, 0.1))        # arrowhead
+    for s in (-1, 1):
+        beam(last, (s * 0.08, 0, e - 0.12), (s * 0.25, 0.0, e - 0.28), 0.09, 0.08, dark, taper=(0.2, 0.3))   # its barbs
 
     for side, s in (('L', 1), ('R', -1)):
-        # Wide enough apart that the gilt wrist caps clear each other at the top of the flight flap.
-        raised_wing(body, side, (s * 0.28, 0.3, 0.22), 1.45, dark, skin, gold, horn_col, (s * 0.2, 0.27, -0.42), thick=0.85)
+        # Rooted on the shoulder tops, wide enough apart that the gilt wrist caps clear each other at the top of the flight
+        # flap even though the wings stand raised; the leading finger points up and back, as on its sheet.
+        raised_wing(body, side, (s * 0.4, 0.44, 0.22), 1.65, dark, skin, gold, horn_col, (s * 0.26, 0.42, -0.42), thick=0.82, tilt=0.45,
+                    raise_=0.08, tips=((0.88, 0.66, -0.5), (0.84, 0.24, -0.82), (0.52, 0.0, -0.96)))
     finish('DB_drakeling', 'drakeling.glb')
 
 
@@ -552,32 +608,24 @@ def cinderwing():
     scene, root = fresh_scene('DB_cinderwing')
     inner = pivot(root, 'inner')
     inner.scale = (2.4, 2.4, 2.4)
-    # Thick, short legs set wide under a barrel chest, big rounded shoulders and haunches.
-    for name, x, z, back in (('legFL', 0.52, 0.5, False), ('legFR', -0.52, 0.5, False), ('legBL', 0.5, -0.56, True), ('legBR', -0.5, -0.56, True)):
-        limb(inner, name, (x, 0.7, z), main, dark, ivory, r=1.8 if back else 1.9, back=back, toe=dark, gilt=gold, glow=glow, rng=rng)
+    # Thick, short legs set wide under a massive barrel chest, big rounded shoulders and haunches.
+    for name, x, z, back in (('legFL', 0.58, 0.44, False), ('legFR', -0.58, 0.44, False), ('legBL', 0.56, -0.56, True), ('legBR', -0.56, -0.56, True)):
+        limb(inner, name, (x, 0.95, z), main, dark, ivory, r=1.8 if back else 1.9, back=back, toe=dark, gilt=gold, glow=glow, rng=rng,
+             girth=1.3, paw_r=2.2 if back else 2.35)
 
-    body = pivot(inner, 'body', (0, 0.96, 0))
+    body = pivot(inner, 'body', (0, 1.21, 0))
+    built = set(body.children)
     box(body, (1.0, 0.8, 0.6), (0, 0.06, -0.6), main, bevel=0.12)                      # hips
     box(body, (1.2, 0.98, 0.72), (0, 0.06, -0.08), main, bevel=0.12)                   # belly block
     box(body, (1.3, 1.16, 0.72), (0, 0.16, 0.42), main, rot=(-0.18, 0, 0), bevel=0.14)  # barrel chest
     box(body, (0.86, 0.6, 0.46), (0, 0.5, 0.62), main, rot=(-0.55, 0, 0), bevel=0.1)   # withers into the neck
     for s in (-1, 1):
-        box(body, (0.34, 0.56, 0.66), (s * 0.62, 0.22, 0.42), main, rot=(-0.18, 0, 0), bevel=0.13)  # rounded shoulder
-        box(body, (0.3, 0.56, 0.62), (s * 0.55, 0.08, -0.62), main, bevel=0.12)                   # rounded haunch
+        box(body, (0.4, 0.66, 0.74), (s * 0.62, 0.2, 0.42), main, rot=(-0.18, 0, 0), bevel=0.15)   # rounded shoulder
+        box(body, (0.38, 0.7, 0.74), (s * 0.56, 0.06, -0.6), main, bevel=0.15)                    # rounded haunch
     yd, zd = Vector((0, 0.984, -0.179)), Vector((0, 0.179, 0.984))   # the chest's local Y and Z (it is turned -0.18 about X)
     C = lambda x, y, z: Vector((x, 0.16, 0.42)) + yd * y + zd * z     # a point in the chest's frame (its front face at z 0.36)
 
-    def wrap(top, bottom, front, side, color, lift=(0.015, 0.06), thick=0.07, shrink=0.94):
-        """Band wrapping round the chest's front between the heights `top` and `bottom` of the chest's frame: a flat front
-        `front` wide with its ends turned back at 45 degrees for `side` more each way. Its outer face stands `lift[0]` off
-        the chest at the top and `lift[1]` at the bottom, so a scute's lower edge stands proud over the next one; the lower
-        edge is the upper one scaled by `shrink`, so every face stays flat."""
-        def ring(y, n0, k):
-            b, a, t = front / 2, front / 2 + side, thick
-            pts = ((-a, -side), (-b, 0), (b, 0), (a, -side), (a - 0.7 * t, -side - 0.7 * t), (b - 0.4 * t, -t),
-                   (0.4 * t - b, -t), (0.7 * t - a, -side - 0.7 * t))
-            return [C(k * u, y, n0 + k * n) for u, n in pts]
-        return loft(body, [ring(top, 0.36 + lift[0], 1.0), ring(bottom, 0.36 + lift[1], shrink)], color)
+    wrap = lambda *a, **k: chest_band(body, C, 0.36, *a, **k)
 
     # The chest after its sheet: the furnace glows through cracks down the throat, and below it ivory scutes wrap round
     # the front of the chest from under the neck down between the forelegs, narrowing as they go, each plate's lower edge
@@ -597,9 +645,9 @@ def cinderwing():
         dorsal(body, (0, y, z), h, 0.06, 0.15, 0.25, crystal)                          # red crystals down the spine
     # Furnace cracks across each shoulder, flank and haunch.
     for s in (-1, 1):
-        crack(body, (s * 0.795, 0.3, 0.58), (0, -0.5, -1), (s, 0, 0), 0.36, 0.05, rng, steps=4, color=glow)
+        crack(body, (s * 0.825, 0.3, 0.6), (0, -0.5, -1), (s, 0, 0), 0.36, 0.05, rng, steps=4, color=glow)
         crack(body, (s * 0.606, 0.0, 0.26), (0, 0.3, -1), (s, 0, 0), 0.3, 0.045, rng, steps=3, branches=0, color=glow)
-        crack(body, (s * 0.706, 0.2, -0.44), (0, -0.5, -1), (s, 0, 0), 0.32, 0.04, rng, steps=3, branches=0, color=glow)
+        crack(body, (s * 0.756, 0.2, -0.4), (0, -0.5, -1), (s, 0, 0), 0.32, 0.04, rng, steps=3, branches=0, color=glow)
     # Harness: a girth behind the forelegs; a breast strap wrapping the scutes, with a square gilt buckle (a raised boss in
     # a gilt plate) at each front corner, its ends running back under the shoulders; and a saddle pack on each flank
     # behind the girth, below the wing.
@@ -619,12 +667,16 @@ def cinderwing():
         for z in (-0.27, -0.13):
             box(body, (0.03, 0.08, 0.06), (s * 0.7, 0.13, z), gold, bevel=0)                            # gilt clasps
             box(body, (0.03, 0.04, 0.03), (s * 0.706, 0.13, z), leather, bevel=0)
+    # The torso, harness and all, grown as one to the sheet's massive build: broader and deeper, a little longer.
+    G = (1.18, 1.1, 1.04)
+    inflate(body, built, G)
+    g = lambda x, y, z: (x * G[0], y * G[1], z * G[2])
 
     def neck(n, i):
-        w = 0.4 - i * 0.03
-        beam(n, (0, 0, -0.14), (0, 0, 0.5), 2 * w, 2 * w, main, taper=((w - 0.03) / w,) * 2, bevel=0.04)
-        dorsal(n, (0, w - 0.01, 0.12), 0.2, 0.05, 0.11, 0.2, crystal)
-        k = 0.03 / 0.64   # the neck's faces lean in as it tapers; the cracks lie along them
+        w = 0.48 - i * 0.035
+        beam(n, (0, 0, -0.14), (0, 0, 0.42), 2 * w, 2 * w, main, taper=((w - 0.035) / w,) * 2, bevel=0.05)
+        dorsal(n, (0, w - 0.01, 0.1), 0.22, 0.05, 0.12, 0.22, crystal)
+        k = 0.035 / 0.56   # the neck's faces lean in as it tapers; the cracks lie along them
         if i < 3:   # a crack running up the throat, and one up a side
             trunk = []
             crack(n, (0.03, -w + 0.003 + k * 0.04, -0.1), (0, k, 1), (0, -1, k), 0.5, 0.042, rng, steps=4, branches=0,
@@ -637,10 +689,10 @@ def cinderwing():
                 p = trunk[j]
                 crack(n, (p.x, -w + 0.003 + k * (p.z + 0.14), p.z), (s * 0.85, k, 1), (0, -1, k), 0.4 - 0.05 * j, 0.034, crng,
                       steps=3, branches=1 if j < 3 else 0, color=glow)
-    # The neck rises high out of the top of the chest, so the head is carried up and the bib shows under it.
-    last = segments(body, 'neck', 3, (0, 0.6, 0.62), (0.44, 0.44, 0.44), (-0.55, -0.35, -0.15), neck)
+    # A short, thick neck rises out of the top of the chest, so the head is carried close over it and the scutes show under it.
+    last = segments(body, 'neck', 3, g(0, 0.6, 0.62), (0.32, 0.32, 0.32), (-0.55, -0.25, -0.05), neck)
 
-    head = pivot(last, 'head', (0, 0.02, 0.48), (0.4, 0, 0))
+    head = pivot(last, 'head', (0, 0.02, 0.38), (0.2, 0, 0))
     # Skull built round the eye sockets, as the drakeling's: core, back of the head, cheek, front wall, brow ridge.
     box(head, (0.56, 0.46, 0.6), (0, 0.14, 0.0), main, bevel=0.05)                    # core (eye floor at |x| 0.28)
     box(head, (0.65, 0.42, 0.34), (0, 0.15, -0.13), main, bevel=0.05)                 # back of the head
@@ -653,15 +705,15 @@ def cinderwing():
         eye(head, s, 0.28, 0.17, 0.175, 0.11, 0.22, 0xFF8A1C, 0x140806, 0x1A0806, glow=0xFF5A08, strength=1.4)
         box(head, (0.08, 0.02, 0.02), (s * 0.1, 0.05, 0.865), MOUTH, bevel=0)            # nostril: a low slit
         horn(head, [(s * 0.235, 0.04, 0.72), (s * 0.235, -0.08, 0.73)], 0.045, ivory)    # upper fang
-        dorsal(head, (s * 0.15, 0.37, -0.02), 0.13, 0.06, 0.08, 0.14, crystal)            # red crystal crest
-        a, m, b = Vector((s * 0.17, 0.34, -0.14)), Vector((s * 0.28, 0.6, -0.5)), Vector((s * 0.34, 0.76, -0.92))
-        horn(head, [a, m, b], 0.17, ivory, tip=0.1)                                       # great horn
-        band(head, a, m, 0.62, 0.17 * 0.72, 0.17 * 0.72, gold, length=0.07)
-        for k, (base, tip) in enumerate((((0.31, 0.22, -0.22), (0.5, 0.34, -0.66)), ((0.31, 0.06, -0.2), (0.5, 0.08, -0.6)),
-                                          ((0.29, -0.08, -0.14), (0.44, -0.16, -0.48)))):
+        dorsal(head, (s * 0.13, 0.37, 0.14), 0.13, 0.03, 0.08, 0.14, crystal)             # red crystal crest, in front of the horns
+        a, m, b = Vector((s * 0.18, 0.34, -0.1)), Vector((s * 0.3, 0.7, -0.44)), Vector((s * 0.38, 0.98, -0.86))
+        horn(head, [a, m, b], 0.29, ivory, tip=0.1)                                       # great horn
+        band(head, a, m, 0.62, 0.29 * 0.72, 0.29 * 0.72, gold, length=0.1)
+        for (base, tip), w in ((((0.3, 0.22, -0.2), (0.6, 0.36, -1.02)), 0.21), (((0.31, 0.05, -0.18), (0.55, 0.02, -0.74)), 0.14),
+                               (((0.29, -0.1, -0.12), (0.48, -0.2, -0.56)), 0.11)):
             base, tip = Vector((s * base[0], base[1], base[2])), Vector((s * tip[0], tip[1], tip[2]))
-            horn(head, [base, tip], 0.1 - k * 0.015, ivory, tip=0.15)                     # cheek spikes
-            band(head, base, tip, 0.4, (0.1 - k * 0.015) * 0.75, (0.1 - k * 0.015) * 0.75, gold, length=0.05)
+            horn(head, [base, tip], w, ivory, tip=0.15)                                    # swept-back cheek horns
+            band(head, base, tip, 0.4, w * 0.75, w * 0.75, gold, length=0.06)
     jaw = pivot(head, 'jaw', (0, -0.06, 0.22))
     beam(jaw, (0, -0.02, -0.4), (0, -0.012, 0.62), 0.5, 0.15, main, taper=(0.82, 0.8), bevel=0.03)
     box(jaw, (0.32, 0.02, 0.54), (0, 0.048, 0.27), 0xE8601C, bevel=0, emissive=0xC03A0A, strength=1.2)   # molten floor of the mouth
@@ -686,14 +738,14 @@ def cinderwing():
         wm = (w0 + w1) / 2
         dorsal(t, (0, 0.43 * wm - 0.005, -L * (0.62 if i == 6 else 0.5)), 0.08 + 0.45 * wm, 0.07, 0.03 + 0.36 * wm, 0.45 * L,
                crystal)
-    last = segments(body, 'tail', 6, (0, 0.1, -0.84), [-v for v in TL[:-1]], TR, tail)
+    last = segments(body, 'tail', 6, g(0, 0.1, -0.84), [-v for v in TL[:-1]], TR, tail)
     e, we = -TL[-1], TW[-1]
     loft(last, [section(e + 0.035, we * 1.24), section(e - 0.065, we * 1.24)], gold)                     # gilt cuff
     # A chunky faceted spike, as wide as the cuff where it leaves it and swelling a little before it narrows to a point.
     loft(last, [section(e - 0.03, we * 1.2), section(e - 0.13, we * 1.22), [Vector((0, 0.012, e - 0.44))]], ivory)
 
     for side, s in (('L', 1), ('R', -1)):
-        raised_wing(body, side, (s * 0.44, 0.6, 0.24), 2.3, dark, skin, gold, ivory, (s * 0.36, 0.43, -0.62), thick=0.75,
+        raised_wing(body, side, g(s * 0.44, 0.6, 0.24), 2.3, dark, skin, gold, ivory, g(s * 0.36, 0.43, -0.62), thick=0.75,
                     edge=gold, lift=1.1)
     finish('DB_cinderwing', 'cinderwing.glb')
 
