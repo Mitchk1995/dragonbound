@@ -218,8 +218,8 @@ function gardens(s: Site) {
     s.wall([[gx - side * pier, GARDEN.south, top], [sx, GARDEN.south, top], [sx, GARDEN.z + pier, top]], CROWN_Y);
     s.wall([[sx, GARDEN.z - pier, top], [sx, TERRACE.parts[0][3] - 0.1, top]], CROWN_Y);
     // The gates (their way out toward local +Z), standing open into the garden.
-    s.prop('garden_gate', gx, GARDEN.south, 0, 0, { len: W, opt: { h: GARDEN.wallH, swing: -1 } });
-    s.prop('garden_gate', sx, GARDEN.z, -side * (Math.PI / 2), 0, { len: W, opt: { h: GARDEN.wallH, swing: -1 } });
+    s.prop('garden_gate', gx, GARDEN.south, 0, 0, { len: W, opt: { h: GARDEN.wallH } });
+    s.prop('garden_gate', sx, GARDEN.z, -side * (Math.PI / 2), 0, { len: W, opt: { h: GARDEN.wallH } });
     for (const [x, z] of [[gx - pier, GARDEN.south], [gx + pier, GARDEN.south], [sx, GARDEN.z - pier], [sx, GARDEN.z + pier]]) s.blockRect(x, z, 0.55, 0.55, 0);
     // The quarters.
     GARDEN.quarters.forEach((q, n) => {
@@ -321,7 +321,7 @@ function paddock(s: Site) {
   s.prop('hay_rack', x1 - 4.2, z0 + 1.3, 0, 0);
   s.blockRect(x1 - 4.2, z0 + 1.3, 1.0, 0.45, 0);
   s.prop('field_trough', fx - 2.2, gz + 6.5, Math.PI / 2, 0);
-  s.blockRect(fx - 2.2, gz + 6.5, 0.4, 1.1, Math.PI / 2);
+  s.blockRect(fx - 2.2, gz + 6.5, 0.4, 1.1, 0);
   for (const [x, z, rot, v, graze] of [[44.2, 81.2, 1.3, 0, 0], [39.6, 86.4, -0.7, 2, 1], [47.6, 90.6, 2.5, 1, 1], [42.4, 95.2, -2.1, 0, 1], [39.6, 91.6, 0.6, 1, 0]]) {
     // (Full-sized horses, a little bigger than the stables' own, standing a head over the hero.)
     s.prop('horse', x, z, rot, 0, { len: graze, v, s: 1.15 });

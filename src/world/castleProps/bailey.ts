@@ -84,8 +84,8 @@ function taperBand(pts: THREE.Vector2[], ws: number[], hs: number[]) {
 /**
  * The fountain's bronze dragon (pick A, October 2), a sentinel sitting upright like a guardian lion
  * and facing +Z, its base on y = 0, about 3.3 high: a few big blocky castings, the haunches folded
- * under it, the deep chest upright with paler belly plates, straight thick forelegs planted on broad
- * feet so they plainly carry it, the wings folded flat against its flanks, the tail curled round its
+ * under it, the deep chest upright with paler belly plates, jointed forelegs (shoulder, elbow,
+ * forearm) planted on broad paws so they plainly carry it, the wings folded flat against its flanks, the tail curled round its
  * side on the plinth, the head held high with a square snout, the jaw open; gold horns, spines,
  * claws, eyes and tail spade. Returns the point in its open mouth the water pours from.
  */
@@ -183,9 +183,22 @@ function sentinelDragon(k: ModelKit, g: THREE.Object3D): THREE.Vector3 {
 
 /** The garden trees' wind clock (ticked by each tree, the world's time). */
 const TREE_WIND = { uWindT: { value: 0 } };
-/** The garden trees' leaf shadows: plain depth, cut to the leaves' outline (three.js takes the map and alpha test from each tree's own leaves). */
-const LEAF_DEPTH = shareResource(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
 const treeParts = new Map<string, THREE.BufferGeometry>(), treeMats = new Map<string, THREE.MeshStandardMaterial>();
+const leafDepths = new Map<GrownKind, THREE.MeshDepthMaterial>();
+
+/**
+ * A grown kind's leaf shadows: plain depth cut to the leaves' outline by their own atlas, one per kind
+ * (three.js sets a custom depth material's map from the leaves it draws, so kinds never share one).
+ */
+function leafDepth(kind: GrownKind) {
+  let mat = leafDepths.get(kind);
+  if (!mat) {
+    const leaves = treeMaterial(kind, 'canopy');
+    mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leaves.map, alphaTest: leaves.alphaTest });
+    leafDepths.set(kind, shareResource(mat));
+  }
+  return mat;
+}
 
 /**
  * One shape of a grown kind's wood or leaves for a garden tree: the woods' own buffers (shared, never
@@ -220,7 +233,7 @@ function treeMaterial(kind: GrownKind, part: 'trunk' | 'canopy') {
 /** The still water in a small basin or trough (the colour props.ts finishes as still water, with a sheen). */
 const BASIN_WATER = 0x1a3238;
 
-/** A disc of still water `r` across, lying flat at y = 0 (its top) and a hair thick. */
+/** A disc of still water of radius `r` lying flat, its underside on y = 0, 2 cm thick. */
 const waterDisc = (r: number) => new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, r, 0, Math.PI * 2, false), { depth: 0.02, bevelEnabled: false, curveSegments: 24 }).rotateX(-Math.PI / 2);
 
 /**
@@ -584,14 +597,14 @@ export const BAILEY_PROPS: Record<string, Builder> = {
         k.box(g, [0.12, 0.02, 0.09], [Math.cos(a) * r, 0.03, Math.sin(a) * r], o.petals, [0, a, 0]);
       }
     }
-    const canopy = g.getObjectByName('garden-tree-canopy') as THREE.InstancedMesh;
+    const canopy = g.getObjectByName('garden-tree-canopy') as THREE.InstancedMesh, depth = leafDepth(kind);
     return {
       obj: g,
       tick: (t) => {
         TREE_WIND.uWindT.value = t;
-        // (Once the world has made it an occluder: the leaves' shadow is cut to their own outline,
-        // not the cut-away's plain depth, as the woods' are.)
-        canopy.customDepthMaterial = LEAF_DEPTH;
+        // (The world makes every occluder's shadow the cut-away's plain depth once the prop is built;
+        // on its first tick the tree takes back its leaves' own, cut to their outline as the woods'.)
+        if (canopy.customDepthMaterial !== depth) canopy.customDepthMaterial = depth;
       },
     };
   },
@@ -754,19 +767,18 @@ export const BAILEY_PROPS: Record<string, Builder> = {
    * A gateway through a garden wall (the way through along local Z), `len` wide between its piers: a
    * pier either side a metre square, standing a little proud of the wall's faces and over its coping
    * (`opt.h`, the wall's height), on a base course, under a moulded cap and a ball finial; a pair of
-   * navy iron gates hung on the piers' inner faces, standing open a quarter turn toward `opt.swing`
-   * (±1 along Z) against the gateway's sides. `opt.piers`: which piers it builds (1 the -X one, 2 the
-   * +X one, 3 both), so a gate at a wall's corner shares the corner's pier.
+   * navy iron gates hung on the piers' inner faces, standing open a quarter turn toward -Z (into the
+   * garden) against the gateway's sides.
    */
   garden_gate: (k, g, arg) => {
-    const W = lenOf(arg) ?? 3, o = (arg?.opt ?? {}) as { h?: number; swing?: number; piers?: number }, H = o.h ?? 2.6, sw = o.swing ?? 1, piers = o.piers ?? 3;
+    const W = lenOf(arg) ?? 3, H = (arg?.opt as { h?: number } | undefined)?.h ?? 2.6;
     for (const sx of [-1, 1]) {
-      if (piers & (sx < 0 ? 1 : 2)) gardenPier(k, g, sx * (W / 2 + 0.52), 0, H);
+      gardenPier(k, g, sx * (W / 2 + 0.52), 0, H);
       // The leaf: a stile at its hinge against the pier, bars between top and bottom rails, gilt
       // spear heads over the top rail, swung open along Z to lie beside the gateway's side.
       const leaf = new THREE.Group(), L = W / 2 - 0.06;
       leaf.position.set(sx * (W / 2 - 0.04), 0, 0);
-      leaf.rotation.y = sw * sx * (Math.PI / 2);
+      leaf.rotation.y = -sx * (Math.PI / 2);
       g.add(leaf);
       const u = -sx;
       cb(k, leaf, [0.07, 1.95, 0.07], [0, 0.98, 0], LAMP_NAVY, undefined, 0.01);
@@ -846,7 +858,7 @@ export const BAILEY_PROPS: Record<string, Builder> = {
     k.cyl(g, 0.34, 0.42, 0.3, [0, 0.15, 0], STONE, undefined, 8);
     k.cyl(g, 0.16, 0.22, 0.9, [0, 0.75, 0], STONE_L, undefined, 8);
     k.cyl(g, 0.6, 0.2, 0.22, [0, 1.31, 0], STONE_L, undefined, 12);
-    k.mesh(g, waterDisc(0.52), BASIN_WATER, [0, 1.395, 0]);
+    k.mesh(g, waterDisc(0.5), BASIN_WATER, [0, 1.42, 0]);
   },
   /** Two straw bee skeps on a stone shelf (facing +Z): coiled domes with a dark entrance at the foot. */
   skeps: (k, g) => {
