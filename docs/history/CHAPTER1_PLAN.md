@@ -1,6 +1,6 @@
 # Dragonbound: Chapter 1 "The Hidden Keep"
 
-The current design plan is [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md). The user now wants a complete cohesive levels 1-10 region before the proper playthrough; the chapter structure below records current content and the earlier plan, not a final layout for that region.
+The current design plan is [DESIGN_DECISIONS.md](../DESIGN_DECISIONS.md). The user now wants a complete cohesive levels 1-10 region before the proper playthrough; the chapter structure below records current content and the earlier plan, not a final layout for that region.
 
 ## Context
 v0.1 proved the combat feel, but it was a combat sandbox, not the game we planned. Your playtest feedback:
@@ -27,7 +27,7 @@ The dragons hunt the last of the Dragonbound. You wake in **Dragonspire Keep**, 
 ## Chapter 1 Content
 **Skills (all to 99, OSRS XP curve):**
 - Melee, Ranged, Magic, Hitpoints.
-- **Defence:** armour requirements use Defence instead of Hitpoints. Combat automatically trains the equipped weapon style, Hitpoints and Defence; there is no stance selector. See [BALANCE.md](BALANCE.md) for the current XP shares and measured pacing.
+- **Defence:** armour requirements use Defence instead of Hitpoints. Combat automatically trains the equipped weapon style, Hitpoints and Defence; there is no stance selector. See [BALANCE.md](../BALANCE.md) for the current XP shares and measured pacing.
 - **Mining and Smithing (new).**
 - Future skills stay visible but locked.
 

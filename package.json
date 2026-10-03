@@ -16,8 +16,10 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check:encoding": "node tools/check-encoding.cjs",
-    "check": "npm run typecheck && npm test && vite build && npm run check:encoding",
-    "inspect": "node tools/inspect.mjs"
+    "check:size": "node tools/check-size.cjs",
+    "check": "npm run check:size && npm run typecheck && npm test && vite build && npm run check:encoding",
+    "inspect": "node tools/inspect.mjs",
+    "review": "node tools/review.mjs"
   },
   "build": {
     "appId": "com.dragonbound.game",

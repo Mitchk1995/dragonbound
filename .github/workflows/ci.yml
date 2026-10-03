@@ -25,5 +25,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Typecheck, tests, production build and encoding
+      - name: File sizes, typecheck, tests, production build and encoding
         run: npm run check
