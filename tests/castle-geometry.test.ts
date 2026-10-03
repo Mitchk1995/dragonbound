@@ -39,7 +39,6 @@ const JOINTS: { a: string[]; b: string[]; why: string; rule?: (a: Piece, b: Piec
   { a: ['building'], b: ['great_doors'], why: 'the great door\'s leaves hang in the hall\'s doorway, standing open into the hall' },
   { a: ['parapet', 'balustrade', 'ramp_wall', 'kerb', 'climb_wall'], b: ['parapet', 'balustrade', 'parapet_pier'], why: 'runs of one low wall meet end to end or on their pier (the climb\'s west wall ends in the ledge road\'s pier at the stair\'s head)' },
   { a: ['climb_buttress'], b: ['climb_wall'], why: 'a buttress is bonded into the battered talus of the wall it stands against' },
-  { a: ['gate_bastion'], b: ['spring_fall'], why: 'the fall pours down the face of the bastion over it, its rock and moss lying back against the masonry' },
   { a: ['round_tower', 'corner_tower'], b: ['tower_flag'], why: 'the flagpole is stepped into the tower\'s platform' },
   { a: ['fence'], b: ['gate_piers'], why: 'a fence runs into its gate pier' },
   { a: ['stream_stone'], b: ['stream_stone'], why: 'stones heaped together in the stream' },

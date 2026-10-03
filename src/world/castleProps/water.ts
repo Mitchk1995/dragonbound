@@ -54,7 +54,6 @@ interface MoatOpt {
   coping?: number;
   batter?: number;
   r?: number;
-  rTop?: number;
   out?: number[];
   depth?: number;
 }
@@ -378,7 +377,7 @@ export const WATER_PROPS: Record<string, Builder> = {
     k.cyl(g, 0.38, 0.38, 0.1, [0, H + 1.38, -0.5], WOOD, [Math.PI / 2, 0, 0], 10);
     k.cyl(g, 0.06, 0.06, 0.5, [0, H + 1.18, -0.5], IRON, undefined, 6);
     // Water slipping over the sill and foam riding down the channel to the brink.
-    const time = { value: 0 }, bits: THREE.Mesh[] = [];
+    const bits: THREE.Mesh[] = [];
     for (let i = 0; i < 4; i++) {
       const f = new THREE.Mesh(brokenFoam(300 + i, 0.5, 7, 0.5), decalMat());
       f.scale.set(1.4, 1, 0.8);
@@ -390,7 +389,6 @@ export const WATER_PROPS: Record<string, Builder> = {
     return {
       obj: g,
       tick: (t) => {
-        time.value = t;
         bits.forEach((f, i) => {
           const p = (t * 0.22 + i / bits.length) % 1;
           f.position.set(Math.sin(i * 2.1 + t * 0.3) * 0.25, o.wl + 0.02, -0.2 - p * L);

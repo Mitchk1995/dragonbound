@@ -254,11 +254,12 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
   // grass grows long at its foot).
   const weight = new Float32Array(VW * (h + 1)), garden = new Float32Array(VW * (h + 1)), foot = new Float32Array(VW * (h + 1));
   const blocked = (x: number, z: number) => x >= 0 && z >= 0 && x < w && z < h && layout.cells[z * w + x] === Cell.Blocked && !!kind(x, z);
-  // Where the turf meets rock or the island's edge it thins out short of it along a wandering line
-  // (a few tens of centimetres here, more than a metre there), never on the cells' square steps.
-  const brink = brinkDistance(layout, theme), wander = smoothNoise(91);
+  // On the island of levels (the castle's rock), where the turf meets rock or the island's edge it
+  // thins out short of it along a wandering line (a few tens of centimetres here, more than a metre
+  // there), never on the cells' square steps.
+  const brink = layout.level ? brinkDistance(layout, theme) : null, wander = smoothNoise(91);
   for (let z = 0; z <= h; z++) for (let x = 0; x <= w; x++) {
-    let wt = Math.max(0, Math.min(1, 0.5 + (brink[z * VW + x] - 0.3 - 1.1 * wander(x * 0.3, z * 0.3)) * 1.6));
+    let wt = brink ? Math.max(0, Math.min(1, 0.5 + (brink[z * VW + x] - 0.3 - 1.1 * wander(x * 0.3, z * 0.3)) * 1.6)) : 1;
     for (const c of layout.lawnCut ?? []) wt = Math.min(wt, Math.max(0, Math.min(1, 0.5 + (Math.hypot(x - c.x, z - c.z) - c.r) * 0.5)));
     if (sf) {
       const v = z * VW + x;

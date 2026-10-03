@@ -620,8 +620,9 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
         if (debrisFloor) addDebris(x, z);
         // Reeds along shores (water only, never lava), bushes where the forest thins out, flowers
         // in open meadows.
-        if (green && nearFluid(x, z) && !theme.lava && !theme.wallRise && rng() < 0.35) {
-          // A clump of reeds rooted on the bank (never standing out in the open water, nor on paving).
+        // (On the island of levels, the castle's, never on the moat's paved and masonry banks.)
+        if ((green || !layout.level) && nearFluid(x, z) && !theme.lava && !theme.wallRise && rng() < 0.35) {
+          // A clump of reeds rooted on the bank (never standing out in the open water).
           const cx = x + 0.2 + rng() * 0.6, cz = z + 0.2 + rng() * 0.6;
           for (let k = 0; k < 6; k++) {
             const rx = cx + (rng() - 0.5) * 0.45, rz = cz + (rng() - 0.5) * 0.45, ry = heightAt(rx, rz);
@@ -671,9 +672,10 @@ export function buildWorldView(layout: ZoneLayout, theme: ZoneTheme, seed = 99):
     const propNear = new Uint8Array(w * h), massAt = new Uint8Array(w * h);
     /** Round every prop, the height it stands at: no rock mass may rise over it there. */
     const propFoot = new Float32Array(w * h).fill(-Infinity);
-    /** Where a prop stands: its middle, and all along the points a wall is laid on. */
+    /** Where a prop stands: its middle, and all along the plan points a wall is laid on (kinds whose `opt.pts` are plan offsets). */
+    const PLAN_RUNS = new Set(['ramp_wall', 'moat_bank', 'moat_plinth_run']);
     const standsAt = (pr: (typeof layout.props)[number]) => {
-      const pts = (pr.opt?.pts as number[][] | undefined) ?? [], at = [[0, 0]];
+      const pts = PLAN_RUNS.has(pr.kind) ? ((pr.opt?.pts as number[][] | undefined) ?? []) : [], at = [[0, 0]];
       for (let k = 0; k + 1 < pts.length; k++) {
         const [ax, az] = pts[k], [bx, bz] = pts[k + 1], n = Math.ceil(Math.hypot(bx - ax, bz - az) / 0.5);
         for (let j = 0; j <= n; j++) at.push([ax + ((bx - ax) * j) / n, az + ((bz - az) * j) / n]);
