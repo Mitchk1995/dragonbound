@@ -19,7 +19,8 @@ import type { Slot } from '../types';
  * the dev server with DRAGONBOUND_INSPECT=<suites>; this drives the real game through every zone,
  * point of interest, model, pose and panel and writes full-window PNGs plus report.json to
  * inspect/. Suites: all | zones | models | hero | anims | ui | icons (comma separated); explicit only:
- * perf, memory, trees (tree style comparison and the grown oak, see treeLineup.ts; trees:oak for the oak alone),
+ * perf, memory, trees (tree style comparison and the grown oak, see treeLineup.ts; trees:oak for the oak alone,
+ * trees:grown:<kind> for one grown kind's progress pictures),
  * approved (approved artwork, see approvedInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
@@ -123,7 +124,8 @@ export async function runInspect(g: Game, suites: string) {
     if (want('models') || want('hero')) await modelsSuite(g, shot, !want('models'));
     if (want('anims')) await animsSuite(g, shot);
     if (want('icons')) await iconsSuite(shot);
-    // Tree style comparison (explicit only: `trees`, `trees:oak` for the grown oak alone, or `trees:scout` to pick the forest patch).
+    // Tree style comparison (explicit only: `trees`, `trees:oak` for the grown oak alone, `trees:grown:<kind>` for a grown
+    // kind's progress pictures, or `trees:scout` to pick the forest patch).
     const treeArg = suites.split(',').find((s) => s === 'trees' || s.startsWith('trees:'));
     if (treeArg) report.trees = await (await import('./treeLineup')).treesSuite(g, shot, treeArg.split(':').slice(1));
     // Approved artwork in every consumer, and the Steel Platebody's fit (explicit only: `approved`; `approved:ui` or

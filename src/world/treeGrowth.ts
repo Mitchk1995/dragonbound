@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clamp, mulberry32, type Rng } from '../core/rng';
-import { SPRAY_CELLS } from '../render/foliage';
+import { SPRAY_CELLS, sprayCell, type LeafKind } from '../render/foliage';
 
 /**
  * Grown trees (the 'natural' tree style, trees.ts): a tree is grown from a seed, never assembled
@@ -47,8 +47,14 @@ export interface Species {
   /** Leaf sprays: their size (m) and their spacing along a branch (m). */
   spray: [number, number];
   sprayEvery: number;
+  /** How deep in the crown sprays still grow above and below its middle (crown depth: 0 its centre, 1 its envelope). */
+  fill: [number, number];
   /** Roots spreading over the ground at the foot. */
   roots: number;
+  /** Girth (m) one bark tile wraps round: a limb takes as many whole tiles as fit its girth at its foot, so its ridges converge as it tapers. */
+  bark: number;
+  /** The leaves its sprays carry (foliage.ts). */
+  leaf: LeafKind;
 }
 
 /**
@@ -70,7 +76,35 @@ export const OAK: Species = {
   fan: [0.75, 1.25],
   spray: [1.15, 1.6],
   sprayEvery: 0.5,
+  fill: [0.22, 0.45],
   roots: 5,
+  bark: 0.7,
+  leaf: 'oak',
+};
+
+/**
+ * The common tree, the first rung of the woodcutting ladder: a young broadleaf about 7.5 m tall,
+ * its slim straight trunk running on up through a rounded crown taller than it is wide, five or six
+ * limbs climbing steeply out of it and its shoots carrying oval leaves.
+ */
+export const TREE: Species = {
+  height: [7.2, 8.2],
+  spread: [5.0, 5.8],
+  crownBase: 0.3,
+  trunk: 0.3,
+  tip: 0.025,
+  fork: [2.4, 2.9],
+  limbs: [5, 6],
+  rise: [0.62, 1.12],
+  crook: 0.24,
+  every: 0.45,
+  fan: [0.6, 1.0],
+  spray: [1.05, 1.35],
+  sprayEvery: 0.3,
+  fill: [0.08, 0.25],
+  roots: 4,
+  bark: 0.55,
+  leaf: 'oval',
 };
 
 // ─── Crown envelope ─────────────────────────────────────────────────────────
@@ -176,6 +210,8 @@ export interface Spray {
 }
 
 export interface Skeleton {
+  /** The species it was grown from. */
+  species: Species;
   limbs: Limb[];
   sprays: Spray[];
   crown: Crown;
@@ -428,12 +464,13 @@ export function growTree(sp: Species, seed: number): Skeleton {
   for (let k = 0; k < sp.roots; k++) {
     const az = ra0 + (k / sp.roots) * Math.PI * 2 + (rng() - 0.5) * 0.25;
     const out = new THREE.Vector3(Math.cos(az), 0, Math.sin(az)), side = new THREE.Vector3(-out.z, 0, out.x);
-    const base = pointOn(trunk, rootAt), len = range(rng, [1.4, 2.2]), bend = (rng() - 0.5) * 0.5;
+    // (Sized by the trunk's girth: an oak's run 1.4 to 2.2 m out from 0.95 m off its axis.)
+    const g = sp.trunk / 0.55, base = pointOn(trunk, rootAt), len = range(rng, [1.4, 2.2]) * g, bend = (rng() - 0.5) * 0.5 * g, foot = 0.95 * g;
     limbs.push(limb(-1, 0, rootAt, smoothPath([
       base,
-      base.clone().addScaledVector(out, 0.95).setY(0.16),
-      base.clone().addScaledVector(out, 0.95 + len * 0.5).addScaledVector(side, bend * 0.5).setY(-0.02),
-      base.clone().addScaledVector(out, 0.95 + len).addScaledVector(side, bend).setY(-0.42),
+      base.clone().addScaledVector(out, foot).setY(0.16 * g),
+      base.clone().addScaledVector(out, foot + len * 0.5).addScaledVector(side, bend * 0.5).setY(-0.02),
+      base.clone().addScaledVector(out, foot + len).addScaledVector(side, bend).setY(-0.42),
     ])));
     frames(limbs[limbs.length - 1], tangentOn(trunk, rootAt));
   }
@@ -456,9 +493,9 @@ export function growTree(sp: Species, seed: number): Skeleton {
         const at = pointOn(L, s).addScaledVector(radial, range(rng, [0.04, 0.16]));
         const depth = crownDepth(crown, at);
         // None deep in the lower crown, where the wood shows from the side; the upper crown fills in
-        // further, so from the play camera above it reads as one leafy dome. None hang low enough to
-        // brush the hero's head.
-        if (depth < (at.y > crown.centre.y ? 0.22 : 0.45) || at.y < 3) continue;
+        // further (sp.fill), so from the play camera above it reads as one leafy dome. None hang low
+        // enough to brush the hero's head.
+        if (depth < (at.y > crown.centre.y ? sp.fill[0] : sp.fill[1]) || at.y < 3) continue;
         const dir = T.clone().addScaledVector(radial, 0.75).addScaledVector(crownNormal(crown, at, out), 0.4).addScaledVector(UP, 0.15).normalize();
         sprays.push({ at, dir, size: range(rng, sp.spray) * (0.85 + 0.2 * clamp(depth, 0, 1)), sway: 0, limb: li, s });
       }
@@ -473,13 +510,13 @@ export function growTree(sp: Species, seed: number): Skeleton {
   pipeModel(limbs, sprays, sp);
   sway(limbs, sprays, fork);
   for (const L of limbs) {
-    L.sides = L.order === 0 ? 15 : L.order === -1 ? 5 : sidesFor(L.radius[0]);
+    L.sides = L.order === 0 ? clamp(Math.round(8 + sp.trunk * 13), 10, 15) : L.order === -1 ? 5 : sidesFor(L.radius[0]);
     // The trunk above its fork and each main limb's outer half go on with fewer sides.
     const clear = L.order === 0 ? Math.max(...limbs.filter((c) => c.order === 1).map((c) => c.at)) + 1.2 : 0;
     const i = L.order === 0 ? L.radius.findIndex((r, k) => L.arc[k] > clear && r < sp.trunk * 0.5) : L.order === 1 ? L.radius.findIndex((r) => r < L.radius[0] * 0.6) : -1;
     if (i > 0 && sidesFor(L.radius[i]) < L.sides) L.step = { s: L.arc[i], sides: sidesFor(L.radius[i]) };
   }
-  return compact(planJoints(limbs, sprays), sprays, crown, H);
+  return compact(planJoints(limbs, sprays), sprays, crown, H, sp);
 }
 
 /**
@@ -641,12 +678,13 @@ function moveSubtree(limbs: Limb[], sprays: Spray[], ids: number[], P: Limb, C: 
 }
 
 /** Drop the limbs that found no place (and their leaves), renumbering the rest. */
-function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, height: number): Skeleton {
+function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, height: number, species: Species): Skeleton {
   const map = new Map<number, number>();
   const kept = limbs.filter((_, i) => !dead.has(i));
   limbs.forEach((L, i) => !dead.has(i) && map.set(i, map.size));
   for (const L of kept) if (L.parent >= 0) L.parent = map.get(L.parent)!;
   return {
+    species,
     limbs: kept,
     sprays: sprays.filter((s) => !dead.has(s.limb)).map((s) => ({ ...s, limb: map.get(s.limb)! })),
     crown,
@@ -670,9 +708,10 @@ function buttress(roots: number[], a: number, y: number) {
  * The tree's wood as one connected mesh (see the file comment). Attributes besides position and
  * normal: `color` (a painted shade: the damp foot, the crotch of every fork and the shaded inner
  * crown darker), `aWood` (the wind's weight, and how much bark detail shows: none over a collar,
- * whose frame turns from the parent's to the branch's), and the bark frame for the bark shader
- * (foliage.ts): `aBarkA` = the frame's normal and the surface's distance from the centreline,
- * `aBarkB` = the centreline's tangent and the arc length along it.
+ * whose bark turns from the parent's to the branch's), and where the bark lies for the bark shader
+ * (foliage.ts): `aBarkA` = the cosine and sine of the point's angle round its limb, the whole bark
+ * tiles round that limb and the surface's distance from the centreline, `aBarkB` = the
+ * centreline's tangent and the arc length along it.
  */
 export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   const { limbs, crown } = sk;
@@ -683,9 +722,9 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   const rings: number[][][] = [];
   const rims: number[][] = [];
   const P = new THREE.Vector3(), T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), V = new THREE.Vector3();
-  const vertex = (p: THREE.Vector3, n: THREE.Vector3, t: THREE.Vector3, r: number, v: number, shade: number, w: number) => {
+  const vertex = (p: THREE.Vector3, a: number, tiles: number, t: THREE.Vector3, r: number, v: number, shade: number, w: number) => {
     pos.push(p.x, p.y, p.z);
-    ba.push(n.x, n.y, n.z, r);
+    ba.push(Math.cos(a), Math.sin(a), tiles, r);
     bb.push(t.x, t.y, t.z, v);
     // The damp foot, and the inner crown in the shade of the leaves.
     const foot = 0.68 + 0.32 * THREE.MathUtils.smoothstep(p.y, -0.3, 1.1);
@@ -704,6 +743,8 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     const st = stations(L, holes, start, len - tipLen);
     const sides = st.map((s) => sidesAt(L, s));
     const v0 = L.joint ? L.joint.v0 : 0;
+    // Bark tiles round the limb: as many as fit its girth at its foot (the trunk's at breast height).
+    const tiles = Math.max(1, Math.round((Math.PI * 2 * (L.order === 0 ? along(L.radius, L, arcAtHeight(L, 1.3)) : L.radius[0])) / sk.species.bark));
     // Rings.
     rings[li] = st.map((s, k) => {
       const S = sides[k];
@@ -716,7 +757,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
         const a = (j / S) * Math.PI * 2;
         const rr = r * (L.order === 0 ? buttress(rootSides, a, P.y) : 1);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
-        return vertex(V.copy(P).addScaledVector(D, rr), N, T, rr, v0 + s, 1, w);
+        return vertex(V.copy(P).addScaledVector(D, rr), a, tiles, T, rr, v0 + s, 1, w);
       });
     });
     const ring = rings[li];
@@ -759,13 +800,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     pointOn(L, len, P);
     tangentOn(L, len, T);
     normalOn(L, len, T, N);
-    const tip = vertex(P, N, T, 0.001, v0 + len, 1, along(L.sway, L, len));
+    const tip = vertex(P, 0, tiles, T, 0.001, v0 + len, 1, along(L.sway, L, len));
     const last = ring[ring.length - 1];
     for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
     // The collar: this branch's first ring stitched to its hole's rim in the parent.
     if (L.parent >= 0) {
       stitch(rims[li], ring[0], pos, idx, tangentOn(L, start, T), normalOn(L, start, T, N), pointOn(L, start, P));
-      for (const vi of ring[0]) wood[vi * 2 + 1] = 0.35;
+      for (const vi of ring[0]) wood[vi * 2 + 1] = 0;
     }
   });
 
@@ -862,12 +903,14 @@ function stitch(rim: number[], ring: number[], pos: number[], idx: number[], t: 
 /**
  * The crown's leaf cards (see the file comment). Attributes besides position, normal and uv:
  * `color` (the crown's painted shade), `aWind` (the spray's anchor on its twig and its sway weight:
- * the whole card moves with its twig) and `aFlutter` (0 at the card's foot, 1 at its far edge).
+ * the whole card moves with its twig), `aFlutter` (0 at the card's foot, 1 at its far edge), and
+ * `aCard` and `aSpine` (the card's face and the point on its midline level with the vertex: seen
+ * edge on, the leaf shader narrows a card onto its midline).
  */
 export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
   const rng = mulberry32(seed * 104729 + 7);
   const { crown } = sk;
-  const pos: number[] = [], nrm: number[] = [], uv: number[] = [], col: number[] = [], wind: number[] = [], flutter: number[] = [], idx: number[] = [];
+  const pos: number[] = [], nrm: number[] = [], uv: number[] = [], col: number[] = [], wind: number[] = [], flutter: number[] = [], card3: number[] = [], spine: number[] = [], idx: number[] = [];
   const out = new THREE.Vector3(), cn = new THREE.Vector3(), n = new THREE.Vector3(), p = new THREE.Vector3(), tmp = new THREE.Vector3();
   // Leaf masses: the sprays of one branch light together as one soft lobe of the crown, lit on top
   // and shaded under, the way a painter blocks in a tree's masses before its leaves.
@@ -885,30 +928,35 @@ export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
   }
   const card = (s: Spray, base: THREE.Vector3, up: THREE.Vector3, face: THREE.Vector3, w: number, h: number) => {
     const side = new THREE.Vector3().crossVectors(up, face).normalize();
-    const cell = Math.floor(rng() * SPRAY_CELLS * SPRAY_CELLS), cu = (cell % SPRAY_CELLS) / SPRAY_CELLS, cv = Math.floor(cell / SPRAY_CELLS) / SPRAY_CELLS;
-    const flip = rng() < 0.5, e = 1 / SPRAY_CELLS, pad = 0.004;
-    // The spray's own tone: a little lighter or darker, warmer or cooler, than its neighbours.
-    const tone = 0.92 + rng() * 0.16, warm = (rng() - 0.5) * 0.08;
+    const { u0, u1, v0, v1 } = sprayCell(Math.floor(rng() * SPRAY_CELLS * SPRAY_CELLS));
+    const flip = rng() < 0.5, pad = 0.003;
+    // The spray's own tone: lighter or darker, warmer or cooler, than its neighbours.
+    const tone = 0.86 + rng() * 0.28, warm = (rng() - 0.5) * 0.1;
     const mass = masses.get(s.limb)!;
     const first = pos.length / 3;
     for (const [sx, sy] of [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]] as const) {
-      p.copy(base).addScaledVector(side, sx * w).addScaledVector(up, sy * h);
+      p.copy(base).addScaledVector(up, sy * h);
+      spine.push(p.x, p.y, p.z);
+      card3.push(face.x, face.y, face.z);
+      p.addScaledVector(side, sx * w);
       pos.push(p.x, p.y, p.z);
       // Normals swell out of the leaf mass (from a little under its middle) and the crown as a whole.
       crownNormal(crown, p, cn);
       tmp.copy(mass.c).addScaledVector(UP, -0.35 * mass.r);
       n.subVectors(p, tmp).normalize().multiplyScalar(0.5).addScaledVector(cn, 0.35).addScaledVector(UP, 0.15).normalize();
       nrm.push(n.x, n.y, n.z);
-      const u = (flip ? 0.5 - sx : 0.5 + sx) * (e - 2 * pad) + cu + pad, v = sy * (e - 2 * pad) + cv + pad;
-      uv.push(u, v);
-      // The painted shade: darker deep in the crown, under it and under each mass; warm on top, cool below.
+      uv.push(u0 + pad + (flip ? 0.5 - sx : 0.5 + sx) * (u1 - u0 - 2 * pad), v0 + pad + sy * (v1 - v0 - 2 * pad));
+      // The painted shade: darker deep in the crown, under it and under each mass, so the crown
+      // reads as lit masses over shadowed hollows; the light warm and yellow, the shade cool and grey.
       const depth = crownDepth(crown, p);
-      const inner = 1 - 0.38 * (1 - THREE.MathUtils.smoothstep(depth, 0.5, 1.0));
-      const under = 0.72 + 0.28 * THREE.MathUtils.smoothstep(cn.y, -0.8, 0.35);
-      const lobe = 0.84 + 0.16 * clamp((p.y - mass.c.y) / mass.r * 0.5 + 0.5, 0, 1);
-      const top = THREE.MathUtils.smoothstep(cn.y, -0.2, 0.9);
+      const inner = 1 - 0.45 * (1 - THREE.MathUtils.smoothstep(depth, 0.5, 1.0));
+      const under = 0.68 + 0.32 * THREE.MathUtils.smoothstep(cn.y, -0.8, 0.35);
+      const lobe = 0.74 + 0.32 * clamp((p.y - mass.c.y) / mass.r * 0.5 + 0.5, 0, 1);
+      const top = THREE.MathUtils.smoothstep(cn.y, -0.2, 0.9) * THREE.MathUtils.smoothstep(0.55, 0.95, depth);
       const k = inner * under * lobe * tone;
-      col.push(k * (0.93 + top * 0.12 + warm), k * (0.98 + top * 0.04), k * (1.07 - top * 0.15 - warm));
+      // (Shade drifts toward grey-blue: the green is strongest only where the light falls.)
+      const grey = (1 - top) * 0.12;
+      col.push(k * (0.92 + top * 0.16 + warm + grey * 0.2), k * (0.97 + top * 0.06 - grey * 0.15), k * (1.04 - top * 0.2 - warm + grey * 0.5));
       wind.push(s.at.x, s.at.y, s.at.z, s.sway);
       flutter.push(sy);
     }
@@ -947,6 +995,8 @@ export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 4));
   g.setAttribute('aFlutter', new THREE.Float32BufferAttribute(flutter, 1));
+  g.setAttribute('aCard', new THREE.Float32BufferAttribute(card3, 3));
+  g.setAttribute('aSpine', new THREE.Float32BufferAttribute(spine, 3));
   g.setIndex(idx);
   g.computeBoundingSphere();
   return g;

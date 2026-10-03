@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { coverageMips, LEAF_ATLAS, oakLeafHalfWidth, paintBark, paintLeafAtlas, SPRAY_CELLS } from '../src/render/foliage';
-import { SIZE } from '../src/render/textures';
+import { BARK_SIZE, coverageMips, LEAF_ATLAS, oakLeafHalfWidth, ovalLeafHalfWidth, paintBark, paintLeafAtlas, sprayCell, SPRAY_CELLS, type BarkKind, type LeafKind } from '../src/render/foliage';
 import { mulberry32 } from '../src/core/rng';
-import { OAK_SEEDS, thinWood, treeSet, treeTriangles, type GrownLook } from '../src/world/trees';
+import { GROWN, GROWN_KINDS, thinWood, treeSet, treeTriangles, type GrownLook } from '../src/world/trees';
 import { growTree, leafGeometry, OAK, woodGeometry } from '../src/world/treeGrowth';
 
 const tris = (g: THREE.BufferGeometry) => g.index!.count / 3;
-const oaks = OAK_SEEDS.map((seed) => {
-  const sk = growTree(OAK, seed);
-  return { seed, sk, wood: woodGeometry(sk), leaves: leafGeometry(sk, seed) };
-});
+const grown = GROWN_KINDS.flatMap((kind) => GROWN[kind].seeds.map((seed) => {
+  const sk = growTree(GROWN[kind].species, seed);
+  return { kind, seed, sk, wood: woodGeometry(sk), leaves: leafGeometry(sk, seed) };
+}));
+const oaks = grown.filter((t) => t.kind === 'oak');
 
 /** Connected pieces of an indexed mesh (vertices joined by its triangles), and vertices no triangle uses. */
 function pieces(g: THREE.BufferGeometry) {
@@ -39,17 +39,19 @@ function edgeUse(g: THREE.BufferGeometry) {
   return use;
 }
 
-describe('grown trees: the oak', () => {
-  it('the same seed grows the same oak, another seed another', () => {
-    const again = growTree(OAK, OAK_SEEDS[0]);
-    const a = oaks[0], b = oaks[1];
-    expect(Array.from(woodGeometry(again).getAttribute('position').array)).toEqual(Array.from(a.wood.getAttribute('position').array));
-    expect(Array.from(leafGeometry(again, a.seed).getAttribute('position').array)).toEqual(Array.from(a.leaves.getAttribute('position').array));
-    expect(Array.from(b.wood.getAttribute('position').array)).not.toEqual(Array.from(a.wood.getAttribute('position').array));
+describe('grown trees: every kind', () => {
+  it('the same seed grows the same tree, another seed another', () => {
+    for (const kind of GROWN_KINDS) {
+      const [a, b] = grown.filter((t) => t.kind === kind);
+      const again = growTree(GROWN[kind].species, a.seed);
+      expect(Array.from(woodGeometry(again).getAttribute('position').array)).toEqual(Array.from(a.wood.getAttribute('position').array));
+      expect(Array.from(leafGeometry(again, a.seed).getAttribute('position').array)).toEqual(Array.from(a.leaves.getAttribute('position').array));
+      expect(Array.from(b.wood.getAttribute('position').array)).not.toEqual(Array.from(a.wood.getAttribute('position').array));
+    }
   });
 
   it('its trunk, roots, limbs and branches are one connected surface, welded at every fork', () => {
-    for (const { wood } of oaks) {
+    for (const { wood } of grown) {
       expect(pieces(wood)).toEqual({ pieces: 1, unused: 0 });
       // Manifold: no edge carries more than two faces, and the only open edges are round the
       // trunk's foot, under the ground (every tip, collar and step is closed).
@@ -62,7 +64,7 @@ describe('grown trees: the oak', () => {
   });
 
   it('its wood faces outward from every limb', () => {
-    const { sk, wood } = oaks[0];
+    for (const { sk, wood } of grown.filter((t) => t.seed === GROWN[t.kind].seeds[0])) {
     const pts = sk.limbs.flatMap((L) => L.path);
     const pos = wood.getAttribute('position'), idx = wood.index!.array;
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), mid = new THREE.Vector3();
@@ -82,10 +84,95 @@ describe('grown trees: the oak', () => {
       total++;
       if (n.dot(mid.clone().sub(near)) > 0) out++;
     }
-    expect(out / total).toBeGreaterThan(0.97);
+    expect(out / total, `${sk.species.leaf} ${sk.height}`).toBeGreaterThan(0.97);
+    }
   });
 
-  it('stands true to size beside the 2 m hero: about 11 m tall, a crown wider than it is tall, a massive trunk', () => {
+  it('keeps every main limb and root, and almost every branch, welded on', () => {
+    for (const { kind, sk } of grown) {
+      const sp = GROWN[kind].species, count = (order: number) => sk.limbs.filter((L) => L.order === order).length;
+      expect(count(0)).toBe(1);
+      expect(count(-1)).toBe(sp.roots);
+      expect(count(1)).toBeGreaterThanOrEqual(sp.limbs[0]);
+      expect(count(1)).toBeLessThanOrEqual(sp.limbs[1]);
+      expect(count(2)).toBeGreaterThan(15);
+      expect(sk.dropped).toBeLessThanOrEqual(Math.max(3, sk.limbs.length * 0.12));
+      expect(sk.limbs.slice(1).every((L) => L.joint !== null)).toBe(true);
+    }
+  });
+
+  it('stays within its triangle budget (wood and leaves together)', () => {
+    for (const { wood, leaves } of grown) {
+      expect(tris(wood) + tris(leaves)).toBeLessThanOrEqual(8000);
+      expect(tris(leaves)).toBeGreaterThan(800);
+    }
+    expect(treeTriangles('natural').grove).toBeLessThanOrEqual(8000);
+  });
+
+  it('wraps whole bark tiles round each limb, its angle carried as a unit cosine and sine', () => {
+    for (const { wood } of grown) {
+      const a = wood.getAttribute('aBarkA');
+      for (let i = 0; i < a.count; i++) {
+        expect(Math.hypot(a.getX(i), a.getY(i))).toBeCloseTo(1, 4);
+        expect(Number.isInteger(a.getZ(i)) && a.getZ(i) >= 1).toBe(true);
+      }
+    }
+  });
+
+  it('leaf cards: each shows one painted spray, lies flat about its midline, and is lit by unit normals turned toward the sky', () => {
+    const cells = Array.from({ length: SPRAY_CELLS * SPRAY_CELLS }, (_, i) => sprayCell(i));
+    for (const { leaves } of grown) {
+      const uv = leaves.getAttribute('uv'), nrm = leaves.getAttribute('normal'), face = leaves.getAttribute('aCard'), spine = leaves.getAttribute('aSpine'), pos = leaves.getAttribute('position');
+      const used = new Set<number>();
+      for (let i = 0; i < uv.count; i += 4) {
+        const us = [0, 1, 2, 3].map((k) => uv.getX(i + k)), vs = [0, 1, 2, 3].map((k) => uv.getY(i + k));
+        const c = cells.findIndex((r) => Math.min(...us) >= r.u0 && Math.max(...us) <= r.u1 && Math.min(...vs) >= r.v0 && Math.max(...vs) <= r.v1);
+        expect(c).toBeGreaterThanOrEqual(0);
+        used.add(c);
+        // Every corner lies in the plane through the card's midline, square to its face.
+        const f = new THREE.Vector3().fromBufferAttribute(face, i);
+        expect(f.length()).toBeCloseTo(1, 4);
+        for (let k = 0; k < 4; k++) {
+          const off = new THREE.Vector3().fromBufferAttribute(pos, i + k).sub(new THREE.Vector3().fromBufferAttribute(spine, i + k));
+          expect(Math.abs(off.dot(f))).toBeLessThan(1e-4);
+        }
+      }
+      // Every spray design shows up in each tree.
+      expect(used.size).toBe(cells.length);
+      let up = 0;
+      for (let i = 0; i < nrm.count; i++) {
+        expect(Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i))).toBeCloseTo(1, 4);
+        up += nrm.getY(i);
+      }
+      expect(up / nrm.count).toBeGreaterThan(0.25);
+    }
+  });
+});
+
+describe('grown trees: true to size', () => {
+  it('the common tree stands about 7.5 m tall beside the 2 m hero, its rounded crown taller than wide, on a slim trunk', () => {
+    const sp = GROWN.tree.species;
+    for (const { sk, wood, leaves } of grown.filter((t) => t.kind === 'tree')) {
+      const l = new THREE.Box3().setFromBufferAttribute(leaves.getAttribute('position') as THREE.BufferAttribute);
+      const w = new THREE.Box3().setFromBufferAttribute(wood.getAttribute('position') as THREE.BufferAttribute);
+      expect(sk.height).toBeGreaterThanOrEqual(sp.height[0]);
+      expect(sk.height).toBeLessThanOrEqual(sp.height[1]);
+      expect(l.max.y).toBeGreaterThan(sk.height - 1.2);
+      expect(l.max.y).toBeLessThan(sk.height + 0.6);
+      expect(w.max.y).toBeLessThan(l.max.y);
+      const spread = Math.max(l.max.x - l.min.x, l.max.z - l.min.z);
+      expect(spread).toBeGreaterThan(5);
+      expect(spread).toBeLessThan(l.max.y - l.min.y + 3);
+      expect(l.min.y).toBeGreaterThan(2.1);
+      const trunk = sk.limbs[0], breast = trunk.path.findIndex((p) => p.y >= 1.3);
+      expect(trunk.radius[breast]).toBeGreaterThan(sp.trunk * 0.95);
+      expect(trunk.radius[breast]).toBeLessThan(sp.trunk * 1.15);
+      // Smaller than every oak.
+      for (const o of oaks) expect(sk.height).toBeLessThan(o.sk.height);
+    }
+  });
+
+  it('the oak stands true to size beside the 2 m hero: about 11 m tall, a crown wider than it is tall, a massive trunk', () => {
     for (const { sk, wood, leaves } of oaks) {
       const w = new THREE.Box3().setFromBufferAttribute(wood.getAttribute('position') as THREE.BufferAttribute);
       const l = new THREE.Box3().setFromBufferAttribute(leaves.getAttribute('position') as THREE.BufferAttribute);
@@ -106,42 +193,6 @@ describe('grown trees: the oak', () => {
     }
   });
 
-  it('keeps every main limb and root, and almost every branch, welded on', () => {
-    for (const { sk } of oaks) {
-      const count = (order: number) => sk.limbs.filter((L) => L.order === order).length;
-      expect(count(0)).toBe(1);
-      expect(count(-1)).toBe(OAK.roots);
-      expect(count(1)).toBeGreaterThanOrEqual(OAK.limbs[0]);
-      expect(count(1)).toBeLessThanOrEqual(OAK.limbs[1]);
-      expect(count(2)).toBeGreaterThan(25);
-      expect(sk.dropped).toBeLessThanOrEqual(Math.max(3, sk.limbs.length * 0.12));
-      expect(sk.limbs.slice(1).every((L) => L.joint !== null)).toBe(true);
-    }
-  });
-
-  it('stays within its triangle budget (wood and leaves together)', () => {
-    for (const { wood, leaves } of oaks) {
-      expect(tris(wood) + tris(leaves)).toBeLessThanOrEqual(8000);
-      expect(tris(leaves)).toBeGreaterThan(1200);
-    }
-    expect(treeTriangles('natural').grove).toBeLessThanOrEqual(8000);
-  });
-
-  it('leaf cards: each shows one painted spray, lit by unit normals turned toward the sky', () => {
-    const { leaves } = oaks[0];
-    const uv = leaves.getAttribute('uv'), nrm = leaves.getAttribute('normal'), cell = 1 / SPRAY_CELLS;
-    let up = 0;
-    for (let i = 0; i < uv.count; i += 4) {
-      const us = [0, 1, 2, 3].map((k) => uv.getX(i + k)), vs = [0, 1, 2, 3].map((k) => uv.getY(i + k));
-      expect(Math.floor(Math.min(...us) / cell)).toBe(Math.floor((Math.max(...us) - 1e-6) / cell));
-      expect(Math.floor(Math.min(...vs) / cell)).toBe(Math.floor((Math.max(...vs) - 1e-6) / cell));
-    }
-    for (let i = 0; i < nrm.count; i++) {
-      expect(Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i))).toBeCloseTo(1, 4);
-      up += nrm.getY(i);
-    }
-    expect(up / nrm.count).toBeGreaterThan(0.25);
-  });
 });
 
 describe('grown trees: painted surfaces', () => {
@@ -156,8 +207,16 @@ describe('grown trees: painted surfaces', () => {
     }
   });
 
-  it('the leaf atlas: sprays on clear ground, and mipmaps that keep the leaves as full at a distance', () => {
-    const levels = coverageMips(paintLeafAtlas(), LEAF_ATLAS);
+  it('an oval leaf swells once to its widest below the middle and draws out to a point', () => {
+    const w = Array.from({ length: 400 }, (_, i) => ovalLeafHalfWidth((i + 0.5) / 400, true));
+    const widest = w.indexOf(Math.max(...w)) / 400;
+    expect(widest).toBeGreaterThan(0.3);
+    expect(widest).toBeLessThan(0.55);
+    expect(w[396]).toBeLessThan(Math.max(...w) * 0.25);
+  });
+
+  it.each(['oak', 'oval'] as LeafKind[])('the %s leaf atlas: sprays on clear ground, and mipmaps that keep the leaves as full at a distance', (kind) => {
+    const levels = coverageMips(paintLeafAtlas(kind), LEAF_ATLAS);
     expect(levels[0].width).toBe(LEAF_ATLAS);
     expect(levels[levels.length - 1].width).toBe(1);
     const passing = (l: (typeof levels)[number]) => {
@@ -169,9 +228,10 @@ describe('grown trees: painted surfaces', () => {
     expect(full).toBeGreaterThan(0.2);
     expect(full).toBeLessThan(0.7);
     // Each cell's corners are clear (the sprays never touch a neighbour's).
-    const cell = LEAF_ATLAS / SPRAY_CELLS, a = (x: number, y: number) => levels[0].data[(y * LEAF_ATLAS + x) * 4 + 3];
-    for (let cy = 0; cy < SPRAY_CELLS; cy++) for (let cx = 0; cx < SPRAY_CELLS; cx++) {
-      for (const [x, y] of [[0, cell - 1], [cell - 1, cell - 1], [0, 0]]) expect(a(cx * cell + x, cy * cell + y)).toBe(0);
+    const a = (x: number, y: number) => levels[0].data[(y * LEAF_ATLAS + x) * 4 + 3];
+    for (let i = 0; i < SPRAY_CELLS * SPRAY_CELLS; i++) {
+      const { u0, u1, v0, v1 } = sprayCell(i), x0 = u0 * LEAF_ATLAS, x1 = u1 * LEAF_ATLAS - 1, y0 = v0 * LEAF_ATLAS, y1 = v1 * LEAF_ATLAS - 1;
+      for (const [x, y] of [[x0, y1], [x1, y1], [x0, y0]]) expect(a(x, y)).toBe(0);
     }
     for (const l of levels.filter((l) => l.width >= 16)) {
       expect(passing(l) / full).toBeGreaterThan(0.85);
@@ -187,8 +247,8 @@ describe('grown trees: painted surfaces', () => {
     expect(dark / clear).toBeLessThan(0.01);
   });
 
-  it('the bark tiles without a seam and has real furrows', () => {
-    const data = paintBark();
+  it.each(['oak', 'tree'] as BarkKind[])('the %s bark tiles without a seam and runs in long ridges up the limb', (kind) => {
+    const SIZE = BARK_SIZE, data = paintBark(kind);
     const at = (x: number, y: number) => data[(y * SIZE + x) * 4];
     const col = (a: number, b: number) => {
       let s = 0;
@@ -211,7 +271,7 @@ describe('grown trees: painted surfaces', () => {
     let across = 0, alongBark = 0;
     for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE - 1; x++) across += Math.abs(at(x + 1, y) - at(x, y));
     for (let y = 0; y < SIZE - 1; y++) for (let x = 0; x < SIZE; x++) alongBark += Math.abs(at(x, y + 1) - at(x, y));
-    expect(across).toBeGreaterThan(alongBark * 1.5);
+    expect(across).toBeGreaterThan(alongBark * 2.5);
     let lo = 255, hi = 0;
     for (let i = 0; i < data.length; i += 4) {
       lo = Math.min(lo, data[i]);
@@ -224,8 +284,8 @@ describe('grown trees: painted surfaces', () => {
 describe('grown trees in the world', () => {
   it('the natural style pairs the wood of each oak with its own leaves; block trees still share one trunk', () => {
     const natural = treeSet('natural'), block = treeSet('block');
-    expect(natural.trunk.grove.length).toBe(OAK_SEEDS.length);
-    expect(natural.canopy.grove.length).toBe(OAK_SEEDS.length);
+    expect(natural.trunk.grove.length).toBe(GROWN.oak.seeds.length);
+    expect(natural.canopy.grove.length).toBe(GROWN.oak.seeds.length);
     expect(natural.grown.grove).toBeDefined();
     expect(block.trunk.grove.length).toBe(1);
     expect(block.grown).toEqual({});

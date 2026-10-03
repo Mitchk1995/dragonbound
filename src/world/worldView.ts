@@ -17,7 +17,7 @@ import { chamferBox, hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMa
 import { useStrataRock } from '../render/rock';
 
 import type { SurfaceKind } from '../render/textures';
-import { thinWood, treeSet, type TreeKind, type TreeSet, type TreeStyle } from './trees';
+import { grownTrees, GROWN, thinWood, treeSet, type GrownKind, type GrownLook, type TreeKind, type TreeSet, type TreeStyle } from './trees';
 
 // ─── See-through occlusion ──────────────────────────────────────────────────
 
@@ -279,11 +279,16 @@ const withVertexShade = (m: THREE.MeshStandardMaterial) => {
 
 type SceneryArgs = [color: number, occlude: boolean, surface?: SurfaceKind | PaintKind, shadow?: boolean, grade?: Grade, setup?: (m: THREE.MeshStandardMaterial) => void];
 
+/** Material arguments for a grown tree's trunk and canopy: its own bark and leaves (foliage.ts), swaying with the world's wind. */
+const grownArgs = (look: GrownLook): [SceneryArgs, SceneryArgs] => [
+  [0xffffff, true, undefined, true, undefined, (m) => look.trunk(m, WIND)],
+  [0xffffff, true, undefined, true, undefined, (m) => look.canopy(m, WIND)],
+];
+
 /** Material arguments for a tree's trunk and canopy (shared by the world and the dev lineup). */
 function treeArgs(ts: TreeSet, k: TreeKind): [SceneryArgs, SceneryArgs] {
-  // Grown trees bring their own bark and leaves (foliage.ts), swaying with the world's wind.
   const grown = ts.grown[k];
-  if (grown) return [[0xffffff, true, undefined, true, undefined, (m) => grown.trunk(m, WIND)], [0xffffff, true, undefined, true, undefined, (m) => grown.canopy(m, WIND)]];
+  if (grown) return grownArgs(grown);
   return [
     [k === 'ash' ? 0x2a2420 : 0x4a3020, true, 'bark'],
     [0, true, ts.paint[k], true, ts.grade, ts.shaded && k !== 'ash' ? withVertexShade : undefined],
@@ -301,6 +306,15 @@ export function treeMeshes(style: TreeStyle, kind: TreeKind, mats: THREE.Matrix4
     instanced(geo, sceneryMaterial(!!c, color, occlude, surface, grade, setup), mats, c, shadow);
   const vs = ts.canopy[kind], trunks = ts.trunk[kind];
   return [mk(trunks[trunks.length === vs.length ? variant % vs.length : 0], null, trunk), mk(vs[variant % vs.length], cols, crown)];
+}
+
+/** Dev only: one variant of a grown kind (trees.ts GROWN) as instanced meshes with the world's own materials. */
+export function grownMeshes(kind: GrownKind, mats: THREE.Matrix4[], cols: THREE.Color[], variant = 0) {
+  const set = grownTrees(kind), [trunk, crown] = grownArgs(GROWN[kind].look);
+  const mk = (geo: THREE.BufferGeometry, c: THREE.Color[] | null, [color, occlude, surface, shadow = true, grade, setup]: SceneryArgs) =>
+    instanced(geo, sceneryMaterial(!!c, color, occlude, surface, grade, setup), mats, c, shadow);
+  const v = variant % set.canopy.length;
+  return [mk(set.trunk[v], null, trunk), mk(set.canopy[v], cols, crown)];
 }
 
 // ─── Builder ────────────────────────────────────────────────────────────────

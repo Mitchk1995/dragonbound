@@ -5,10 +5,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { mulberry32 } from '../core/rng';
 import type { ZoneTheme } from '../data/zones';
 import { hash01 } from '../render/blocks';
-import { grownBark, grownLeaves, type WindClock } from '../render/foliage';
+import { grownBark, grownLeaves, type BarkLook, type WindClock } from '../render/foliage';
 import type { PaintKind } from '../render/paint';
 import type { Grade } from '../render/surface';
-import { growTree, leafGeometry, OAK, woodGeometry } from './treeGrowth';
+import { growTree, leafGeometry, OAK, TREE, woodGeometry, type Species } from './treeGrowth';
 
 /**
  * Tree models for the world's instanced forests.
@@ -24,6 +24,9 @@ import { growTree, leafGeometry, OAK, woodGeometry } from './treeGrowth';
  * - 'natural': grown trees (treeGrowth.ts), true to size: the broadleaves are mature oaks, each one
  *   continuous grown trunk, roots and limbs under a crown of painted leaf sprays, in three seeded
  *   variants. Pines, dead ash and bushes keep their block models until grown kinds replace them.
+ *
+ * The grown kinds (GROWN) are the woodcutting ladder as it is built, rung by rung: so far the
+ * common tree and the oak, each a species, its seeds and its look.
  *
  * Every block canopy carries a painted vertex shade under the painted leaf albedo: lighter top
  * faces, a lit lip on the upper bevels, each side face darkening toward its foot, dark undersides,
@@ -362,18 +365,60 @@ function blockSet(): TreeSet {
   };
 }
 
-/** Seeds of the grown oaks (each a different tree; the world alternates between them). */
-export const OAK_SEEDS = [1, 2, 3];
+/** The grown kinds built so far: the woodcutting ladder's first two rungs. */
+export type GrownKind = 'tree' | 'oak';
+export const GROWN_KINDS: GrownKind[] = ['tree', 'oak'];
+
+/** A grown kind: the species it grows from, the seeds of its variants (each a different tree) and its look. */
+interface Grown {
+  species: Species;
+  seeds: number[];
+  look: GrownLook;
+}
+
+/** An oak's bark: long, deep fissures between warm grey-brown ridges. */
+const OAK_BARK: BarkLook = { kind: 'oak', tile: 1.2, relief: 0.05, furrow: [0.06, 0.05, 0.043], plate: [[0.2, 0.18, 0.155], [0.34, 0.32, 0.29]], moss: [0.25, 0.33, 0.13] };
+/** The common tree's bark: shallower, finer furrows in a smoother, lighter grey-brown. */
+const TREE_BARK: BarkLook = { kind: 'tree', tile: 0.9, relief: 0.03, furrow: [0.1, 0.085, 0.072], plate: [[0.25, 0.23, 0.205], [0.37, 0.355, 0.33]], moss: [0.27, 0.35, 0.15] };
+
+export const GROWN: Record<GrownKind, Grown> = {
+  // Fresh mid greens, now and then a yellower one or one turning gold.
+  tree: {
+    species: TREE,
+    seeds: [11, 12, 13],
+    look: { trunk: (m, w) => grownBark(m, w, TREE_BARK), canopy: (m, w) => grownLeaves(m, w, 'oval'), size: [0.92, 1.08], spacing: 5.5, palette: [0x648c45, 0x6b9347, 0x5c8541, 0x86923f, 0xb39a45] },
+  },
+  // Oaks in deep, slightly grey summer greens, now and then an olive one or one turning gold.
+  oak: {
+    species: OAK,
+    seeds: [1, 2, 3],
+    look: { trunk: (m, w) => grownBark(m, w, OAK_BARK), canopy: (m, w) => grownLeaves(m, w, 'oak'), size: [0.9, 1.08], spacing: 7.5, palette: [0x557f41, 0x5b8643, 0x4c763d, 0x737f3d, 0xa88c45] },
+  },
+};
+
+const grownSets = new Map<GrownKind, { trunk: THREE.BufferGeometry[]; canopy: THREE.BufferGeometry[] }>();
+
+/** A grown kind's variants: each one's wood and its leaves (built once, shared). */
+export function grownTrees(kind: GrownKind) {
+  let set = grownSets.get(kind);
+  if (!set) {
+    const { species, seeds } = GROWN[kind];
+    const grown = seeds.map((seed) => growTree(species, seed));
+    set = { trunk: grown.map(woodGeometry), canopy: grown.map((sk, i) => leafGeometry(sk, seeds[i])) };
+    for (const g of [...set.trunk, ...set.canopy]) shareResource(g);
+    grownSets.set(kind, set);
+  }
+  return set;
+}
 
 function naturalSet(): TreeSet {
   const block = blockSet();
-  const oaks = OAK_SEEDS.map((seed) => growTree(OAK, seed));
+  const oaks = grownTrees('oak');
   return {
     ...block,
-    trunk: { ...block.trunk, grove: oaks.map(woodGeometry) },
-    canopy: { ...block.canopy, grove: oaks.map((sk, i) => leafGeometry(sk, OAK_SEEDS[i])) },
-    // Oaks in deep summer greens, now and then an olive one or one turning gold (never a blossom).
-    grown: { grove: { trunk: grownBark, canopy: grownLeaves, size: [0.9, 1.08], spacing: 7.5, palette: [0x4f8a3b, 0x58923f, 0x467f36, 0x77863a, 0xb8913c] } },
+    trunk: { ...block.trunk, grove: oaks.trunk },
+    canopy: { ...block.canopy, grove: oaks.canopy },
+    grown: { grove: GROWN.oak.look },
   };
 }
 
