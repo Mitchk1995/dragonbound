@@ -9,7 +9,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { BASES, TIER_ORDER, UNIQUES } from '../src/data/items';
+import { makeItem } from '../src/loot/itemGen';
 import { HeroDresser, MODEL_FILES, makeModel, registerModelScene, roleOf } from '../src/render/registry';
+import type { Item, Slot } from '../src/types';
 
 beforeAll(async () => {
   const loader = new GLTFLoader();
@@ -128,7 +131,108 @@ describe('hero base', () => {
   });
 });
 
+describe('the starting outfit and the gear on the redesigned hero', () => {
+  // Every body armour, glove and boot the game has, worn the way the game dresses the hero.
+  const pieces: [string, Slot, () => Item][] = [
+    ...TIER_ORDER.flatMap((t) => (['chainbody', 'platebody', 'gauntlets', 'boots'] as const).map((p): [string, Slot, () => Item] =>
+      [`${t}_${p}`, BASES[`${t}_${p}`].slot!, () => makeItem(`${t}_${p}`)])),
+    ...(['leather_body', 'leather_gloves', 'leather_boots'] as const).map((id): [string, Slot, () => Item] => [id, BASES[id].slot!, () => makeItem(id)]),
+    ...Object.values(UNIQUES).filter((u) => ['body', 'gloves', 'boots'].includes(BASES[u.base].slot!))
+      .map((u): [string, Slot, () => Item] => [u.id, BASES[u.base].slot!, () => ({ ...makeItem(u.base), unique: u.id, rarity: 'unique' }) as Item]),
+  ];
+  const visible = (o: THREE.Object3D) => {
+    for (let a: THREE.Object3D | null = o; a; a = a.parent) if (!a.visible) return false;
+    return true;
+  };
+  const inGear = (o: THREE.Object3D) => {
+    for (let a: THREE.Object3D | null = o; a; a = a.parent) if (a.name.startsWith('gear:')) return true;
+    return false;
+  };
+  /** The rig part a mesh moves with. */
+  const partOf = (o: THREE.Object3D) => {
+    for (let a: THREE.Object3D | null = o.parent; a; a = a.parent) if (['body', 'head', 'armL', 'armR', 'legL', 'legR'].includes(a.name)) return a;
+    return null;
+  };
+  /** World points of the hero's own visible parts that `keep` selects (rest pose). */
+  const heroPoints = (root: THREE.Object3D, keep: (m: THREE.Mesh, part: THREE.Object3D, local: THREE.Vector3) => boolean) => {
+    root.updateMatrixWorld(true);
+    const out: THREE.Vector3[] = [];
+    for (const m of meshes(root)) {
+      const part = partOf(m);
+      if (!part || inGear(m) || !visible(m)) continue;
+      const inv = part.matrixWorld.clone().invert();
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        const w = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+        if (keep(m, part, w.clone().applyMatrix4(inv))) out.push(w);
+      }
+    }
+    return out;
+  };
+  const gearBox = (root: THREE.Object3D, socks: string[]) => {
+    const box = new THREE.Box3();
+    root.traverse((o) => {
+      if (socks.some((s) => o.name === `gear:${s}`)) box.expandByObject(o);
+    });
+    return box.expandByScalar(0.005);
+  };
+
+  it('outfit pieces show in plain clothes and come off under the gear that covers them', () => {
+    const plain = makeModel('hero');
+    new HeroDresser(plain).dress(null, {});
+    const outfit: THREE.Object3D[] = [];
+    plain.root.traverse((o) => {
+      if (o.name.startsWith('outfit_')) outfit.push(o);
+    });
+    expect(outfit.map((o) => o.name.split('_').slice(0, 2).join('_'))).toEqual(expect.arrayContaining(['outfit_body', 'outfit_boots', 'outfit_gloves']));
+    for (const o of outfit) expect(o.visible, o.name).toBe(true);
+    for (const [id, slot, item] of pieces) {
+      const m = makeModel('hero');
+      new HeroDresser(m).dress(null, { [slot]: item() });
+      m.root.traverse((o) => {
+        if (o.name.startsWith('outfit_')) expect(o.visible, `${id}: ${o.name}`).toBe(!o.name.startsWith(`outfit_${slot}_`));
+      });
+    }
+  });
+
+  for (const [id, slot, item] of pieces) {
+    it(`${id} covers what it should`, () => {
+      const m = makeModel('hero');
+      new HeroDresser(m).dress(null, { [slot]: item() });
+      const root = m.root;
+      if (slot === 'gloves') {
+        // The fists (below the bracer) stay inside the gauntlets.
+        for (const [arm, sock] of [['armL', 'sock_handL'], ['armR', 'sock_gloveR']]) {
+          const box = gearBox(root, [sock]);
+          const hand = heroPoints(root, (_, part, l) => part.name === arm && l.y < -0.52);
+          expect(hand.length, arm).toBeGreaterThan(20);
+          for (const p of hand) expect(box.containsPoint(p), `${id} ${arm} hand at ${p.toArray().map((v) => v.toFixed(3))}`).toBe(true);
+        }
+      } else if (slot === 'boots') {
+        // Everything of the leg below the boot's top is inside the boot.
+        for (const [leg, sock] of [['legL', 'sock_footL'], ['legR', 'sock_footR']]) {
+          const box = gearBox(root, [sock]);
+          const low = heroPoints(root, (_, part, l) => part.name === leg && l.y < box.max.y - part.getWorldPosition(new THREE.Vector3()).y - 0.01);
+          expect(low.length, leg).toBeGreaterThan(8);
+          for (const p of low) expect(box.containsPoint(p), `${id} ${leg} at ${p.toArray().map((v) => v.toFixed(3))}`).toBe(true);
+        }
+      } else {
+        // The tunic's torso and skirt sit inside the armour (the belt line and above, down to the hem).
+        const box = gearBox(root, ['sock_chest']);
+        const torso = heroPoints(root, (mesh, part, l) => part.name === 'body' && role(mesh) !== 'skin' && l.y > -0.12 && l.y < 0.74);
+        expect(torso.length).toBeGreaterThan(50);
+        for (const p of torso) {
+          expect(box.min.x <= p.x && p.x <= box.max.x && p.z <= box.max.z && p.z >= box.min.z, `${id} tunic at ${p.toArray().map((v) => v.toFixed(3))}`).toBe(true);
+        }
+      }
+    });
+  }
+});
+
 describe('creatures', () => {
+  it('the Cinder Priest has his own model, a head taller than his cultists', () => {
+    expect(makeModel('priest').height).toBeGreaterThan(makeModel('cultist').height * 1.15);
+  });
   it('kobolds are short: well under two thirds of the hero', () => {
     expect(makeModel('kobold').height).toBeLessThan(makeModel('hero').height * 0.65);
   });
