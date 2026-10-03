@@ -7,6 +7,8 @@ import { hasModel, makeModel } from '../render/registry';
 import { applyFinish, studioEnv } from '../render/env';
 import { applyPaint, type PaintKind } from '../render/paint';
 import { bondPhases, cleanBreaks, COURSE, Laid, laidDrum, masonGeometry, STONE as STONE_LEN, type DrumOpts, type GridDir, type LaidCorner, type MasonGrid, type MasonOpts } from '../render/masonry';
+import { NodeMaterial } from 'three/webgpu';
+import { abs, diffuseColor, dot, float, normalize, normalView, positionView, pow, saturate } from 'three/tsl';
 import { addPatch } from '../render/surface';
 import { chamferBox, hash01, octagon, prism, rockBlock, slabBlock, taper, wedge } from '../render/blocks';
 import { makePortal, type PortalSpec } from './portalFx';
@@ -990,13 +992,13 @@ export function windowGlass() {
   });
   // (Clear face on, the sky over it at a slant: the pane grows more reflective and less see-through
   // the more glancing the look.)
-  addPatch(m, { key: 'glass-fresnel', apply: (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{
-      float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 5.0);
-      diffuseColor.a = clamp(diffuseColor.a + fres * 0.6, 0.0, 1.0);
-    }
-    #include <opaque_fragment>`);
-  } });
+  addPatch(m, { key: 'glass-fresnel', nodes: () => ({
+    output(light) {
+      const fres = pow(float(1).sub(saturate(abs(dot(normalize(positionView), normalView)))), 5);
+      diffuseColor.a.assign(saturate(diffuseColor.a.add(fres.mul(0.6))));
+      return light;
+    },
+  }) });
   m.userData.decal = true;
   m.userData.cloth = true;
   m.userData.baseEmissive = new THREE.Color(0);
@@ -3349,7 +3351,8 @@ export function finishProp(g: THREE.Object3D, kits: ModelKit[]) {
   g.traverse((o) => {
     if (o instanceof THREE.Mesh && !Array.isArray(o.material) && o.material.userData.smooth) o.geometry = toCreasedNormals(o.geometry, Math.PI / 3.2);
     if (o instanceof THREE.Mesh) {
-      const fx = o.material instanceof THREE.ShaderMaterial;
+      const fx = o.material instanceof NodeMaterial;
+
       o.castShadow = !fx && !(o.material as THREE.Material).userData.decal;
       o.receiveShadow = !fx;
     }

@@ -7,7 +7,10 @@ export async function memoryCheck(g: Game) {
   const frames = async () => {
     for (let i = 0; i < 4; i++) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   };
-  const sample = () => ({ ...g.renderer.info.memory, programs: g.renderer.info.programs?.length ?? 0 });
+  const sample = () => {
+    const m = g.renderer.info.memory;
+    return { geometries: m.geometries, textures: m.textures, programs: m.programs, renderTargets: m.renderTargets };
+  };
   const round = async () => {
     for (const zone of ['mine', 'foothills', 'ruin', 'lair', 'keep']) {
       g.travel(zone, true);

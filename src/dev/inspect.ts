@@ -50,11 +50,13 @@ interface PerfStats { cpuMs: number; gpuMs: number; gpuP95: number; frameMs: num
 export async function runInspect(g: Game, suites: string) {
   const api = window.electronAPI!.inspect!;
   const want = (s: string) => suites === 'all' || suites.split(',').includes(s);
-  const gl0 = g.renderer.getContext();
+  const buffer = g.renderer.getDrawingBufferSize(new THREE.Vector2());
   const report: Record<string, unknown> = {
     suites, startedAt: new Date().toISOString(), errors: [] as string[],
+    // Which of the renderer's backends drew (WebGPU, or its WebGL 2 fallback).
+    backend: (g.renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2',
     // Captures are device pixels: css size × devicePixelRatio (e.g. 1600×900 at 150% → 2400×1350).
-    viewport: { css: [innerWidth, innerHeight], dpr: devicePixelRatio, drawingBuffer: [gl0.drawingBufferWidth, gl0.drawingBufferHeight] },
+    viewport: { css: [innerWidth, innerHeight], dpr: devicePixelRatio, drawingBuffer: [buffer.x, buffer.y] },
   };
   const errors = report.errors as string[];
   window.addEventListener('error', (e) => errors.push(String(e.message)));
@@ -121,6 +123,7 @@ export async function runInspect(g: Game, suites: string) {
     // `cams:name@ex_ey_ez_lx_ly_lz_span+…`: free cameras over the keep (see camSuite).
     const camArg = suites.split(',').find((s) => s.startsWith('cams:'));
     if (camArg) report.cams = await (await import('./castleInspect')).camSuite(g, shot, camArg.slice(5));
+    for (const t of suites.split(',').filter((t) => t.startsWith('tmpdebug'))) await (await import('./tmpDebug')).tmpDebug(g, shot, t.slice(9));
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     // The light: the engine test's castle views and the play camera round the island and in every zone (explicit only:
     // `lighting`, `lighting:keep` for the island alone, `lighting:cost` for what each part of the light costs, `lighting:quality` for switching quality mid-session).
@@ -168,11 +171,15 @@ export function equip(g: Game, gear: Partial<Record<Slot, string | null>>) {
 
 // ─── Measurements ───────────────────────────────────────────────────────────
 
+/** Brightness statistics of the frame just drawn (read in the same task, while the canvas holds it). */
 function lumStats(g: Game): LumStats {
-  const gl = g.renderer.getContext();
-  const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
-  const px = new Uint8Array(w * h * 4);
-  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const cv = g.renderer.domElement, w = cv.width, h = cv.height;
+  const copy = document.createElement('canvas');
+  copy.width = w;
+  copy.height = h;
+  const ctx = copy.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(cv, 0, 0);
+  const px = ctx.getImageData(0, 0, w, h).data;
   const hist = new Uint32Array(256);
   let n = 0, clipped = 0, crushed = 0, r = 0, gg = 0, b = 0;
   for (let i = 0; i < px.length; i += 4 * 7) {
@@ -203,46 +210,31 @@ function lumStats(g: Game): LumStats {
 /**
  * Frame cost with the world frozen (dt = 0, every system still runs its per-frame work):
  * - cpuMs: update + render submission on the CPU;
- * - gpuMs: GPU time of the whole render (EXT_disjoint_timer_query_webgl2), the real render cost.
- * Wall-clock with a readPixels sync is NOT used: it quantises to the display's vsync period.
+ * - gpuMs: GPU time of the whole render (the renderer's timestamp queries, every pass of the frame),
+ *   the real render cost.
+ * Wall-clock with a readback sync is NOT used: it quantises to the display's vsync period.
  * `render` replaces update + draw (a free camera that the game's own update would move).
  */
 export async function perf(g: Game, n = 60, render?: () => void): Promise<PerfStats> {
-  const gl = g.renderer.getContext() as WebGL2RenderingContext;
-  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
-  const cpu: number[] = [];
-  const queries: WebGLQuery[] = [];
+  const r = g.renderer;
+  const cpu: number[] = [], gpu: number[] = [];
   // Only our frames may touch the GPU while measuring (the frame loop would interleave its own).
   const held = g.debug.hold;
   g.debug.hold = () => true;
+  // (Drop whatever was timed before the first measured frame.)
+  await r.resolveTimestampsAsync('render');
   for (let i = 0; i < n; i++) {
     const t0 = performance.now();
-    const q = ext ? gl.createQuery() : null;
-    if (q && ext) gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
     if (render) render();
     else {
       g.update(0, 1 / 60);
       g.draw();
     }
-    if (q && ext) {
-      gl.endQuery(ext.TIME_ELAPSED_EXT);
-      queries.push(q);
-    }
     cpu.push(performance.now() - t0);
+    const ms = await r.resolveTimestampsAsync('render');
+    if (ms) gpu.push(ms);
     await raf(); // one measured frame per display frame, like the game
   }
-  const gpu: number[] = [];
-  for (let tries = 0; tries < 60 && gpu.length < queries.length; tries++) {
-    await raf();
-    for (const q of queries) {
-      if ((q as any).done) continue;
-      if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
-        if (!gl.getParameter(ext!.GPU_DISJOINT_EXT)) gpu.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
-        (q as any).done = true;
-      }
-    }
-  }
-  queries.forEach((q) => gl.deleteQuery(q));
   g.debug.hold = held;
   const med = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length / 2)] : NaN);
   const p95 = (x: number[]) => (x.length ? x.slice().sort((p, q) => p - q)[Math.floor(x.length * 0.95)] : NaN);
@@ -342,7 +334,7 @@ async function zonesSuite(g: Game, shot: (n: string) => Promise<void>, only?: st
       info.reset();
       g.draw();
       info.autoReset = true;
-      rep.info = { calls: info.render.calls, triangles: info.render.triangles, programs: info.programs?.length ?? 0, geometries: info.memory.geometries, textures: info.memory.textures };
+      rep.info = { calls: info.render.calls, triangles: info.render.triangles, programs: info.memory.programs, geometries: info.memory.geometries, textures: info.memory.textures };
       g.debug.timeScale = 1;
       out.push(rep);
     }
@@ -533,8 +525,8 @@ async function perfSuite(g: Game) {
         return () => (g.sun.castShadow = true);
       }],
       ['no bloom', () => {
-        game.bloom.enabled = false;
-        return () => (game.bloom.enabled = true);
+        g.post.setQuality({ msaa: 4, shade: true, bloom: false });
+        return () => g.post.setQuality({ msaa: 4, shade: true, bloom: true });
       }],
       ['no vegetation', () => {
         const l = byName((o) => o instanceof THREE.InstancedMesh);
@@ -566,15 +558,10 @@ async function perfSuite(g: Game) {
         return () => l.forEach((o) => (o.visible = true));
       }],
       ['no MSAA', () => {
-        const rt = game.composer.renderTarget1;
-        const s = rt.samples;
-        rt.samples = 0;
-        game.composer.renderTarget2.samples = 0;
-        return () => {
-          rt.samples = s;
-          game.composer.renderTarget2.samples = s;
-        };
+        g.post.setQuality({ msaa: 0, shade: true, bloom: true });
+        return () => g.post.setQuality({ msaa: 4, shade: true, bloom: true });
       }],
+
     ];
     const row: Record<string, string> = {};
     await perf(g, 20); // warm up programs

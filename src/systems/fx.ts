@@ -1,9 +1,32 @@
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { atan, Discard, Fn, If, length, positionGeometry, smoothstep, vec4 } from 'three/tsl';
+import { own } from '../render/patch';
 import { disposeObject } from '../render/resources';
 import type { Game } from '../game';
 import { PAL } from '../render/kit';
 
+/**
+ * A weapon slash's colour (see Fx.arc), shared by every slash: each reads its own sweep off its
+ * material. HDR colour (above 1) so bloom catches the edge; soft inner and outer rims.
+ */
+const ARC = Fn(() => {
+  const head = own.f('arcHead'), angle = own.f('arcAngle');
+  const r = own.v2('arcR'), p = positionGeometry.xy;
+  // 0..1 along the sweep, and 0 inner .. 1 outer.
+  const t = atan(p.y, p.x).add(angle.mul(0.5)).div(angle).toVar();
+  const rr = length(p).sub(r.x).div(r.y.sub(r.x)).toVar();
+  If(t.greaterThan(head), () => {
+    Discard();
+  });
+  // Brightest at the leading edge.
+  const trail = smoothstep(head.sub(0.6), head, t).mul(0.85);
+  const rim = smoothstep(0, 0.3, rr).mul(smoothstep(1, 0.8, rr));
+  return vec4(own.color('arcColor').mul(rr.mul(rr).add(0.3)), trail.mul(rim).mul(own.f('arcFade')));
+})();
+
 interface FxMesh {
+
   obj: THREE.Object3D;
   life: number;
   max: number;
@@ -60,35 +83,15 @@ export class Fx {
    */
   arc(x: number, z: number, dir: number, r: number, angle: number, color: number) {
     const r0 = r * 0.45;
-    const uniforms = {
-      uColor: { value: new THREE.Color(color).multiplyScalar(1.7) },
-      uHead: { value: 0 },
-      uFade: { value: 1 },
-      uAngle: { value: angle },
-      uR: { value: new THREE.Vector2(r0, r) },
-    };
-    const m = new THREE.Mesh(
-      new THREE.RingGeometry(r0, r, 28, 2, -angle / 2, angle),
-      new THREE.ShaderMaterial({
-        uniforms,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-        vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        fragmentShader: `varying vec2 vP;
-          uniform vec3 uColor; uniform float uHead; uniform float uFade; uniform float uAngle; uniform vec2 uR;
-          void main() {
-            float t = (atan(vP.y, vP.x) + uAngle * 0.5) / uAngle;      // 0..1 along the sweep
-            float rr = (length(vP) - uR.x) / (uR.y - uR.x);           // 0 inner .. 1 outer
-            if (t > uHead) discard;
-            float trail = smoothstep(uHead - 0.6, uHead, t) * 0.85;    // brightest at the leading edge
-            float rim = smoothstep(0.0, 0.3, rr) * smoothstep(1.0, 0.8, rr);
-            float a = trail * rim * uFade;
-            gl_FragColor = vec4(uColor * (0.3 + rr * rr), a);
-          }`,
-      }),
-    );
+    const mat = Object.assign(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }), {
+      arcColor: new THREE.Color(color).multiplyScalar(1.7),
+      arcHead: 0,
+      arcFade: 1,
+      arcAngle: angle,
+      arcR: new THREE.Vector2(r0, r),
+    });
+    mat.colorNode = ARC;
+    const m = new THREE.Mesh(new THREE.RingGeometry(r0, r, 28, 2, -angle / 2, angle), mat);
     m.rotation.x = -Math.PI / 2;
     const g = new THREE.Group();
     g.add(m);
@@ -97,8 +100,8 @@ export class Fx {
     const life = 0.3;
     this.add(g, life, (f) => {
       const age = 1 - f; // 0 → 1 over the effect
-      uniforms.uHead.value = Math.min(1, age * 3.2); // the sweep completes in ~0.09 s
-      uniforms.uFade.value = age < 0.35 ? 1 : 1 - (age - 0.35) / 0.65;
+      mat.arcHead = Math.min(1, age * 3.2); // the sweep completes in ~0.09 s
+      mat.arcFade = age < 0.35 ? 1 : 1 - (age - 0.35) / 0.65;
     });
   }
 

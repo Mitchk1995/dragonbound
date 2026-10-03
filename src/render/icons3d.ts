@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
 import { BASES } from '../data/items';
 import type { Item } from '../types';
 import { buildGear, gearLook, joinCuffs, makeModel } from './registry';
 import { buildMaterialModel } from './materialModels';
+import { installPatchedMaterials } from './patch';
 import { setPaintGain } from './surface';
 
 /** Painted albedo contrast in icons, relative to the game. */
@@ -24,20 +26,22 @@ const YAW = -0.45, PITCH = 0.22;
 /** Amulets face the camera, turned just enough to show their depth. */
 export const AMULET_YAW = -0.22, AMULET_PITCH = 0.08;
 
-let renderer: THREE.WebGLRenderer | null = null;
+let renderer: WebGPURenderer | null = null;
 const scene = new THREE.Scene();
 // Orthographic: the silhouette fills the frame exactly, with no perspective shrink at the edges.
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
 const cache = new Map<string, string>();
 
-function init() {
-  if (renderer) return renderer;
+/** Start the icon renderer (at startup: a renderer starts asynchronously, icons are drawn on demand). */
+export async function initIcons() {
+  if (renderer) return;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = SIZE;
-  renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
-  renderer.setSize(SIZE, SIZE, false);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.25;
+  const r = new WebGPURenderer({ canvas, alpha: true, antialias: true });
+  installPatchedMaterials(r);
+  r.setSize(SIZE, SIZE, false);
+  r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.toneMappingExposure = 1.25;
   scene.add(new THREE.HemisphereLight(0xfff4e0, 0x3a3040, 1.6));
   const key = new THREE.DirectionalLight(0xffffff, 2.4);
   key.position.set(-2, 4, 5);
@@ -45,7 +49,8 @@ function init() {
   const rim = new THREE.DirectionalLight(0x9ab8ff, 1.2);
   rim.position.set(3, 1, -4);
   scene.add(rim);
-  return renderer;
+  await r.init();
+  renderer = r;
 }
 
 function lookKey(item: Item) {
@@ -153,7 +158,8 @@ export function itemIconUrl(item: Item): string {
   const key = lookKey(item);
   const hit = cache.get(key);
   if (hit) return hit;
-  const r = init();
+  const r = renderer;
+  if (!r) throw new Error('item icons are not ready (initIcons)');
   const { holder, half, depth } = iconSubject(item);
   camera.left = camera.bottom = -half;
   camera.right = camera.top = half;
@@ -163,7 +169,9 @@ export function itemIconUrl(item: Item): string {
   scene.add(holder);
   r.setClearColor(0x000000, 0);
   r.render(scene, camera);
+  // (Read in the same task as the draw, while the canvas still holds it.)
   const url = r.domElement.toDataURL('image/png');
+
   scene.remove(holder);
   cache.set(key, url);
   return url;

@@ -1,130 +1,29 @@
 import * as THREE from 'three';
+import { abs, attribute, cameraViewMatrix, clamp, cross, dFdx, dFdy, dot, float, fwidth, If, length, mat3, materialColor, max, min, mix, normalize, positionView, positionWorld, pow, select, sign, sin, smoothstep, sqrt, step, vec2, vec3, vec4 } from 'three/tsl';
 import { charTexture, forgeTexture, groundTexture, noiseTexture, surfaceTexture, SURFACES, type SurfaceKind } from './textures';
-import { PAINT_TINT } from './paint';
-import { ROCK_GLSL, rockAtlas, ROCK_TILE } from './rock';
+import { paintTint } from './paint';
+import { rockAtlas, rockFaceN, rockPaint, ROCK_TILE } from './rock';
+import { addPatch, objectPosition, packAttributes, rot2, surfaceFrame, type F, type SurfaceFrame, type SurfaceSpace, type V2, type V3, type V4 } from './patch';
 
-// ─── Composable shader patches ──────────────────────────────────────────────
-
-type Shader = THREE.WebGLProgramParametersWithUniforms;
-
-export interface ShaderPatch {
-  /** Identifies the generated program: patches with equal keys must produce equal GLSL. */
-  key: string;
-  /** Patches in the same slot replace each other (defaults to the key). */
-  slot?: string;
-  apply(shader: Shader): void;
-}
-
-const patches = new WeakMap<THREE.Material, ShaderPatch[]>();
-
-/**
- * Add a shader patch to a material. Several patches (surface detail, see-through occlusion…)
- * stack: they all run in one onBeforeCompile and share one program cache key. Adding a patch
- * in a slot the material already has replaces it (e.g. new uniforms for the same program).
- * Material.clone() does not carry patches over; patch the clone.
- */
-export function addPatch(mat: THREE.Material, patch: ShaderPatch) {
-  let list = patches.get(mat);
-  if (!list) {
-    const l: ShaderPatch[] = (list = []);
-    patches.set(mat, l);
-    mat.onBeforeCompile = (shader) => {
-      for (const p of l) p.apply(shader);
-    };
-    mat.customProgramCacheKey = () => l.map((p) => p.key).join('|');
-  }
-  const slot = patch.slot ?? patch.key;
-  const i = list.findIndex((p) => (p.slot ?? p.key) === slot);
-  if (i >= 0) list[i] = patch;
-  else list.push(patch);
-  mat.needsUpdate = true;
-}
-
-export const patchKeys = (mat: THREE.Material) => (patches.get(mat) ?? []).map((p) => p.key);
+export { addPatch, patchKeys, type SurfaceSpace } from './patch';
 
 // ─── Surface detail: triplanar albedo + bump ────────────────────────────────
-
-/**
- * Object space follows the mesh (the pattern moves with it);
- * world space lines up across instances and props (walls, rocks, trees).
- */
-export type SurfaceSpace = 'object' | 'world';
-
-const VERT_WORLD = `
-  {
-    vec4 sw = vec4(transformed, 1.0);
-    mat3 sm = mat3(modelMatrix);
-    #ifdef USE_INSTANCING
-      sw = instanceMatrix * sw;
-      sm = sm * mat3(instanceMatrix);
-    #endif
-    vSurfPos = (modelMatrix * sw).xyz;
-    vSurfNrm = sm * objectNormal;
-    vSurfAx = vec3(viewMatrix[0]);
-    vSurfAy = vec3(viewMatrix[1]);
-    vSurfAz = vec3(viewMatrix[2]);
-  }`;
-
-const VERT_OBJECT = `
-  vSurfPos = transformed;
-  vSurfNrm = objectNormal;
-  vSurfAx = normalMatrix * vec3(1.0, 0.0, 0.0);
-  vSurfAy = normalMatrix * vec3(0.0, 1.0, 0.0);
-  vSurfAz = normalMatrix * vec3(0.0, 0.0, 1.0);`;
-
-const VARYINGS = `
-  varying vec3 vSurfPos;
-  varying vec3 vSurfNrm;
-  varying vec3 vSurfAx;
-  varying vec3 vSurfAy;
-  varying vec3 vSurfAz;`;
 
 /**
  * Bump from the height gradient measured in texture space (finite differences), carried to view
  * space along the projection axes. Unlike screen-space derivative bump it has no 2×2-pixel
  * blockiness or dashed moiré at grazing angles.
  */
-const FRAG_BUMP = `
-  const float SURF_E = 1.5 / 256.0;
-  vec3 surfBump(vec3 n, vec3 grad, float strength) {
-    vec3 g = grad.x * vSurfAx + grad.y * vSurfAy + grad.z * vSurfAz;
-    g -= dot(g, n) * n;
-    return normalize(n - g * strength);
-  }`;
-
-function commonInject(shader: Shader, space: SurfaceSpace, fragDecl: string) {
-  shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', `#include <common>\n${VARYINGS}`)
-    .replace('#include <project_vertex>', `#include <project_vertex>\n${space === 'world' ? VERT_WORLD : VERT_OBJECT}`);
-  shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\n${VARYINGS}\n${FRAG_BUMP}\n${fragDecl}`);
+const SURF_E = 1.5 / 256;
+function surfBump(f: SurfaceFrame, n: V3, grad: V3, strength: F): V3 {
+  const g0 = f.toView(grad);
+  const g = g0.sub(n.mul(dot(g0, n)));
+  return normalize(n.sub(g.mul(strength)));
 }
 
-/**
- * Albedo, roughness and (when `bump`) bump from `float surfSample(out vec3 grad)`: a height in
- * 0..1 and its gradient along the projection axes, evaluated after the colour chunks.
- */
-function heightInject(shader: Shader, bump = true) {
-  shader.fragmentShader = shader.fragmentShader
-    .replace(
-      '#include <color_fragment>',
-      `#include <color_fragment>
-      vec3 surfGrad;
-      float surfH = surfSample(surfGrad);
-      diffuseColor.rgb *= clamp(1.0 + (surfH - 0.5) * 2.0 * uSurfAlbedo, 0.0, 2.0);`,
-    )
-    .replace(
-      '#include <roughnessmap_fragment>',
-      `#include <roughnessmap_fragment>
-      roughnessFactor = clamp(roughnessFactor + (0.5 - surfH) * 0.3 * uSurfAlbedo, 0.05, 1.0);`,
-    );
-  if (bump) {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <normal_fragment_maps>',
-      `#include <normal_fragment_maps>
-      normal = surfBump(normal, surfGrad, uSurfBump * 0.12 / uSurfScale);`,
-    );
-  }
-}
+/** The albedo and roughness a surface height (0..1) gives (`alb` its strength). */
+const heightColor = (c: V3, h: F, alb: F) => c.mul(clamp(h.sub(0.5).mul(2).mul(alb).add(1), 0, 2));
+const heightRoughness = (r: F, h: F, alb: F) => clamp(r.add(float(0.5).sub(h).mul(0.3).mul(alb)), 0.05, 1);
 
 /**
  * Apply a procedural surface to a MeshStandardMaterial (other material types are left alone).
@@ -141,36 +40,33 @@ export function applySurface(mat: THREE.Material, kind: SurfaceKind, space: Surf
     uSurfAlbedo: { value: p.albedo },
     uSurfBump: { value: p.bump },
   };
-  // Flat: one fetch per plane. Bumped: two more per plane for the gradient.
-  const plane = bump
-    ? `vec3 surfPlane(vec2 uv) {
-        float h = texture2D(uSurfTex, uv).r;
-        return vec3(h, texture2D(uSurfTex, uv + vec2(SURF_E, 0.0)).r - h, texture2D(uSurfTex, uv + vec2(0.0, SURF_E)).r - h);
-      }`
-    : 'vec3 surfPlane(vec2 uv) { return vec3(texture2D(uSurfTex, uv).r, 0.0, 0.0); }';
   addPatch(mat, {
     key: `surface:${space}${bump ? '' : ':flat'}`,
     slot: 'surface',
-    apply(shader) {
-      Object.assign(shader.uniforms, uniforms);
-      commonInject(
-        shader,
-        space,
-        `uniform sampler2D uSurfTex;
-        uniform float uSurfScale;
-        uniform float uSurfAlbedo;
-        uniform float uSurfBump;
-        ${plane}
-        float surfSample(out vec3 grad) {
-          vec3 w = pow(abs(normalize(vSurfNrm)), vec3(4.0));
-          w /= (w.x + w.y + w.z);
-          vec3 p = vSurfPos * uSurfScale;
-          vec3 px = surfPlane(p.yz), py = surfPlane(p.xz + 0.37), pz = surfPlane(p.xy + 0.71);
-          grad = (vec3(0.0, px.y, px.z) * w.x + vec3(py.y, 0.0, py.z) * w.y + vec3(pz.y, pz.z, 0.0) * w.z) * (uSurfScale / SURF_E);
-          return px.x * w.x + py.x * w.y + pz.x * w.z;
-        }`,
-      );
-      heightInject(shader, bump);
+    uniforms,
+    nodes(u, b) {
+      let f: SurfaceFrame;
+      const tex = u.tex('uSurfTex'), scale = u.f('uSurfScale'), alb = u.f('uSurfAlbedo');
+      // Flat: one fetch per plane. Bumped: two more per plane for the gradient.
+      const plane = (uv: V2): V3 => {
+        const h = tex.sample(uv).r.toVar();
+        return bump ? vec3(h, tex.sample(uv.add(vec2(SURF_E, 0))).r.sub(h), tex.sample(uv.add(vec2(0, SURF_E))).r.sub(h)) : vec3(h, 0, 0);
+      };
+      let h: F = float(0.5), grad: V3 = vec3(0);
+      return {
+        color(c) {
+          f = surfaceFrame(space, b);
+          const w0 = pow(abs(normalize(f.nrm)), vec3(4));
+          const w = w0.div(w0.x.add(w0.y).add(w0.z)).toVar();
+          const q = f.pos.mul(scale).toVar();
+          const px = plane(q.yz).toVar(), py = plane(q.xz.add(0.37)).toVar(), pz = plane(q.xy.add(0.71)).toVar();
+          grad = vec3(0, px.y, px.z).mul(w.x).add(vec3(py.y, 0, py.z).mul(w.y)).add(vec3(pz.y, pz.z, 0).mul(w.z)).mul(scale.div(SURF_E)).toVar();
+          h = px.x.mul(w.x).add(py.x.mul(w.y)).add(pz.x.mul(w.z)).toVar();
+          return heightColor(c, h, alb);
+        },
+        roughness: (r) => heightRoughness(r, h, alb),
+        normal: bump ? (n) => surfBump(f, n, grad, u.f('uSurfBump').mul(0.12).div(scale)) : undefined,
+      };
     },
   });
 }
@@ -210,17 +106,10 @@ export function applyGrade(mat: THREE.Material, grade: Grade, space: GradeSpace)
   addPatch(mat, {
     key: `grade:${space}`,
     slot: 'grade',
-    apply(shader) {
-      Object.assign(shader.uniforms, uniforms);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform vec4 uGradeRow;\nvarying float vGrade;')
-        .replace(
-          '#include <project_vertex>',
-          `#include <project_vertex>\n${space === 'root' ? 'vGrade = dot(uGradeRow, modelMatrix * vec4(transformed, 1.0));' : 'vGrade = transformed.y;'}`,
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uGradeLow;\nuniform float uGradeFrom;\nuniform float uGradeTo;\nvarying float vGrade;')
-        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(uGradeLow, 1.0, smoothstep(uGradeFrom, uGradeTo, vGrade));');
+    uniforms,
+    nodes(u, b) {
+      const g = space === 'root' ? dot(u.v4('uGradeRow'), vec4(positionWorld, 1)) : objectPosition(b).y;
+      return { color: (c) => c.mul(mix(u.f('uGradeLow'), 1, smoothstep(u.f('uGradeFrom'), u.f('uGradeTo'), g))) };
     },
   });
 }
@@ -235,22 +124,10 @@ export function applyHeightShade(mat: THREE.Material, low: number, from: number,
   const uniforms = { uHsLow: { value: low }, uHsRange: { value: new THREE.Vector2(from, to) } };
   addPatch(mat, {
     key: 'hshade',
-    apply(shader) {
-      Object.assign(shader.uniforms, uniforms);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying float vHsY;')
-        .replace(
-          '#include <project_vertex>',
-          `#include <project_vertex>
-          #ifdef USE_INSTANCING
-            vHsY = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).y;
-          #else
-            vHsY = (modelMatrix * vec4(transformed, 1.0)).y;
-          #endif`,
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uHsLow;\nuniform vec2 uHsRange;\nvarying float vHsY;')
-        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(1.0, uHsLow, sqrt(smoothstep(uHsRange.x, uHsRange.y, vHsY)));');
+    uniforms,
+    nodes(u) {
+      const r = u.v2('uHsRange');
+      return { color: (c) => c.mul(mix(1, u.f('uHsLow'), sqrt(smoothstep(r.x, r.y, positionWorld.y)))) };
     },
   });
 }
@@ -443,6 +320,12 @@ const paintVec = (p: CharPaint) => ({
   y: new THREE.Vector4(p.forge ?? 0, 0, 0, 0),
 });
 
+/**
+ * Pack a prepared model geometry's painted-shader attributes (prepareCharGeometry, paintAttributes)
+ * into one vertex buffer, once its parts are merged (see packAttributes).
+ */
+export const packCharAttributes = (geo: THREE.BufferGeometry) => packAttributes(geo, ['aRest', 'aRestN', 'aFace', 'aPart', 'aPaintW', 'aPaintX', 'aPaintY']);
+
 /** Per-vertex recipe attributes for merged parts that mix several recipes in one material. */
 export function paintAttributes(geo: THREE.BufferGeometry, p: CharPaint | null) {
   const n = geo.attributes.position.count;
@@ -493,79 +376,64 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
     uPaintX: { value: init.x },
   };
   mat.userData.charPaint = uniforms;
-  const W = per ? 'vPaintW' : 'uPaintW', X = per ? 'vPaintX' : 'uPaintX', Y = per ? 'vPaintY' : 'uPaintY';
   addPatch(mat, {
     key: `cpaint:${per ? 'vertex' : 'uniform'}`,
     slot: 'surface',
-    apply(shader) {
-      Object.assign(shader.uniforms, uniforms);
-      const vary = `varying vec3 vRest;\nvarying vec3 vRestN;\nvarying vec4 vFace;\nvarying float vPart;\n${per ? 'varying vec4 vPaintW;\nvarying vec4 vPaintX;\nvarying vec4 vPaintY;' : ''}`;
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\nattribute vec3 aRest;\nattribute vec3 aRestN;\nattribute vec4 aFace;\nattribute float aPart;\n${per ? 'attribute vec4 aPaintW;\nattribute vec4 aPaintX;\nattribute vec4 aPaintY;' : ''}\n${vary}`)
-        .replace('#include <project_vertex>', `#include <project_vertex>\nvRest = aRest;\nvRestN = aRestN;\nvFace = aFace;\nvPart = aPart;\n${per ? 'vPaintW = aPaintW;\nvPaintX = aPaintX;\nvPaintY = aPaintY;' : ''}`);
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          '#include <common>',
-          `#include <common>
-          ${vary}
-          uniform sampler2D uCharTex;
-          uniform sampler2D uForgeTex;
-          uniform vec4 uPaintY;
-          uniform float uCharScale;
-          uniform float uCharEdgeW;
-          uniform float uCharGain;
-          uniform vec4 uPaintW;
-          uniform vec4 uPaintX;`,
-        )
-        .replace(
-          '#include <color_fragment>',
-          `#include <color_fragment>
-          float cpRough = 0.0;
-          {
-            // Flat face normal in the rest frame (an attribute: derivative normals break up into
-            // speckle on faces seen edge-on).
-            vec3 rn = normalize(vRestN + vec3(0.0, 1e-6, 0.0));
-            vec3 an = abs(rn);
-            vec4 pw = ${W}, px = ${X};
-            vec3 q = vRest * (uCharScale * px.w);
-            vec2 cuv = an.y >= max(an.x, an.z) ? q.xz : (an.x > an.z ? q.zy : q.xy);
-            vec4 ct = texture2D(uCharTex, cuv) - 0.5;
-            float cv = dot(ct, pw) * 2.0;
-            // Painted worn edge round each flat face; thin bevel faces are all edge.
-            float faceOk = step(1e-6, vFace.z * vFace.w);
-            float fe = min(min(vFace.x, vFace.z - vFace.x), min(vFace.y, vFace.w - vFace.y));
-            float thin = min(vFace.z, vFace.w);
-            float fw = min(uCharEdgeW, 0.3 * thin);
-            float edge = faceOk * max(1.0 - smoothstep(fw * 0.35, fw, fe), 1.0 - smoothstep(uCharEdgeW * 1.2, uCharEdgeW * 1.8, thin));
-            // Light from above: side faces lighter at the top, up faces lit, down faces shaded.
-            float side = 1.0 - smoothstep(0.55, 0.8, an.y);
-            float gy = faceOk * (vFace.y / max(vFace.w, 1e-6) - 0.5);
-            float grad = mix(sign(rn.y) * 0.5, gy, side);
-            diffuseColor.rgb *= clamp(1.0 + (cv + px.x * edge + px.y * grad) * uCharGain, 0.35, 1.8);
-            float forge = ${Y}.x;
-            if (forge > 0.0) {
-              // Forged metal: hammered dishes and draw-marks, a polished worn lip on every edge,
-              // soot settling along each plate's foot and in blotches, a tone per plate.
-              vec4 ft = texture2D(uForgeTex, cuv) - 0.5;
-              float footD = mix(1.0, vFace.y, side * faceOk);
-              float foot = (1.0 - smoothstep(0.0, 0.09, footD)) * side + step(rn.y, -0.6) * 0.5;
-              float grime = clamp(foot * (0.75 + ft.b) + smoothstep(0.05, 0.4, ft.b) * 0.6, 0.0, 1.0);
-              float tone = (fract(vPart * 7.13) - 0.5) * 0.2;
-              float f = ft.r * 0.42 + ft.g * 0.14 + ft.a * 0.05 + tone + edge * 0.32 - grime * 0.36;
-              diffuseColor.rgb *= clamp(1.0 + f * forge * uCharGain, 0.35, 1.8);
-              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15))), grime * forge * 0.35 * uCharGain);
-              cpRough = (grime * 0.3 - edge * 0.12 + ft.r * 0.25 + ft.a * 0.15) * forge * uCharGain;
-            }
-            if (px.z > 0.0) {
-              float moss = smoothstep(0.1, 0.24, ct.r + rn.y * 0.3 - 0.12) * px.z * uCharGain;
-              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.13, 0.22, 0.05) * (0.8 + ct.r), moss * 0.6);
-            }
-          }`,
-        )
-        .replace(
-          '#include <roughnessmap_fragment>',
-          '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + cpRough, 0.05, 1.0);',
-        );
+    uniforms: uniforms as unknown as Record<string, { value: unknown }>,
+    nodes(u) {
+      const rest = attribute('aRest', 'vec3') as V3, face = attribute('aFace', 'vec4') as V4;
+      const pw = per ? (attribute('aPaintW', 'vec4') as V4) : u.v4('uPaintW');
+      const px = per ? (attribute('aPaintX', 'vec4') as V4) : u.v4('uPaintX');
+      const py = per ? (attribute('aPaintY', 'vec4') as V4) : u.v4('uPaintY');
+      const gain = u.f('uCharGain'), edgeW = u.f('uCharEdgeW');
+      let rough: F = float(0);
+      return {
+        color(c0) {
+          const c = c0.toVar();
+          // Flat face normal in the rest frame (an attribute: derivative normals break up into
+          // speckle on faces seen edge-on).
+          const rn = normalize((attribute('aRestN', 'vec3') as V3).add(vec3(0, 1e-6, 0))).toVar();
+          const an = abs(rn).toVar();
+          const q = rest.mul(u.f('uCharScale').mul(px.w)).toVar();
+          const cuv = select(an.y.greaterThanEqual(max(an.x, an.z)), q.xz, select(an.x.greaterThan(an.z), q.zy, q.xy)).toVar();
+          const ct = u.tex('uCharTex').sample(cuv).sub(0.5).toVar();
+          const cv = dot(ct, pw).mul(2);
+          // Painted worn edge round each flat face; thin bevel faces are all edge.
+          const faceOk = step(1e-6, face.z.mul(face.w));
+          const fe = min(min(face.x, face.z.sub(face.x)), min(face.y, face.w.sub(face.y)));
+          const thin = min(face.z, face.w);
+          const fw = min(edgeW, thin.mul(0.3));
+          const edge = faceOk.mul(max(float(1).sub(smoothstep(fw.mul(0.35), fw, fe)), float(1).sub(smoothstep(edgeW.mul(1.2), edgeW.mul(1.8), thin)))).toVar();
+          // Light from above: side faces lighter at the top, up faces lit, down faces shaded.
+          const side = float(1).sub(smoothstep(0.55, 0.8, an.y)).toVar();
+          const gy = faceOk.mul(face.y.div(max(face.w, 1e-6)).sub(0.5));
+          const grad = mix(sign(rn.y).mul(0.5), gy, side);
+          c.mulAssign(clamp(cv.add(px.x.mul(edge)).add(px.y.mul(grad)).mul(gain).add(1), 0.35, 1.8));
+          const forge = py.x;
+          const cpRough = float(0).toVar();
+          If(forge.greaterThan(0), () => {
+            // Forged metal: hammered dishes and draw-marks, a polished worn lip on every edge,
+            // soot settling along each plate's foot and in blotches, a tone per plate.
+            const ft = u.tex('uForgeTex').sample(cuv).sub(0.5).toVar();
+            const footD = mix(1, face.y, side.mul(faceOk));
+            const foot = float(1).sub(smoothstep(0, 0.09, footD)).mul(side).add(step(rn.y, -0.6).mul(0.5));
+            const grime = clamp(foot.mul(ft.b.add(0.75)).add(smoothstep(0.05, 0.4, ft.b).mul(0.6)), 0, 1).toVar();
+            const part = attribute('aPart', 'float') as F;
+            const tone = part.mul(7.13).fract().sub(0.5).mul(0.2);
+            const f = ft.r.mul(0.42).add(ft.g.mul(0.14)).add(ft.a.mul(0.05)).add(tone).add(edge.mul(0.32)).sub(grime.mul(0.36));
+            c.mulAssign(clamp(f.mul(forge).mul(gain).add(1), 0.35, 1.8));
+            c.assign(mix(c, vec3(dot(c, vec3(0.3, 0.55, 0.15))), grime.mul(forge).mul(0.35).mul(gain)));
+            cpRough.assign(grime.mul(0.3).sub(edge.mul(0.12)).add(ft.r.mul(0.25)).add(ft.a.mul(0.15)).mul(forge).mul(gain));
+          });
+          If(px.z.greaterThan(0), () => {
+            const moss = smoothstep(0.1, 0.24, ct.r.add(rn.y.mul(0.3)).sub(0.12)).mul(px.z).mul(gain);
+            c.assign(mix(c, vec3(0.13, 0.22, 0.05).mul(ct.r.add(0.8)), moss.mul(0.6)));
+          });
+          rough = cpRough;
+          return c;
+        },
+        roughness: (r) => clamp(r.add(rough), 0.05, 1),
+      };
     },
   });
 }
@@ -595,40 +463,59 @@ export function setPaintGain(root: THREE.Object3D, gain: number) {
  * on the ruddy rock; the soot around the roost and the seams is painted into the terrain's
  * vertex colour), in the mine ochre mineral stains and cool damp patches. Nothing elsewhere.
  */
-function floorVariation(kind: 'lair' | 'mine' | null) {
-  if (!kind) return '';
-  const tint = kind === 'lair'
-    ? `float nf = texture2D(uMixTex, vSurfPos.xz * 0.19 + vec2(0.37, 0.11)).r;
-       float ash = smoothstep(0.38, 0.8, nf * 0.65 + n1 * 0.35) * floorW;
-       vec3 ashCol = vec3(dot(diffuseColor.rgb, vec3(0.3, 0.5, 0.2))) * vec3(1.14, 1.06, 1.0);
-       diffuseColor.rgb = mix(diffuseColor.rgb, ashCol, ash * 0.42);
-       diffuseColor.rgb *= 1.0 + (n2 - 0.5) * 0.2 * floorW;`
-    : `float stain = smoothstep(0.6, 0.66, n1) * floorW;
-       float damp = smoothstep(0.32, 0.26, n2) * floorW;
-       diffuseColor.rgb *= mix(vec3(1.0), vec3(1.2, 0.98, 0.74), stain);
-       diffuseColor.rgb *= mix(vec3(1.0), vec3(0.8, 0.86, 0.96), damp);`;
-  return `{
-    float rockW = vSplat.w / max(0.001, dot(vSplat, vec4(1.0)));
-    float floorW = rockW * (1.0 - smoothstep(0.2, 0.6, vSurfPos.y)) * smoothstep(0.8, 0.95, normalize(vSurfNrm).y);
-    float n1 = texture2D(uMixTex, vSurfPos.xz * 0.045 + vec2(0.61, 0.27)).r;
-    float n2 = texture2D(uMixTex, vSurfPos.xz * 0.08 + vec2(0.23, 0.83)).r;
-    ${tint}
-  }`;
+function floorVariation(kind: 'lair' | 'mine', c: V3, mixN: (q: V2) => F, splat: V4, pos: V3, nrm: V3) {
+  const rockW = splat.w.div(max(dot(splat, vec4(1)), 0.001));
+  const floorW = rockW.mul(float(1).sub(smoothstep(0.2, 0.6, pos.y))).mul(smoothstep(0.8, 0.95, normalize(nrm).y)).toVar();
+  const n1 = mixN(pos.xz.mul(0.045).add(vec2(0.61, 0.27))).toVar();
+  const n2 = mixN(pos.xz.mul(0.08).add(vec2(0.23, 0.83))).toVar();
+  if (kind === 'lair') {
+    const nf = mixN(pos.xz.mul(0.19).add(vec2(0.37, 0.11)));
+    const ash = smoothstep(0.38, 0.8, nf.mul(0.65).add(n1.mul(0.35))).mul(floorW);
+    const ashCol = vec3(dot(c, vec3(0.3, 0.5, 0.2))).mul(vec3(1.14, 1.06, 1.0));
+    c.assign(mix(c, ashCol, ash.mul(0.42)));
+    c.mulAssign(n2.sub(0.5).mul(0.2).mul(floorW).add(1));
+  } else {
+    const stain = smoothstep(0.6, 0.66, n1).mul(floorW);
+    const damp = smoothstep(0.32, 0.26, n2).mul(floorW);
+    c.mulAssign(mix(vec3(1), vec3(1.2, 0.98, 0.74), stain));
+    c.mulAssign(mix(vec3(1), vec3(0.8, 0.86, 0.96), damp));
+  }
 }
 
 /** Height of one cave-rock terrace (terrain.ts builds them; the riser shading below keys to it). */
 export const CAVE_TERRACE = 1.0;
 
 /**
- * Cave walls' terrace risers (inside the rock block: needs rockK, gn, vSurfPos): dark in the
- * crease at their foot, catching light on the lip at their top, so each terrace reads as a slab
- * of rock standing on the one below.
+ * Paving laid as a designed bond on the cell grid: rows a third of a cell deep along X, each stone
+ * two thirds long, every other row's joints over the middle of the stones below. Every cell edge falls
+ * on a row joint and on a whole or half stone, so wherever a paved area ends (a cell edge) its stones
+ * end whole, and a kerb (a third wide, flush on the paving's side) takes its first row exactly.
+ * Rounded, bevelled stones, a tone each, soft broad drift: as the painted paving. Like the castle's
+ * dressed stone (paint.ts) each stone has real relief, gentler: `grad` takes the slope of its bevelled
+ * edge over the ground (MASON's bump, in world space) and `joint` how much of the fragment is joint,
+ * both softened far off (`px`, metres to a pixel). Returns the stone's painted value.
  */
-const CAVE_RISERS = `
-              float steepF = smoothstep(0.3, 0.65, 1.0 - abs(gn.y)) * smoothstep(0.5, 1.1, vSurfPos.y);
-              float tf = fract(vSurfPos.y / ${CAVE_TERRACE.toFixed(2)});
-              diffuseColor.rgb *= mix(1.0, mix(0.62, 1.1, smoothstep(0.02, 0.8, tf)), steepF);
-`;
+function paveLaid(p: V2, px: F, mixN: (q: V2) => F, grad: V2, joint: F): F {
+  const rz = p.y.mul(3), r = rz.floor().toVar(), fz = rz.sub(r).toVar();
+  const xo = p.x.mul(1.5).add(select(r.mod(2).greaterThan(0.5), float(0.5), float(0))), b = xo.floor().toVar(), fx = xo.sub(b).toVar();
+  const dx = min(fx, float(1).sub(fx)).div(1.5).toVar(), dz = min(fz, float(1).sub(fz)).div(3).toVar();
+  const rc = 0.05;
+  const sg = vec2(select(fx.lessThan(0.5), float(1), float(-1)), select(fz.lessThan(0.5), float(1), float(-1)));
+  const corner = dx.lessThan(rc).and(dz.lessThan(rc));
+  const cq = vec2(float(rc).sub(dx), float(rc).sub(dz));
+  const dir = select(corner, normalize(cq.add(1e-5)).mul(sg), select(dx.lessThan(dz), vec2(sg.x, 0), vec2(0, sg.y)));
+  const d = select(corner, float(rc).sub(length(cq)), min(dx, dz)).add(mixN(p.mul(1.7)).sub(0.5).mul(0.012)).toVar();
+  const tb = clamp(d.sub(0.014).div(0.035), 0, 1), near = float(1).sub(smoothstep(0.02, 0.07, px)).toVar();
+  grad.assign(dir.mul(float(1).sub(tb).mul(2 * 0.011 / 0.035)).mul(near));
+  joint.assign(float(1).sub(smoothstep(px.mul(-0.5).add(0.014), px.mul(0.5).add(0.014), d)).mul(mix(0.5, 1, near)));
+  const h = sin(dot(vec2(r, b), vec2(127.1, 311.7))).mul(43758.5453).fract();
+  const tone = h.sub(0.5).mul(0.3).add(0.54).add(mixN(p.mul(0.09)).sub(0.5).mul(0.1)).add(mixN(p.mul(0.6).add(0.3)).sub(0.5).mul(0.08));
+  const faceV = tone.sub(float(1).sub(smoothstep(0.02, 0.07, d)).mul(0.1)).add(float(1).sub(smoothstep(0, 0.05, fz.div(3))).mul(smoothstep(0.02, 0.04, d)).mul(0.06));
+  return faceV.sub(0.12).mul(smoothstep(0.008, 0.026, d)).add(0.12);
+}
+
+/** Shared clock for animated ground (the refracted, caustic-lit bed under water); terrain ticks it. */
+export const GROUND_TIME = { value: 0 };
 
 /**
  * Ground: a four-channel painted atlas (dirt, grass, flagstone, smooth floor rock) projected
@@ -638,42 +525,7 @@ const CAVE_RISERS = `
  * to big slabs, and back). Steep faces (and all raised rock where the relief has no grassy top)
  * take the shared painted rock (rock.ts: strata blocks, cracks, grain), projected triplanar from
  * the flat face so it never stretches on tall faces.
- */
-/**
- * GLSL: paving laid as a designed bond on the cell grid: rows a third of a cell deep along X, each
- * stone two thirds long, every other row's joints over the middle of the stones below. Every cell
- * edge falls on a row joint and on a whole or half stone, so wherever a paved area ends (a cell
- * edge) its stones end whole, and a kerb (a third wide, flush on the paving's side) takes its first row
- * exactly. Rounded, bevelled stones, a tone each, soft broad drift: as the painted paving. Like the
- * castle's dressed stone (paint.ts) each stone has real relief, gentler: paveGrad is the slope of its
- * bevelled edge over the ground (MASON's bump, in world space: PAVE_BUMP) and paveJoint how much of
- * the fragment is joint, both softened far off (`px`, metres to a pixel).
- */
-const PAVE_LAID = `
-        vec2 paveGrad = vec2(0.0);
-        float paveJoint = 0.0;
-        float paveLaid(vec2 p, float px) {
-          float rz = p.y * 3.0, r = floor(rz), fz = rz - r;
-          float xo = p.x * 1.5 + (mod(r, 2.0) > 0.5 ? 0.5 : 0.0), b = floor(xo), fx = xo - b;
-          float dx = min(fx, 1.0 - fx) / 1.5, dz = min(fz, 1.0 - fz) / 3.0, rc = 0.05;
-          vec2 sg = vec2(fx < 0.5 ? 1.0 : -1.0, fz < 0.5 ? 1.0 : -1.0);
-          vec2 dir = dx < dz ? vec2(sg.x, 0.0) : vec2(0.0, sg.y);
-          if (dx < rc && dz < rc) dir = normalize(vec2(rc - dx, rc - dz) + 1e-5) * sg;
-          float d = (dx < rc && dz < rc) ? rc - length(vec2(rc - dx, rc - dz)) : min(dx, dz);
-          d += (texture2D(uMixTex, p * 1.7).r - 0.5) * 0.012;
-          float tb = clamp((d - 0.014) / 0.035, 0.0, 1.0), near = 1.0 - smoothstep(0.02, 0.07, px);
-          paveGrad = dir * (2.0 * 0.011 * (1.0 - tb) / 0.035) * near;
-          paveJoint = (1.0 - smoothstep(0.014 - 0.5 * px, 0.014 + 0.5 * px, d)) * mix(0.5, 1.0, near);
-          float h = fract(sin(dot(vec2(r, b), vec2(127.1, 311.7))) * 43758.5453);
-          float tone = 0.54 + (h - 0.5) * 0.3 + (texture2D(uMixTex, p * 0.09).r - 0.5) * 0.1 + (texture2D(uMixTex, p * 0.6 + 0.3).r - 0.5) * 0.08;
-          float face = tone - (1.0 - smoothstep(0.02, 0.07, d)) * 0.1 + (1.0 - smoothstep(0.0, 0.05, fz / 3.0)) * smoothstep(0.02, 0.04, d) * 0.06;
-          return 0.12 + (face - 0.12) * smoothstep(0.008, 0.026, d);
-        }`;
-
-/** Shared clock for animated ground (the refracted, caustic-lit bed under water); terrain ticks it. */
-export const GROUND_TIME = { value: 0 };
-
-/**
+ *
  * `cliff`: colour steep faces blend to (slope-based texturing: mesa tops keep their grass).
  * `cave`: towering cave walls (terraced rock mass: lit risers, chiselled faces).
  * `waterY`: the water surface height when the zone has water: the bed below it wobbles as if
@@ -684,6 +536,7 @@ export const GROUND_TIME = { value: 0 };
  *   pebbles poke through first, grass creeps into the paving's joints), instead of a soft smear.
  * `moss`: moss in the paving's grout lines (the drowned city).
  * `rockMoss`: how far moss spreads over grassy-topped rock (0 patches on the flattest ledges, 1 lush).
+ * `laid`: the paving laid as a designed bond (paveLaid) instead of the atlas's flagstones.
  */
 export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade = 1, cliff: number | null = null, topRange: [number, number] = [0.8, 3.4], cave = false, waterY: number | null = null, waterTint = 0x2e6a70, rockTops = true, sharp = false, moss = false, rockMoss = 0, laid = false) {
   const wet = waterY !== null;
@@ -705,216 +558,188 @@ export function applyGround(mat: THREE.MeshStandardMaterial, lava = 0, topShade 
     // the lava crevice glow below.
     uSurfScale: { value: 0.25 },
     uSurfAlbedo: { value: 0.42 },
-    uSurfBump: { value: 0 },
   };
   addPatch(mat, {
     key: `ground4${laid ? ':laid' : ''}${lava > 0 ? ':lava' : ''}${topShade < 1 ? ':shade' : ''}${cliff !== null ? ':cliff' : ''}${cave ? ':cave' : ''}${wet ? ':wet' : ''}${rockTops ? ':tops' : ''}${sharp ? ':sharp' : ''}${moss ? ':moss' : ''}`,
-    apply(shader) {
-      Object.assign(shader.uniforms, uniforms);
-      commonInject(
-        shader,
-        'world',
-        `uniform sampler2D uGroundTex;
-        uniform sampler2D uMixTex;
-        uniform float uSurfScale;
-        uniform float uSurfAlbedo;
-        uniform float uSurfBump;
-        uniform float uLava;
-        uniform float uPaintAmt;
-        uniform float uTime;
-        uniform float uWaterY;
-        uniform vec3 uWaterTint;
-        uniform vec3 uCliff;
-        uniform float uRockMoss;
-        uniform float uTopShade;
-        uniform vec2 uTopRange;
-        varying vec4 vSplat;
-        ${sharp ? 'varying vec3 vCol0;\n        varying vec3 vCol1;\n        varying vec3 vCol2;\n        varying vec3 vCol3;' : ''}
-        // The ground weights after sharpening, and the atlas sample (set by surfSample).
-        vec4 gK;
-        vec4 gT;
-        ${ROCK_GLSL}
-        ${laid ? PAVE_LAID : ''}
-        // 37° rotation (column-major) for the second, larger-scale sample.
-        const mat2 GROT = mat2(0.7986, 0.6018, -0.6018, 0.7986);
-        const float GSCALE2 = 0.348;
-        const mat2 GROT2 = mat2(0.3256, 0.9455, -0.9455, 0.3256);
-        float surfSample(out vec3 grad) {
-          grad = vec3(0.0);
-          vec4 k = vSplat / max(0.001, dot(vSplat, vec4(1.0)));
-          vec3 w = pow(abs(normalize(vSurfNrm)), vec3(6.0));
-          w /= (w.x + w.y + w.z);
+    uniforms,
+    nodes(u, b) {
+      const pos = positionWorld;
+      let nrm: V3 = vec3(0, 1, 0);
+      const gTex = u.tex('uGroundTex'), mixT = u.tex('uMixTex'), rockT = u.tex('uRockTex');
+      const S = u.f('uSurfScale'), alb = u.f('uSurfAlbedo'), time = u.f('uTime'), waterY = u.f('uWaterY');
+      const mixN = (q: V2) => mixT.sample(q).r;
+      const splat = attribute('aSplat', 'vec4') as V4;
+      // The ground weights after sharpening, the atlas sample and the height (set by the colour).
+      let gK: V4 = vec4(0), surfH: F = float(0.5), paveGrad: V2 = vec2(0), paveJoint: F = float(0);
+      return {
+        color(c) {
+          nrm = surfaceFrame('world', b).nrm;
+          if (laid) {
+            paveGrad = vec2(0).toVar();
+            paveJoint = float(0).toVar();
+          }
+          const k = splat.div(max(dot(splat, vec4(1)), 0.001)).toVar();
+          const w0 = pow(abs(normalize(nrm)), vec3(6));
+          const w = w0.div(w0.x.add(w0.y).add(w0.z)).toVar();
           // Top: the splatted atlas at two scales, blended by a slow noise mask.
-          vec2 p = vSurfPos.xz;
-          ${laid ? '// (How many metres a pixel spans, taken before any branch.)\n          float pavePx = length(fwidth(p));' : ''}
-          ${wet ? `// Under water the bed is seen through moving ripples: its pattern wobbles.
-          float sub = smoothstep(uWaterY + 0.02, uWaterY - 0.12, vSurfPos.y);
-          p += (vec2(texture2D(uMixTex, p * 0.21 + vec2(uTime * 0.03, 0.0)).r, texture2D(uMixTex, p * 0.17 + vec2(0.5, uTime * 0.025)).r) - 0.5) * 0.3 * sub;` : ''}
-          vec4 t1 = texture2D(uGroundTex, p * uSurfScale);
-          vec4 t2 = texture2D(uGroundTex, GROT * p * (uSurfScale * GSCALE2) + vec2(0.31, 0.57));
-          float m = smoothstep(0.36, 0.64, texture2D(uMixTex, p * 0.019 + vec2(0.13, 0.71)).r);
-          vec4 t = mix(t1, t2, m);
+          const p = pos.xz.toVar();
+          // (How many metres a pixel spans, taken before any branch.)
+          const pavePx = laid ? length(fwidth(p)).toVar() : float(0);
+          if (wet) {
+            // Under water the bed is seen through moving ripples: its pattern wobbles.
+            const sub = smoothstep(waterY.add(0.02), waterY.sub(0.12), pos.y);
+            p.addAssign(vec2(mixN(p.mul(0.21).add(vec2(time.mul(0.03), 0))), mixN(p.mul(0.17).add(vec2(0.5, time.mul(0.025))))).sub(0.5).mul(0.3).mul(sub));
+          }
+          const t1 = gTex.sample(p.mul(S)).toVar();
+          const t2 = gTex.sample(rot2(p, 0.7986, 0.6018, -0.6018, 0.7986).mul(S.mul(0.348)).add(vec2(0.31, 0.57))).toVar();
+          const m = smoothstep(0.36, 0.64, mixN(p.mul(0.019).add(vec2(0.13, 0.71))));
+          const t = mix(t1, t2, m).toVar();
           // Beaten earth: a third sample at another scale and angle, blended in by a finer mask, so
           // no stain repeats on a visible grid across a big yard.
-          if (k.x > 0.001) {
-            float m3 = smoothstep(0.3, 0.7, texture2D(uMixTex, p * 0.083 + vec2(0.57, 0.21)).r);
-            float t3 = texture2D(uGroundTex, GROT2 * p * (uSurfScale * 0.61) + vec2(0.73, 0.19)).r;
-            t.r = mix(mix(t1.r, t2.r, 0.5), t3, m3);
-          }
+          If(k.x.greaterThan(0.001), () => {
+            const m3 = smoothstep(0.3, 0.7, mixN(p.mul(0.083).add(vec2(0.57, 0.21))));
+            const t3 = gTex.sample(rot2(p, 0.3256, 0.9455, -0.9455, 0.3256).mul(S.mul(0.61)).add(vec2(0.73, 0.19))).r;
+            t.x.assign(mix(mix(t1.r, t2.r, 0.5), t3, m3));
+          });
           // Paving is laid square to the world and never cross-faded (two overlaid layouts read
-          // as cracked mud): one unrotated sample with an 8-unit tile${laid ? ', or (laid) the designed bond' : ''}.
-          if (k.b > 0.001) t.b = ${laid ? 'paveLaid(p, pavePx)' : 'texture2D(uGroundTex, p * (uSurfScale * 0.5)).b'};
-          ${sharp ? `// Height blend: each ground type rises by its own pattern (grass clumps, pebbles,
-          // paving stones stand proud of their joints); within a narrow band of the highest the
-          // types mix, below it they drop out. Edges are crisp but follow the paint, never the grid.
-          vec4 hk = k + (t - 0.5) * 1.2 * step(0.001, k);
-          float top = max(max(hk.x, hk.y), max(hk.z, hk.w));
-          vec4 kk = max(hk - (top - 0.03), 0.0);
-          k = kk / max(1e-4, dot(kk, vec4(1.0)));` : ''}
+          // as cracked mud): one unrotated sample with an 8-unit tile, or (laid) the designed bond.
+          If(k.z.greaterThan(0.001), () => {
+            t.z.assign(laid ? paveLaid(p, pavePx, mixN, paveGrad, paveJoint) : gTex.sample(p.mul(S.mul(0.5))).b);
+          });
+          if (sharp) {
+            // Height blend: each ground type rises by its own pattern (grass clumps, pebbles, paving
+            // stones stand proud of their joints); within a narrow band of the highest the types mix,
+            // below it they drop out. Edges are crisp but follow the paint, never the grid.
+            const hk = k.add(t.sub(0.5).mul(1.2).mul(step(0.001, k))).toVar();
+            const top = max(max(hk.x, hk.y), max(hk.z, hk.w));
+            const kk = max(hk.sub(top.sub(0.03)), 0).toVar();
+            k.assign(kk.div(max(dot(kk, vec4(1)), 1e-4)));
+          }
           gK = k;
-          gT = t;
-          float h = dot(t, k);
-          // Most ground is flat: skip the side projections there.
-          if (w.y > 0.985) return h;
-          // Steep faces: a calm drift here (the rock pattern itself is painted after the colour).
-          float s = uSurfScale * 0.8;
-          float rx = texture2D(uRockTex, vSurfPos.zy * s).a, rz = texture2D(uRockTex, vSurfPos.xy * s).a;
-          return h * w.y + (rx * w.x + rz * w.z) * 0.6 + 0.2 * (w.x + w.z);
-        }`,
-      );
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\nattribute vec4 aSplat;\nvarying vec4 vSplat;${sharp ? '\n' + [0, 1, 2, 3].map((c) => `attribute vec3 aCol${c};\nvarying vec3 vCol${c};`).join('\n') : ''}`)
-        .replace('#include <project_vertex>', `#include <project_vertex>\nvSplat = aSplat;${sharp ? '\nvCol0 = aCol0; vCol1 = aCol1; vCol2 = aCol2; vCol3 = aCol3;' : ''}`);
-      heightInject(shader, false);
-      if (sharp || moss) {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          'float surfH = surfSample(surfGrad);',
-          `float surfH = surfSample(surfGrad);
-          ${sharp ? '// Each ground type in its own colour, by the sharpened weights.\n          diffuseColor.rgb = diffuse * (vCol0 * gK.x + vCol1 * gK.y + vCol2 * gK.z + vCol3 * gK.w);' : ''}
-          ${moss ? `{
+          const h = dot(t, k).toVar();
+          surfH = h;
+          // Most ground is flat: skip the side projections there; steep faces take a calm drift (the
+          // rock pattern itself is painted after the colour).
+          If(w.y.lessThanEqual(0.985), () => {
+            const s = S.mul(0.8);
+            const rx = rockT.sample(pos.zy.mul(s)).a, rz = rockT.sample(pos.xy.mul(s)).a;
+            h.assign(h.mul(w.y).add(rx.mul(w.x).add(rz.mul(w.z)).mul(0.6)).add(w.x.add(w.z).mul(0.2)));
+          });
+          if (sharp) {
+            // Each ground type in its own colour, by the sharpened weights.
+            const col = (i: number) => attribute(`aCol${i}`, 'vec3') as V3;
+            c.assign(vec3(materialColor).mul(col(0).mul(k.x).add(col(1).mul(k.y)).add(col(2).mul(k.z)).add(col(3).mul(k.w))));
+          }
+          if (moss) {
             // Moss in the paving's joints, in patches: dark green where the mortar is.
-            float joint = 1.0 - smoothstep(0.16, 0.3, gT.b);
-            float patchM = smoothstep(0.42, 0.62, texture2D(uMixTex, vSurfPos.xz * 0.07 + vec2(0.7, 0.2)).r);
-            float mossK = joint * gK.z * (0.35 + 0.65 * patchM) * smoothstep(-0.05, 0.05, vSurfPos.y + 0.1);
-            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.12, 0.05), mossK * 0.85);
-          }` : ''}`,
-        );
-      }
-      // Painterly: warm lights, cool darks (and, laid, the paving's joints deep and dark).
-      shader.fragmentShader = shader.fragmentShader.replace(
-        'diffuseColor.rgb *= clamp(1.0 + (surfH - 0.5) * 2.0 * uSurfAlbedo, 0.0, 2.0);',
-        `diffuseColor.rgb *= clamp(1.0 + (surfH - 0.5) * 2.0 * uSurfAlbedo, 0.0, 2.0);
-        { float paintV = surfH; diffuseColor.rgb *= ${PAINT_TINT}; }
-        ${laid ? 'diffuseColor.rgb *= mix(1.0, 0.6, paveJoint * gK.z);' : ''}
-        ${floorVariation(lava > 0 ? 'lair' : topShade < 1 ? 'mine' : null)}`,
-      );
-      if (laid) {
-        // The paving stones' bevelled edges bend the normal where the ground lies flat.
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <normal_fragment_maps>',
-          `#include <normal_fragment_maps>
-          {
-            float paveK = smoothstep(0.97, 0.99, normalize(vSurfNrm).y) * gK.z;
-            normal = normalize(normal - mat3(viewMatrix) * vec3(paveGrad.x, 0.0, paveGrad.y) * paveK);
-          }`,
-        );
-      }
-      // Rock, in order: the cliff colour on steep faces, the painted rock, cave risers, the climb
-      // into darkness, and last the drowned bed's absorption (one block, so the order is explicit).
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <roughnessmap_fragment>',
-        `#include <roughnessmap_fragment>
-        {
-          vec3 gn = normalize(vSurfNrm);
-          float steep = smoothstep(0.42, 0.78, 1.0 - abs(gn.y));
-          ${cliff !== null ? '// Steep faces take the cliff rock colour whatever the vertex colour (mesa tops stay grassy).\n          diffuseColor.rgb = mix(diffuseColor.rgb, uCliff * (0.8 + surfH * 0.4), steep);' : ''}
-          float rockK = max(steep, smoothstep(0.45, 1.0, vSurfPos.y)${rockTops ? '' : ' * smoothstep(0.45, 0.8, vSplat.w / max(0.001, dot(vSplat, vec4(1.0))))'});
-          if (rockK > 0.001) {
-            vec3 fn = rockFaceN(vSurfPos);
-            diffuseColor.rgb = rockPaint(diffuseColor.rgb, vSurfPos, fn, rockK);
-            ${cave ? '' : `// Weathered outdoor rock: dark rain streaks run down the faces (long, thin, broken), broad
-            // ochre and cool stains drift across them${rockTops ? '' : ', and moss and grass take hold on the ledges'}.
-            vec3 aw = abs(fn);
-            float stx = texture2D(uMixTex, vec2(vSurfPos.z * 0.12 + 0.3, vSurfPos.y * 0.01)).r;
-            float stz = texture2D(uMixTex, vec2(vSurfPos.x * 0.12 + 0.7, vSurfPos.y * 0.01)).r;
-            float streak = (stx * aw.x + stz * aw.z) / max(0.001, aw.x + aw.z);
-            float face = steep * rockK * (1.0 - smoothstep(0.35, 0.7, aw.y));
-            diffuseColor.rgb *= 1.0 - 0.32 * smoothstep(0.45, 0.75, streak) * face;
-            float drift2 = texture2D(uMixTex, vSurfPos.xz * 0.021 + vec2(vSurfPos.y * 0.017, 0.4)).r;
-            diffuseColor.rgb *= mix(vec3(0.92, 0.97, 1.06), vec3(1.12, 1.0, 0.8), smoothstep(0.3, 0.75, drift2) * face + (1.0 - face) * 0.5);
+            const joint = float(1).sub(smoothstep(0.16, 0.3, t.b));
+            const patchM = smoothstep(0.42, 0.62, mixN(pos.xz.mul(0.07).add(vec2(0.7, 0.2))));
+            const mossK = joint.mul(k.z).mul(patchM.mul(0.65).add(0.35)).mul(smoothstep(-0.05, 0.05, pos.y.add(0.1)));
+            c.assign(mix(c, vec3(0.07, 0.12, 0.05), mossK.mul(0.85)));
+          }
+          // Painterly: warm lights, cool darks (and, laid, the paving's joints deep and dark).
+          c.assign(heightColor(c, h, alb).mul(paintTint(h, u.f('uPaintAmt'))));
+          if (laid) c.mulAssign(mix(1, 0.6, paveJoint.mul(k.z)));
+          if (lava > 0) floorVariation('lair', c, mixN, splat, pos, nrm);
+          else if (topShade < 1) floorVariation('mine', c, mixN, splat, pos, nrm);
+          // Rock, in order: the cliff colour on steep faces, the painted rock, cave risers, the climb
+          // into darkness, and last the drowned bed's absorption.
+          const gn = normalize(nrm).toVar();
+          const steep = smoothstep(0.42, 0.78, float(1).sub(abs(gn.y))).toVar();
+          // Steep faces take the cliff rock colour whatever the vertex colour (mesa tops stay grassy).
+          if (cliff !== null) c.assign(mix(c, u.v3('uCliff').mul(h.mul(0.4).add(0.8)), steep));
+          const rockK = max(steep, smoothstep(0.45, 1, pos.y).mul(rockTops ? float(1) : smoothstep(0.45, 0.8, splat.w.div(max(dot(splat, vec4(1)), 0.001))))).toVar();
+          If(rockK.greaterThan(0.001), () => {
+            const fn = rockFaceN(pos).toVar();
+            c.assign(rockPaint(rockT, u.f('uRockScale'), c, pos, fn, rockK));
+            if (cave) return;
+            // Weathered outdoor rock: dark rain streaks run down the faces (long, thin, broken), broad
+            // ochre and cool stains drift across them, and (grassy tops) moss and grass on the ledges.
+            const aw = abs(fn).toVar();
+            const stx = mixN(vec2(pos.z.mul(0.12).add(0.3), pos.y.mul(0.01)));
+            const stz = mixN(vec2(pos.x.mul(0.12).add(0.7), pos.y.mul(0.01)));
+            const streak = stx.mul(aw.x).add(stz.mul(aw.z)).div(max(aw.x.add(aw.z), 0.001));
+            const faceK = steep.mul(rockK).mul(float(1).sub(smoothstep(0.35, 0.7, aw.y))).toVar();
+            c.mulAssign(float(1).sub(smoothstep(0.45, 0.75, streak).mul(faceK).mul(0.32)));
+            const drift2 = mixN(pos.xz.mul(0.021).add(vec2(pos.y.mul(0.017), 0.4)));
+            c.mulAssign(mix(vec3(0.92, 0.97, 1.06), vec3(1.12, 1.0, 0.8), smoothstep(0.3, 0.75, drift2).mul(faceK).add(float(1).sub(faceK).mul(0.5))));
             // One big weathering gradient up every face: warmer and darker toward the damp foot,
             // cooler and lighter toward the sunlit crown; the faces lifted a little overall so those
             // turned from the sun read as shaded rock, never black.
-            float hk = smoothstep(-1.0, 13.0, vSurfPos.y);
-            diffuseColor.rgb *= mix(mix(vec3(1.0), vec3(0.9, 0.86, 0.8), face), mix(vec3(1.0), vec3(1.04, 1.06, 1.12), face), hk) * (1.0 + 0.12 * face);
-            ${rockTops ? '' : `float mossN = texture2D(uMixTex, vSurfPos.xz * 0.19 + vec2(0.13, 0.77)).r;
-            // Moss laid from straight above in world space: only on faces that face up (the
-            // geometry's own normal, not the painted facets, so it never traces the strata), in broad
-            // patches with a ragged edge, soil and grit speckled through it. Lush rock (uRockMoss)
-            // carries it over most tops and down the rounded shoulders.
-            float mossP = texture2D(uMixTex, vSurfPos.xz * 0.035 + vec2(0.52, 0.31)).r;
-            float edgeN = texture2D(uMixTex, vSurfPos.xz * 0.6 + vec2(0.21, 0.44)).r;
-            float mossUp = mix(0.78, 0.5, uRockMoss), mossCut = mix(0.6, 0.36, uRockMoss);
-            float moss = smoothstep(mossUp, mossUp + 0.17, gn.y) * smoothstep(mossCut, mossCut + 0.12, mossP + (edgeN - 0.5) * 0.22) * rockK;
-            vec3 mossC = mix(vec3(0.13, 0.2, 0.07), vec3(0.21, 0.3, 0.1), mossN);
-            mossC = mix(mossC, vec3(0.24, 0.2, 0.15), smoothstep(0.62, 0.8, edgeN) * 0.6);
-            diffuseColor.rgb = mix(diffuseColor.rgb, mossC, moss * 0.8);`}`}
+            const hk = smoothstep(-1, 13, pos.y);
+            c.mulAssign(mix(mix(vec3(1), vec3(0.9, 0.86, 0.8), faceK), mix(vec3(1), vec3(1.04, 1.06, 1.12), faceK), hk).mul(faceK.mul(0.12).add(1)));
+            if (rockTops) return;
+            // Moss laid from straight above in world space: only on faces that face up (the geometry's
+            // own normal, not the painted facets, so it never traces the strata), in broad patches with
+            // a ragged edge, soil and grit speckled through it. Lush rock (uRockMoss) carries it over
+            // most tops and down the rounded shoulders.
+            const mossN = mixN(pos.xz.mul(0.19).add(vec2(0.13, 0.77)));
+            const mossP = mixN(pos.xz.mul(0.035).add(vec2(0.52, 0.31)));
+            const edgeN = mixN(pos.xz.mul(0.6).add(vec2(0.21, 0.44))).toVar();
+            const rm = u.f('uRockMoss');
+            const mossUp = mix(0.78, 0.5, rm), mossCut = mix(0.6, 0.36, rm);
+            const mossK = smoothstep(mossUp, mossUp.add(0.17), gn.y).mul(smoothstep(mossCut, mossCut.add(0.12), mossP.add(edgeN.sub(0.5).mul(0.22)))).mul(rockK);
+            const mossC = mix(mix(vec3(0.13, 0.2, 0.07), vec3(0.21, 0.3, 0.1), mossN), vec3(0.24, 0.2, 0.15), smoothstep(0.62, 0.8, edgeN).mul(0.6));
+            c.assign(mix(c, mossC, mossK.mul(0.8)));
+          });
+          if (cave && topShade < 1) {
+            // Cave walls' terrace risers: dark in the crease at their foot, catching light on the lip
+            // at their top, so each terrace reads as a slab of rock standing on the one below.
+            const steepF = smoothstep(0.3, 0.65, float(1).sub(abs(gn.y))).mul(smoothstep(0.5, 1.1, pos.y));
+            const tf = pos.y.div(CAVE_TERRACE).fract();
+            c.mulAssign(mix(1, mix(0.62, 1.1, smoothstep(0.02, 0.8, tf)), steepF));
           }
-          ${cave && topShade < 1 ? CAVE_RISERS : ''}
-          ${topShade < 1 ? `// Rock falls away into darkness as it climbs (eased in caves, so the first ledges stay readable).
-          float climb = smoothstep(uTopRange.x, uTopRange.y, vSurfPos.y);
-          diffuseColor.rgb *= mix(1.0, uTopShade, ${cave ? 'sqrt(climb)' : 'climb'});` : ''}
-          ${wet ? `// The drowned bed: absorbed toward the water colour with depth.
-          float dW = uWaterY - vSurfPos.y;
-          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5 + uWaterTint * 0.35, smoothstep(0.02, 0.5, dW));` : ''}
-        }`,
-      );
-      if (wet) {
-        // Caustics dance across the drowned bed (brightest in the shallows).
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <emissivemap_fragment>',
-          `#include <emissivemap_fragment>
-          {
-            float d = uWaterY - vSurfPos.y;
-            float sub = smoothstep(0.02, 0.14, d);
-            vec2 cp = vSurfPos.xz;
-            // Two drifting ridged layers multiplied: a fine web of light, like sun through ripples.
-            float ca = texture2D(uMixTex, cp * 0.62 + vec2(uTime * 0.03, uTime * 0.011)).r;
-            float cb = texture2D(uMixTex, cp * 0.81 + vec2(0.37, 0.61) - vec2(uTime * 0.012, uTime * 0.027)).r;
-            float caus = pow((1.0 - abs(ca * 2.0 - 1.0)) * (1.0 - abs(cb * 2.0 - 1.0)), 5.0);
-            float shallow = 1.0 - smoothstep(0.05, 0.4, d);
-            totalEmissiveRadiance += vec3(0.7, 0.95, 0.88) * caus * shallow * sub * 0.3;
-          }`,
-        );
-      }
-      if (topShade < 1 && cave) {
-        shader.fragmentShader = shader.fragmentShader
-          .replace(
-            '#include <normal_fragment_maps>',
-            `#include <normal_fragment_maps>
-            {
-              // Chiselled risers, calm tops: steep rock takes its flat face normal (hard-edged
-              // facets), the ledge tops keep the smooth normal, so the mass reads as cut strata.
-              vec3 fn = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
-              float st = smoothstep(0.35, 0.7, 1.0 - abs(normalize(vSurfNrm).y)) * smoothstep(0.5, 1.1, vSurfPos.y);
-              normal = normalize(mix(normal, fn, st * 0.85));
-            }`,
-          );
-      }
-      if (lava > 0) {
-        // Lava pools in the floor rock's deepest fissures, pulsing slowly. Emissive, so it glows
-        // regardless of lighting (and feeds bloom).
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <emissivemap_fragment>',
-          `#include <emissivemap_fragment>
-          {
-            float rockW = vSplat.w / max(0.001, dot(vSplat, vec4(1.0)));
-            float crev = smoothstep(0.34, 0.16, surfH) * rockW * smoothstep(0.9, 0.97, normalize(vSurfNrm).y) * (1.0 - smoothstep(0.15, 0.5, vSurfPos.y));
-            float pulse = 0.75 + 0.25 * sin(vSurfPos.x * 0.7 + vSurfPos.z * 0.5);
-            totalEmissiveRadiance += vec3(1.0, 0.32, 0.06) * crev * pulse * 2.2 * uLava;
-          }`,
-        );
-      }
+          if (topShade < 1) {
+            // Rock falls away into darkness as it climbs (eased in caves, so the first ledges stay readable).
+            const range = u.v2('uTopRange');
+            const climb = smoothstep(range.x, range.y, pos.y);
+            c.mulAssign(mix(1, u.f('uTopShade'), cave ? sqrt(climb) : climb));
+          }
+          if (wet) {
+            // The drowned bed: absorbed toward the water colour with depth.
+            const dW = waterY.sub(pos.y);
+            c.assign(mix(c, c.mul(0.5).add(u.v3('uWaterTint').mul(0.35)), smoothstep(0.02, 0.5, dW)));
+          }
+          return c;
+        },
+        roughness: (r) => heightRoughness(r, surfH, alb),
+        normal: laid || (cave && topShade < 1) ? (n) => {
+          if (cave) {
+            // Chiselled risers, calm tops: steep rock takes its flat face normal (hard-edged facets),
+            // the ledge tops keep the smooth normal, so the mass reads as cut strata.
+            const fn = normalize(cross(dFdx(positionView), dFdy(positionView)));
+            const st = smoothstep(0.35, 0.7, float(1).sub(abs(normalize(nrm).y))).mul(smoothstep(0.5, 1.1, pos.y));
+            return normalize(mix(n, fn, st.mul(0.85)));
+          }
+          // The paving stones' bevelled edges bend the normal where the ground lies flat.
+          const paveK = smoothstep(0.97, 0.99, normalize(nrm).y).mul(gK.z);
+          return normalize(n.sub(mat3(cameraViewMatrix).mul(vec3(paveGrad.x, 0, paveGrad.y)).mul(paveK)));
+        } : undefined,
+        emissive: wet || lava > 0 ? (e) => {
+          let out = e;
+          if (lava > 0) {
+            // Lava pools in the floor rock's deepest fissures, pulsing slowly. Emissive, so it glows
+            // regardless of lighting (and feeds bloom).
+            const rockW = splat.w.div(max(dot(splat, vec4(1)), 0.001));
+            const crev = smoothstep(0.34, 0.16, surfH).mul(rockW).mul(smoothstep(0.9, 0.97, normalize(nrm).y)).mul(float(1).sub(smoothstep(0.15, 0.5, pos.y)));
+            const pulse = sin(pos.x.mul(0.7).add(pos.z.mul(0.5))).mul(0.25).add(0.75);
+            out = out.add(vec3(1.0, 0.32, 0.06).mul(crev.mul(pulse).mul(2.2).mul(u.f('uLava'))));
+          }
+          if (wet) {
+            // Caustics dance across the drowned bed (brightest in the shallows): two drifting ridged
+            // layers multiplied, a fine web of light, like sun through ripples.
+            const d = waterY.sub(pos.y).toVar();
+            const sub = smoothstep(0.02, 0.14, d);
+            const cp = pos.xz;
+            const ca = mixN(cp.mul(0.62).add(vec2(time.mul(0.03), time.mul(0.011))));
+            const cb = mixN(cp.mul(0.81).add(vec2(0.37, 0.61)).sub(vec2(time.mul(0.012), time.mul(0.027))));
+            const caus = pow(float(1).sub(abs(ca.mul(2).sub(1))).mul(float(1).sub(abs(cb.mul(2).sub(1)))), 5);
+            const shallow = float(1).sub(smoothstep(0.05, 0.4, d));
+            out = out.add(vec3(0.7, 0.95, 0.88).mul(caus.mul(shallow).mul(sub).mul(0.3)));
+          }
+          return out;
+        } : undefined,
+      };
     },
   });
 }
@@ -930,3 +755,4 @@ export function propSurface(c: THREE.Color): SurfaceKind | null {
   const hsl = c.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
   return hsl.s < 0.12 && hsl.l > 0.2 && hsl.l < 0.8 ? 'stone' : null;
 }
+

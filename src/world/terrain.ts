@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import type { ZoneTheme } from '../data/zones';
+import { abs, attribute, cameraViewMatrix, cos, diffuseColor, dot, float, If, length, mat3, max, min, mix, normalize, normalView, positionView, positionWorld, pow, reflect, saturate, sin, smoothstep, transpose, vec2, vec3 } from 'three/tsl';
+import { addPatch, packAttributes, rot2, type F, type V2, type V3 } from '../render/patch';
 import { applyGround, CAVE_TERRACE, GROUND_TIME } from '../render/surface';
 import { noiseTexture } from '../render/textures';
-import { planarReflection } from './water';
+import { mirrorUV, planarReflection, SUN_GLINT } from './water';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
 import { strandField } from './strands';
 import { mulberry32 } from '../core/rng';
@@ -558,6 +560,7 @@ export function buildTerrain(layout: ZoneLayout, theme: ZoneTheme, seed: number)
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('aSplat', new THREE.BufferAttribute(splat, 4));
   chanCol.forEach((a, ch) => geo.setAttribute(`aCol${ch}`, new THREE.BufferAttribute(a, 3)));
+  packAttributes(geo, ['aSplat', 'aCol0', 'aCol1', 'aCol2', 'aCol3']);
   geo.setIndex([...flat, ...rough]);
   geo.computeVertexNormals();
   const wet = layout.fluid.some((f) => f === Fluid.Water);
@@ -1073,144 +1076,125 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
     color: 0xffffff, roughness: lava ? 0.55 : 0.3, metalness: 0,
     transparent: !lava, opacity: lava ? 1 : 0.86, depthWrite: lava,
   });
-  const common = `
-    uniform float uTime;
-    uniform sampler2D uNoise;
-    uniform vec3 uShallow;
-    uniform vec3 uDeep;
-    uniform vec3 uSkyHigh;
-    uniform vec3 uSkyLow;
-    uniform float uReflOn;
-    uniform vec3 uReflK;
-    uniform mat4 uReflMat;
-    ${refl ? 'uniform sampler2D uRefl;' : ''}
-    varying float vDepth;
-    varying vec3 vFluidPos;
-    float fluidN(vec2 p) { return texture2D(uNoise, p).r; }
-    vec2 fluidGrad(vec2 p, float e) { float c = fluidN(p); return vec2(fluidN(p + vec2(e, 0.0)) - c, fluidN(p + vec2(0.0, e)) - c) / e; }
-    vec2 lavaHash(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
-    // Cellular noise: x = distance to nearest cell, y = to second nearest, z = nearest cell id.
-    vec3 lavaCells(vec2 p) {
-      vec2 i = floor(p), f = fract(p);
-      float f1 = 8.0, f2 = 8.0, id = 0.0;
-      for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-        vec2 o = vec2(float(x), float(y));
-        vec2 h = lavaHash(i + o);
-        float d = length(o + 0.15 + h * 0.7 - f);
-        if (d < f1) { f2 = f1; f1 = d; id = h.x; } else if (d < f2) f2 = d;
-      }
-      return vec3(f1, f2, id);
-    }`;
-  mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aDepth;\nvarying float vDepth;\nvarying vec3 vFluidPos;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvDepth = aDepth;\nvFluidPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${common}`)
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        vec2 fp = vFluidPos.xz;
-        vec2 q1 = fp * 0.07 + vec2(uTime * 0.011, uTime * 0.006);
-        vec2 q2 = fp * 0.23 - vec2(uTime * 0.021, -uTime * 0.014);
-        float n1 = fluidN(q1), n2 = fluidN(q2);
-        float ripple = n1 * 0.6 + n2 * 0.4;
-        ${lava
-          ? `// Crust plates drift and slowly deform; seams widen with depth (heat).
-             vec2 warp = vec2(fluidN(fp * 0.05 + uTime * 0.004), fluidN(fp * 0.05 + 0.5 - uTime * 0.003)) - 0.5;
-             vec3 cells = lavaCells(fp * 0.45 + warp * 1.4 + vec2(uTime * 0.014, uTime * 0.009));
-             float heat = smoothstep(0.02, 0.6, vDepth + (n1 - 0.5) * 0.2);
-             float gap = cells.y - cells.x;
-             float seam = 1.0 - smoothstep(0.015, 0.035 + heat * 0.075, gap);
-             float glowNear = 1.0 - smoothstep(0.0, 0.2 + heat * 0.2, gap);
-             float molten = smoothstep(0.82, 0.98, heat * 0.45 + n2 * 0.65);
-             vec3 crust = vec3(0.06, 0.045, 0.042) * (0.75 + cells.z * 0.5);
-             crust = mix(crust, vec3(0.22, 0.05, 0.015), glowNear * heat * 0.7);
-             diffuseColor.rgb = mix(crust, vec3(0.3, 0.08, 0.02), max(seam, molten));`
-          : `// Depth colour: clear turquoise shallows (the bed shows through, see the ground's wet
-             // patch) deepening to opaque blue-green.
-             float deep = smoothstep(0.03, 0.72, vDepth + (ripple - 0.5) * 0.1);
-             // The deep is not one flat colour: broad, slowly drifting patches of a greener and a
-             // bluer deep, darkest where it is deepest.
-             float patchN = fluidN(fp * 0.016 + vec2(uTime * 0.0015, -uTime * 0.001));
-             vec3 deepC = mix(uDeep * vec3(0.8, 1.1, 0.95), uDeep * vec3(1.05, 0.9, 1.18), smoothstep(0.3, 0.7, patchN));
-             deepC *= 1.0 - 0.28 * smoothstep(0.45, 0.72, vDepth);
-             diffuseColor.rgb = mix(uShallow, deepC, deep);
-             // Foam: a broken rim where the bank meets the water, and a second line that laps
-             // in and out a little way offshore.
-             float n3 = fluidN(fp * 0.61 + vec2(uTime * 0.05, -uTime * 0.04));
-             // Thin and soft: a narrow, broken lace right at the waterline, never a white band.
-             float rim = (1.0 - smoothstep(0.0, 0.028, vDepth + (n2 - 0.5) * 0.03)) * smoothstep(0.4, 0.62, n3 + 0.08);
-             float lap = smoothstep(0.72, 0.95, 0.5 + 0.5 * sin(uTime * 0.8 - vDepth * 40.0 + n1 * 5.0));
-             float band = lap * (1.0 - smoothstep(0.03, 0.1, vDepth)) * smoothstep(0.48, 0.66, n3);
-             float foam = max(rim, band * 0.45);
-             diffuseColor.rgb = mix(diffuseColor.rgb, mix(uShallow, vec3(0.86, 0.92, 0.92), 0.7), foam * 0.55);
-             diffuseColor.a = mix(0.38, 0.94, smoothstep(0.0, 0.6, vDepth)) + foam * 0.2;`}`,
-      )
-      .replace(
-        '#include <normal_fragment_maps>',
-        `#include <normal_fragment_maps>
-        {
+  addPatch(mat, {
+    key: lava ? 'fluid4-lava' : refl ? 'fluid4-mirror' : 'fluid4-water',
+    uniforms,
+    nodes(u) {
+      const time = u.f('uTime'), shallow = u.v3('uShallow');
+      const fluidN = (p: V2) => u.tex('uNoise').sample(p).r;
+      const fluidGrad = (p: V2, e: number) => {
+        const c = fluidN(p).toVar();
+        return vec2(fluidN(p.add(vec2(e, 0))).sub(c), fluidN(p.add(vec2(0, e))).sub(c)).div(e);
+      };
+      const depth = attribute('aDepth', 'float') as F;
+      const fp = positionWorld.xz;
+      // Set by the colour, read by the normal and the emission.
+      let q1: V2 = vec2(0), q2: V2 = vec2(0), n1: F = float(0), n2: F = float(0);
+      let heat: F = float(0), seam: F = float(0), molten: F = float(0), glowNear: F = float(0);
+      let rw: V3 = vec3(0), ndv: F = float(0), cover: F = float(0), mirC: V3 = vec3(0);
+      return {
+        color(c) {
+          q1 = fp.mul(0.07).add(vec2(time.mul(0.011), time.mul(0.006))).toVar();
+          q2 = fp.mul(0.23).sub(vec2(time.mul(0.021), time.mul(-0.014))).toVar();
+          n1 = fluidN(q1).toVar();
+          n2 = fluidN(q2).toVar();
+          const ripple = n1.mul(0.6).add(n2.mul(0.4));
+          if (lava) {
+            // Crust plates drift and slowly deform; seams widen with depth (heat).
+            const warp = vec2(fluidN(fp.mul(0.05).add(time.mul(0.004))), fluidN(fp.mul(0.05).add(0.5).sub(time.mul(0.003)))).sub(0.5);
+            const cells = lavaCells(fp.mul(0.45).add(warp.mul(1.4)).add(vec2(time.mul(0.014), time.mul(0.009)))).toVar();
+            heat = smoothstep(0.02, 0.6, depth.add(n1.sub(0.5).mul(0.2))).toVar();
+            const gap = cells.y.sub(cells.x).toVar();
+            seam = float(1).sub(smoothstep(0.015, heat.mul(0.075).add(0.035), gap)).toVar();
+            glowNear = float(1).sub(smoothstep(0, heat.mul(0.2).add(0.2), gap)).toVar();
+            molten = smoothstep(0.82, 0.98, heat.mul(0.45).add(n2.mul(0.65))).toVar();
+            const crust = mix(vec3(0.06, 0.045, 0.042).mul(cells.z.mul(0.5).add(0.75)), vec3(0.22, 0.05, 0.015), glowNear.mul(heat).mul(0.7));
+            return mix(crust, vec3(0.3, 0.08, 0.02), max(seam, molten));
+          }
+          // Depth colour: clear turquoise shallows (the bed shows through, see the ground's wet patch)
+          // deepening to opaque blue-green.
+          const deep = smoothstep(0.03, 0.72, depth.add(ripple.sub(0.5).mul(0.1)));
+          // The deep is not one flat colour: broad, slowly drifting patches of a greener and a bluer
+          // deep, darkest where it is deepest.
+          const patchN = fluidN(fp.mul(0.016).add(vec2(time.mul(0.0015), time.mul(-0.001))));
+          const dp = u.v3('uDeep');
+          const deepC = mix(dp.mul(vec3(0.8, 1.1, 0.95)), dp.mul(vec3(1.05, 0.9, 1.18)), smoothstep(0.3, 0.7, patchN)).mul(float(1).sub(smoothstep(0.45, 0.72, depth).mul(0.28)));
+          // Foam: a broken rim where the bank meets the water, and a second line that laps in and out a
+          // little way offshore. Thin and soft: a narrow, broken lace right at the waterline, never a band.
+          const n3 = fluidN(fp.mul(0.61).add(vec2(time.mul(0.05), time.mul(-0.04)))).toVar();
+          const rim = float(1).sub(smoothstep(0, 0.028, depth.add(n2.sub(0.5).mul(0.03)))).mul(smoothstep(0.4, 0.62, n3.add(0.08)));
+          const lap = smoothstep(0.72, 0.95, sin(time.mul(0.8).sub(depth.mul(40)).add(n1.mul(5))).mul(0.5).add(0.5));
+          const band = lap.mul(float(1).sub(smoothstep(0.03, 0.1, depth))).mul(smoothstep(0.48, 0.66, n3));
+          const foam = max(rim, band.mul(0.45)).toVar();
+          diffuseColor.a.assign(mix(0.38, 0.94, smoothstep(0, 0.6, depth)).add(foam.mul(0.2)));
+          const col = mix(mix(shallow, deepC, deep), mix(shallow, vec3(0.86, 0.92, 0.92), 0.7), foam.mul(0.55)).toVar();
+          // The sky the rippled surface reflects (the emission adds it): the reflected ray in the world.
+          const vdir = positionView.negate().normalize();
+          ndv = saturate(dot(vdir, normalView)).toVar();
+          rw = transpose(mat3(cameraViewMatrix)).mul(reflect(vdir.negate(), normalView)).toVar();
+          if (refl) {
+            // The mirrored scene (ruins, columns, the far shore) where there is one, rippled by the
+            // swells; the painted sky everywhere else. Solid reflections read stronger than the sky's,
+            // so the ruins show in the water even from the high camera.
+            const flatN = normalize(mat3(cameraViewMatrix).mul(vec3(0, 1, 0)));
+            const mir = u.tex('uRefl').sample(mirrorUV(u.m4('uReflMat'), positionWorld, normalView.xy.sub(flatN.xy).mul(0.45))).toVar();
+            const k = u.v3('uReflK');
+            cover = saturate(mir.a).mul(u.f('uReflOn')).mul(min(1, k.x.add(k.y.mul(pow(float(1).sub(ndv), 3))))).toVar();
+            mirC = mir.rgb.mul(mix(vec3(1), shallow.mul(1.6), k.z)).toVar();
+            col.mulAssign(float(1).sub(cover.mul(0.78)));
+          }
+          return col;
+        },
+        normal(n) {
           // Water: long swells, a cross-chop and fine wind ripples; lava: a slow heave.
-          vec2 g = fluidGrad(q1, 0.01) * ${lava ? '0.0' : '0.006'} + fluidGrad(q2, 0.01) * ${lava ? '0.002' : '0.004'};
-          ${lava ? '' : `// Gentle swells rolling across the surface (their crests wander with the noise), under
-          // a faint wind chop.
-          vec2 swD = vec2(0.8, 0.6);
-          float swPh = dot(fp, swD) * 0.7 - uTime * 0.85 + n1 * 4.0;
-          g += swD * cos(swPh) * 0.045 * (0.55 + 0.45 * n2) + fluidGrad(fp * 0.7 + vec2(uTime * 0.06, uTime * 0.045), 0.01) * 0.0015;`}
-          vec3 gv = (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz;
-          normal = normalize(normal - gv + dot(gv, normal) * normal);
-        }`,
-      )
-      .replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-        ${lava
-          ? `vec3 hot = mix(vec3(1.2, 0.3, 0.04), vec3(1.5, 0.6, 0.12), heat);
-             float pulse = 0.85 + 0.15 * sin(uTime * 1.3 + fp.x * 0.3 + fp.y * 0.2);
-             totalEmissiveRadiance += max(hot * seam, vec3(1.25, 0.34, 0.05) * molten * (0.6 + 0.3 * n2)) * pulse;
-             totalEmissiveRadiance += vec3(0.3, 0.05, 0.005) * glowNear * heat * 0.35;`
-          : `// Sky reflection: the reflected ray picks a colour from a sky gradient, so ripples
-             // show as moving light and dark bands; stronger toward grazing angles.
-             vec3 vdir = normalize(vViewPosition);
-             float ndv = clamp(dot(vdir, normal), 0.0, 1.0);
-             vec3 rw = (vec4(reflect(-vdir, normal), 0.0) * viewMatrix).xyz;
-             vec3 sky = mix(uSkyLow, uSkyHigh, smoothstep(-0.1, 0.9, rw.y) * (0.75 + 0.25 * smoothstep(0.3, -0.6, rw.z)));
-             // Drifting cloud shadows in the reflection keep open water from reading as one flat sheet.
-             float cloud = smoothstep(0.35, 0.75, fluidN(rw.xz / max(0.25, rw.y) * 0.05 + fp * 0.012 + vec2(uTime * 0.004, 0.0)));
-             sky *= 0.8 + 0.35 * cloud;
-             float fres = 0.1 + 0.9 * pow(1.0 - ndv, 4.0);
-             vec3 envC = sky * fres;
-             ${refl ? `// The mirrored scene (ruins, columns, the far shore) where there is one, rippled by the
-             // swells; the painted sky everywhere else. Solid reflections read stronger than the
-             // sky's, so the ruins show in the water even from the high camera.
-             vec4 rc = uReflMat * vec4(vFluidPos, 1.0);
-             vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-             vec2 ruv = rc.xy / rc.w + (normal.xy - flatN.xy) * 0.45;
-             vec4 mir = texture2D(uRefl, ruv);
-             float cover = clamp(mir.a, 0.0, 1.0) * uReflOn * min(1.0, uReflK.x + uReflK.y * pow(1.0 - ndv, 3.0));
-             vec3 mirC = mir.rgb * mix(vec3(1.0), uShallow * 1.6, uReflK.z);
-             envC = mix(envC, mirC * (0.95 + 0.25 * pow(1.0 - ndv, 2.0)), cover);
-             diffuseColor.rgb *= 1.0 - cover * 0.78;
-             // Caustic shimmer in the shallows: a drifting web of light over the drowned paving.
-             float ca = fluidN(fp * 0.55 + vec2(uTime * 0.035, uTime * 0.013));
-             float cb = fluidN(fp * 0.73 + vec2(0.37, 0.61) - vec2(uTime * 0.015, uTime * 0.03));
-             float caus = pow((1.0 - abs(ca * 2.0 - 1.0)) * (1.0 - abs(cb * 2.0 - 1.0)), 4.0);
-             float shoal = 1.0 - smoothstep(0.06, 0.5, vDepth);
-             totalEmissiveRadiance += vec3(0.5, 0.95, 0.85) * caus * shoal * (1.0 - cover * 0.7) * 0.55;` : ''}
-             totalEmissiveRadiance += envC * (0.55 + 0.45 * smoothstep(0.0, 0.5, vDepth));
-             // Sun glints: a sun low ahead of the camera, reflected by the ripple normals, so a
-             // path of sparkles flickers on the crests (HDR: they bloom).
-             vec3 sunDir = normalize(vec3(0.25, 0.5, -0.83));
-             float spec = pow(max(dot(normalize(rw), sunDir), 0.0), 400.0);
-             // Two samples at unrelated scales and angles multiplied, so the sparkles never line up on the noise lattice.
-             float twinkle = smoothstep(0.42, 0.62, fluidN(fp * 1.13 + vec2(uTime * 0.11, -uTime * 0.07)) * fluidN(mat2(0.8, 0.6, -0.6, 0.8) * fp * 1.71 - vec2(uTime * 0.05, uTime * 0.09)));
-             // (Capped, so a glint never burns the surface out to white.)
-             totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * min(spec * twinkle * 0.9 + pow(max(dot(normalize(rw), sunDir), 0.0), 18.0) * 0.05, 0.45);`}`,
-      );
-  };
-  mat.customProgramCacheKey = () => (lava ? 'fluid4-lava' : refl ? 'fluid4-mirror' : 'fluid4-water');
+          let g = fluidGrad(q1, 0.01).mul(lava ? 0 : 0.006).add(fluidGrad(q2, 0.01).mul(lava ? 0.002 : 0.004));
+          if (!lava) {
+            // Gentle swells rolling across the surface (their crests wander with the noise), under a
+            // faint wind chop.
+            const swD = vec2(0.8, 0.6);
+            const swPh = dot(fp, swD).mul(0.7).sub(time.mul(0.85)).add(n1.mul(4));
+            g = g.add(swD.mul(cos(swPh).mul(0.045).mul(n2.mul(0.45).add(0.55)))).add(fluidGrad(fp.mul(0.7).add(vec2(time.mul(0.06), time.mul(0.045))), 0.01).mul(0.0015));
+          }
+          const gv = mat3(cameraViewMatrix).mul(vec3(g.x, 0, g.y)).toVar();
+          return normalize(n.sub(gv).add(n.mul(dot(gv, n))));
+        },
+        emissive(e) {
+          if (lava) {
+            const hot = mix(vec3(1.2, 0.3, 0.04), vec3(1.5, 0.6, 0.12), heat);
+            const pulse = sin(time.mul(1.3).add(fp.x.mul(0.3)).add(fp.y.mul(0.2))).mul(0.15).add(0.85);
+            return e.add(max(hot.mul(seam), vec3(1.25, 0.34, 0.05).mul(molten.mul(n2.mul(0.3).add(0.6)))).mul(pulse)).add(vec3(0.3, 0.05, 0.005).mul(glowNear.mul(heat).mul(0.35)));
+          }
+          // Sky reflection: the reflected ray picks a colour from a sky gradient, so ripples show as
+          // moving light and dark bands; stronger toward grazing angles.
+          const sky = mix(u.v3('uSkyLow'), u.v3('uSkyHigh'), smoothstep(-0.1, 0.9, rw.y).mul(smoothstep(0.3, -0.6, rw.z).mul(0.25).add(0.75)));
+          // Drifting cloud shadows in the reflection keep open water from reading as one flat sheet.
+          const cloud = smoothstep(0.35, 0.75, fluidN(rw.xz.div(max(rw.y, 0.25)).mul(0.05).add(fp.mul(0.012)).add(vec2(time.mul(0.004), 0))));
+          const fres = pow(float(1).sub(ndv), 4).mul(0.9).add(0.1);
+          let envC = sky.mul(cloud.mul(0.35).add(0.8)).mul(fres);
+          let out = e;
+          if (refl) {
+            envC = mix(envC, mirC.mul(pow(float(1).sub(ndv), 2).mul(0.25).add(0.95)), cover);
+            // Caustic shimmer in the shallows: a drifting web of light over the drowned paving.
+            const ca = fluidN(fp.mul(0.55).add(vec2(time.mul(0.035), time.mul(0.013))));
+            const cb = fluidN(fp.mul(0.73).add(vec2(0.37, 0.61)).sub(vec2(time.mul(0.015), time.mul(0.03))));
+            const caus = pow(float(1).sub(abs(ca.mul(2).sub(1))).mul(float(1).sub(abs(cb.mul(2).sub(1)))), 4);
+            const shoal = float(1).sub(smoothstep(0.06, 0.5, depth));
+            out = out.add(vec3(0.5, 0.95, 0.85).mul(caus.mul(shoal).mul(float(1).sub(cover.mul(0.7))).mul(0.55)));
+          }
+          out = out.add(envC.mul(smoothstep(0, 0.5, depth).mul(0.45).add(0.55)));
+          // Sun glints: a sun low ahead of the camera, reflected by the ripple normals, so a path of
+          // sparkles flickers on the crests (HDR: they bloom). Two samples at unrelated scales and angles
+          // multiplied, so the sparkles never line up on the noise lattice.
+          const sd = max(dot(normalize(rw), SUN_GLINT), 0).toVar();
+          const spec = pow(sd, 400);
+          const twinkle = smoothstep(0.42, 0.62, fluidN(fp.mul(1.13).add(vec2(time.mul(0.11), time.mul(-0.07)))).mul(fluidN(rot2(fp, 0.8, 0.6, -0.6, 0.8).mul(1.71).sub(vec2(time.mul(0.05), time.mul(0.09))))));
+          // (Capped, so a glint never burns the surface out to white.)
+          return out.add(vec3(1.0, 0.96, 0.86).mul(min(spec.mul(twinkle).mul(0.9).add(pow(sd, 18).mul(0.05)), 0.45)));
+        },
+      };
+    },
+  });
+
   const mesh = new THREE.Mesh(geo, mat);
   if (refl) {
     let layered = !mirror?.moat;
@@ -1232,4 +1216,26 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
   mesh.receiveShadow = !lava;
   mesh.renderOrder = 1;
   return { mesh, tick: (t: number) => (uniforms.uTime.value = t) };
+}
+
+/** A hash of a cell to two values in 0..1. */
+const lavaHash = (p: V2) => sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))).mul(43758.5453).fract();
+
+/** Cellular noise: x = distance to the nearest cell, y = to the second nearest, z = the nearest cell's id. */
+function lavaCells(p: V2): V3 {
+  const i = p.floor().toVar(), f = p.fract().toVar();
+  const f1 = float(8).toVar(), f2 = float(8).toVar(), id = float(0).toVar();
+  for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) {
+    const o = vec2(x, y);
+    const h = lavaHash(i.add(o)).toVar();
+    const d = length(o.add(0.15).add(h.mul(0.7)).sub(f)).toVar();
+    If(d.lessThan(f1), () => {
+      f2.assign(f1);
+      f1.assign(d);
+      id.assign(h.x);
+    }).ElseIf(d.lessThan(f2), () => {
+      f2.assign(d);
+    });
+  }
+  return vec3(f1, f2, id);
 }

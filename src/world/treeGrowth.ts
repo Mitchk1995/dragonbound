@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp, mulberry32, type Rng } from '../core/rng';
 import { SPRAY_CELLS, sprayCell, type LeafKind } from '../render/foliage';
+import { packAttributes } from '../render/patch';
 
 /**
  * Grown trees (the 'natural' tree style, trees.ts): a tree is grown from a seed, never assembled
@@ -1225,6 +1226,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   g.setAttribute('aWood', pick(wood, 4));
   g.setAttribute('aBarkA', pick(ba, 4));
   g.setAttribute('aBarkB', pick(bb, 4));
+  packAttributes(g, ['aWood', 'aBarkA', 'aBarkB']);
   g.setIndex(idx.map((i) => keep[i]));
   g.computeVertexNormals();
   g.computeBoundingSphere();
@@ -1429,6 +1431,7 @@ export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
   g.setAttribute('aFlutter', new THREE.Float32BufferAttribute(flutter, 1));
   g.setAttribute('aCard', new THREE.Float32BufferAttribute(card3, 3));
   g.setAttribute('aSpine', new THREE.Float32BufferAttribute(spine, 3));
+  packAttributes(g, ['aWind', 'aFlutter', 'aCard', 'aSpine']);
   g.setIndex(idx);
   g.computeBoundingSphere();
   return g;

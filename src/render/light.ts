@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import type { NodeBuilder } from 'three/webgpu';
+import type { V3 } from './patch';
+import { cameraViewMatrix, dot, exp, float, Fn, fog, length, mat3, max, mix, normalize, positionView, pow, renderGroup, uniform } from 'three/tsl';
 
 /**
  * The world's sunlight: one shadow map fitted to whatever the camera sees, and the haze that
@@ -131,38 +134,37 @@ export function fitSunShadow(sun: THREE.DirectionalLight, camera: THREE.Perspect
 }
 
 /**
- * Distance haze (aerial perspective), patched into every built-in material's fog once, before any
- * material compiles. The scene's Fog keeps its meaning (near: where the haze begins to show, far:
- * where it has swallowed everything), but it gathers smoothly with distance instead of in a band,
- * so the far side of the view is a little paler and softer, never cut off. Towards the sun the haze
- * glows with the sunlight's warmth; away from it, it stays the cooler sky colour.
+ * Distance haze (aerial perspective): the fog every fogged material takes, from the scene's Fog. Its
+ * near and far keep their meaning (near: where the haze begins to show, far: where it has swallowed
+ * everything), but it gathers smoothly with distance instead of in a band, so the far side of the
+ * view is a little paler and softer, never cut off. On lit materials the haze glows towards the sun
+ * with the sunlight's warmth; away from it, and on unlit ones, it stays the cooler sky colour. With
+ * no Fog on the scene there is no haze.
  */
-export function hazeFog() {
-  const C = THREE.ShaderChunk;
-  if (C.fog_fragment.includes('haze-fog')) return;
-  C.fog_pars_vertex = C.fog_pars_vertex.replace('varying float vFogDepth;', 'varying float vFogDepth;\n\tvarying vec3 vFogView;');
-  C.fog_vertex = C.fog_vertex.replace('vFogDepth = - mvPosition.z;', 'vFogDepth = - mvPosition.z;\n\tvFogView = mvPosition.xyz;');
-  C.fog_pars_fragment = C.fog_pars_fragment.replace('varying float vFogDepth;', 'varying float vFogDepth;\n\tvarying vec3 vFogView;');
-  // Lit materials declare the lights first: mark that the sun's direction can be read.
-  C.lights_pars_begin += '\n#define HAZE_SUN\n';
-  C.fog_fragment = `// haze-fog
-#ifdef USE_FOG
-	#ifdef FOG_EXP2
-		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
-		vec3 hazeColor = fogColor;
-	#else
-		// Thin at first, then thicker: about 5% at the near edge, 60% halfway out, 95% at the far edge.
-		float hazeD = length( vFogView );
-		float hazeT = max( hazeD - fogNear * 0.8, 0.0 ) / max( fogFar - fogNear * 0.8, 1.0 );
-		float fogFactor = 1.0 - exp( - 3.0 * hazeT * hazeT );
-		vec3 hazeColor = fogColor;
-		#if defined( HAZE_SUN ) && NUM_DIR_LIGHTS > 0
-			vec3 hazeSun = directionalLights[ 0 ].color;
-			float hazeGlow = pow( max( dot( normalize( vFogView ), directionalLights[ 0 ].direction ), 0.0 ), 4.0 );
-			hazeColor = mix( fogColor, fogColor * ( 0.75 + 0.5 * hazeSun / max( max( hazeSun.r, hazeSun.g ), max( hazeSun.b, 1e-3 ) ) ), hazeGlow * 0.6 );
-		#endif
-	#endif
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, hazeColor, fogFactor );
-#endif
-`;
+export function hazeFog(scene: THREE.Scene, sun: THREE.DirectionalLight) {
+  // (Read once per render, by every fogged material alike.)
+  const near = uniform(0).setGroup(renderGroup), far = uniform(1).setGroup(renderGroup), color = uniform(new THREE.Color()).setGroup(renderGroup);
+  const sunDir = uniform(new THREE.Vector3()).setGroup(renderGroup), sunCol = uniform(new THREE.Color()).setGroup(renderGroup);
+  const _p = new THREE.Vector3(), _t = new THREE.Vector3();
+  // (The fog and the sun as they stand.)
+  near.onRenderUpdate(() => {
+    const fog = scene.fog as THREE.Fog | null;
+    far.value = fog ? fog.far : 2e9;
+    if (fog) color.value.copy(fog.color);
+    sunDir.value.subVectors(sun.getWorldPosition(_p), sun.target.getWorldPosition(_t)).normalize();
+    sunCol.value.copy(sun.color).multiplyScalar(sun.intensity);
+    return fog ? fog.near : 1e9;
+  });
+  return Fn((builder: NodeBuilder) => {
+    // Thin at first, then thicker: about 5% at the near edge, 60% halfway out, 95% at the far edge.
+    const v = positionView;
+    const t = max(length(v).sub(near.mul(0.8)), 0).div(max(far.sub(near.mul(0.8)), 1));
+    const factor = float(1).sub(exp(t.mul(t).mul(-3)));
+    if (!(builder.material as { lights?: boolean } | null)?.lights) return fog(color, factor);
+    const glow = pow(max(dot(normalize(v), mat3(cameraViewMatrix).mul(sunDir)), 0), 4);
+    const sc = sunCol as unknown as V3;
+    const tint = sc.div(max(max(sc.r, sc.g), max(sc.b, 1e-3))).mul(0.5).add(0.75);
+    const fc = color as unknown as V3;
+    return fog(mix(fc, fc.mul(tint), glow.mul(0.6)), factor);
+  })();
 }

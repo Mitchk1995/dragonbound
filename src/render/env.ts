@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { float, Fn, reference, renderGroup, texture, vec2 } from 'three/tsl';
+import type { F, V2, V3 } from './patch';
 import { shareResource } from './resources';
 
 /**
@@ -147,20 +149,17 @@ export function zoneLighting(t: LightingTheme): ZoneLighting {
 }
 
 /**
- * Soft, steady shadow edges: the stock PCF filter turns its few samples by a per-pixel noise, which
+ * Soft, steady shadow edges: the stock filter turns its few samples by a per-pixel noise, which
  * reads as a dithered stripe along every shadow edge on a wall or a basin's rim. A fixed 4 × 4 grid
- * of filtered taps across the light's shadow radius gives an even soft edge with no noise. (Patched into the shader
- * chunk once, before any material compiles.)
+ * of filtered taps across the light's shadow radius gives an even soft edge with no noise. (Set as a
+ * light's shadow filter: `light.shadow.filterNode`.)
  */
-export function steadyShadows() {
-  const chunk = THREE.ShaderChunk.shadowmap_pars_fragment;
-  if (chunk.includes('steady-shadows')) return;
-  const next = chunk.replace(/float phi = interleavedGradientNoise\( gl_FragCoord\.xy \) \* PI2;[\s\S]*?\) \* 0\.2;/, `// steady-shadows
-				shadow = 0.0;
-				for ( int i = 0; i < 4; i ++ ) for ( int j = 0; j < 4; j ++ ) {
-					shadow += texture( shadowMap, vec3( shadowCoord.xy + ( vec2( float( i ), float( j ) ) - 1.5 ) * radius * 0.66, shadowCoord.z ) );
-				}
-				shadow /= 16.0;`);
-  if (next === chunk) throw new Error('steadyShadows: the shadow chunk has changed; update the patch');
-  THREE.ShaderChunk.shadowmap_pars_fragment = next;
-}
+export const steadyShadows = Fn(({ depthTexture, shadowCoord, shadow }: { depthTexture: THREE.DepthTexture; shadowCoord: V3; shadow: THREE.LightShadow }) => {
+  const mapSize = (reference('mapSize', 'vec2', shadow) as unknown as { setGroup(g: unknown): V2 }).setGroup(renderGroup);
+  const radius = (reference('radius', 'float', shadow) as unknown as { setGroup(g: unknown): F }).setGroup(renderGroup).div(mapSize.x).mul(0.66).toVar();
+  let sum: F = float(0);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    sum = sum.add(texture(depthTexture, shadowCoord.xy.add(vec2(i - 1.5, j - 1.5).mul(radius))).compare(shadowCoord.z) as unknown as F);
+  }
+  return sum.div(16);
+});

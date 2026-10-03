@@ -10,7 +10,7 @@ import type { Hold } from './anim';
 import type { Model } from './kit';
 import { applyFinish, type Finish } from './env';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
-import { applyCharPaint, applyGrade, CHAR_PAINTS, MODEL_GRADE, paintAttributes, prepareCharGeometry, setCharPaint, trackGradeRoot, type CharPaint, type CharPaintKind } from './surface';
+import { applyCharPaint, applyGrade, CHAR_PAINTS, MODEL_GRADE, packCharAttributes, paintAttributes, prepareCharGeometry, setCharPaint, trackGradeRoot, type CharPaint, type CharPaintKind } from './surface';
 
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
@@ -222,6 +222,7 @@ export function registerModelScene(name: string, scene: THREE.Group) {
   if (!name.startsWith('gear_bow_') && name !== 'gear_u_emberstring') mergeRigidParts(scene, name);
   scene.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
+    packCharAttributes(node.geometry);
     shareResource(node.geometry);
     for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
       for (const value of Object.values(material)) if (value instanceof THREE.Texture) shareResource(value);
