@@ -64,6 +64,13 @@ Mitchell's answers on the [Round 5 review page](https://claude.ai/artifact/LYYQ9
 3. Blueprint the levels 1–10 region.
 4. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
 
+Where things stand (October 3):
+- **Castle:** four rounds of Mitchell's picture notes are fixed and merged. He is reviewing the latest pictures on the review page, https://claude.ai/artifact/N6gcB3FxkqzgARButYqR2p, where he pins notes; a fixed note is marked `status: done` and drops off the page.
+- **Castle, open points:**
+  - The rock's ledges currently carry no pines: the cliff scenery is seeded from the layout, so unrelated layout edits reshuffle it.
+  - The short ore lane from the climb to the minecart ends short of the climb's west wall. Where it should join is undecided.
+- **Characters** are next once the castle is approved. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
+
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 
 ### Follow-up (October 1, late)
