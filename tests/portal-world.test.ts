@@ -85,15 +85,18 @@ describe('portal glimpses', () => {
 });
 
 describe('zone lighting', () => {
-  it('warms the key, cools the fill, and keeps the total light about the same', () => {
+  it('warms the key, cools the fill, and lets the sun outshine the sky light so shadows read', () => {
     for (const id of Object.keys(ZONES)) {
       const t = ZONES[id].theme, L = zoneLighting(t);
       const warm = (c: THREE.Color) => c.r - c.b;
       expect(warm(L.key), id).toBeGreaterThanOrEqual(warm(new THREE.Color(t.sun[0])) - 1e-6);
       expect(warm(L.fill), id).toBeLessThan(warm(L.key));
-      const before = t.sun[1] + t.hemi[2], after = L.keyIntensity + L.hemiIntensity + L.fillIntensity;
-      expect(after / before, id).toBeGreaterThan(0.95);
-      expect(after / before, id).toBeLessThan(1.25);
+      // The bounce from the ground takes on the sunlight's colour.
+      const gap = (c: THREE.Color) => Math.hypot(c.r - L.key.r, c.g - L.key.g, c.b - L.key.b);
+      expect(gap(L.ground), id).toBeLessThan(gap(new THREE.Color(t.hemi[1])));
+      // Outdoors at full contrast the sun carries well over twice the sky light; nowhere is it weaker than before.
+      if (!t.wallRise && (t.shade ?? 1) === 1) expect(L.keyIntensity / L.hemiIntensity, id).toBeGreaterThan((2 * t.sun[1]) / t.hemi[2]);
+      expect(L.keyIntensity, id).toBeGreaterThanOrEqual(t.sun[1]);
     }
   });
 });

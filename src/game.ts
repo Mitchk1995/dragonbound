@@ -17,7 +17,10 @@ import { Particles } from './fx/particles';
 import { Sfx } from './fx/sfx';
 import { Rig, newAnimState } from './render/anim';
 import { PAL } from './render/kit';
-import { steadyShadows, zoneLighting } from './render/env';
+import { LIGHT_BALANCE, steadyShadows, zoneLighting, type ZoneLighting } from './render/env';
+import { fitSunShadow, hazeFog, SUN_DIR } from './render/light';
+import { ShadePass } from './render/shadePass';
+import { SKY_LIGHT } from './render/sky';
 import { makeModel } from './render/registry';
 import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
 import { SaveWriter } from './save/writer';
@@ -39,8 +42,12 @@ export type Mode = 'title' | 'create' | 'play';
 
 export class Game {
   readonly renderer: THREE.WebGLRenderer;
-  /** Scene → bloom (HDR, only values above ~1 glow: emissives, fire, lava, portals) → tone map. */
+  /**
+   * Scene → ambient occlusion and colour grade → bloom (HDR, only values above ~1 glow: emissives,
+   * fire, lava, portals) → tone map.
+   */
   private composer!: EffectComposer;
+  private shade!: ShadePass;
   private bloom!: UnrealBloomPass;
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(42, 1, 0.5, 400);
@@ -115,32 +122,26 @@ export class Game {
 
   constructor(public canvas: HTMLCanvasElement) {
     steadyShadows();
+    hazeFog();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+    // (The scene pass keeps its depth: the ambient occlusion reads it.)
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4, depthTexture: new THREE.DepthTexture(1, 1) });
     this.composer = new EffectComposer(this.renderer, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.shade = new ShadePass(this.camera, () => this.scene.fog as THREE.Fog | null);
+    this.composer.addPass(this.shade);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.5, 0.95);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.scene.fog = new THREE.Fog(0x2c2630, 38, 85);
     this.scene.add(this.hemi);
+    // The shadow camera, its filter and its biases are fitted to the view every frame (see light()).
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
-    const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -28;
-    sc.right = sc.top = 28;
-    sc.near = 1;
-    sc.far = 90;
-    // (Enough normal offset that faces turned from the sun never speckle with their own shadow.)
-    this.sun.shadow.bias = -0.0004;
-    this.sun.shadow.normalBias = 0.07;
-    // (A wide, even filter: where a shadow edge lies along a face the sun only grazes, its texels
-    // stretch into long steps; spread over a few texels they blend into a soft edge, not a stipple.)
-    this.sun.shadow.radius = 2.2;
+    this.sun.shadow.mapSize.set(4096, 4096);
     this.fill.target = this.sun.target;
     this.scene.add(this.sun, this.sun.target, this.fill, this.particles.mesh, this.glow.mesh, this.player.obj);
     this.player.bind(this);
@@ -269,20 +270,28 @@ export class Game {
     (this.scene.fog as THREE.Fog).color.setHex(t.bg);
     (this.scene.fog as THREE.Fog).near = t.fog[0];
     (this.scene.fog as THREE.Fog).far = t.fog[1];
-    this.hemi.color.setHex(t.hemi[0]);
-    this.hemi.groundColor.setHex(t.hemi[1]);
-    this.hemi.intensity = t.hemi[2];
-    const lit = zoneLighting(t);
-    this.sun.color.copy(lit.key);
-    this.sun.intensity = lit.keyIntensity;
-    this.hemi.intensity = lit.hemiIntensity;
-    this.fill.color.copy(lit.fill);
-    this.fill.intensity = lit.fillIntensity;
-    this.renderer.toneMappingExposure = t.exposure;
+    this.relight();
     this.hovered = null;
     this.hoveredItem = null;
     this.hoveredThing = null;
     this.ui.showBoss(null);
+  }
+
+  /** Light the scene for the current zone's theme (the sun, the sky and bounce light, the fill, the sky dome). */
+  relight() {
+    const t = this.zone.def.theme, lit = zoneLighting(t);
+    this.lit = lit;
+    this.sun.color.copy(lit.key);
+    this.sun.intensity = lit.keyIntensity;
+    this.hemi.color.copy(lit.sky);
+    this.hemi.groundColor.copy(lit.ground);
+    this.hemi.intensity = lit.hemiIntensity;
+    this.fill.color.copy(lit.fill);
+    this.fill.intensity = lit.fillIntensity;
+    this.renderer.toneMappingExposure = t.exposure * LIGHT_BALANCE.exposure;
+    SKY_LIGHT.uSunDir.value.copy(SUN_DIR);
+    SKY_LIGHT.uSunCol.value.copy(lit.key);
+    SKY_LIGHT.uHaze.value.setHex(t.bg);
   }
 
   /** Portal travel with a fade. Leaving a zone discards it; the next visit is a fresh instance. */
@@ -496,15 +505,27 @@ export class Game {
   }
 
   /**
-   * Quality presets. High: up to 2× pixel ratio, 4× MSAA, 2048 shadows, bloom. Medium: 1.5×,
-   * MSAA, 1536 shadows, bloom. Low: 1× (no supersampling on HiDPI), no MSAA, 1024 shadows, no
-   * bloom — for integrated GPUs. The lawn draws 8, 6 or 4 shells.
+   * Quality presets. High: up to 2× pixel ratio, 4× MSAA, 4096 shadows, ambient occlusion, bloom.
+   * Medium: 1.5×, MSAA, 2048 shadows, occlusion, bloom. Low: 1× (no supersampling on HiDPI), no
+   * MSAA, 1024 shadows, no occlusion, no bloom — for integrated GPUs. The lawn draws 8, 6 or 4 shells.
    */
   applyGraphics(level: Graphics) {
-    const p = { high: { ratio: 2, msaa: 4, shadow: 2048, bloom: true }, medium: { ratio: 1.5, msaa: 4, shadow: 1536, bloom: true }, low: { ratio: 1, msaa: 0, shadow: 1024, bloom: false } }[level];
+    const p = {
+      high: { ratio: 2, msaa: 4, shadow: 4096, bloom: true, ao: true },
+      medium: { ratio: 1.5, msaa: 4, shadow: 2048, bloom: true, ao: true },
+      low: { ratio: 1, msaa: 0, shadow: 1024, bloom: false, ao: false },
+    }[level];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
-    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) rt.samples = p.msaa;
+    // (A target allocates its buffers once: on a new sample count it is released and rebuilt on next use,
+    // its depth texture with it, even when its size stays the same.)
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) {
+      if (rt.samples === p.msaa) continue;
+      rt.samples = p.msaa;
+      rt.dispose();
+    }
     this.bloom.enabled = p.bloom;
+    // (Without occlusion the low preset skips the whole pass and its grade.)
+    this.shade.enabled = p.ao;
     setLawnShells(LAWN_SHELLS[level]);
     if (this.sun.shadow.mapSize.x !== p.shadow) {
       this.sun.shadow.mapSize.set(p.shadow, p.shadow);
@@ -516,7 +537,49 @@ export class Game {
 
   /** Render the current view through the post chain. */
   draw() {
+    this.light();
     this.composer.render();
+  }
+
+  /** The zone's lights (relight), before the indoor softening. */
+  private lit: ZoneLighting | null = null;
+  /**
+   * How far the sun's shadows reach: at least this near (the play camera sees less), at most this far
+   * (a view over the whole island leaves the far side to the haze).
+   */
+  private static readonly SHADOW_REACH = [80, 160] as const;
+  private readonly lookDir = new THREE.Vector3();
+  private readonly fillFrom = new THREE.Vector3(-18, 14, -6);
+
+  /**
+   * Light the current view: the sun's shadows fitted to everything the camera sees (the play
+   * camera, the title's orbit or a free camera alike), the cool fill from the side away from it.
+   */
+  private light() {
+    const cam = this.camera, d = cam.getWorldDirection(this.lookDir);
+    // The ground under the middle of the view (a couple of steps onto the terrain).
+    let y = this.player.pos.y, x = cam.position.x, z = cam.position.z;
+    for (let i = 0; i < 2 && d.y < -0.05; i++) {
+      const t = (y - cam.position.y) / d.y;
+      x = cam.position.x + d.x * t;
+      z = cam.position.z + d.z * t;
+      const h = this.zoneOrNull?.view.heightAt(x, z);
+      if (h !== undefined && Number.isFinite(h)) y = h;
+    }
+    const dist = Math.hypot(x - cam.position.x, y - cam.position.y, z - cam.position.z);
+    const fog = this.scene.fog as THREE.Fog | null;
+    const [near, far] = Game.SHADOW_REACH;
+    const reach = Math.min(fog ? fog.far : Infinity, THREE.MathUtils.clamp(dist * 1.6, near, far));
+    fitSunShadow(this.sun, cam, SUN_DIR, y, reach);
+    this.fill.position.copy(this.sun.target.position).add(this.fillFrom);
+    // Inside a building (its roof lifted for the camera) the light is the room's: the sun falls
+    // in softly and the sky light, as through its windows, fills it evenly.
+    const lit = this.lit;
+    if (lit) {
+      const k = this.zoneOrNull?.indoors ?? 0;
+      this.sun.intensity = lit.keyIntensity * (1 - 0.65 * k);
+      this.hemi.intensity = lit.hemiIntensity * (1 + 0.8 * k);
+    }
   }
 
   private resize() {
@@ -546,9 +609,6 @@ export class Game {
     OCCLUDE.uOccOn.value = 1;
     OCCLUDE.uOccPlayer.value.copy(p);
     OCCLUDE.uOccCam.value.copy(this.camera.position);
-    this.sun.position.set(p.x + 14, p.y + 28, p.z + 10);
-    this.sun.target.position.set(p.x, p.y, p.z);
-    this.fill.position.set(p.x - 18, p.y + 14, p.z - 6);
   }
 
   private buildTitleDragon() {
@@ -573,9 +633,6 @@ export class Game {
       const off = this.debug.poseView ? 0 : -1.4;
       this.camera.position.set(p.x + off, 2.2, p.z + 5.2);
       this.camera.lookAt(p.x + off, 1.15, p.z);
-      this.sun.position.set(p.x + 6, 14, p.z + 10);
-      this.fill.position.set(p.x - 8, 6, p.z - 2);
-      this.sun.target.position.set(p.x, 0, p.z);
       OCCLUDE.uOccOn.value = 0;
       for (const f of this.zone.view.followers) f.position.set(p.x, 0, p.z);
       return;
@@ -590,11 +647,8 @@ export class Game {
     this.camera.lookAt(cx, 0, cz);
     const fog = this.scene.fog as THREE.Fog;
     fog.near = R * 0.9;
-    fog.far = R * 2.6;
+    fog.far = R * 3.6;
     OCCLUDE.uOccOn.value = 0;
-    this.sun.position.set(cx + 20, 40, cz + 10);
-    this.fill.position.set(cx - 24, 20, cz - 8);
-    this.sun.target.position.set(cx, 0, cz);
     const d = this.titleDragon;
     if (d) {
       const a = this.time * 0.16;

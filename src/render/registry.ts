@@ -147,7 +147,7 @@ const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace', 'a
 // ─── Painted albedo recipes ──────────────────────────────────────────────────
 
 const ROLE_PAINT: Record<string, CharPaintKind | null> = {
-  skin: 'skin', hair: 'hair', cloth: 'cloth', cloth2: 'cloth', leather: 'leather',
+  skin: 'skin', hair: 'hair', cloth: 'cloth', clothDark: 'cloth', cloth2: 'cloth', leather: 'leather',
   metal: 'metal', trim: 'trim', dark: 'darkMetal', glow: null,
 };
 
@@ -300,7 +300,7 @@ export function makeModel(name: string): Model {
 
 // ─── Role recolouring ───────────────────────────────────────────────────────
 
-export type RoleColors = Partial<Record<'skin' | 'hair' | 'cloth' | 'cloth2' | 'leather' | 'metal' | 'trim' | 'dark' | 'glow', number>>;
+export type RoleColors = Partial<Record<'skin' | 'hair' | 'cloth' | 'clothDark' | 'cloth2' | 'leather' | 'metal' | 'trim' | 'dark' | 'glow', number>>;
 
 export function roleOf(m: THREE.Material): string | null {
   const match = /^ROLE_(\w+?)(\.\d{3})?$/.exec(m.name);
@@ -401,6 +401,11 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
 const isBow = (model: string) => model.startsWith('bow_') || model === 'u_emberstring';
 const BLADE_MODELS = new Set(['sword', 'longsword', 'u_cinderfang']);
 
+/** The tunic's collar and sleeve bands (ROLE_clothDark): the tunic's dye at this brightness. */
+const CLOTH_DARK = 0.55;
+const shadeOf = (hex: number, k: number) =>
+  (Math.round(((hex >> 16) & 255) * k) << 16) | (Math.round(((hex >> 8) & 255) * k) << 8) | Math.round((hex & 255) * k);
+
 /** Helms that cover the hair (and, for full helms, the beard). The Ashen Crown is an open circlet worn over the hair. */
 const HAIR_HIDDEN_BY: Record<string, 'hair' | 'all'> = { helm_open: 'hair', helm_full: 'all' };
 
@@ -411,10 +416,14 @@ const HAIR_HIDDEN_BY: Record<string, 'hair' | 'all'> = { helm_open: 'hair', helm
 export class HeroDresser {
   private attached: THREE.Object3D[] = [];
   private sockets = new Map<string, THREE.Object3D>();
+  /** The starting outfit's extra pieces (hero.py `outfit_<slot>_*`), hidden while gear fills that slot. */
+  private outfit: [Slot, THREE.Object3D][] = [];
 
   constructor(private model: Model) {
     model.root.traverse((o) => {
       if (o.name.startsWith('sock_')) this.sockets.set(o.name, o);
+      const m = /^outfit_(body|gloves|boots)_/.exec(o.name);
+      if (m) this.outfit.push([m[1] as Slot, o]);
     });
   }
 
@@ -426,7 +435,12 @@ export class HeroDresser {
     disposeObjects(this.attached);
     this.attached = [];
     const a = look ?? { name: '', skin: 1, hair: 1, hairColor: 1, beard: 0, cloth: 0, cloth2: 5 };
-    const dye = { cloth: CLOTH_COLORS[a.cloth] ?? CLOTH_COLORS[0], cloth2: CLOTH_COLORS[a.cloth2] ?? CLOTH_COLORS[5] };
+    const cloth = CLOTH_COLORS[a.cloth] ?? CLOTH_COLORS[0];
+    const dye = { cloth, clothDark: shadeOf(cloth, CLOTH_DARK), cloth2: CLOTH_COLORS[a.cloth2] ?? CLOTH_COLORS[5] };
+    for (const [slot, node] of this.outfit) {
+      const item = equipment[slot];
+      node.visible = !(item && gearLook(item));
+    }
     applyRoles(this.model.root, {
       skin: SKIN_TONES[a.skin] ?? SKIN_TONES[1],
       hair: HAIR_COLORS[a.hairColor] ?? HAIR_COLORS[1],
@@ -512,7 +526,7 @@ export class HeroDresser {
 
 /** Every model file the game may use; missing ones fall back to placeholders. */
 export const MODEL_FILES = [
-  'hero', 'goblin', 'kobold', 'cultist', 'drakeling', 'cinderwing', 'whelp', 'golem', 'warden', 'quartermaster',
+  'hero', 'goblin', 'kobold', 'cultist', 'priest', 'drakeling', 'cinderwing', 'whelp', 'golem', 'warden', 'quartermaster',
   'gear_sword', 'gear_longsword', 'gear_pickaxe', 'gear_helm_open', 'gear_helm_full',
   ...['worn', 'hunter', 'recurve', 'drakebone'].map((b) => `gear_bow_${b}`),
   ...['apprentice', 'oak', 'runed', 'ember'].map((s) => `gear_staff_${s}`),

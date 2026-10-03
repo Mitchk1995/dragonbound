@@ -57,7 +57,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
   cinder_priest: {
     id: 'cinder_priest', name: 'Cinder Priest', level: 14, hp: 260, xp: 75, dmg: [8, 12], atkRange: 10, ...PACE.cinder_priest,
-    armor: 4, radius: 0.6, aggro: 12, behavior: 'caster', drop: 'priest', model: 'cultist', scale: 1.45,
+    armor: 4, radius: 0.6, aggro: 12, behavior: 'caster', drop: 'priest', model: 'priest', scale: 1,
     aoeRadius: 2.0, multiCast: 4, elite: true,
   },
   cinderwing: {
