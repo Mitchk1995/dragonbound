@@ -8,7 +8,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - Handle all repository housekeeping yourself, start to finish: branch, commit, open the PR, fix CI, merge, then delete the branch and any worktree. When you finish, nothing is left uncommitted and no stray branch, worktree or scratch folder remains.
 - Ask the owner only about the game: feel, look, design direction and priorities.
 - **Show, don't tell.** Progress, options and questions go to the owner as pictures (in-game captures, concept images), with a line or two of text at most. No score tables, long lists or walls of text; the owner won't open the game to check. Show progress regularly, not only at the end.
-- **One thing at a time for the owner's eye.** The owner judges one area at a time from pictures before it counts as done. The owner's eye is the judge; critic agents are a tool for finding defects, not a loop to grind. Stop and show the owner when progress stalls.
+- **One thing at a time for the owner's eye.** The owner judges one area at a time from pictures before it counts as done. The owner's eye is the judge: visual work goes to the owner straight from the builder, with no separate reviewer or critic stage (owner, October 3, to save usage). Stop and show the owner when progress stalls.
 - **Be honest about style.** Say plainly when a look is or is not achievable with how we build things, and show it. Concept paintings are mood, not blueprints: they tend to be generic, so scrutinise their layout and use your own taste.
 - **Workflows for implementation (October 3).** The owner moved to a bigger plan: use workflows where they help, partitioned so parallel jobs never edit the same code, each job in its own worktree on its own branch. Heavy jobs still run one at a time through the shared lock (see "How work lands"). Keep the repo, branches and scratch output clean.
 - **How to work through a batch of owner notes.**
@@ -17,8 +17,8 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
   - Run one fresh, focused job per group. A single long-running agent costs more with every step; groups that touch the same code run one after another, the rest can run side by side in their own worktrees.
   - Give every job one shared brief: rules, style, where the code is, how to capture and how to report.
   - A job checks each fix from several camera angles, not only the review view, and extends the geometry audit where it can.
-  - A style-aware reviewer checks the result before the owner sees it.
-- **Every visual builder, critic or reviewer starts from the style.** Its prompt points it at "The look" in [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md) and the owner's picks for that area in the plan. Nothing reaches the owner until the geometry checks pass and a style-aware reviewer has zoomed into every capture.
+  - The owner judges the result from pictures; there is no separate visual review stage.
+- **Every visual builder starts from the style.** Its prompt points it at "The look" in [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md) and the owner's picks for that area in the plan. Nothing reaches the owner until the geometry checks pass and the builder has zoomed into every capture it shows.
 - **Mechanics and non-visual systems go to Codex** (GPT 6.1 Sol, max effort, run headless with the Codex app's newest bundled `codex.exe`); Claude does design, planning, look and feel.
 
 ## Where things are

@@ -39,7 +39,8 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   and the grass seam by the landing.
 - **How we work now:** Mitchell moved to a bigger plan; workflows are used for implementation where they help,
   partitioned so parallel jobs never edit the same code. He wants regular progress in pictures and an honest answer
-  when a style is or is not achievable.
+  when a style is or is not achievable. Visual work comes to him straight from the builder: no separate reviewer or
+  critic stage, he judges right away (to save usage).
 
 ## Foundation work (October 2)
 
