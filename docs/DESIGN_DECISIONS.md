@@ -44,12 +44,10 @@ Mitchell's fifth round of castle picture notes (38 notes, kept with their marked
   lighting and sky ("we dont need to go crazy right away, i do want it looking nice") and left the cohesion to Claude.
   The direction is natural proportions, materials and light, still softly painted, so the blocky characters belong in
   it, as they do in the LEGO games. Photoreal is out of reach with how we build, and it would make them look pasted in.
-  It comes in small steps, each shown to him as before-and-after pictures:
+  It comes in small steps, each shown to him as before-and-after pictures, starting once the stone and the trees land:
   1. Light and sky: a warmer sun, softer shadows, a little haze in the distance, and a real sky with clouds.
   2. Water: reflections, depth and foam on the moat, the falls and the streams.
   3. Ground, grass, plants and crops, grown like the oak.
-
-  Light and sky start once the stone and the trees land.
 - **Everything must make structural sense** (October 3): "it all has to make structural sense". His examples: the walled
   climb up to the landing "doesnt make sense the way it is built" and should have stairs, and the ledge road needs a wall
   on its other side too. He added that the insides of the buildings must work with their outsides, so the interiors are
