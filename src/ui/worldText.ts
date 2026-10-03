@@ -20,9 +20,9 @@ interface Floater {
 const DIGIT_KINDS: Record<string, DigitKind | undefined> = { dmg: 'white', crit: 'crit', hurt: 'hurt', heal: 'heal' };
 
 /** Floating words ("+30 gold", "+1 potion") are set in the gold alphabet, this many px to the capitals. */
-const WORD_CAP = 13;
+const WORD_CAP = 22;
 /** Names over heads: how tall the capitals stand, how far off a name still shows, and how high above the head. */
-const NAME_CAP = 13, NAME_RANGE = 14, NAME_LIFT = 0.15;
+const NAME_CAP = 19, NAME_RANGE = 14, NAME_LIFT = 0.15;
 
 /** Screen-space overlays anchored to world positions: damage numbers, loot labels, enemy health bars. */
 export class WorldText {

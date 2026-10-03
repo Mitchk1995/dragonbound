@@ -30,6 +30,8 @@ const UI_SELECTOR = '.panel, .sidepanel, .console, .dlg, .objective, .slot';
 
 /** How tall the capitals stand (px) in the zone plaque and in the boss's name. */
 const PLAQUE_CAP = 16, BOSS_CAP = 18;
+/** The kind-of-place ribbon: small painted capitals, spaced out, in a muted gold (see .zkind in style.css). */
+const RIBBON_CAP = 10, RIBBON_TRACK = 0.16;
 
 /** What kind of place a zone is, shown beside the zone plaque on arrival. */
 const ZONE_KIND: Record<string, string> = { hub: 'Sanctuary', gather: 'Gathering grounds', hunt: 'Hunting grounds', quest: 'Forgotten ruin', lair: "Dragon's lair" };
@@ -639,7 +641,13 @@ export class UI {
     if (!tl) return;
     paintText(this.$('.zname'), name, 'gold', PLAQUE_CAP);
     const def = this.g.zone.def;
-    this.$('.zkind').textContent = def.name === name ? (ZONE_KIND[def.kind] ?? '') : '';
+    const kind = def.name === name ? (ZONE_KIND[def.kind] ?? '') : '';
+    const ribbon = this.$('.zkind');
+    if (kind) paintText(ribbon, kind.toUpperCase(), 'gold', RIBBON_CAP, RIBBON_TRACK);
+    else {
+      ribbon.replaceChildren();
+      delete ribbon.dataset.painted;
+    }
     tl.classList.remove('arrive');
     void tl.offsetWidth;
     tl.classList.add('arrive');
