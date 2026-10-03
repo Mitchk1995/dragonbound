@@ -5,7 +5,7 @@ import type { GroundItem } from '../entities/groundItem';
 import type { Game } from '../game';
 import type { DigitKind } from './digitGlyphs';
 import { isDigitText, paintDigits, paintText, preloadDigits, preloadFonts } from './paintedText';
-import { worldTextShows } from './worldTextRule';
+import { NAME_CAP, WORD_CAP, overlapsHud, worldTextShows, type ScreenRect } from './worldTextRule';
 
 interface Floater {
   el: HTMLElement;
@@ -15,15 +15,27 @@ interface Floater {
   t: number;
   life: number;
   dx: number;
+  /** Its size on screen (px), measured on its first frame (-1 until then). */
+  w: number;
+  h: number;
 }
 
 /** The painted digit set for each floater class; the rest (gold pickups) stay text. */
 const DIGIT_KINDS: Record<string, DigitKind | undefined> = { dmg: 'white', crit: 'crit', hurt: 'hurt', heal: 'heal' };
 
-/** Floating words ("+30 gold", "+1 potion") are set in the gold alphabet, this many px to the capitals. */
-const WORD_CAP = 22;
-/** Names over heads: how tall the capitals stand, how far off a name still shows, and how high above the head. */
-const NAME_CAP = 19, NAME_RANGE = 14, NAME_LIFT = 0.15;
+/** Names over heads: how far off a name still shows, and how high above the head. Lettering sizes: worldTextRule.ts. */
+const NAME_RANGE = 14, NAME_LIFT = 0.15;
+
+/**
+ * The HUD panels world labels give way to: the zone plaque, the objective, the console, the side panel, the boss bar
+ * and any open window (the plaque's ribbon is added while it shows). Hidden panels measure empty and are skipped.
+ */
+const HUD_PANELS = '.zone.plaque, .objective, .console, .sidepanel, .bossbar, #panels > *';
+/** How fast (per second) a portal title fades out under a HUD panel and back in once clear. */
+const TITLE_FADE = 8;
+
+const tmpV = new THREE.Vector3(), tmpC = new THREE.Vector3(), tmpS = new THREE.Vector3();
+const camRight = new THREE.Vector3(), camUp = new THREE.Vector3();
 
 /** Screen-space overlays anchored to world positions: damage numbers, loot labels, enemy health bars. */
 export class WorldText {
@@ -31,7 +43,12 @@ export class WorldText {
   private floaters: Floater[] = [];
   private labels = new Map<GroundItem, HTMLElement>();
   private bars = new Map<Enemy, HTMLElement>();
-  private names = new Map<Interactable, HTMLElement>();
+  private names = new Map<Interactable, { el: HTMLElement; w: number; h: number }>();
+  /** The portal title sprites of the current zone, found once per zone. */
+  private titles: THREE.Sprite[] = [];
+  private titlesOf: unknown = null;
+  /** The HUD panels' boxes this frame. */
+  private hud: ScreenRect[] = [];
   private v = new THREE.Vector3();
   private layerNums: HTMLElement;
   private layerLabels: HTMLElement;
@@ -76,7 +93,7 @@ export class WorldText {
     else if (word) paintText(el, text, 'gold', WORD_CAP);
     else el.textContent = text;
     this.layerNums.appendChild(el);
-    this.floaters.push({ el, x, y, z, t: 0, life: cls === 'crit' ? 1.0 : 0.8, dx: (Math.random() - 0.5) * 40 });
+    this.floaters.push({ el, x, y, z, t: 0, life: cls === 'crit' ? 1.0 : 0.8, dx: (Math.random() - 0.5) * 40, w: -1, h: -1 });
     if (this.floaters.length > 80) this.floaters.shift()!.el.remove();
   }
 
@@ -84,7 +101,7 @@ export class WorldText {
   clear() {
     for (const el of this.labels.values()) el.remove();
     for (const el of this.bars.values()) el.remove();
-    for (const el of this.names.values()) el.remove();
+    for (const n of this.names.values()) n.el.remove();
     this.names.clear();
     for (const f of this.floaters) f.el.remove();
     this.labels.clear();
@@ -108,15 +125,27 @@ export class WorldText {
     if (!worldTextShows(this.g.mode)) {
       // Title, creation or any other menu-only state: drop whatever play left behind and draw nothing.
       if (this.floaters.length || this.labels.size || this.bars.size || this.names.size) this.clear();
+      this.updateTitles(dt, false); // no HUD here: every portal title shows
       return;
+    }
+    this.measureHud();
+    // Measure new floaters together, before anything moves, so the frame lays out once.
+    for (const f of this.floaters) {
+      if (f.w < 0) {
+        f.w = f.el.offsetWidth;
+        f.h = f.el.offsetHeight;
+      }
     }
     for (const f of this.floaters) {
       f.t += dt;
       const p = this.project(f.x, f.y, f.z);
       const k = f.t / f.life;
       const rise = 50 * (1 - Math.pow(1 - Math.min(1, k * 1.5), 2));
-      f.el.style.transform = `translate(${p.x + f.dx * k}px, ${p.y - rise}px) translate(-50%, -50%) scale(${f.el.classList.contains('crit') ? 1.4 - Math.min(0.4, k) : 1})`;
-      f.el.style.opacity = String(Math.min(1, (1 - k) * 3));
+      const cx = p.x + f.dx * k, cy = p.y - rise;
+      const sc = f.el.classList.contains('crit') ? 1.4 - Math.min(0.4, k) : 1;
+      const w = f.w * sc, h = f.h * sc;
+      f.el.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(${sc})`;
+      f.el.style.opacity = this.underHud(cx - w / 2, cy - h / 2, w, h) ? '0' : String(Math.min(1, (1 - k) * 3));
     }
     this.floaters = this.floaters.filter((f) => {
       if (f.t >= f.life) f.el.remove();
@@ -125,6 +154,64 @@ export class WorldText {
     this.updateLabels();
     this.updateBars();
     this.updateNames();
+    this.updateTitles(dt, true);
+  }
+
+  /** Read where the HUD panels sit this frame, before any label moves. */
+  private measureHud() {
+    this.hud.length = 0;
+    for (const el of document.querySelectorAll<HTMLElement>(HUD_PANELS)) this.hud.push(el.getBoundingClientRect());
+    // The ribbon beside the plaque counts only while it shows (it fades out after arrival).
+    const ribbon = document.querySelector<HTMLElement>('.zkind');
+    if (ribbon && ribbon.childElementCount && parseFloat(getComputedStyle(ribbon).opacity) > 0.05) this.hud.push(ribbon.getBoundingClientRect());
+  }
+
+  /** True when a box (left, top, width, height in px) would touch a HUD panel. */
+  private underHud(left: number, top: number, w: number, h: number) {
+    return overlapsHud({ left, top, right: left + w, bottom: top + h }, this.hud);
+  }
+
+  /**
+   * Portal titles float in the world, so they would slide under the zone plaque or the side panel at the screen's
+   * edges. Each title's lettering is boxed on screen, and the title fades out while that box touches a HUD panel
+   * (`hudShown` false: no HUD on screen, so every title fades back in).
+   */
+  private updateTitles(dt: number, hudShown: boolean) {
+    if (this.titlesOf !== this.g.zone) {
+      this.titlesOf = this.g.zone;
+      this.titles = [];
+      this.g.zone.group.traverse((o) => {
+        if (o.name === 'portal-title' && (o as THREE.Sprite).isSprite) this.titles.push(o as THREE.Sprite);
+      });
+    }
+    if (!this.titles.length) return;
+    const cam = this.g.camera;
+    camRight.setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+    camUp.setFromMatrixColumn(cam.matrixWorld, 1).normalize();
+    for (const s of this.titles) {
+      const ink = s.userData.ink as ScreenRect | undefined;
+      let clear = true;
+      if (ink && hudShown) {
+        s.getWorldPosition(tmpC);
+        tmpS.setFromMatrixScale(s.matrixWorld);
+        let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity, behind = false;
+        for (const u of [ink.left, ink.right]) {
+          for (const v of [ink.top, ink.bottom]) {
+            tmpV.copy(tmpC).addScaledVector(camRight, (u - 0.5) * tmpS.x).addScaledVector(camUp, (0.5 - v) * tmpS.y).project(cam);
+            if (tmpV.z >= 1) behind = true;
+            const x = (tmpV.x * 0.5 + 0.5) * window.innerWidth, y = (-tmpV.y * 0.5 + 0.5) * window.innerHeight;
+            l = Math.min(l, x);
+            r = Math.max(r, x);
+            t = Math.min(t, y);
+            b = Math.max(b, y);
+          }
+        }
+        clear = behind || !overlapsHud({ left: l, top: t, right: r, bottom: b }, this.hud);
+      }
+      const m = s.material;
+      m.opacity = clear ? Math.min(1, m.opacity + TITLE_FADE * dt) : Math.max(0, m.opacity - TITLE_FADE * dt);
+      s.visible = m.opacity > 0.01;
+    }
   }
 
   private updateLabels() {
@@ -175,6 +262,7 @@ export class WorldText {
       }
       placed.push({ x: e.x, y, w, h });
       e.el.style.transform = `translate(${e.x}px, ${y}px) translate(-50%, -50%)`;
+      e.el.style.visibility = this.underHud(e.x - w / 2, y - h / 2, w, h) ? 'hidden' : '';
     }
   }
 
@@ -187,19 +275,21 @@ export class WorldText {
       const p = this.project(it.x, it.height + NAME_LIFT, it.z);
       if (!p.visible) continue;
       seen.add(it);
-      let el = this.names.get(it);
-      if (!el) {
-        el = document.createElement('div');
+      let n = this.names.get(it);
+      if (!n) {
+        const el = document.createElement('div');
         el.className = 'npcname';
         paintText(el, it.name, 'gold', NAME_CAP);
         this.layerBars.appendChild(el);
-        this.names.set(it, el);
+        n = { el, w: el.offsetWidth, h: el.offsetHeight };
+        this.names.set(it, n);
       }
-      el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+      n.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+      n.el.style.visibility = this.underHud(p.x - n.w / 2, p.y - n.h, n.w, n.h) ? 'hidden' : '';
     }
-    for (const [it, el] of this.names) {
+    for (const [it, n] of this.names) {
       if (!seen.has(it)) {
-        el.remove();
+        n.el.remove();
         this.names.delete(it);
       }
     }
@@ -220,6 +310,7 @@ export class WorldText {
       }
       const p = this.project(e.x, e.model.height + 0.4, e.z);
       el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
+      el.style.visibility = this.underHud(p.x - 24, p.y - 4, 48, 8) ? 'hidden' : '';
       (el.firstChild as HTMLElement).style.width = `${(100 * Math.max(0, e.hp)) / e.maxHp}%`;
     }
     for (const [e, el] of this.bars) {
