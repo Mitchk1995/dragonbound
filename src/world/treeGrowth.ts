@@ -16,8 +16,10 @@ import { SPRAY_CELLS, sprayCell, type LeafKind } from '../render/foliage';
  *   stitched to the rim of that hole, so each fork is a real collar flowing out of the parent and
  *   the trunk, roots, limbs and branches are one connected surface.
  * - Leaves: two crossed cards per spray (now and then a third), set facing the sky and the outside
- *   of the crown, each carrying a painted spray of oak leaves (foliage.ts) whose twig springs from
- *   the branch; none hang low enough to brush the hero's head. Their normals swell out of each
+ *   of the crown, each carrying a spray of the species' leaves (foliage.ts) whose twig springs from
+ *   the branch; none hang low enough to brush the hero's head. A weeping tree (the willow) also
+ *   lets fall strands from its outer branches: chains of cards hanging plumb to a hem, each strand
+ *   swaying as one from its top. Their normals swell out of each
  *   branch's leaf mass and out of the crown, so it lights in soft masses, and their vertex colour
  *   carries a painted shade: a darker inner crown, a cool underside and a warm top.
  */
@@ -55,6 +57,21 @@ export interface Species {
   bark: number;
   /** The leaves its sprays carry (foliage.ts). */
   leaf: LeafKind;
+  /** The lowest a leaf spray springs from (m; 3 when left out), so none hangs low enough to brush the hero's head. */
+  clear?: number;
+  /** How far the trunk leans off upright by the fork (m; 0.24 when left out), its crown carried over with it. */
+  lean?: number;
+  /** How much the crown narrows above its middle (0 or left out: a dome; toward 1: a cone). */
+  taper?: number;
+  /** How far up the trunk its buttresses run, as a multiple of an oak's (1 when left out): a yew's fluted bole. */
+  flute?: number;
+  /** How side branches bend as they grow (radians a step; 0.03 when left out, a little upward): below 0 they arch over. */
+  arch?: number;
+  /**
+   * A weeping tree's curtain: from the outer branches, strands of leaves hang straight down to a hem
+   * (m above the ground, a range), each strand a chain of cards about `card` m long and `width` m wide.
+   */
+  weep?: { hem: [number, number]; card: number; width: number };
 }
 
 /**
@@ -107,6 +124,115 @@ export const TREE: Species = {
   leaf: 'oval',
 };
 
+/**
+ * The willow, the ladder's third rung: a weeping willow about 9 m tall with a crown wider than it is
+ * tall, its stout, often leaning trunk forking low into a few great limbs that climb and spread, their
+ * branches arching over, and from them a curtain of long strands of narrow leaves hanging straight
+ * down to just above the hero's head.
+ */
+export const WILLOW: Species = {
+  height: [8.6, 9.8],
+  spread: [10.0, 11.6],
+  crownBase: 0.34,
+  trunk: 0.46,
+  tip: 0.02,
+  fork: [2.1, 2.7],
+  limbs: [4, 5],
+  rise: [0.6, 1.05],
+  crook: 0.28,
+  every: 0.55,
+  fan: [0.55, 0.95],
+  spray: [1.05, 1.3],
+  sprayEvery: 0.38,
+  fill: [0.15, 0.6],
+  roots: 5,
+  bark: 0.6,
+  leaf: 'willow',
+  lean: 0.55,
+  arch: -0.06,
+  weep: { hem: [2.35, 3.1], card: 1.55, width: 1.0 },
+};
+
+/**
+ * The maple, the fourth rung: about 10.5 m tall, a straight grey trunk forking into five or six limbs
+ * that climb steeply and spread into a broad, full, rounded dome of lobed leaves (green in summer,
+ * red and orange where the zone wears its autumn).
+ */
+export const MAPLE: Species = {
+  height: [10.0, 11.2],
+  spread: [9.0, 10.2],
+  crownBase: 0.25,
+  trunk: 0.42,
+  tip: 0.025,
+  fork: [2.7, 3.2],
+  limbs: [5, 6],
+  rise: [0.58, 1.08],
+  crook: 0.24,
+  every: 0.58,
+  fan: [0.65, 1.1],
+  spray: [1.15, 1.45],
+  sprayEvery: 0.4,
+  fill: [0.14, 0.34],
+  roots: 5,
+  bark: 0.6,
+  leaf: 'maple',
+  clear: 3.6,
+};
+
+/**
+ * The yew, the fifth rung: a dark, dense evergreen about 8.7 m tall, its massive fluted red-brown
+ * trunk splitting low into many upright limbs under a broad, heavy crown of needle sprays that reaches
+ * low and fills right through.
+ */
+export const YEW: Species = {
+  height: [8.2, 9.2],
+  spread: [7.6, 8.8],
+  crownBase: 0.3,
+  trunk: 0.5,
+  tip: 0.025,
+  fork: [1.7, 2.2],
+  limbs: [6, 7],
+  rise: [0.62, 1.2],
+  crook: 0.3,
+  every: 0.5,
+  fan: [0.7, 1.15],
+  spray: [1.1, 1.4],
+  sprayEvery: 0.28,
+  fill: [0.0, 0.12],
+  roots: 7,
+  bark: 0.5,
+  leaf: 'yew',
+  clear: 3.7,
+  taper: 0.3,
+  flute: 2.2,
+};
+
+/**
+ * The magic tree, the top rung and the ladder's one fantasy: a tall, graceful tree about 10.7 m high
+ * on a slim, gently leaning pale trunk, its few long limbs sweeping up and out in easy curves into an
+ * open, airy crown of glowing teal leaves.
+ */
+export const MAGIC: Species = {
+  height: [10.2, 11.2],
+  spread: [8.0, 9.2],
+  crownBase: 0.36,
+  trunk: 0.34,
+  tip: 0.022,
+  fork: [3.1, 3.7],
+  limbs: [4, 5],
+  rise: [0.78, 1.18],
+  crook: 0.18,
+  every: 0.66,
+  fan: [0.5, 0.88],
+  spray: [1.1, 1.4],
+  sprayEvery: 0.44,
+  fill: [0.26, 0.45],
+  roots: 5,
+  bark: 0.55,
+  leaf: 'magic',
+  lean: 0.45,
+};
+
 // ─── Crown envelope ─────────────────────────────────────────────────────────
 
 /** The crown's envelope: an irregular dome the branches grow to fill. */
@@ -118,7 +244,12 @@ export interface Crown {
   down: number;
   /** Bays and bulges: [amplitude, waves round, tilt with elevation, phase]. */
   lumps: [number, number, number, number][];
+  /** How much it narrows above its middle (Species.taper). */
+  taper: number;
 }
+
+/** The envelope's horizontal radius at a height (dy: up its upper radius, 1 at the top) as a share of its widest. */
+const narrow = (c: Crown, dy: number) => (c.taper ? 1 - c.taper * clamp(dy, 0, 1) : 1);
 
 const UP = new THREE.Vector3(0, 1, 0);
 const scratch = new THREE.Vector3();
@@ -133,15 +264,16 @@ function reach(c: Crown, u: THREE.Vector3) {
 
 /** Where a point sits in the crown: 0 at its centre, 1 on the envelope, more outside it. */
 export function crownDepth(c: Crown, p: THREE.Vector3) {
-  const dx = (p.x - c.centre.x) / c.r, dy = (p.y - c.centre.y) / (p.y > c.centre.y ? c.up : c.down), dz = (p.z - c.centre.z) / c.r;
+  const dy = (p.y - c.centre.y) / (p.y > c.centre.y ? c.up : c.down), r = c.r * narrow(c, dy);
+  const dx = (p.x - c.centre.x) / r, dz = (p.z - c.centre.z) / r;
   const d = Math.hypot(dx, dy, dz);
   return d < 1e-6 ? 0 : d / reach(c, scratch.set(dx, dy, dz).divideScalar(d));
 }
 
 /** The envelope's outward direction at a point (its ellipsoid's normal). */
 export function crownNormal(c: Crown, p: THREE.Vector3, out = new THREE.Vector3()) {
-  const ry = p.y > c.centre.y ? c.up : c.down;
-  out.set((p.x - c.centre.x) / (c.r * c.r), (p.y - c.centre.y) / (ry * ry), (p.z - c.centre.z) / (c.r * c.r));
+  const ry = p.y > c.centre.y ? c.up : c.down, r = c.r * narrow(c, (p.y - c.centre.y) / ry);
+  out.set((p.x - c.centre.x) / (r * r), (p.y - c.centre.y) / (ry * ry), (p.z - c.centre.z) / (r * r));
   return out.lengthSq() < 1e-12 ? out.set(0, 1, 0) : out.normalize();
 }
 
@@ -205,6 +337,12 @@ export interface Spray {
   /** The limb carrying it, and the arc length along it. */
   limb: number;
   s: number;
+  /**
+   * A weeping tree's hanging strand (Species.weep): the card's place down its strand (0 the top) of its
+   * cards, the hem it hangs to (m above the ground), and the strand's top, which every card of it sways
+   * from (so the strand moves as one).
+   */
+  hang?: { drop: number; of: number; hem: number; top: THREE.Vector3 };
 }
 
 export interface Skeleton {
@@ -365,8 +503,8 @@ function sphere(n: number) {
   });
 }
 
-/** The trunk's buttresses at height y: how far the trunk swells toward a root, as a multiple of its radius. */
-const buttressSwell = (y: number) => 1 + 0.32 * (1 - THREE.MathUtils.smoothstep(y, -0.1, 1.1));
+/** The trunk's buttresses at height y: how far the trunk swells toward a root, as a multiple of its radius (`flute`: Species.flute). */
+const buttressSwell = (y: number, flute = 1) => 1 + 0.32 * (1 - THREE.MathUtils.smoothstep(y, -0.1, 1.1 * flute));
 
 /** The trunk's flare toward its foot: its radius there as a multiple of the pipe model's. */
 const footFlare = (y: number) => 1 + 0.5 * (1 - THREE.MathUtils.smoothstep(y, -0.2, 1.6));
@@ -381,6 +519,7 @@ export function growTree(sp: Species, seed: number): Skeleton {
     centre: new THREE.Vector3((rng() - 0.5) * 0.9, cy, (rng() - 0.5) * 0.9),
     r: R, up: top - cy, down: cy - bottom,
     lumps: [[0.09, 3, 0.7, rng() * 6.28], [0.06, 5, -1.2, rng() * 6.28], [0.05, 2, 2.4, rng() * 6.28]],
+    taper: sp.taper ?? 0,
   };
   const limbs: Limb[] = [];
 
@@ -388,8 +527,11 @@ export function growTree(sp: Species, seed: number): Skeleton {
   // a crooked leader ending under its top.
   const fork = range(rng, sp.fork);
   const leanA = rng() * Math.PI * 2, lean = new THREE.Vector3(Math.cos(leanA), 0, Math.sin(leanA));
-  const bole = [new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 0.6, 0), new THREE.Vector3(lean.x * 0.1, fork * 0.6, lean.z * 0.1), new THREE.Vector3(lean.x * 0.24, fork, lean.z * 0.24)];
-  const leaderDir = lean.clone().multiplyScalar(0.28).add(UP).normalize();
+  // (A leaning tree's crown leans over with it.)
+  const leans = (sp.lean ?? 0.24) / 0.24;
+  if (sp.lean !== undefined) crown.centre.addScaledVector(lean, (sp.lean - 0.24) * 1.6);
+  const bole = [new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 0.6, 0), new THREE.Vector3(lean.x * 0.1 * leans, fork * 0.6, lean.z * 0.1 * leans), new THREE.Vector3(lean.x * 0.24 * leans, fork, lean.z * 0.24 * leans)];
+  const leaderDir = lean.clone().multiplyScalar(0.28 * leans).add(UP).normalize();
   const leader = crooked(rng, bole[3], leaderDir, H - 1.8 - rng() * 0.8 - fork, 1.0, 0.2, 0.08, crown);
   limbs.push(limb(0, -1, 0, smoothPath([...bole, ...leader.slice(1)])));
   const trunk = limbs[0];
@@ -404,7 +546,8 @@ export function growTree(sp: Species, seed: number): Skeleton {
     const base = pointOn(trunk, at);
     const dir = new THREE.Vector3(Math.cos(az) * Math.cos(rise), Math.sin(rise), Math.sin(az) * Math.cos(rise));
     const len = Math.max(3.5, toEnvelope(crown, base, dir) * range(rng, [0.74, 0.86]));
-    limbs.push(limb(1, 0, at, smoothPath(crooked(rng, base, dir, len, 1.0, sp.crook, 0.05, crown))));
+    // (A weeping tree's limbs arch over as they spread.)
+    limbs.push(limb(1, 0, at, smoothPath(crooked(rng, base, dir, len, 1.0, sp.crook, sp.weep ? -0.03 : 0.05, crown))));
   }
   for (let i = 1; i < limbs.length; i++) frames(limbs[i], tangentOn(trunk, limbs[i].at));
 
@@ -423,7 +566,7 @@ export function growTree(sp: Species, seed: number): Skeleton {
       if (d.y < -0.3) continue;
       const len = toEnvelope(crown, base, d) * range(rng, [0.92, 1.04]);
       if (len < 0.6) continue;
-      limbs.push(limb(2, pi, s, smoothPath(crooked(rng, base, d, len, 0.6, 0.36, 0.03, null))));
+      limbs.push(limb(2, pi, s, smoothPath(crooked(rng, base, d, len, 0.6, 0.36, sp.arch ?? 0.03, null))));
     }
   };
   branchOff(0, arcAtHeight(trunk, fork + 0.7), lengthOf(trunk) * 0.97);
@@ -436,7 +579,8 @@ export function growTree(sp: Species, seed: number): Skeleton {
   let ends = outer();
   for (const u of sphere(160)) {
     if (u.y < -0.55) continue;
-    const goal = new THREE.Vector3(u.x * R, u.y * (u.y > 0 ? crown.up : crown.down), u.z * R).multiplyScalar(reach(crown, u) * 0.9).add(crown.centre);
+    const far = reach(crown, u) * 0.9, k = narrow(crown, u.y * far);
+    const goal = new THREE.Vector3(u.x * R * k, u.y * (u.y > 0 ? crown.up : crown.down), u.z * R * k).multiplyScalar(far).add(crown.centre);
     if (ends.some((p) => p.distanceToSquared(goal) < 1.7 * 1.7)) continue;
     let best: { li: number; s: number; d: number } | null = null;
     for (let li = 0; li <= n; li++) {
@@ -452,7 +596,7 @@ export function growTree(sp: Species, seed: number): Skeleton {
     if (!best) continue;
     const base = pointOn(limbs[best.li], best.s), d = goal.clone().sub(base).normalize();
     if (d.y < -0.3) continue;
-    limbs.push(limb(2, best.li, best.s, smoothPath(crooked(rng, base, d, best.d, 0.7, 0.22, 0.03, null))));
+    limbs.push(limb(2, best.li, best.s, smoothPath(crooked(rng, base, d, best.d, 0.7, 0.22, sp.arch ?? 0.03, null))));
     ends = outer();
   }
 
@@ -479,12 +623,23 @@ export function growTree(sp: Species, seed: number): Skeleton {
   // inside the crown, where only the wood shows.
   const sprays: Spray[] = [];
   const out = new THREE.Vector3();
+  /** A hanging strand from `at` down to the hem: a chain of cards, each a little over its share long (they overlap). */
+  const strand = (at: THREE.Vector3, li: number, s: number, weep: NonNullable<Species['weep']>) => {
+    const len = at.y - range(rng, weep.hem);
+    const away = crownNormal(crown, at, new THREE.Vector3()).setY(0);
+    if (len < 0.8 || away.lengthSq() < 1e-4) return false;
+    const dir = new THREE.Vector3(0, -1, 0).addScaledVector(away.normalize(), 0.1).addScaledVector(perpendicular(UP, rng), 0.05).normalize();
+    const n = Math.max(1, Math.round(len / weep.card)), step = len / n / -dir.y, top = at.clone();
+    for (let k = 0; k < n; k++) sprays.push({ at: at.clone().addScaledVector(dir, step * k), dir: dir.clone(), size: step * 1.08, sway: 0, limb: li, s, hang: { drop: k, of: n, hem: at.y - len, top: top.clone() } });
+    return true;
+  };
   limbs.forEach((L, li) => {
     if (L.order < 1) return;
     if (!L.tangent.length) frames(L, tangentOn(limbs[L.parent], L.at));
     const len = lengthOf(L);
     let phi = rng() * Math.PI * 2;
-    for (let s = len * (L.order === 2 ? 0.22 : 0.6) + rng() * 0.15; s < len - 0.25; s += sp.sprayEvery * (0.8 + rng() * 0.4)) {
+    // (A weeping tree's limbs are clothed from a third of the way out.)
+    for (let s = len * (L.order === 2 ? 0.22 : sp.weep ? 0.35 : 0.6) + rng() * 0.15; s < len - 0.25; s += sp.sprayEvery * (0.8 + rng() * 0.4)) {
       phi += 2.39996;
       for (const turn of [0, Math.PI + (rng() - 0.5) * 0.8]) {
         const T = tangentOn(L, s), radial = around(T, UP, phi + turn);
@@ -493,7 +648,9 @@ export function growTree(sp: Species, seed: number): Skeleton {
         // None deep in the lower crown, where the wood shows from the side; the upper crown fills in
         // further (sp.fill), so from the play camera above it reads as one leafy dome. None hang low
         // enough to brush the hero's head.
-        if (depth < (at.y > crown.centre.y ? sp.fill[0] : sp.fill[1]) || at.y < 3) continue;
+        if (depth < (at.y > crown.centre.y ? sp.fill[0] : sp.fill[1]) || at.y < (sp.clear ?? 3)) continue;
+        // A weeping tree's outer branches let fall strands of leaves (its upper crown keeps sprays too).
+        if (sp.weep && depth > 0.55 && strand(at, li, s, sp.weep) && at.y < crown.centre.y + crown.up * 0.35) continue;
         const dir = T.clone().addScaledVector(radial, 0.75).addScaledVector(crownNormal(crown, at, out), 0.4).addScaledVector(UP, 0.15).normalize();
         sprays.push({ at, dir, size: range(rng, sp.spray) * (0.85 + 0.2 * clamp(depth, 0, 1)), sway: 0, limb: li, s });
       }
@@ -514,7 +671,19 @@ export function growTree(sp: Species, seed: number): Skeleton {
     const i = L.order === 0 ? L.radius.findIndex((r, k) => L.arc[k] > clear && r < sp.trunk * 0.5) : L.order === 1 ? L.radius.findIndex((r) => r < L.radius[0] * 0.6) : -1;
     if (i > 0 && sidesFor(L.radius[i]) < L.sides) L.step = { s: L.arc[i], sides: sidesFor(L.radius[i]) };
   }
-  return compact(planJoints(limbs, sprays), sprays, crown, H, sp);
+  const sk = compact(planJoints(limbs, sprays, sp.flute ?? 1), sprays, crown, H, sp);
+  // Strands hang plumb from wherever their branch was set (planJoints may have turned it), and one
+  // whose branch was turned down near the hem is left off.
+  sk.sprays = sk.sprays.filter((s) => !s.hang || s.hang.top.y > s.hang.hem + 0.6);
+  for (const s of sk.sprays) {
+    if (!s.hang) continue;
+    const { drop, of, hem, top } = s.hang, d = s.dir, out = Math.hypot(d.x, d.z);
+    d.set(out > 1e-6 ? (d.x / out) * 0.1 : 0, -1, out > 1e-6 ? (d.z / out) * 0.1 : 0).normalize();
+    const step = Math.max(0.5, top.y - hem) / of / -d.y;
+    s.at.copy(top).addScaledVector(d, step * drop);
+    s.size = step * 1.08;
+  }
+  return sk;
 }
 
 /**
@@ -571,7 +740,7 @@ function sway(limbs: Limb[], sprays: Spray[], fork: number) {
       L.sway = L.arc.map((a) => base + (L.order === 1 ? 0.45 : 0.6) * (a / len) + (L.order === 2 ? 0.1 : 0.03));
     }
   });
-  for (const s of sprays) s.sway = along(limbs[s.limb].sway, limbs[s.limb], s.s) + 0.15;
+  for (const s of sprays) s.sway = along(limbs[s.limb].sway, limbs[s.limb], s.s) + 0.15 + (s.hang ? 0.2 + s.hang.drop * 0.25 : 0);
 }
 
 interface Hole extends Joint {
@@ -587,7 +756,7 @@ interface Hole extends Joint {
  * every other hole; a branch whose hole would crowd another's is slid along its parent or turned
  * round it a side or two (carrying its whole subtree and leaves), and dropped only if nothing fits.
  */
-function planJoints(limbs: Limb[], sprays: Spray[]) {
+function planJoints(limbs: Limb[], sprays: Spray[], flute: number) {
   const kids: number[][] = limbs.map(() => []);
   limbs.forEach((L, i) => L.parent >= 0 && kids[L.parent].push(i));
   const dead = new Set<number>();
@@ -606,7 +775,7 @@ function planJoints(limbs: Limb[], sprays: Spray[]) {
             if (!narrow && (ds !== 0 || Math.abs(dj) > (C.order > 1 ? 0 : 1))) continue;
             // (Turned at most about 50 degrees: a branch is never swung round to grow down.)
             if (Math.abs(dj) * ((Math.PI * 2) / sidesAt(P, C.at + ds)) > 0.9) continue;
-            const h = footprint(P, C, ds, dj, narrow);
+            const h = footprint(P, C, ds, dj, narrow, flute);
             if (h && placed.every((o) => apart(o, h, sidesAt(P, h.s)))) {
               hole = h;
               break search;
@@ -635,13 +804,13 @@ function planJoints(limbs: Limb[], sprays: Spray[]) {
  * narrower hole pinches the branch's foot into a ring), or `narrow`, as wide as the branch against
  * the parent's girth at its axis (lower down, where the parent is thicker).
  */
-function footprint(P: Limb, C: Limb, ds: number, dj: number, narrow: boolean): Hole | null {
+function footprint(P: Limb, C: Limb, ds: number, dj: number, narrow: boolean, flute: number): Hole | null {
   const len = lengthOf(P), at = C.at + ds;
   const d0 = tangentOn(C, Math.min(0.25, lengthOf(C) * 0.3));
   const T0 = tangentOn(P, C.at), N0 = normalOn(P, C.at, T0), B0 = new THREE.Vector3().crossVectors(T0, N0);
   const ct = d0.dot(T0), sinA = Math.max(0.35, Math.sqrt(Math.max(0, 1 - ct * ct)));
   // (A root leaves the trunk through the buttress swelling toward it.)
-  const girth = (x: number) => along(P.radius, P, x) * (C.order < 0 ? buttressSwell(pointOn(P, x).y) : 1);
+  const girth = (x: number) => along(P.radius, P, x) * (C.order < 0 ? buttressSwell(pointOn(P, x).y, flute) : 1);
   const rp = girth(at), rc = C.radius[0];
   const exit = rp / sinA, s = at + exit * ct, h = clamp((rc * 1.12) / sinA, rc, rc * 4);
   const start = P.joint ? P.joint.ring + 0.05 : 0.05, end = len - Math.max(0.12, along(P.radius, P, len) * 3);
@@ -683,6 +852,7 @@ function moveSubtree(limbs: Limb[], sprays: Spray[], ids: number[], P: Limb, C: 
     if (!set.has(s.limb)) continue;
     s.at.applyMatrix4(m);
     s.dir.applyMatrix3(rot).normalize();
+    s.hang?.top.applyMatrix4(m);
   }
 }
 
@@ -705,8 +875,8 @@ function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: 
 // ─── Wood ───────────────────────────────────────────────────────────────────
 
 /** The trunk's buttresses: swelling toward each root at its foot. */
-function buttress(roots: number[], a: number, y: number) {
-  const k = buttressSwell(y) - 1;
+function buttress(roots: number[], a: number, y: number, flute: number) {
+  const k = buttressSwell(y, flute) - 1;
   if (k <= 0) return 1;
   let s = 0;
   for (const r of roots) s += Math.pow(Math.max(0, Math.cos(a - r)), 6);
@@ -817,7 +987,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       const r = along(L.radius, L, s), w = along(L.sway, L, s);
       return Array.from({ length: S }, (_, j) => {
         const a = (j / S) * Math.PI * 2;
-        const rr = r * (L.order === 0 ? buttress(rootSides, a, P.y) : 1);
+        const rr = r * (L.order === 0 ? buttress(rootSides, a, P.y, sk.species.flute ?? 1) : 1);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
         return vertex(V.copy(P).addScaledVector(D, rr), a, bark, rr, s, 1, w);
       });
@@ -964,6 +1134,9 @@ function stitch(rim: number[], ring: number[], pos: number[], idx: number[], t: 
 
 // ─── Leaves ─────────────────────────────────────────────────────────────────
 
+/** No leaf card reaches lower than this (m): it would brush the 2 m hero's head. */
+const HEAD = 2.15;
+
 /**
  * The crown's leaf cards (see the file comment). Attributes besides position, normal and uv:
  * `color` (the crown's painted shade), `aWind` (the spray's anchor on its twig and its sway weight:
@@ -990,8 +1163,11 @@ export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
     const m = masses.get(s.limb)!;
     m.r = Math.max(m.r, s.at.distanceTo(m.c) + s.size * 0.5);
   }
-  const card = (s: Spray, base: THREE.Vector3, up: THREE.Vector3, face: THREE.Vector3, w: number, h: number) => {
+  const card = (s: Spray, foot: THREE.Vector3, up: THREE.Vector3, face: THREE.Vector3, w: number, h: number) => {
     const side = new THREE.Vector3().crossVectors(up, face).normalize();
+    // (A card that would reach down past the hero's head is lifted clear.)
+    const base = foot.clone();
+    base.y += Math.max(0, HEAD - (base.y + Math.min(0, up.y * h) - Math.abs(side.y) * w * 0.5));
     const { u0, u1, v0, v1 } = sprayCell(Math.floor(rng() * SPRAY_CELLS * SPRAY_CELLS));
     const flip = rng() < 0.5, pad = 0.003;
     // The spray's own tone: lighter or darker, warmer or cooler, than its neighbours.
@@ -1004,10 +1180,12 @@ export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
       card3.push(face.x, face.y, face.z);
       p.addScaledVector(side, sx * w);
       pos.push(p.x, p.y, p.z);
-      // Normals swell out of the leaf mass (from a little under its middle) and the crown as a whole.
+      // Normals swell out of the leaf mass (from a little under its middle) and the crown as a whole;
+      // a hanging strand's out of the curtain and up, so the curtain lights as one soft, rounded face.
       crownNormal(crown, p, cn);
       tmp.copy(mass.c).addScaledVector(UP, -0.35 * mass.r);
-      n.subVectors(p, tmp).normalize().multiplyScalar(0.5).addScaledVector(cn, 0.35).addScaledVector(UP, 0.15).normalize();
+      if (s.hang) n.set(face.x, 0, face.z).normalize().multiplyScalar(0.6).addScaledVector(UP, 0.55).addScaledVector(cn, 0.2).normalize();
+      else n.subVectors(p, tmp).normalize().multiplyScalar(0.5).addScaledVector(cn, 0.35).addScaledVector(UP, 0.15).normalize();
       nrm.push(n.x, n.y, n.z);
       uv.push(u0 + pad + (flip ? 0.5 - sx : 0.5 + sx) * (u1 - u0 - 2 * pad), v0 + pad + sy * (v1 - v0 - 2 * pad));
       // The painted shade: darker deep in the crown, under it and under each mass, so the crown
@@ -1017,18 +1195,42 @@ export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
       const under = 0.68 + 0.32 * THREE.MathUtils.smoothstep(cn.y, -0.8, 0.35);
       const lobe = 0.74 + 0.32 * clamp((p.y - mass.c.y) / mass.r * 0.5 + 0.5, 0, 1);
       const top = THREE.MathUtils.smoothstep(cn.y, -0.2, 0.9) * THREE.MathUtils.smoothstep(0.55, 0.95, depth);
-      const k = inner * under * lobe * tone;
+      // (A strand lit from its top, a little darker toward its hem.)
+      const k = s.hang ? (0.98 - 0.22 * ((s.hang.drop + sy) / s.hang.of)) * Math.max(inner, 0.8) * tone : inner * under * lobe * tone;
       // (Shade drifts toward grey-blue: the green is strongest only where the light falls.)
       const grey = (1 - top) * 0.12;
       col.push(k * (0.92 + top * 0.16 + warm + grey * 0.2), k * (0.97 + top * 0.06 - grey * 0.15), k * (1.04 - top * 0.2 - warm + grey * 0.5));
-      wind.push(s.at.x, s.at.y, s.at.z, s.sway);
+      const anchor = s.hang?.top ?? s.at;
+      wind.push(anchor.x, anchor.y, anchor.z, s.sway);
       flutter.push(sy);
     }
     idx.push(first, first + 1, first + 2, first, first + 2, first + 3);
   };
   const face = new THREE.Vector3(), up = new THREE.Vector3(), base = new THREE.Vector3();
+  const weep = sk.species.weep;
   for (const s of sk.sprays) {
     crownNormal(crown, s.at, out);
+    if (s.hang && weep) {
+      // A strand's card hangs from its top, facing out of the crown, with a second crossing it; at
+      // its top a spray arches out over the branch before the strand falls (so from above the
+      // curtain's head is leafy too).
+      face.set(out.x, 0, out.z).add(new THREE.Vector3(rng() - 0.5, 0, rng() - 0.5).multiplyScalar(0.6));
+      if (face.lengthSq() < 1e-4) face.set(1, 0, 0);
+      face.normalize();
+      const away = face.clone();
+      up.copy(s.dir).addScaledVector(face, -s.dir.dot(face)).normalize();
+      face.crossVectors(new THREE.Vector3().crossVectors(up, face), up).normalize();
+      const w = weep.width * range(rng, [0.8, 1.0]);
+      base.copy(s.at).addScaledVector(face, 0.03);
+      card(s, base, up, face, w, s.size);
+      if (s.hang.drop === 0) {
+        const arch = away.clone().multiplyScalar(0.8).addScaledVector(UP, -0.25).normalize();
+        const lie = new THREE.Vector3().crossVectors(arch, new THREE.Vector3().crossVectors(UP, arch)).normalize();
+        card(s, s.at.clone().addScaledVector(away, -0.35), arch, lie, w * 1.15, weep.card * 0.85);
+      }
+      card(s, base, up, face.clone().applyAxisAngle(up, (rng() < 0.5 ? 1 : -1) * range(rng, [1.1, 1.45])), w * 0.9, s.size * 0.97);
+      continue;
+    }
     // Sprays face the sky and the outside of the crown, as leaves turn to the light; each runs out
     // along its twig, laid into that face.
     face.copy(UP).multiplyScalar(0.75).addScaledVector(out, 0.55).add(new THREE.Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5).multiplyScalar(0.5)).normalize();
