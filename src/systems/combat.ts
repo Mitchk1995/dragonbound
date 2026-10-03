@@ -263,7 +263,7 @@ export class Combat {
     if (heavy && !o.tick && e.hp > 0 && e.def.behavior !== 'boss') e.stagger(g, T.stagger.secs);
     if (!o.tick) g.hitstop(hit.crit ? T.hitstopCrit : T.hitstop);
     g.text.damage(hit.amount, e.x, e.model.height, e.z, hit.crit ? 'crit' : 'dmg');
-    const blood = e.def.model === 'goblin' ? 0x5a8a2a : e.def.model === 'cultist' ? 0x5a1a2c : 0xb02a1a;
+    const blood = e.def.model === 'goblin' ? 0x5a8a2a : e.def.model === 'cultist' || e.def.model === 'priest' ? 0x5a1a2c : 0xb02a1a;
     g.particles.burst(new THREE.Vector3(e.x, e.model.height * 0.5, e.z), { count: hit.crit ? 10 : 5, color: [blood, 0x3a1a10], speed: 3.5, up: 3, life: 0.5, size: 0.12 });
     if (hit.crit) {
       g.sfx.play('crit', 0.9, 0.9 + Math.random() * 0.2);

@@ -121,6 +121,14 @@ export function buildCultist(): Model {
   return model(k, root, 2.0);
 }
 
+/** The Cinder Priest's placeholder: a cultist a head taller (priest.glb replaces it). */
+export function buildPriest(): Model {
+  const m = buildCultist();
+  m.root.scale.setScalar(1.3);
+  m.height *= 1.3;
+  return m;
+}
+
 interface DragonOpts {
   scale: number;
   main: number;
@@ -244,6 +252,7 @@ export const MODEL_BUILDERS: Record<string, () => Model> = {
   goblin: buildGoblin,
   kobold: buildKobold,
   cultist: buildCultist,
+  priest: buildPriest,
   drakeling: buildDrakeling,
   cinderwing: buildCinderwing,
   whelp: buildWhelp,
