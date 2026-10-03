@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMIES } from '../src/data/enemies';
+import { NPC_NAMES } from '../src/entities/interactable';
 import { ZONES } from '../src/data/zones';
 import { DIGIT_SETS } from '../src/ui/digitGlyphs';
 import { FONT_CAP, FONT_SETS, type FontKind } from '../src/ui/fontGlyphs';
@@ -85,7 +86,7 @@ describe('painted alphabets', () => {
   });
 
   it('paints every zone, NPC and boss name in the game without falling back', () => {
-    const names = [...Object.values(ZONES).map((z) => z.name), 'The Warden', 'Quartermaster Bram', ...Object.values(ENEMIES).map((e) => e.name)];
+    const names = [...Object.values(ZONES).map((z) => z.name), ...Object.values(NPC_NAMES), ...Object.values(ENEMIES).map((e) => e.name)];
     for (const n of names) expect(layoutText(n, 'gold', 16).fallbacks, n).toEqual([]);
   });
 });

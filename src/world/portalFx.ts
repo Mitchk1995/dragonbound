@@ -408,7 +408,7 @@ const css = (c: THREE.Color, k = 1, a = 1) => {
  * a padlock and the hint under them. `atlas` is the blue alphabet's image; until it arrives only the rule is drawn
  * (the caller repaints when it loads).
  */
-function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, open: boolean, hint: string, atlas: ImageBitmap | null) {
+function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, open: boolean, hint: string, atlas: ImageBitmap | null, atlasFailed = false) {
   const { width: W, height: H } = ctx.canvas;
   ctx.clearRect(0, 0, W, H);
   const zc = new THREE.Color(color);
@@ -436,6 +436,11 @@ function paintTitle(ctx: CanvasRenderingContext2D, name: string, color: number, 
     ctx.fillStyle = open ? '#a8dcff' : '#b0aca6';
     laid.forEach((l, i) => drawText(ctx, atlas, 'blue', l, (W - l.width) / 2, top + i * gap));
     ctx.restore();
+  } else if (atlasFailed) {
+    // The alphabet could not be loaded: plain letters rather than a nameless portal.
+    ctx.fillStyle = open ? '#a8dcff' : '#b0aca6';
+    ctx.textAlign = 'center';
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, top + i * gap));
   }
   // Rule with a gem (open) or a padlock and the hint (locked).
   const ry = top + (lines.length - 1) * gap + depth + 34;
@@ -507,15 +512,17 @@ function buildTitle(name: string, color: number, open: boolean, hint: string): T
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  let atlas: ImageBitmap | null = null;
+  let atlas: ImageBitmap | null = null, atlasFailed = false;
   const draw = () => {
-    paintTitle(ctx, name, color, open, hint, atlas);
+    paintTitle(ctx, name, color, open, hint, atlas, atlasFailed);
     tex.needsUpdate = true;
   };
   draw();
   // Repaint once the alphabet has loaded, and once the display font has (the first paint may use the fallback serif).
   void loadAtlas(FONT_SETS.blue).then((a) => {
     atlas = a;
+    atlasFailed = !a;
+    if (!a) console.warn('portal titles: the blue alphabet failed to load');
     draw();
   });
   const fonts = (document as any).fonts as FontFaceSet | undefined;

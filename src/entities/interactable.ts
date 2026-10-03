@@ -8,7 +8,7 @@ import { Rig, newAnimState } from '../render/anim';
 
 export type InteractKind = StationKind | 'rock';
 
-const NPC_NAMES: Record<string, string> = { warden: 'The Warden', quartermaster: 'Quartermaster Bram' };
+export const NPC_NAMES: Record<string, string> = { warden: 'The Warden', quartermaster: 'Quartermaster Bram' };
 
 /**
  * Anything the player clicks to use: ore rocks, stations, portals, NPCs.

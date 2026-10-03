@@ -111,7 +111,7 @@ export function layoutText(text: string, font: FontKind, cap: number, opts: { tr
 /**
  * Fill `el` with `text` set in an alphabet: one sprite per glyph in a baseline-aligned flex line, so a character with
  * no painted glyph simply stays ordinary text in the same line. Painting the same text again does nothing, so a HUD can
- * call this every frame. The text stays readable to assistive tech and `data-text`.
+ * call this every frame. The text stays readable to assistive tech through `aria-label`.
  */
 export function paintText(el: HTMLElement, text: string, font: FontKind, cap: number, track = 0) {
   const key = `${font}|${cap}|${track}|${text}`;
@@ -146,7 +146,7 @@ export function paintText(el: HTMLElement, text: string, font: FontKind, cap: nu
   el.replaceChildren(line);
 }
 
-/** Start loading the alphabets (and the digits) so the first word of a session never shows an empty box. */
+/** Start loading the alphabets so the first word of a session never shows an empty box. */
 export function preloadFonts(kinds: FontKind[] = ['gold', 'blue']) {
   for (const k of kinds) new Image().src = FONT_SETS[k].file;
 }
