@@ -181,7 +181,7 @@ export async function baileySuite(g: Game, shot: (name: string) => Promise<void>
     };
     try {
       // (The whole castle's frame cost, from the overview.)
-      if (name === 'overview') out[`perf-${name}`] = await perf(g, 40, pose);
+      if (name === 'overview') out[`perf-${name}`] = await perf(g, 40, () => { g.update(0, 1 / 60); pose(); g.draw(); });
       await shot(`bailey-${name}`);
     }
     finally {
