@@ -45,7 +45,7 @@ water that comes from somewhere and goes somewhere. "Realistic" in owner notes m
 photoreal.
 
 **Surfaces.** Soft stylized shading, and every surface carries a hand-painted texture: stone, wood, bark, leaves, crops,
-cloth. Dressed stone is the owner's pick B (October 3): chunky blocks with recessed dark joints, bevelled and slightly
+cloth. Base textures are sourced (Codex image generation in this painted style, or CC0 libraries toned to match, see AGENTS.md); the shader and the material recipes add relief, wear and tone on top. Dressed stone is the owner's pick B (October 3): chunky blocks with recessed dark joints, bevelled and slightly
 chipped edges, a lit top edge and a little tone variation block to block. Its relief is drawn in the shader across wall
 faces, and wherever a wall's outline shows the stones (tops, corners, arches, tower outlines) they are real blocks standing
 proud of the face, so the stones clearly stand out from the play camera. Round towers are laid in flat stones, one flat
