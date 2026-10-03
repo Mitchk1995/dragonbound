@@ -132,7 +132,7 @@ export async function runInspect(g: Game, suites: string) {
     // The painted damage numbers floating in the real game (explicit only: `digits`).
     if (suites.split(',').includes('digits')) await (await import('./digitsInspect')).digitsSuite(g, shot);
     // The painted alphabets: names, portal titles, the zone plaque, the boss bar and a small-text test (explicit only: `font`).
-    if (suites.split(',').includes('font')) await (await import('./fontInspect')).fontSuite(g, shot);
+    if (suites.split(',').includes('font')) report.font = await (await import('./fontInspect')).fontSuite(g, shot);
   } catch (e) {
     errors.push(`inspect aborted: ${(e as Error).stack ?? e}`);
   }

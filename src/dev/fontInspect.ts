@@ -14,6 +14,7 @@ const frames = async (n: number) => {
 };
 
 export async function fontSuite(g: Game, shot: (name: string) => Promise<void>) {
+  const report: Record<string, unknown> = {};
   g.travel('keep', true);
   await frames(30);
   const p = g.player;
@@ -30,16 +31,34 @@ export async function fontSuite(g: Game, shot: (name: string) => Promise<void>) 
   await shot('font-gameplay');
   g.text.clear();
 
-  // The zone plaque on arrival, in another zone with a longer name.
-  g.travel('foothills', true);
-  await frames(30);
-  g.ui.zoneTitle(g.zone.def.name);
-  await frames(110); // the kind-of-place ribbon finishes sliding out from behind the plaque
-  await shot('font-banner');
+  // The zone plaque on arrival: every zone name is measured against the ribbon beside it, and the lair's is captured.
+  const gaps: string[] = [];
+  for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {
+    g.travel(id, true);
+    await frames(30);
+    g.ui.zoneTitle(g.zone.def.name);
+    await new Promise((r) => setTimeout(r, 1700)); // the ribbon finishes sliding out once the plaque has popped in
+    const plaque = document.querySelector<HTMLElement>('.zone.plaque')!.getBoundingClientRect();
+    const ribbon = document.querySelector<HTMLElement>('.zkind')!.getBoundingClientRect();
+    const text = document.querySelector<HTMLElement>('.zname .ptext')!.getBoundingClientRect();
+    const ok = text.right <= plaque.right && text.left >= plaque.left && plaque.right - ribbon.left <= 7;
+    gaps.push(`${g.zone.def.name}: text ${text.left.toFixed(0)}-${text.right.toFixed(0)}, plaque ${plaque.left.toFixed(0)}-${plaque.right.toFixed(0)}, ribbon from ${ribbon.left.toFixed(0)}${ok ? '' : '  OVERLAP'}`);
+    if (id === 'lair' || id === 'foothills') {
+      // Pickup words over this ground (grass, the dark lair) beside the plaque.
+      g.player.pos.y = 0;
+      g.camPos.copy(g.player.pos);
+      g.text.float('+30 gold', g.player.x - 1.2, 2.2, g.player.z, 'gold');
+      g.text.float('+1 potion', g.player.x + 1.4, 2.2, g.player.z - 0.4, 'heal');
+      await frames(10);
+      await shot(`font-banner-${id}`);
+      g.text.clear();
+    }
+  }
+  report.plaques = gaps;
 
   // The boss bar.
   g.travel('lair', true);
-  await frames(30);
+  await new Promise((r) => setTimeout(r, 1700)); // the zone plaque has settled
   const boss = g.zone.enemies.find((e) => e.def.behavior === 'boss');
   if (boss) g.ui.showBoss(boss);
   await frames(10);
@@ -65,4 +84,5 @@ export async function fontSuite(g: Game, shot: (name: string) => Promise<void>) 
   await frames(4);
   await shot('font-small');
   g.ui.hideTooltip();
+  return report;
 }
