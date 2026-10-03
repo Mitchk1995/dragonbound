@@ -162,6 +162,13 @@ export class ZoneRuntime {
     }
   }
 
+  /** How far the roof is off the building the hero stands in (0 outdoors .. 1 inside). */
+  get indoors() {
+    let k = 0;
+    for (const v of this.cut.values()) k = Math.max(k, v);
+    return k;
+  }
+
   update(dt: number) {
     const p = this.g.player;
     for (const it of this.interactables) it.update(dt, it.kind === 'npc' && p.distTo(it) < 6 ? p.x : undefined, p.z);
