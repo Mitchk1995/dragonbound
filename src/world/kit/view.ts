@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { fireCard } from '../../fx/fire';
 import { shareResource } from '../../render/resources';
 import { windowGlass } from '../props';
 import type { KitBuild, Placed } from './build';
 import type { ElementDef, Part } from './elements';
 import { plainGeometry, texturedGeometry } from './geometry';
+import { U } from './scale';
 import { kitMaterial, plantMaterial } from './surfaces';
 
 /**
@@ -11,7 +13,8 @@ import { kitMaterial, plantMaterial } from './surfaces';
  * glowing glass apart), so a whole street of houses costs the draw calls of one house whatever its
  * stone count. Every textured piece is drawn with the kit's one material (its surface picked by the
  * texture array's layer); each instance takes its piece's colour (`aTint`), and the material gives
- * each its own patch of the texture and a tone of its own from where it stands.
+ * each its own patch of the texture and a tone of its own from where it stands. A fire's flames are
+ * the game's painted flame cards, one small draw each (fx/fire.ts).
  *
  * What lasts and what a view owns: the shapes' vertex data (built once, below), the kit's material,
  * its texture arrays and the props' models are cached for the session and never freed by a view.
@@ -112,6 +115,8 @@ const shrunk = (m: THREE.Matrix4) => gone.makeScale(0, 0, 0).copyPosition(m);
 export class KitView {
   readonly group = new THREE.Group();
   private readonly batches: Batch[] = [];
+  /** The painted flames burning on its pieces (a fire's), each with the placement it burns on. */
+  private readonly flames: { p: Placed; card: THREE.Mesh }[] = [];
   private shown: (p: Placed) => boolean = () => true;
   private readonly copies: THREE.Matrix4[];
 
@@ -139,14 +144,30 @@ export class KitView {
       this.batches.push(batch);
       this.group.add(mesh);
     }
+    this.light();
     this.recolor((p) => p.color);
     this.setDoor('shut');
     this.setVisible(() => true);
   }
 
+  /** Each placement's painted flames in each copy, together in a group of their own. */
+  private light() {
+    const fires = new THREE.Group(), at = new THREE.Vector3();
+    fires.name = 'flames';
+    for (const p of this.build.items) for (const f of p.el.flames ?? []) {
+      const m = this.build.matrix(p, tmp);
+      for (const c of this.copies) {
+        at.set(f.x * U, f.y * U, f.z * U).applyMatrix4(m).applyMatrix4(c);
+        this.flames.push({ p, card: fireCard(fires, at.x, at.y, at.z, f.s, f.broad) });
+      }
+    }
+    if (this.flames.length) this.group.add(fires);
+  }
+
   /** Shows the placements `show` accepts and hides the rest. */
   setVisible(show: (p: Placed) => boolean) {
     this.shown = show;
+    for (const f of this.flames) f.card.visible = show(f.p);
     for (const b of this.batches) {
       this.copies.forEach((c, k) => b.items.forEach((p, i) => {
         const m = this.build.matrix(p, tmp);
@@ -191,10 +212,17 @@ export class KitView {
       calls++;
       tris += (b.mesh.geometry.index!.count / 3) * n;
     }
+    // (Each flame burning is a card of its own: a draw of two triangles.)
+    const lit = this.flames.filter((f) => f.card.visible).length;
+    calls += lit;
+    tris += lit * 2;
     return { pieces: this.build.items.length, shown, calls, tris: Math.round(tris) };
   }
 
-  /** Frees what the view alone owns: its batches' geometries (their buffers and colours) and placements. */
+  /**
+   * Frees what the view alone owns: its batches' geometries (their buffers and colours) and placements.
+   * (Its flames' card and materials are the game's, shared by every fire.)
+   */
   dispose() {
     this.group.removeFromParent();
     for (const b of this.batches) {
@@ -202,5 +230,6 @@ export class KitView {
       b.mesh.dispose();
     }
     this.batches.length = 0;
+    this.flames.length = 0;
   }
 }

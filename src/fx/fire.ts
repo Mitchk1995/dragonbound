@@ -66,16 +66,17 @@ let card: THREE.PlaneGeometry | null = null;
 const materials = new Map<SheetId, MeshBasicNodeMaterial>();
 
 /**
- * A fire's flame at (x, y, z) of `parent`, `s` its scale (1: a hearth's; a torch's is about 0.6). Broad fires (s ≥ 1)
- * burn the bonfire's flames, smaller ones the torch's. Named 'flame': an effect, never merged or audited as a solid.
+ * A fire's flame at (x, y, z) of `parent`, `s` its scale (1: a hearth's; a torch's is about 0.6). Broad fires (s ≥ 1,
+ * or a small fire of logs, `broad`) burn the bonfire's flames, the rest the torch's. Named 'flame': an effect, never
+ * merged or audited as a solid.
  */
-export function fireCard(parent: THREE.Object3D, x: number, y: number, z: number, s: number) {
+export function fireCard(parent: THREE.Object3D, x: number, y: number, z: number, s: number, broad = s >= 1) {
   if (!card) {
     card = shareResource(new THREE.PlaneGeometry(1, 1));
     // (The card turns to face the camera from its foot: its bounds are a ball round all it can cover.)
     card.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, CARD / 2, 0), CARD * 0.75);
   }
-  const sheet: SheetId = s >= 1 ? 'bonfire' : 'torch';
+  const sheet: SheetId = broad ? 'bonfire' : 'torch';
   let mat = materials.get(sheet);
   if (!mat) materials.set(sheet, (mat = fireMaterial(sheet)));
   const mesh = new THREE.Mesh(card, mat);
