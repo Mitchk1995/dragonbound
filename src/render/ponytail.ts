@@ -8,7 +8,8 @@ import * as THREE from 'three';
  * As the head turns (a quarter round when aiming a bow), the tie comes round over the shoulder, so the tail leans back
  * (PONYTAIL_BACK) and a little out (PONYTAIL_OUT) over the shoulder, as far as the tie has come round to it, instead of
  * hanging down through it. Leaning back, the body swings away from the tail; leaning forward (a slam), it would swing
- * into it, so there the tail rests on the back and leans with it.
+ * into it, so there the tail rests on the back and leans with it; and swinging, it never passes forward of the upright
+ * through its tie (the back stops it), so it only ever overshoots away from the body.
  * tools/blender/animpose.py `ponytail` mirrors it, settled, for the clipping audit (tools/blender/haircheck.py).
  */
 export const PONYTAIL = 'ponytail';
@@ -21,8 +22,8 @@ export const PONYTAIL_DAMP = 0.4;
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 const S = {
   q: new THREE.Quaternion(), root: new THREE.Quaternion(), inv: new THREE.Quaternion(), part: new THREE.Quaternion(),
-  hang: new THREE.Quaternion(), swing: new THREE.Quaternion(), v: new THREE.Vector3(), down: new THREE.Vector3(),
-  acc: new THREE.Vector3(),
+  frame: new THREE.Quaternion(), hang: new THREE.Quaternion(), swing: new THREE.Quaternion(), v: new THREE.Vector3(),
+  down: new THREE.Vector3(), acc: new THREE.Vector3(),
 };
 
 /**
@@ -61,12 +62,12 @@ export class Ponytail {
       return;
     }
     const inv = S.inv.copy(root.getWorldQuaternion(S.root)).invert();
-    // How far the body leans forward against the character (the tail rests on its back), and the head's turn.
+    // The character's frame (world), leaning with the body as far as it leans forward (the tail rests on its back).
     const up = body ? inRoot(body, Y, inv) : S.v.copy(Y);
-    const target = S.hang.copy(S.root).multiply(S.swing.setFromAxisAngle(X, Math.max(0, Math.atan2(up.z, up.y))));
+    const frame = S.frame.copy(S.root).multiply(S.swing.setFromAxisAngle(X, Math.max(0, Math.atan2(up.z, up.y))));
+    // Where the tail should hang (world), for the head's turn: its hang axis there, and the spring following it.
     const front = inRoot(head, Z, inv);
-    target.multiply(ponytailHang(Math.atan2(front.x, front.z), S.swing));
-    // Where the tail should hang (world): its hang axis there, and the spring following it.
+    const target = S.hang.copy(frame).multiply(ponytailHang(Math.atan2(front.x, front.z), S.swing));
     const down = S.down.set(0, -1, 0).applyQuaternion(target);
     if (tail !== this.tail) {
       // (A new tail, as the hero is dressed: it starts settled.)
@@ -78,6 +79,16 @@ export class Ponytail {
       S.acc.copy(down).sub(this.dir).multiplyScalar(w * w).addScaledVector(this.vel, -2 * PONYTAIL_DAMP * w);
       this.vel.addScaledVector(S.acc, h);
       this.dir.addScaledVector(this.vel, h).normalize();
+      // The back stops it: in the frame, it never swings forward of the upright through its tie, and loses that swing.
+      const back = S.q.copy(frame).invert(), d = S.v.copy(this.dir).applyQuaternion(back);
+      if (d.z > 0) {
+        d.z = 0;
+        if (d.lengthSq() < 1e-12) d.set(0, -1, 0);
+        this.dir.copy(d.normalize().applyQuaternion(frame));
+        const v = S.acc.copy(this.vel).applyQuaternion(back);
+        v.z = Math.min(0, v.z);
+        this.vel.copy(v.applyQuaternion(frame));
+      }
     }
     // The hang, swung from its axis to where the spring has it, into the tail's parent's frame.
     S.swing.setFromUnitVectors(down, this.dir).multiply(target);

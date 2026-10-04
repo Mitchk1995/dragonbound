@@ -109,4 +109,32 @@ describe('the tied hair\'s tail', () => {
     expect(over).toBeLessThan(0.35 * from);
     expect(off[off.length - 1], 'and settles within two seconds').toBeLessThan(0.5);
   });
+
+  it('never swings into the back: lowering the bow or slamming, it stops at the upright through its tie', () => {
+    /** How far forward of the upright through the tie the tail hangs (the upright leaning with the body as far as the
+     * body leans forward, onto its back): positive is into the back. */
+    const forward = (h: ReturnType<typeof tied>) => {
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(h.turn(h.part('body')));
+      return h.hang().applyAxisAngle(new THREE.Vector3(1, 0, 0), -Math.max(0, Math.atan2(up.z, up.y))).z;
+    };
+    // Lowering the bow, the head turns back to the front and the tail swings back down after it.
+    const bow = tied();
+    bow.pose({ attackKind: 'bow', attack: 0.5 });
+    let worst = -1;
+    for (let f = 0; f < 120; f++) {
+      bow.pose({}, 1 / 60);
+      worst = Math.max(worst, forward(bow));
+    }
+    expect(deg(bow.hang().angleTo(DOWN)), 'it hangs again').toBeLessThan(4);
+    expect(worst).toBeLessThan(1e-4);
+    // A slam: the body leans back in the wind-up, then over forward through the blow.
+    const slam = tied();
+    slam.pose({});
+    worst = -1;
+    for (let f = 0; f <= 60; f++) {
+      slam.pose({ attackKind: 'slam', attack: f / 60 }, 1 / 60);
+      worst = Math.max(worst, forward(slam));
+    }
+    expect(worst).toBeLessThan(1e-4);
+  });
 });

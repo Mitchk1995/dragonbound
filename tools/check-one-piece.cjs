@@ -24,9 +24,6 @@ const JOINT = /^(?:body|head|jaw|inner|neck\d+|tail\d+|wing[LR]|arm[LR]|elbow[LR
 // and its number of pairs of pieces passing inside one another, so neither can grow. A rebuild that fixes a model
 // takes it off this list; a rebuild that only improves it lowers its numbers. Never add to it or raise a number.
 const ALLOWED = {
-  'beard_1': [13, 4],
-  'beard_2': [55, 9],
-  'beard_3': [50, 16],
   'cinderwing': [838, 443],
   'cultist': [88, 68],
   'drakeling': [236, 226],
@@ -64,7 +61,6 @@ const ALLOWED = {
   'gear_u_wyrmbone': [95, 38],
   'goblin': [130, 81],
   'golem': [70, 24],
-  'hair_3': [19, 1],
   'hero': [128, 67],
   'kobold': [77, 88],
   'priest': [147, 121],
