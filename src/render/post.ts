@@ -28,8 +28,8 @@ import { isEffectsWater, setEffectsBuffers, waterShine } from './surfaces';
  *
  * The grade then lifts the colour a touch, so the painted colours stay rich after tone mapping.
  *
- * Four more effects can each be switched on (see LightingEffects; all off, the frame is exactly the
- * one above). They read what the scene pass leaves in a few more buffers beside the picture (each
+ * Four more effects can each be switched on (see LightingEffects; with them all off, the frame is exactly
+ * the one above). They read what the scene pass leaves in a few more buffers beside the picture (each
  * surface's facing, colour, gloss and motion), so they too cost no extra draw calls: all their work
  * is on the graphics card.
  */
@@ -115,7 +115,7 @@ export interface PostQuality {
   bloom: boolean;
   /** With `shade`, the occlusion too (off: the colour grade alone; on by default). */
   occlusion?: boolean;
-  /** The screen-space effects switched on (none by default). */
+  /** The screen-space effects switched on (a missing one is off). */
   effects?: Partial<LightingEffects>;
   /** How finely they are worked (the graphics preset; high by default). */
   level?: EffectLevel;

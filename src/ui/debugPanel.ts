@@ -6,7 +6,7 @@ import type { LightingEffects } from '../render/post';
 import { SKILLS } from '../types';
 import type { UI } from './ui';
 
-/** The lighting effects the debug panel switches (render/post.ts), each off until switched on. */
+/** The lighting effects the debug panel switches (render/post.ts), on as the settings have them. */
 const LIGHTING_TOGGLES: [keyof LightingEffects, string][] = [['bounce', 'Bounce light'], ['contact', 'Contact shading'], ['reflections', 'Reflections'], ['smooth', 'Smooth edges']];
 
 /** The debug panel (F1): test cheats, travel, and the lighting effects' switches. */

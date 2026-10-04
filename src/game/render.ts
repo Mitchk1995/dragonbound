@@ -38,8 +38,8 @@ export function dressScene(g: Game) {
  * Quality presets. High: up to 2× pixel ratio, 4× MSAA, 4096 shadows, ambient occlusion, bloom.
  * Medium: 1.5×, MSAA, 2048 shadows, occlusion, bloom. Low: 1× (no supersampling on HiDPI), no
  * MSAA, 1024 shadows, no occlusion, no bloom — for integrated GPUs. The lawn draws 8, 6 or 4 shells.
- * The lighting effects switched on in the settings (none by default) are worked as finely as the
- * preset allows.
+ * The lighting effects switched on in the settings (contact shading, reflections and smooth edges by
+ * default) are worked as finely as the preset allows; Low draws none of them, so it stays cheap.
  */
 export function applyGraphics(g: Game, level: Graphics) {
   const p = {
@@ -49,7 +49,7 @@ export function applyGraphics(g: Game, level: Graphics) {
   }[level];
   g.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
   // (Without occlusion the low preset skips the whole pass and its grade.)
-  g.post.setQuality({ msaa: p.msaa, shade: p.ao, bloom: p.bloom, effects: g.save.settings.lighting, level });
+  g.post.setQuality({ msaa: p.msaa, shade: p.ao, bloom: p.bloom, effects: level === 'low' ? {} : g.save.settings.lighting, level });
   setLawnShells(LAWN_SHELLS[level]);
   // (The renderer resizes the shadow map to match on its next draw.)
   g.sun.shadow.mapSize.set(p.shadow, p.shadow);
