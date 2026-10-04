@@ -113,7 +113,7 @@ Every grassy cell on the island grows a continuous shell lawn: clipped short wit
 
 ## How it is built
 
-- **Plan:** `src/world/castle/plan.ts` states every number (curtain, twelve towers, keep, terrace, stairs, range, zones, walks, moat, bridge, approach, climb, crown outline, water, farm). `src/data/zoneMaps.ts` (`buildKeep`) runs the castle modules in turn and lists `KEEP_BUILDINGS`.
+- **Plan:** `src/world/castle/plan.ts` states every number (curtain, twelve towers, keep, terrace, stairs, range, zones, walks, moat, bridge, approach, climb, crown outline, water, farm). `src/data/zoneMaps/keep.ts` (`buildKeep`) runs the castle modules and lists `KEEP_BUILDINGS`.
 - **Layout, one module per concern** (`src/world/castle/`): `site.ts` (the shared placing kit: cells, levels, walls, props), `ground.ts` (the crown's natural edge, the moat, the water below the rock), `approach.ts` (the climb, the ledge, the gate terrace, the bridge), `bailey.ts` (terrace, stairs, walks, lawns, fountain, gardens, yards), `curtain.ts` (wall runs, towers, gatehouse).
 - **Buildings:** `keepSpec.ts` and `keepModel.ts` (the great keep: spec, then its own model), `rangeSpecs.ts` (the other six buildings, each with its `CastleLook`), `rangeParts.ts` (the slate roofs, lanterns and flèche), and `buildingModel.ts` (the shared building builder that reads `CastleLook`: windows, roof, buttresses, porch, fills against the curtain, galleries, ceilings, lofts).
 - **Props** (`src/world/castleProps/`: `curtain.ts`, `water.ts`, `approach.ts`, `bailey.ts`): the model builders for the castle's own prop kinds, merged lazily into the registry in `src/world/props/build.ts`. Shared measures are in `src/data/castle.ts`.

@@ -1,5 +1,5 @@
 """
-The island's sky (src/world/worldView.ts): turns the sourced sky panorama into public/textures/sky/cloudsea.jpg
+The island's sky (src/world/worldView/veil.ts): turns the sourced sky panorama into public/textures/sky/cloudsea.jpg
 (listed with its source in the LICENSES.md beside it).
 
 The source is an equirectangular panorama (2:1) of a clear sky over a sea of soft cloud. The generator left a thin
