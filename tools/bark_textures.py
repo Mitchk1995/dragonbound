@@ -13,10 +13,13 @@ turned, mirrored, sized and toned a little differently, its twig's foot at the f
 multipliers (the game's instance colour gives each tree its green, red or gold): the spray's own light and shade
 and a share of its hue, round a mean brightness. Saved as WebP with lossless alpha (the leaves are alpha-cut).
 
-Run with Python 3 (Pillow with WebP, and NumPy) after putting the sources in SRC and CODEX:
+Run with Python 3 (Pillow with WebP, and NumPy) after putting the sources in SRC and CODEX; name barks or
+leaf sprays to make only those (the rest are left as they are):
     python tools/bark_textures.py
+    python tools/bark_textures.py deadwood charred bush
 """
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -42,6 +45,10 @@ BARKS = {
     'yew': dict(color=CODEX / 'bark' / 'bark-yew.png', mean=(122, 74, 56), contrast=1.05, overlap=96, depth=3.0, hue=0.6),
     # Magic: pale silver-blue, smooth flowing ridges with fine glowing veins (most of its own hue kept).
     'magic': dict(color=CODEX / 'bark' / 'bark-magic.png', mean=(176, 184, 196), contrast=0.9, overlap=96, depth=2.2, hue=0.85),
+    # A dead tree's bare wood: weathered silver-grey, long cracks along the grain (its source already wraps top to bottom).
+    'deadwood': dict(color=CODEX / 'retiled' / 'foothills' / 'bark-dead.png', mean=(128, 127, 124), contrast=1.0, overlap=96, depth=3.0, wraps=True, hue=0.2),
+    # The char a fire leaves on a dead tree's foot: black, cracked into blocks, grey ash in the cracks.
+    'charred': dict(color=CODEX / 'nature-bark' / 'bark-burnt-a.png', mean=(40, 37, 35), contrast=1.1, overlap=96, depth=4.0, hue=0.3),
 }
 
 # name: spray source (generated with Codex, see LICENSES.md), where its twig's foot is in the source (px), the
@@ -52,6 +59,8 @@ LEAF_SPRAYS = {
     'maple': dict(color=CODEX / 'leaves' / 'leaf-maple.png', foot=(170, 952), hue=0.2, mean=0.6),
     'yew': dict(color=CODEX / 'leaves' / 'leaf-yew.png', foot=(174, 994), hue=0.35, mean=0.6),
     'magic': dict(color=CODEX / 'leaves' / 'leaf-magic.png', foot=(286, 962), hue=0.3, mean=0.66),
+    # The bushes' leaves: broad oval leaves set along a twig (a beech spray).
+    'bush': dict(color=CODEX / 'nature-leaves' / 'leaf-beech-a.png', foot=(135, 1105), hue=0.25, mean=0.66),
 }
 ATLAS = 1024
 CELLS = 3
@@ -235,22 +244,28 @@ def leaf_atlas(name, b):
     return out
 
 
-def main():
+def main(only):
     OUT.mkdir(parents=True, exist_ok=True)
     LEAVES.mkdir(parents=True, exist_ok=True)
     for name, b in BARKS.items():
+        if only and name not in only:
+            continue
         src = np.asarray(Image.open(b['color']).convert('RGB')).astype(np.float64) / 255.0
-        src = make_tile(src, int(b['overlap'] * src.shape[0] / SIZE))
+        cut = int(b['overlap'] * src.shape[0] / SIZE)
+        # (A source that already wraps top to bottom is cut only side to side: a cut across the grain would show.)
+        src = tile_x(src, cut) if b.get('wraps') else make_tile(src, cut)
         src = np.asarray(Image.fromarray((src * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)).astype(np.float64) / 255.0
         lin = tone(to_linear(src), b['mean'], b['contrast'], b.get('hue', 0.35))
         save(to_srgb(lin), OUT / f'{name}.jpg', 86)
         save(normal_from(to_linear(src), b['depth']), OUT / f'{name}-normal.jpg', 90)
         print(name, 'mean sRGB', (to_srgb(lin).mean((0, 1)) * 255).round())
     for name, b in LEAF_SPRAYS.items():
+        if only and name not in only:
+            continue
         img = Image.fromarray((np.clip(leaf_atlas(name, b), 0, 1) * 255 + 0.5).astype(np.uint8), 'RGBA')
         img.save(LEAVES / f'{name}.webp', quality=88, alpha_quality=100, method=6)
         print(name, 'leaves', (LEAVES / f'{name}.webp').stat().st_size // 1024, 'KB')
 
 
 if __name__ == '__main__':
-    main()
+    main(set(sys.argv[1:]))

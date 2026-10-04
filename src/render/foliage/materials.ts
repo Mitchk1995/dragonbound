@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { abs, attribute, atan, cameraPosition, cross, dFdx, dFdy, diffuseColor, dot, faceDirection, float, fwidth, mat3, max, mix, modelWorldMatrix, normalGeometry, normalize, positionGeometry, positionView, saturate, select, sin, smoothstep, texture, varying, vec2, vec3, vec4 } from 'three/tsl';
+import { abs, attribute, atan, cameraPosition, cross, dFdx, dFdy, diffuseColor, dot, faceDirection, float, fwidth, mat3, max, mix, modelWorldMatrix, mx_noise_float, normalGeometry, normalize, positionGeometry, positionView, saturate, select, sin, smoothstep, texture, varying, vec2, vec3, vec4 } from 'three/tsl';
 import { addPatch, instanceMatrixNode, instanceOrigin, type F, type V2, type V3, type V4 } from '../patch';
 import type { LeafKind } from './leafPaint';
 import { barkFor, leafAtlas, type BarkKind } from './textures';
@@ -37,6 +37,11 @@ export interface BarkLook {
   moss: number[];
   /** How brightly the bark's blue veins glow (the magic tree's; none when left out). */
   glow?: number;
+  /**
+   * A dead tree's char: a fire went up its foot, leaving another bark (its maps laid on as the
+   * bark's) to about `height` m up the wood, in licks `lick` m deep (none when left out).
+   */
+  char?: { kind: BarkKind; height: number; lick: number };
 }
 
 /**
@@ -62,13 +67,15 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
     uBarkGain: { value: look.gain },
     uBarkMoss: { value: new THREE.Vector3(look.moss[0], look.moss[1], look.moss[2]) },
     uBarkGlow: { value: look.glow ?? 0 },
+    uCharTop: { value: look.char?.height ?? 0 },
+    uCharLick: { value: look.char?.lick ?? 0 },
   };
   addPatch(mat, {
     // (The maps are looked up when the material is first drawn, so a world can be built without them.)
-    key: `grown-bark:${look.kind}`,
+    key: `grown-bark:${look.kind}${look.char ? `+${look.char.kind}` : ''}`,
     uniforms,
     nodes(u, b) {
-      const maps = barkFor(look.kind);
+      const maps = barkFor(look.kind), char = look.char && barkFor(look.char.kind);
       const barkA = attribute('aBarkA', 'vec4') as V4, barkB = attribute('aBarkB', 'vec4') as V4, wood = attribute('aWood', 'vec4') as V4;
       let uv: V2 = vec2(0), nl: V3 = vec3(0), detail: F = float(0);
       return {
@@ -86,8 +93,21 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
           const ang = atan(w.y, w.x).mul(0.15915494).toVar();
           const s1 = ang.mul(w.z).toVar(), s2 = ang.add(1).fract().mul(w.z).toVar();
           uv = vec2(select(fwidth(s1).lessThanEqual(fwidth(s2)), s1, s2).add(off), wood.z.div(u.f('uBarkTile'))).toVar();
-          const col = texture(maps.map).sample(uv).rgb.toVar();
-          nl = texture(maps.normal).sample(uv).xyz.mul(2).sub(1).toVar();
+          let raw: V3 = texture(maps.map).sample(uv).rgb, relief: V3 = texture(maps.normal).sample(uv).xyz.mul(2).sub(1);
+          if (char) {
+            // The char: the fire went higher up one side of the trunk than the other and licked up
+            // the grain in tongues, leaving blotches of char above them that thin out as they climb
+            // (each tree its own, from where it stands).
+            const p = positionGeometry.add(instanceOrigin(b).mul(0.37)).toVar();
+            const top = u.f('uCharTop').mul(mx_noise_float(p.mul(vec3(0.3, 0.08, 0.3))).mul(0.7).add(1)).add(mx_noise_float(p.mul(vec3(2.2, 0.18, 2.2))).mul(u.f('uCharLick')));
+            const above = positionGeometry.y.sub(top).toVar();
+            const blot = smoothstep(0.3, 0.46, mx_noise_float(p.mul(vec3(1.3, 0.4, 1.3)))).mul(float(1).sub(smoothstep(0, 2.5, above)));
+            const burnt = max(float(1).sub(smoothstep(-0.06, 0.06, above)), blot).toVar();
+            raw = mix(raw, texture(char.map).sample(uv).rgb, burnt);
+            relief = mix(relief, texture(char.normal).sample(uv).xyz.mul(2).sub(1), burnt);
+          }
+          const col = raw.toVar();
+          nl = relief.toVar();
           // Young branches' relief is gentler.
           detail = smoothstep(0.02, 0.12, wood.y).mul(0.65).add(0.35).toVar();
           const lum = dot(col, vec3(0.2126, 0.7152, 0.0722));

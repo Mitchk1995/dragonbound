@@ -35,6 +35,8 @@ export interface Species {
   leaf: LeafKind;
   /** The lowest a leaf spray springs from (m; 3 when left out), so none hangs low enough to brush the hero's head. */
   clear?: number;
+  /** The lowest a leaf card reaches (m; 2.15 when left out, clear of the hero's head; a bush's reach down to the ground). */
+  head?: number;
   /** How far the trunk leans off upright by the fork (m; 0.24 when left out), its crown carried over with it. */
   lean?: number;
   /** How much the crown narrows above its middle (0 or left out: a dome; toward 1: a cone). */

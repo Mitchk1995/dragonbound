@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp } from '../../core/rng';
 import { packAttributes } from '../../render/patch';
+import { breakLength, brokenEnd } from './breaks';
 import { crownDepth } from './crown';
 import { along, arcAtHeight, lengthOf, normalOn, pointOn, sidesAt, tangentOn, type Joint, type Limb, type Skeleton } from './skeleton';
 import { buttress, FOOT_YS, footLayout, footRadius, footTop } from './trunkFoot';
@@ -90,7 +91,8 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     const len = lengthOf(L);
     const holes = kids[li].map((k) => limbs[k].joint!);
     // (The trunk's tube starts over its foot, built on to it below: trunkFoot.)
-    const start = L.joint ? L.joint.ring : L.order === 0 ? footTop(L, holes) : 0, tipLen = Math.min(len * 0.2, Math.max(0.06, L.radius[L.radius.length - 1] * 2.5));
+    const start = L.joint ? L.joint.ring : L.order === 0 ? footTop(L, holes) : 0;
+    const tipLen = L.broken !== undefined ? breakLength(L, len) : Math.min(len * 0.2, Math.max(0.06, L.radius[L.radius.length - 1] * 2.5));
     const st = stations(L, holes, start, len - tipLen);
     const sides = st.map((s) => sidesAt(L, s));
     // Bark tiles round the limb: as many as fit its girth at its foot (the trunk's at breast height),
@@ -185,10 +187,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       // The crotch: the rim sits in the shadow of the fork.
       for (const vi of rim) for (let e = 0; e < 3; e++) col[vi * 3 + e] *= 0.84;
     }
-    // The tip closes on one point.
-    const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len));
+    // The tip closes on one point (a snapped limb's in a ragged break).
     const last = ring[ring.length - 1];
-    for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
+    if (L.broken !== undefined) brokenEnd(L, last, len - tipLen, len, (p, a, r, s) => vertex(p, a, bark, r, s, 1, along(L.sway, L, s)), idx);
+    else {
+      const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len));
+      for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
+    }
     if (L.order === 0) trunkFoot(L, bark, start);
     // The collar: this branch's first ring stitched to its hole's rim in the parent.
     if (L.parent >= 0) {

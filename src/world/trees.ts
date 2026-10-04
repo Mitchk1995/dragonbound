@@ -9,6 +9,7 @@ import { grownBark, grownLeaves, type BarkLook, type WindClock } from '../render
 import type { PaintKind } from '../render/paint';
 import type { Grade } from '../render/surface';
 import { growTree, leafGeometry, MAGIC, MAPLE, OAK, TREE, WILLOW, woodGeometry, YEW, type Species } from './treeGrowth';
+import { grownStandIns } from './treeStandIns';
 
 /**
  * Tree models for the world's instanced forests.
@@ -16,8 +17,11 @@ import { growTree, leafGeometry, MAGIC, MAPLE, OAK, TREE, WILLOW, woodGeometry, 
  * - 'natural' (the game's style): grown trees (treeGrowth.ts), true to size, each one continuous
  *   grown trunk, roots and limbs under a crown of leaf sprays: the woodcutting ladder's six species
  *   (GROWN), each in three or four shapes. A zone's woods (ZoneTheme.woods) say which species grow
- *   in place of each of its tree kinds; dead ash, and any kind a zone gives no species, keeps its
- *   block model, as do the bushes.
+ *   in place of each of its tree kinds; any kind a zone gives no species keeps its block model. The
+ *   dead ash and the bushes are grown too (TreeSet.grown): a dead ash is a tree grown and then
+ *   killed (bare, its top and limbs snapped off, weathered silver-grey wood charred at its foot), a
+ *   bush is grown from the ground up (several stems out of one root crown under a dome of leaf
+ *   sprays).
  * - 'block': stepped block canopies. Each broadleaf is a crown of bevelled
  *   blocks of mixed proportions, tiers stepping in and shifting as they rise, a few small blocks
  *   stepping out at the edges and small tufts breaking the flat tops, every block tilted a little
@@ -74,6 +78,15 @@ export interface TreeSet {
   shaded: boolean;
   /** The zone's woods grow grown trees (GROWN) in place of its tree kinds (the 'natural' style). */
   natural: boolean;
+  /** The 'natural' style's grown dead ash and bushes, standing in for the block ones (`trunk.ash`, `canopy.ash` and `bush`). */
+  grown?: { ash: GrownStandIn; bush: GrownStandIn };
+}
+
+/** A grown model standing in for a block one: each of its shapes' wood and leaves (a dead ash has none), and how it looks. */
+export interface GrownStandIn {
+  trunk: THREE.BufferGeometry[];
+  canopy: THREE.BufferGeometry[];
+  look: GrownLook;
 }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -485,8 +498,9 @@ export function pickGrown(weights: Partial<Record<GrownKind, number>>, n: number
 }
 
 function naturalSet(): TreeSet {
-  // (The kinds no grown species stands in for keep the block models, shared with the block style.)
-  return { ...treeSet('block'), natural: true };
+  // (The kinds no grown species stands in for keep the block models, shared with the block style;
+  // the dead ash and the bushes are grown.)
+  return { ...treeSet('block'), natural: true, grown: grownStandIns() };
 }
 
 const sets = new Map<TreeStyle, TreeSet>();
@@ -518,18 +532,24 @@ export function grownTriangles(kind: GrownKind) {
   return set.canopy.map((c, v) => triangles(set.trunk[v]) + triangles(c));
 }
 
+/** Which of `at` stand clear of every stone (its reach `r`, and `room` m more): a grown dead ash is not planted with its foot in a boulder. */
+export function clearOfStones(at: { x: number; z: number }[], stones: { x: number; z: number; r: number }[], room: number) {
+  return at.map((p) => stones.every((s) => Math.hypot(s.x - p.x, s.z - p.z) >= s.r + room));
+}
+
 /**
  * Thin a wood for grown trees, which need far more room than block trees laid one to a cell. The
  * grown trees (those with a `spacing`, in metres) are taken in an order hashed from their positions
- * (so no scan-line pattern), and one stays only where no grown tree already kept stands within its
- * spacing or the kept one's, whichever is wider; then every other tree, and every piece of
- * undergrowth, under a kept crown (within half its spacing) goes. Returns which stay.
+ * (so no scan-line pattern), those marked `first` (dead ash, standing in their own small patches)
+ * before the rest, and one stays only where no grown tree already kept stands within its spacing or
+ * the kept one's, whichever is wider; then every other tree, and every piece of undergrowth, under a
+ * kept crown (within half its spacing) goes. Returns which stay.
  */
-export function thinWood(trees: { x: number; z: number; spacing?: number }[], under: { x: number; z: number }[] = []) {
+export function thinWood(trees: { x: number; z: number; spacing?: number; first?: boolean }[], under: { x: number; z: number }[] = []) {
   const kept: { x: number; z: number; r: number }[] = [];
   const keep = trees.map(() => true);
   const grown = trees.map((_, i) => i).filter((i) => trees[i].spacing !== undefined);
-  grown.sort((a, b) => hash01(trees[a].x, trees[a].z, 7) - hash01(trees[b].x, trees[b].z, 7));
+  grown.sort((a, b) => Number(!trees[a].first) - Number(!trees[b].first) || hash01(trees[a].x, trees[a].z, 7) - hash01(trees[b].x, trees[b].z, 7));
   for (const i of grown) {
     const p = trees[i], r = p.spacing!;
     keep[i] = kept.every((q) => Math.hypot(p.x - q.x, p.z - q.z) >= Math.max(r, q.r));

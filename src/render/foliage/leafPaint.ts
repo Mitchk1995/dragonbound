@@ -7,8 +7,8 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Leaf kinds whose sprays are sourced (public/textures/leaves/): a willow's narrow hanging leaves, a maple's lobed ones, a yew's needles and the magic tree's glowing leaves. */
-export const SOURCED_LEAVES = ['willow', 'maple', 'yew', 'magic'] as const;
+/** Leaf kinds whose sprays are sourced (public/textures/leaves/): a willow's narrow hanging leaves, a maple's lobed ones, a yew's needles, the magic tree's glowing leaves and a bush's broad oval ones. */
+export const SOURCED_LEAVES = ['willow', 'maple', 'yew', 'magic', 'bush'] as const;
 export type SourcedLeaf = (typeof SOURCED_LEAVES)[number];
 
 /** The leaf kinds: an oak's lobed leaves and a common broadleaf's oval ones (painted), and the sourced ones. */

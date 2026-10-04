@@ -1,5 +1,6 @@
 import type { Game } from '../game';
 import { GROWN_KINDS, TREE_STYLE, TREE_STYLES, treeSet, treeTriangles, type GrownKind, type TreeKind } from '../world/trees';
+import { bushesSuite } from './treeLineup/bushes';
 import { grownSuite } from './treeLineup/grown';
 import { ladderSuite } from './treeLineup/ladder';
 import { lineup, scout } from './treeLineup/lineup';
@@ -25,6 +26,9 @@ import { zoneShot, type Shot } from './treeLineup/stage';
  *   each, every new species close up, and a forest of the Foothills as it ships, with frame costs.
  * - the roots and crowns (`trees:roots`, see rootsSuite): every shape of every species low at its
  *   foot and from the side, and grown trees where the ground falls away round them.
+ * - the grown bushes and dead ash (`trees:bushes`, see bushesSuite): every shape beside an oak, a
+ *   common tree and the hero, close up, and in the woods as they ship; `trees:bushes:angles` every
+ *   shape from four sides.
  * `trees:oak` captures only the oak; `trees:scout` captures candidate spots instead (to pick the views).
  */
 
@@ -46,6 +50,7 @@ export async function treesSuite(g: Game, shot: Shot, opts: string[]) {
   if (opts[0] === 'grown' && GROWN_KINDS.includes(opts[1] as GrownKind)) return { ...report, grown: await grownSuite(g, shot, opts[1] as GrownKind) };
   if (opts[0] === 'ladder') return { ...report, ladder: await ladderSuite(g, shot) };
   if (opts[0] === 'roots') return { ...report, roots: await rootsSuite(g, shot) };
+  if (opts[0] === 'bushes') return { ...report, bushes: await bushesSuite(g, shot, opts.slice(1)) };
   if (opts.includes('scout')) {
     await scout(g, shot);
     return report;
