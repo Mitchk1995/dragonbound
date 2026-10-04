@@ -5,8 +5,8 @@ import type { NodeBuilder, Renderer } from 'three/webgpu';
  * How long an instanced mesh's per-instance GPU buffers live: until the mesh, or the geometry it is
  * drawn with, is disposed.
  *
- * Those buffers (the patches' copy of the instance matrices, patch.ts, the renderer's instance
- * colours, and its own matrices for a mesh of over a thousand) are node attributes, which three.js
+ * Those buffers are node attributes: the patches' copy of the instance matrices (patch.ts), the
+ * renderer's instance colours, and its own matrices for a mesh of over a thousand. three.js
  * 0.186 frees only through a geometry's dispose, and then only those of the first program that drew
  * it: usually its shadow's, which reads none of the patches' buffers. So a shadow caster's buffers
  * outlived it, and a mesh drawn with a shared geometry (which is never disposed) kept all of its own.
@@ -52,7 +52,7 @@ function keep(builder: NodeBuilder) {
     if (k.watched.has(target)) continue;
     const onDispose = () => {
       const k = ref.deref();
-      if (k) free(k, target, meshFreed);
+      if (k) free(k, meshFreed);
     };
     target.addEventListener('dispose', onDispose);
     k.watched.set(target, onDispose);
@@ -65,12 +65,11 @@ function keep(builder: NodeBuilder) {
  * through the renderer's own attribute store, as a geometry's dispose does. A mesh drawn again gets
  * fresh buffers.
  */
-function free(k: Kept, by: Disposable, meshFreed: boolean) {
-  // A disposed geometry may be drawn again by the same mesh: the mesh's dispose still frees them then.
-  for (const [target, onDispose] of k.watched) {
-    if (!meshFreed && target !== by) continue;
-    target.removeEventListener('dispose', onDispose);
-    k.watched.delete(target);
+function free(k: Kept, meshFreed: boolean) {
+  // (A disposed geometry may be drawn again by the same mesh, and disposed again: keep watching.)
+  if (meshFreed) {
+    for (const [target, onDispose] of k.watched) target.removeEventListener('dispose', onDispose);
+    k.watched.clear();
   }
   const attributes = new Set<Attribute>(), interleaved = new Set<THREE.InterleavedBuffer>();
   for (const list of k.built) {
@@ -88,12 +87,9 @@ function free(k: Kept, by: Disposable, meshFreed: boolean) {
     const backend = renderer.backend as unknown as { delete(o: object): void };
     // (Every column first: each destroys the GPU buffer they share.)
     for (const a of attributes) store?.delete(a);
-    for (const data of interleaved) {
-      // (Newer three.js keys an interleaved attribute's GPU buffer on its interleaved buffer; 0.186
-      // keeps the destroyed buffer recorded there and would draw from it again.)
-      store?.delete(data);
-      backend.delete(data);
-    }
+    // (0.186 keeps the destroyed GPU buffer recorded on the interleaved buffer and would draw from
+    // it again.)
+    for (const data of interleaved) backend.delete(data);
   }
   // A disposed mesh's programs go with it.
   if (meshFreed) k.built.clear();

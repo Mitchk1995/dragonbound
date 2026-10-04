@@ -161,14 +161,16 @@ describe('instance buffers live as long as their mesh', () => {
     expect(r.books.stale).toBe(0);
   });
 
-  it('a mesh drawn on after its geometry is disposed gets a fresh buffer, freed with the mesh', async () => {
+  it('a mesh drawn on after its geometry is disposed (twice) gets fresh buffers, freed with the mesh', async () => {
     const { books, scene, draw } = await setup();
     const base = books.live.size;
     const mesh = model();
     scene.add(mesh);
     draw(2);
-    mesh.geometry.dispose();
-    draw(2);
+    for (let i = 0; i < 2; i++) {
+      mesh.geometry.dispose();
+      draw(2);
+    }
     expect(books.stale).toBe(0);
     mesh.removeFromParent();
     mesh.dispose();
