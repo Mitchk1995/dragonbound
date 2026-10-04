@@ -17,15 +17,12 @@ const IGNORED = new Set(['node_modules', 'previews', '__pycache__']);
 // splits every one and empties this list; never add to it.
 const ALLOWED = {
   'docs/CASTLE_DESIGN.md': 29410,
-  'src/dev/inspect.ts': 1181,
   'src/render/masonry.ts': 655,
   'src/world/buildingModel.ts': 2387,
   'src/world/castle/keepModel.ts': 781,
   'src/world/castleProps/bailey.ts': 980,
   'src/world/castleProps/curtain.ts': 914,
   'tests/castle-geometry.test.ts': 879,
-  'tools/blender/_common.py': 728,
-  'tools/blender/gear.py': 975,
 };
 
 /** Every checked file under `root` as { file, kind, size }: lines for code, bytes for docs. */
