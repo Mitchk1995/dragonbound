@@ -55,13 +55,14 @@ export function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attac
   return holder;
 }
 
-/** A creature or NPC at `attack` of `kind`; with `walk`, mid-stride at that phase of it (as hero()). */
-export function creature(model: string, kind: AttackKind, attack: number, walk = 0) {
+/** A creature or NPC at `attack` of `kind`; with `walk`, mid-stride at that phase of it (as hero()); `hurt` (0..1) just
+ * hit. */
+export function creature(model: string, kind: AttackKind, attack: number, walk = 0, hurt = 0) {
   const m = makeModel(model);
   const holder = new THREE.Group();
   holder.add(m.root);
   const rig = new Rig(m.root);
-  rig.update(walk / (WALK_SPEED * rig.stride), { ...newAnimState(), attackKind: kind, attack, speed: walk ? WALK_SPEED : 0 });
+  rig.update(walk / (WALK_SPEED * rig.stride), { ...newAnimState(), attackKind: kind, attack, speed: walk ? WALK_SPEED : 0, hurt });
   return holder;
 }
 
@@ -215,8 +216,8 @@ function near(root: THREE.Object3D, part: string, dir: THREE.Vector3, dist: numb
 }
 
 /**
- * Close-ups the owner judges hands and hoods from: the hero's hand round the sword at rest and raised, the cultist's
- * hood and its hand round the staff (at rest and in the cast), and all five from the side mid-attack, where an arm
+ * Close-ups the owner judges hands and heads from: the hero's hand round the sword at rest and raised, the cultist's
+ * masked head and its hand round the staff (at rest and in the cast), and all five from the side mid-attack, where an arm
  * cutting into the body would show.
  */
 async function closeUps(st: Studio, shot: Shot) {
@@ -240,9 +241,9 @@ async function closeUps(st: Studio, shot: Shot) {
   await flush('char-close-hero-hands', 2, 2);
 
   let c = creature('cultist', 'cast', -1);
-  add('cultist hood · front', c, near(c, 'head', new THREE.Vector3(0, 0.15, 1), 1.9, 0.3));
+  add('cultist head · front', c, near(c, 'head', new THREE.Vector3(0, 0.15, 1), 1.9, 0.3));
   c = creature('cultist', 'cast', -1);
-  add('cultist hood · side', c, near(c, 'head', new THREE.Vector3(1, 0.15, 0.1), 2.2, 0.3));
+  add('cultist head · side', c, near(c, 'head', new THREE.Vector3(1, 0.15, 0.1), 2.2, 0.3));
   c = creature('cultist', 'cast', -1);
   add('staff grip · 3/4', c, near(c, 'sock_handR', new THREE.Vector3(-0.8, 0.3, 0.7), 1.5, 0.15));
   c = creature('cultist', 'cast', MID_ATTACK.cast);

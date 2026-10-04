@@ -179,19 +179,19 @@ def box(parent, size, pos, color, rot=(0, 0, 0), bevel=0.025, emissive=None, str
     return _mesh_obj(bm, parent, pos, rot, color, emissive, strength)
 
 
-def union(base, *others):
-    """Fuse meshes into `base` as one closed solid (exact boolean union), removing the others: one part, one painted
-    tone, no seams or buried faces between the pieces."""
+def union(base, *others, colours=False):
+    """Fuse meshes into `base` as one closed solid (exact boolean union), removing the others: one part, no seams or
+    buried faces between the pieces, in one painted tone or, with `colours`, each piece keeping its own. Each piece's
+    faces keep their shading."""
     bpy.context.view_layer.update()
     for o in others:
         m = base.modifiers.new('union', 'BOOLEAN')
         m.operation = 'UNION'
         m.solver = 'EXACT'
+        m.material_mode = 'TRANSFER' if colours else 'INDEX'
         m.object = o
     dg = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(base.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
-    for p in me.polygons:
-        p.use_smooth = False
     old = [base.data] + [o.data for o in others]
     base.modifiers.clear()
     base.data = me

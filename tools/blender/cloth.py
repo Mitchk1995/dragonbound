@@ -1,9 +1,9 @@
-"""Cloth the way a cloth artist makes it (the model methods audit, October 4): hoods, mantles and capes start as a low
-cage, shaped by modifiers (Mirror, Subdivision with creased edges, Shrinkwrap so it starts outside a stand-in of the
-body it lies on), then a short cloth simulation pinned where the garment is held lets gravity settle real drape and
-folds over the stand-in. The simulation is baked at its last frame and made exactly symmetric, then reduced to the
+"""Cloth the way a cloth artist makes it (the model methods audit, October 4): mantles, capes and the like start as a
+low cage, shaped by modifiers (Mirror, Subdivision with creased edges, Shrinkwrap so it starts outside a stand-in of
+the body it lies on), then a short cloth simulation pinned where the garment is held lets gravity settle real drape
+and folds over the stand-in. The simulation is baked at its last frame and made exactly symmetric, then reduced to the
 game's chunky faceted look (Decimate) and given its thickness (Solidify); rolled bindings (binding()) finish its open
-edges.
+edges, the cloth cut back to meet them and whatever it lies on (clear()).
 
 Everything is fixed (frames, quality, stiffness, the cage), so a re-export gives the same cloth; drape() keeps each
 result for the rest of the Blender session, so a script that builds the same character many times (the fit and clip
@@ -91,11 +91,11 @@ def stand_in(scene, boxes=(), blobs=(), voxel=0.012):
     return o
 
 
-def cage(scene, rows, pins, crease_rim=1.0, apex=True):
+def cage(scene, rows, pins):
     """Half a garment's cage (x >= 0), mirrored by drape(): `rows` of three.js points from its hem up, each running from
     the open front edge (column 0) round to the back's centre line (x = 0). Points on x = 0 are joined to their mirror.
     `pins` (same layout) weight how firmly each point is held in the simulation. The open front edge is creased so the
-    subdivision keeps its line; with `apex`, the top of that edge (the last row's first point) stays a point."""
+    subdivision keeps its line, and its top (the last row's first point) stays a corner."""
     n = len(rows[0])
     bm = bmesh.new()
     vs = [[bm.verts.new(to_blender(p)) for p in row] for row in rows]
@@ -122,10 +122,9 @@ def cage(scene, rows, pins, crease_rim=1.0, apex=True):
     for e in me.edges:
         a, b = e.vertices
         if a % n == 0 and b % n == 0:
-            edge.data[e.index].value = crease_rim
-    if apex:
-        vert = me.attributes.new('crease_vert', 'FLOAT', 'POINT')
-        vert.data[(len(rows) - 1) * n].value = 1.0
+            edge.data[e.index].value = 1.0
+    vert = me.attributes.new('crease_vert', 'FLOAT', 'POINT')
+    vert.data[(len(rows) - 1) * n].value = 1.0
     return o
 
 
@@ -136,16 +135,15 @@ _baked = {}
 
 
 def drape(name, rows, pins, boxes=(), blobs=(), frames=120, levels=2, cloth=None, pin_stiffness=2.0, offset=0.02,
-          faces=360, thick=0.03, crease_rim=1.0, open_top=False, spacing=0.05):
+          faces=360, thick=0.03):
     """Simulate the garment over the stand-in (`boxes`, `blobs`: stand_in()) from its cage (`rows`, `pins`: cage())
-    and return it baked, symmetric, reduced and thickened, in three.js coordinates: {'shell': (verts, faces, slots), the
-    finished cloth, slot 0 its outside, 1 its inside, 2 its edges; 'surface': (verts, faces), the reduced surface before
-    it was thickened (the cloth's outside: the thickness is laid inward from it); 'sim': (verts, faces), the simulated
-    cloth before it was reduced (smooth, for what follows it: bindings); 'edges': its open edge in runs of one kind,
-    ('front' | 'hem' | 'top', points along it), 'top' only with `open_top` (the cage's last row an open edge, not a
-    seam)}. `faces` is the reduced surface's triangle budget (Decimate's ratio comes from it)."""
-    key = hashlib.md5(repr((rows, pins, boxes, blobs, frames, levels, cloth, pin_stiffness, offset, faces, thick,
-                            crease_rim, open_top, spacing)).encode()).hexdigest()
+    and return it baked, symmetric, reduced and thickened, in three.js coordinates: {'shell': (verts, faces), the
+    finished cloth; 'sim': (verts, faces), the simulated cloth before it was reduced (smooth: what bindings are laid
+    on); 'edges': its open edge in runs of one kind ('front' | 'hem' | 'top': along the cage's first column, mirrored,
+    its first row or its last), each run the simulated cloth's points along it, in order round the edge, starting
+    where the run before it ends}. `faces` is the reduced cloth's triangle budget (Decimate's ratio comes from it)."""
+    key = hashlib.md5(repr((rows, pins, boxes, blobs, frames, levels, cloth, pin_stiffness, offset, faces,
+                            thick)).encode()).hexdigest()
     if key in _baked:
         return _baked[key]
     home = bpy.context.window.scene
@@ -159,7 +157,7 @@ def drape(name, rows, pins, boxes=(), blobs=(), frames=120, levels=2, cloth=None
     stand.modifiers.new('collision', 'COLLISION')
     stand.collision.thickness_outer = 0.008
     stand.collision.cloth_friction = 3.0
-    o = cage(scene, rows, pins, crease_rim)
+    o = cage(scene, rows, pins)
     m = o.modifiers.new('mirror', 'MIRROR')
     m.use_axis = (True, False, False)
     m.use_clip, m.use_mirror_merge, m.merge_threshold = True, True, 1e-4
@@ -177,17 +175,17 @@ def drape(name, rows, pins, boxes=(), blobs=(), frames=120, levels=2, cloth=None
     cc.use_collision, cc.distance_min, cc.collision_quality = True, 0.01, 4
     cc.use_self_collision = False
     c.point_cache.frame_start, c.point_cache.frame_end = 1, frames
-    # Which open edge each point of the garment starts on: its front (the cage's first column, mirrored), its hem (the
-    # first row) or its top; and each point's mirror image. The simulation keeps the points in order, so these follow.
+    # Which open edge each stretch of the garment's border lies along: its front (the cage's first column, mirrored),
+    # its hem (the first row) or its top (the last row); and each point's mirror image. The simulation keeps the points
+    # in order, so these follow.
     c.show_viewport = False
     scene.frame_set(1)
     pre = bpy.data.meshes.new_from_object(o.evaluated_get(bpy.context.evaluated_depsgraph_get()))
     c.show_viewport = True
     mirrored = lambda pts: [Vector((-v.x, v.y, v.z)) for v in reversed(pts)] + pts
-    lines = {'front': mirrored([to_blender(r[0]) for r in rows]), 'hem': mirrored([to_blender(p) for p in rows[0]])}
-    if open_top:
-        lines['top'] = mirrored([to_blender(p) for p in rows[-1]])
-    kinds = {i: _nearest(pre.vertices[i].co, lines) for i in _open_verts(pre)}
+    lines = {k: mirrored([to_blender(p) for p in pts]) for k, pts in
+             (('front', [r[0] for r in rows]), ('hem', rows[0]), ('top', rows[-1]))}
+    kinds = {k: _nearest((pre.vertices[k[0]].co + pre.vertices[k[1]].co) / 2, lines) for k in _open_edges(pre)}
     tree = KDTree(len(pre.vertices))
     for v in pre.vertices:
         tree.insert(v.co, v.index)
@@ -213,39 +211,31 @@ def drape(name, rows, pins, boxes=(), blobs=(), frames=120, levels=2, cloth=None
     d.ratio = min(1.0, faces / max(1, sum(len(f) - 2 for f in sim[1])))
     th = baked.modifiers.new('thickness', 'SOLIDIFY')
     th.thickness, th.offset, th.use_even_offset, th.use_rim = thick, -1.0, True, True
-    th.material_offset, th.material_offset_rim = 1, 2
-
-    def grab():
-        me = bpy.data.meshes.new_from_object(baked.evaluated_get(bpy.context.evaluated_depsgraph_get()))
-        out = ([tuple(to_three(v.co)) for v in me.vertices], [tuple(p.vertices) for p in me.polygons],
-               [p.material_index for p in me.polygons])
-        bpy.data.meshes.remove(me)
-        return out
-    th.show_viewport = False
-    surface = grab()
-    th.show_viewport = True
-    shell = grab()
+    me = bpy.data.meshes.new_from_object(baked.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    shell = ([tuple(to_three(v.co)) for v in me.vertices], [tuple(p.vertices) for p in me.polygons])
+    bpy.data.meshes.remove(me)
     for ob in (o, stand, baked):
-        me = ob.data
-        bpy.data.objects.remove(ob, do_unlink=True)
-        bpy.data.meshes.remove(me)
+        _remove(ob)
     bpy.context.window.scene = home
     bpy.data.scenes.remove(scene)
-    # The open edge, in runs of one kind each, in order round it, followed along the simulated cloth (smooth) and
-    # spaced evenly.
-    edges = []
-    for loop in loops(sim):
-        ks = [kinds.get(i, 'hem') for i in loop]
-        cut = next((j for j in range(len(loop)) if ks[j] != ks[j - 1]), 0)
-        loop, ks = loop[cut:] + loop[:cut], ks[cut:] + ks[:cut]
-        for j, i in enumerate(loop):
-            if not edges or j == 0 or ks[j] != ks[j - 1]:
-                edges.append((ks[j], []))
-            edges[-1][1].append(Vector(sim[0][i]))
-    edges = [(k, _even(pts, spacing)) for k, pts in edges if len(pts) > 1]
-    out = {'shell': shell, 'surface': surface[:2], 'sim': sim, 'edges': edges}
+    out = {'shell': shell, 'sim': sim, 'edges': _runs(sim, kinds)}
     _baked[key] = out
     return out
+
+
+def _runs(mesh, kinds):
+    """A surface's open edge in runs of one kind (`kinds`, by edge: its two vertices' indices, the lower first), each
+    run the points along it in order round the edge, starting where the run before it ends."""
+    runs = []
+    for loop in loops(mesh):
+        n = len(loop)
+        ks = [kinds.get(tuple(sorted((loop[j], loop[(j + 1) % n]))), 'hem') for j in range(n)]
+        cut = next((j for j in range(n) if ks[j] != ks[j - 1]), 0)
+        for j in range(cut, cut + n):
+            if j == cut or ks[j % n] != ks[(j - 1) % n]:
+                runs.append((ks[j % n], [Vector(mesh[0][loop[j % n]])]))
+            runs[-1][1].append(Vector(mesh[0][loop[(j + 1) % n]]))
+    return runs
 
 
 def _even(pts, step):
@@ -264,14 +254,13 @@ def _even(pts, step):
     return out
 
 
-def _open_verts(me):
-    count = {}
-    for e in me.edges:
-        count[e.key] = 0
+def _open_edges(me):
+    """A mesh's open edges, each as its two vertices' indices, the lower first."""
+    count = {e.key: 0 for e in me.edges}
     for p in me.polygons:
         for k in p.edge_keys:
             count[k] += 1
-    return sorted({v for k, n in count.items() if n == 1 for v in k})
+    return [k for k, n in count.items() if n == 1]
 
 
 def _seg_dist(p, a, b):
@@ -284,79 +273,216 @@ def _nearest(p, lines):
     return min(lines, key=lambda k: min(_seg_dist(p, a, b) for a, b in zip(lines[k], lines[k][1:])))
 
 
-def binding(parent, path, surface, color, width=0.065, proud=0.022, thick=0.03, lap=0.014, smooth=2):
-    """A rolled binding over a cloth edge, in one piece: along `path` (points on the open edge of `surface`, the cloth's
-    outside, in order; `smooth` passes of averaging take the ripples out of it, its ends kept) it lies `width` onto the
-    outside, stands `proud` off it, rolls over the edge and tucks back under the inside (`thick` in from the outside),
-    so the edge reads as a sewn hem; its inner side steps down into the cloth, so the faceted cloth never shows through
-    it. Across its width it follows the cloth's curve. Give it the simulated cloth (drape()'s 'sim') as `surface`: its
-    turns are smooth."""
-    pts = [Vector(p) for p in path]
-    for _ in range(smooth):
-        pts = [pts[0]] + [(a + b * 2 + c) / 4 for a, b, c in zip(pts, pts[1:], pts[2:])] + [pts[-1]]
+def binding(parent, path, surface, color, width=0.065, proud=0.022, thick=0.03, lap=0.014, step=0.05, smooth=0,
+            ease=6, cloth=None, against=(), reach=0.08):
+    """A rolled binding over a cloth edge, in one piece: along `path` (points on the open edge of `surface`, the
+    simulated cloth (drape()'s 'sim', its faces turned outward), in order: drape()'s edge runs, joined; laid every
+    `step`, then `smooth` passes of averaging round off its corners, its ends kept) it lies `width` onto the outside,
+    stands `proud` off it, rolls over the edge and tucks back under the inside (`thick` in from the outside), so the
+    edge reads as a sewn hem; its inner side steps down into the cloth. It is one cross-section swept along the edge,
+    turning as the cloth turns there, its turn eased along the edge over `ease` passes, so where the cloth twists
+    quickly (a lapel rising into a collar) the binding turns smoothly. Its outside faces away from the line up through
+    the wearer's middle (x = z = 0), even where the cloth folds back on itself.
+    Given the cloth's part (`cloth`, as place() makes it), the binding cuts the cloth back to itself (clear()), and from
+    the solids `against` it (what the cloth rests on or under) in the same cut: whatever of the cloth lies inside the
+    binding, or over it or past the edge it runs along (up to `reach` out), is cut away, so the cloth ends under the
+    binding's inner side, meeting it without passing into it, and none of it shows through the binding or past it, even
+    where the smoothing takes the binding in across a corner of the cloth."""
     tree = surface_tree(surface)
-    centre = sum((Vector(v) for v in surface[0]), Vector()) / len(surface[0])
+    pts = [Vector(p) for p in _even([Vector(p) for p in path], step)]
+    for k in range(smooth):
+        pts = [pts[0]] + [(a + b * 2 + c) / 4 for a, b, c in zip(pts, pts[1:], pts[2:])] + [pts[-1]]
+        if k == smooth - 2:   # back onto the cloth before the last pass, so the binding lies on it, not sunk into it
+            pts = [tree.find_nearest(p)[0] for p in pts]
+    mids = [sum((Vector(surface[0][i]) for i in f), Vector()) / len(f) for f in surface[1]]
+    # Each point's frame: in across the cloth from the edge (b) and the cloth's outward normal there (n), eased along
+    # the edge; every b turned the same way as the one before it, all of them the way most of the cloth lies.
+    ts, ns, inward = [], [], []
+    for i, p in enumerate(pts):
+        ts.append((pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized())
+        _, n, face, _ = tree.find_nearest(p)
+        ns.append(n if n.dot(Vector((p.x, 0.0, p.z))) >= 0 else -n)
+        inward.append(mids[face] - p)
+    for _ in range(ease):
+        ns = [ns[max(i - 1, 0)] + ns[i] * 2 + ns[min(i + 1, len(ns) - 1)] for i in range(len(ns))]
+    frames = []
+    for t, n in zip(ts, ns):
+        n = (n - t * n.dot(t)).normalized()
+        b = n.cross(t)
+        frames.append((b if not frames or b.dot(frames[-1][0]) >= 0 else -b, n))
+    if sum(1 if b.dot(d) > 0 else -1 for (b, _), d in zip(frames, inward)) < 0:
+        frames = [(-b, n) for b, n in frames]
     profile = [(-lap, proud * 0.4), (width * 0.35, proud), (width, proud * 0.7), (width + 0.004, -0.4 * thick),
                (width * 0.5, -thick - proud * 0.5), (-lap * 0.6, -thick - proud * 0.4)]
+    gold = _sweep(parent, pts, frames, profile, color, smooth=True)
+    if cloth is not None:
+        # The binding's inner side, and beyond it everything over, past and under the edge, `reach` out.
+        cut = [(-reach, reach), (width, reach)] + profile[2:5] + [(-reach, -reach)]
+        cutter = _sweep(parent, pts, frames, cut, color)
+        clear(cloth, cutter, *against)
+        _remove(cutter)
+    return gold
 
-    def lay(p, b, n, pb, pn):
-        """A profile point: over the cloth, `pn` off the cloth's surface where it lies `pb` in from the edge."""
-        if pb <= 0:
-            return p + b * pb + n * pn
-        s, ns = tree.find_nearest(p + b * pb)[:2]
-        return s + (ns if ns.dot(n) > 0 else -ns) * pn
+
+def _sweep(parent, pts, frames, profile, color, smooth=False):
+    """A cross-section (`profile`: points in across the cloth and out off it) swept through `frames` ((b, n) at each
+    of `pts`), as one closed solid of triangles (so a solid swept the same way to cut by matches it exactly). With
+    `smooth`, each side of it is shaded smoothly along its length, the edges between sides kept sharp."""
     bm = bmesh.new()
-    rings, last = [], None
-    n_pts = len(pts)
-    for i, p in enumerate(pts):
-        t = (pts[min(i + 1, n_pts - 1)] - pts[max(i - 1, 0)]).normalized()
-        n = tree.find_nearest(p)[1]
-        if n.dot(p - centre) < 0:
-            n = -n
-        b = n.cross(t).normalized()
-        if last is not None:
-            if b.dot(last) < 0:
-                b = -b                               # keep turning the same way along the edge
-        elif (tree.find_nearest(p + b * 0.04)[3] or 0) > (tree.find_nearest(p - b * 0.04)[3] or 0):
-            b = -b                                   # into the cloth, away from the edge
-        last = b
-        n = (n - t * n.dot(t) - b * n.dot(b)).normalized()
-        rings.append([bm.verts.new(lay(p, b, n, pb, pn)) for pb, pn in profile])
+    rings = [[bm.verts.new(p + b * pb + n * pn) for pb, pn in profile] for p, (b, n) in zip(pts, frames)]
     k = len(profile)
     for a, c in zip(rings, rings[1:]):
         for j in range(k):
-            bm.faces.new((a[j], c[j], c[(j + 1) % k], a[(j + 1) % k]))
-    bm.faces.new(rings[0])
-    bm.faces.new(list(reversed(rings[-1])))
+            bm.faces.new((a[j], c[j], c[(j + 1) % k]))
+            bm.faces.new((a[j], c[(j + 1) % k], a[(j + 1) % k]))
+    sides = len(bm.faces)
+    caps = [bm.faces.new(rings[0]), bm.faces.new(list(reversed(rings[-1])))]
+    bmesh.ops.triangulate(bm, faces=caps, ngon_method='EAR_CLIP')
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return _mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color)
+    o = _mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color)
+    if smooth:
+        for i, p in enumerate(o.data.polygons):
+            p.use_smooth = i < sides
+        for e in o.data.edges:
+            a, b = sorted(e.vertices)
+            e.use_edge_sharp = b - a == k        # along the sweep, between two of its sides
+    return o
 
 
-def place(parent, mesh, colors):
-    """A baked mesh (verts, faces[, slot per face]) as flat-shaded parts under `parent` (whose frame is the three.js
-    frame the mesh was authored in): one part per slot k, in colors[k] (one colour to a part, so the game merges each
-    into the part it rides)."""
-    verts, faces = mesh[0], mesh[1]
-    slots = mesh[2] if len(mesh) > 2 else [0] * len(faces)
-    out = []
-    for k, color in enumerate(colors):
+# What clear() cuts back stops this far short of what it meets: touching, but never sharing a face with it, so the two
+# stay two closed shapes and neither passes inside the other.
+GAP = 0.0005
+
+
+def clear(part, *others):
+    """`part` cut back wherever it passes inside any of `others`, a hair (GAP) clear of them (an exact boolean
+    difference with each of them swollen by GAP; they stay as they are), so it meets them without passing into them:
+    one shape never buried in another (AGENTS.md)."""
+    bpy.context.view_layer.update()
+
+    def bounds(o):
+        pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
+        return Vector([min(p[i] for p in pts) for i in range(3)]), Vector([max(p[i] for p in pts) for i in range(3)])
+    lo, hi = bounds(part)
+    tools = bpy.data.collections.new('clear_tools')
+    bpy.context.scene.collection.children.link(tools)
+    for o in others:
+        olo, ohi = bounds(o)
+        if any(olo[i] > hi[i] + GAP or ohi[i] < lo[i] - GAP for i in range(3)):
+            continue                                 # nowhere near it
         bm = bmesh.new()
-        vs = {}
-        for f, slot in zip(faces, slots):
-            if slot != k:
+        bm.from_mesh(o.data)
+        bm.transform(o.matrix_world)
+        bm.normal_update()
+        for v in bm.verts:
+            v.co += v.normal * GAP
+        me = bpy.data.meshes.new('clear_tool')
+        bm.to_mesh(me)
+        bm.free()
+        tools.objects.link(bpy.data.objects.new('clear_tool', me))
+    if tools.objects:   # all of them cut at once
+        m = part.modifiers.new('clear', 'BOOLEAN')
+        m.operation, m.solver, m.operand_type, m.collection = 'DIFFERENCE', 'EXACT', 'COLLECTION', tools
+        m.use_self, m.use_hole_tolerant = True, True
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        me = bpy.data.meshes.new_from_object(part.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+        _tidy(me)
+        old = part.data
+        part.modifiers.clear()
+        part.data = me
+        bpy.data.meshes.remove(old)
+    for tool in list(tools.objects):
+        _remove(tool)
+    bpy.data.collections.remove(tools)
+    return part
+
+
+def _tidy(me, share=0.05):
+    """Tidy what a cut leaves: points within a fifth of a millimetre welded and the slivers between them dissolved
+    (the model check welds points that close); two sheets left touching along an edge parted, each point there moved
+    a third of a millimetre into its own sheet; the loose bits dropped (pieces of `me`, faces joined by edges, with
+    under `share` of its faces); every face made a triangle, cracks closed and fins dropped."""
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=2e-4)
+    bmesh.ops.dissolve_degenerate(bm, edges=bm.edges, dist=2e-4)
+    for v in {v for e in bm.edges if len(e.link_faces) > 2 for v in e.verts}:
+        pinched = [e for e in v.link_edges if len(e.link_faces) > 2] if v.is_valid else []
+        if pinched:
+            for w in bmesh.utils.vert_separate(v, pinched):
+                mid = sum((f.calc_center_median() for f in w.link_faces), Vector()) / max(1, len(w.link_faces))
+                w.co += (mid - w.co).normalized() * 3e-4
+    seen, pieces = set(), []
+    for f in bm.faces:
+        if f in seen:
+            continue
+        piece, todo = [], [f]
+        seen.add(f)
+        while todo:
+            g = todo.pop()
+            piece.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h not in seen:
+                        seen.add(h)
+                        todo.append(h)
+        pieces.append(piece)
+    small = [f for piece in pieces if len(piece) < share * len(bm.faces) for f in piece]
+    bmesh.ops.delete(bm, geom=small, context='FACES')
+    bmesh.ops.delete(bm, geom=[e for e in bm.edges if not e.link_faces], context='EDGES')
+    # The cut's many-sided faces split into triangles here, where a concave one is split properly; then any triangle
+    # with a corner lying on its opposite edge (a crack the check would see) is closed: that edge is split at the
+    # corner and welded to it.
+    bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='EAR_CLIP')
+    for _ in range(64):
+        crack = next(_cracks(bm), None)
+        if crack is None:
+            break
+        edge, end, t, corner = crack
+        _, mid = bmesh.utils.edge_split(edge, end, t)
+        bmesh.ops.weld_verts(bm, targetmap={mid: corner})
+        bmesh.ops.dissolve_degenerate(bm, edges=bm.edges, dist=2e-4)
+        bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='EAR_CLIP')
+    # Fins: a triangle hanging off an edge other faces share, its other two edges free.
+    fins = [f for f in bm.faces if sum(len(e.link_faces) == 1 for e in f.edges) == 2
+            and any(len(e.link_faces) > 2 for e in f.edges)]
+    bmesh.ops.delete(bm, geom=fins, context='FACES')
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bm.to_mesh(me)
+    bm.free()
+
+
+def _cracks(bm, tol=2e-4):
+    """Triangles of `bm` with a corner within `tol` of its opposite edge, inside it: (that edge, its end the split is
+    measured from, how far along, the corner)."""
+    for f in bm.faces:
+        for i in range(3):
+            c, a, b = f.verts[i], f.verts[(i + 1) % 3], f.verts[(i + 2) % 3]
+            ab = b.co - a.co
+            if ab.length_squared < 1e-12:
                 continue
-            for i in f:
-                if i not in vs:
-                    vs[i] = bm.verts.new(verts[i])
-            try:
-                bm.faces.new([vs[i] for i in f])
-            except ValueError:
-                pass
-        if bm.faces:
-            out.append(_mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color))
-        else:
-            bm.free()
-    return out
+            t = (c.co - a.co).dot(ab) / ab.length_squared
+            edge = bm.edges.get((a, b))
+            if edge is not None and 0.01 < t < 0.99 and (a.co + ab * t - c.co).length < tol:
+                yield edge, a, t, c
+
+
+def _remove(o):
+    me = o.data
+    bpy.data.objects.remove(o, do_unlink=True)
+    bpy.data.meshes.remove(me)
+
+
+def place(parent, mesh, color):
+    """A baked mesh (verts, faces) as one flat-shaded part in `color` under `parent`, whose frame is the three.js frame
+    the mesh was authored in."""
+    verts, faces = mesh
+    bm = bmesh.new()
+    vs = [bm.verts.new(v) for v in verts]
+    for f in faces:
+        bm.faces.new([vs[i] for i in f])
+    return _mesh_obj(bm, parent, (0, 0, 0), (0, 0, 0), color)
 
 
 def loops(mesh):
