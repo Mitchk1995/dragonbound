@@ -29,7 +29,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
   - Launch each job as its agent type: the shared brief (rules, style, captures, landing, report) is built into `.claude/agents/`, so the prompt carries only the task and its notes.
   - A job checks each fix from several camera angles, not only the review view, and extends the geometry audit where it can.
 - **Every visual builder starts from the style:** "The look" in [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md) and the owner's picks in its area's plan file. Nothing reaches the owner as finished until the geometry checks pass and the builder has zoomed into every capture it shows; work-in-progress pictures can go sooner, labelled as unfinished.
-- **Mechanics and non-visual systems go to Codex** (GPT 6.1 Sol, max effort, run headless with the Codex app's newest bundled `codex.exe`); Claude does design, planning, look and feel.
+- **Claude does everything, mechanics included (owner, October 4).** Codex access is ending, so mechanics and non-visual systems are Claude's work, run as `builder` jobs. Codex's last use is generating the texture and image library (`D:\dragonbound-archive\codex\CATALOGUE.md`). Once access ends, new textures come from that library or from CC0 sources.
 
 ## Where things are
 
@@ -63,6 +63,20 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - Pure logic (XP, drops, recipes, saves, pathing) is unit-tested in `tests/`.
 - Save format changes bump `SAVE_VERSION` and add a tested migration, so players never lose progress.
 - Art is code: every model is a Blender script in `tools/blender/`, and the `.glb` exports are committed. Textures are sourced, not hand-painted in code (owner, October 3): generated with Codex image generation in the game's painted style, or taken from free CC0 libraries (Poly Haven, ambientCG) and toned to match. Each is made tileable, checked repeating in the game, committed small, and listed with its source and licence. See [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
+- **Use the method a professional 3D artist would use (owner, October 4: "it seems dumb not to use the best ideas").** Scripts are how we run Blender, not a reason to build everything from boxes. Before modelling, pick the technique a professional would use for that thing, and name it in the report:
+  - cloth simulation for hoods, capes, robes and banners;
+  - sculpting then remeshing and decimating for organic shapes;
+  - modifier stacks;
+  - geometry nodes for procedural walls, roofs, rocks, trees and scatter;
+  - UV unwrapping and texture baking from a high-detail version;
+  - armature rigs with weight painting.
+  The script stays deterministic, so exports are reproducible.
+- **One object, one shape (owner, October 4: "without using random shapes mashed together").** Something meant to read as one solid thing, like an anvil, a barrel, a table, a chest or a statue, is modelled as one continuous mesh, never as primitives pushed into each other. The professional ways:
+  - box modelling: start from one block, then extrude, inset, loop-cut and bevel it into shape (anvil, chest, table top);
+  - lathe or spin a profile for round things (barrel, bottle, pot, column);
+  - loft or sweep a profile along a path (rails, hoops, handles, trim);
+  - sculpting and remeshing for organic things.
+  If a draft starts from blocks, join them by boolean union, then voxel-remesh, decimate and bevel them into one watertight mesh. Rebuild the detail through the bake. Only genuinely separate parts stay separate pieces, such as a hammer's head and haft or a cart's wheels, and they meet cleanly without passing through each other. `npm run check` enforces this on every committed model: pieces carried by the same joint may touch but never pass inside one another (limbs overlapping where they turn are exempt), and the allowlist of today's offenders in `tools/check-one-piece.cjs` only shrinks.
 - Always build on the newest stable version of every tool, library, engine feature and model, and use its newest way of doing things, not the legacy path (owner, October 3). At the start of a job, check the versions and current features it touches. Fall back to an older path only when the newest is broken or missing something, and then tell the owner plainly.
 - **Leave it tidier (owner, October 3).** Every job leaves its area tidier than it found it: no new plan or status docs, no placeholder text, TODO stubs or dead code, and a file is split before it passes the size limit (600 lines of code, 25 KB of Markdown, checked by `npm run check`; the allowlist in `tools/check-size.cjs` only shrinks). Reviewers check for all of this.
 - Files are UTF-8 without a BOM; CI rejects BOMs and mojibake.
