@@ -6,6 +6,10 @@ Part of the design plan; the index and the current direction are in [DESIGN_DECI
 
 - **Trees:** the grown oak and the common tree are built and approved with their bark (Mitchell, "looks good", October 3; see "Trees (October 3)" below); the willow, maple, yew and magic tree are built and every zone's woods and lawns now grow the ladder, waiting on Mitchell's verdict from pictures.
 
+## Bushes and dead ash (October 4)
+
+- **Bushes grown like the trees: approved** ("yes, good"). **Dead ash grown then broken: rejected** for its bark and colour only: "texture is completely off on the dead trees doesnt look anything close to right with the bark and colors". The shapes stay; the bark and colours are being redone from real dead-ash reference.
+
 ## The pick (October 3)
 
 - **Trees: pick B, "Natural".** Redo the trees at true size, no longer blocky, as the woodcutting ladder in RuneScape's
