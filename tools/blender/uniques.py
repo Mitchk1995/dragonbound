@@ -141,8 +141,10 @@ def u_emberstring(S):
     obs = obsidian()
     b = bow_frame(S)
     z0 = BOW_Z
-    box(b, (0.12, 2 * RISER, 0.12), (0, 0, z0), GRIP, bevel=0.03)                                    # grip (the riser)
-    facet_gem(b, 0.05, (0, 0, z0 - 0.075), EMBER, emissive=EMBER, strength=5, rot=(0, PI / 4, 0))
+    grip = RISER - BOW_MID + 0.13            # the riser in two: the grip round the hand, then the rest with the gem
+    box(b, (0.12, grip, 0.12), (0, -RISER + grip / 2, z0), GRIP, bevel=0.03).name = 'bow_grip'
+    box(b, (0.12, 2 * RISER - grip, 0.12), (0, grip / 2, z0), GRIP, bevel=0.03)
+    facet_gem(b, 0.05, (0, 0.04, z0 - 0.075), EMBER, emissive=EMBER, strength=5, rot=(0, PI / 4, 0))
     for s in (-1, 1):
         box(b, (0.13, 0.05, 0.15), (0, s * (RISER + 0.02), z0), obs, bevel=0.015)
         limb_chain(b, [(s * y, z + z0) for y, z in EMBER_LIMB], 0.12, 0.09, BONE)

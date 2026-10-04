@@ -141,10 +141,25 @@ def pickaxe(S):
 # Limb profile as (y, z) in the bow's frame: Y along the bow, Z from the grip toward the string (the limbs sweep that
 # way to their tips). The frame is turned in the hand so the bow runs through the hole (the socket's +Y) with the
 # string off to the hand's side (bow_frame), and the hand holds it BOW_MID below its middle, so the arrow, drawn through
-# the middle of the string, passes just over the hand. Grip wraps and bands keep clear of the hand (the frame's y from
-# -BOW_MID - 0.12 to -BOW_MID + 0.12), where only the limb, at most 0.12 thick, runs through the hole.
+# the middle of the string, passes just over the hand. The grip is centred on the hand (grip_stack), at most 0.12 across
+# so it passes through the hand's hole; its bands and rings, wider than the hole, lie beyond the hand either side (the
+# hand closes 0.11 either side of its hole), and the limbs run on from them (limbs_round_grip).
 BOW_Z = 0.08
 BOW_MID = 0.15
+
+
+def grip_stack(b, parts):
+    """The grip and its bands, stacked along the bow and centred on the hand's hole (the frame's y = -BOW_MID): each
+    part (length, (width, depth), colour[, name]) a box touching the next end to end. The part named bow_grip is the
+    one the hand holds, which the game's checks find (render/bowMeasure.ts: the hand on the grip, at its middle).
+    Returns where the stack starts and ends along the bow, for the limbs to run on from (limbs_round_grip)."""
+    y = lo = -BOW_MID - sum(p[0] for p in parts) / 2
+    for length, (w, d), color, *name in parts:
+        o = box(b, (w, length, d), (0, y + length / 2, BOW_Z), color, bevel=0.03)
+        if name:
+            o.name = name[0]
+        y += length
+    return lo, y
 
 
 def bow_frame(S):
@@ -167,6 +182,46 @@ def limb_tube(b, pts, w, t, color, w1, t1, smooth=True, seg=6, n=5, ends=False, 
     wide (X) and `t` deep at the grip, tapering to w1 x t1 at the tips (ends=True: from the first point to the last,
     for a sheath over a tip). smooth=False keeps straight segments with sharp joints (bone), each joint swollen by
     `knuckle`."""
+    return _tube(b, _limb_rings(pts, w, t, w1, t1, smooth, seg, n, ends, knuckle), color)
+
+
+def limbs_round_grip(b, pts, w, t, color, w1, t1, lo, hi, **kw):
+    """The limbs as limb_tube runs them tip to tip, cut away between y = lo and y = hi where the grip and its bands
+    stack (grip_stack): each limb ends flat against the stack, touching it, nothing passing inside anything."""
+    rings = _limb_rings(pts, w, t, w1, t1, **kw)
+    ys = [sum(v.y for v in r) / len(r) for r in rings]
+
+    def at(y):   # where the tube crosses y: the ring there, flattened onto it
+        i = next(k for k in range(len(ys) - 1) if ys[k] <= y <= ys[k + 1])
+        s = (y - ys[i]) / (ys[i + 1] - ys[i])
+        return i, [Vector((a.x + (c.x - a.x) * s, y, a.z + (c.z - a.z) * s)) for a, c in zip(rings[i], rings[i + 1])]
+
+    i, ring_lo = at(lo)
+    j, ring_hi = at(hi)
+    # A ring that reaches past the cut (where a short last step of the profile kinks the curve) is left out: the limb
+    # runs straight on to the cut.
+    below = [r for r in rings[:i + 1] if max(v.y for v in r) <= lo]
+    above = [r for r in rings[j + 1:] if min(v.y for v in r) >= hi]
+    return _tube(b, below + [ring_lo], color), _tube(b, [ring_hi] + above, color)
+
+
+def _tube(b, rings, color):
+    """A closed tube through `rings` (the same number of points round each), capped at both ends."""
+    bm = bmesh.new()
+    vs = [[bm.verts.new(v) for v in r] for r in rings]
+    seg = len(rings[0])
+    for r0, r1 in zip(vs, vs[1:]):
+        for k in range(seg):
+            bm.faces.new((r0[k], r0[(k + 1) % seg], r1[(k + 1) % seg], r1[k]))
+    bm.faces.new(vs[0])
+    bm.faces.new(list(reversed(vs[-1])))
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _mesh_obj(bm, b, (0, 0, 0), (0, 0, 0), color)
+
+
+def _limb_rings(pts, w, t, w1, t1, smooth=True, seg=6, n=5, ends=False, knuckle=0.0):
+    """limb_tube's rings: `seg` points round the tube at each step along it."""
     if smooth:   # Catmull-Rom through the points
         ext = [pts[0]] + list(pts) + [pts[-1]]
         P = []
@@ -187,7 +242,6 @@ def limb_tube(b, pts, w, t, color, w1, t1, smooth=True, seg=6, n=5, ends=False, 
     L = [0.0]
     for a, c in zip(P, P[1:]):
         L.append(L[-1] + (c - a).length)
-    bm = bmesh.new()
     rings = []
     for i, p in enumerate(P):
         T = (P[min(i + 1, len(P) - 1)] - P[max(i - 1, 0)]).normalized()
@@ -195,16 +249,9 @@ def limb_tube(b, pts, w, t, color, w1, t1, smooth=True, seg=6, n=5, ends=False, 
         f = L[i] / L[-1] if ends else abs(2 * L[i] / L[-1] - 1)   # 0 at the grip (or start), 1 at the tips
         k = 1 + knuckle * max([0.0] + [1 - (p - j).length / 0.07 for j in joints])
         ww, tt = (w + (w1 - w) * f) * k, (t + (t1 - t) * f) * k
-        rings.append([bm.verts.new(p + Vector((math.cos(a) * ww / 2, 0, 0)) + N * (math.sin(a) * tt / 2))
+        rings.append([p + Vector((math.cos(a) * ww / 2, 0, 0)) + N * (math.sin(a) * tt / 2)
                       for a in (k_ * 2 * PI / seg + PI / seg for k_ in range(seg))])
-    for r0, r1 in zip(rings, rings[1:]):
-        for k in range(seg):
-            bm.faces.new((r0[k], r0[(k + 1) % seg], r1[(k + 1) % seg], r1[k]))
-    bm.faces.new(rings[0])
-    bm.faces.new(list(reversed(rings[-1])))
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return _mesh_obj(bm, b, (0, 0, 0), (0, 0, 0), color)
+    return rings
 
 def limb_band(b, pts, k, w, h, d, color, s=1):
     """A band round the limb at point k of a half profile (s = -1: the lower limb), square to the limb."""
@@ -213,10 +260,11 @@ def limb_band(b, pts, k, w, h, d, color, s=1):
     box(b, (w, h, d), (0, s * y, z), color, rot=(s * math.atan2(z1 - z0, y1 - y0), 0, 0), bevel=0.01)
 
 
-def bow_tip(b, pts, length, w, color, s=1, w1=0.008):
-    """A pointed cap carrying on from the limb's last point."""
+def bow_tip(b, pts, length, w, color, s=1, w1=0.008, straight=False):
+    """A pointed cap carrying on from the limb's last point (straight: along the bow, so a limb that meets its string
+    at a steep angle ends there instead of reaching on past the string toward the archer)."""
     (y0, z0), (y1, z1) = pts[-2], pts[-1]
-    d = Vector((0, y1 - y0, z1 - z0)).normalized()
+    d = Vector((0, 1, 0)) if straight else Vector((0, y1 - y0, z1 - z0)).normalized()
     a = Vector((0, s * y1, z1))
     beam(b, tuple(a - Vector((0, s * d.y, d.z)) * 0.02), tuple(a + Vector((0, s * d.y, d.z)) * length), w, color, w1=w1, d1=w1)
 
@@ -251,14 +299,12 @@ WORN = [(0, 0), (0.13, 0.008), (0.34, 0.033), (0.58, 0.082), (0.76, 0.153), (0.9
 
 
 def bow_worn(S):
-    """Worn Shortbow: a deep D of weathered grey wood in one smooth piece, a tan rope wrap with a leather strip at the
-    grip, rope whipping and small dark caps at the tips."""
+    """Worn Shortbow: a deep D of weathered grey wood, a tan rope wrap at the grip between dark turns, rope whipping
+    and small dark caps at the tips."""
     b, H = bow_frame(S), 0.8
-    limb_tube(b, bow_shape(WORN, H), 0.12, 0.12, R.metal, 0.06, 0.065)
-    box(b, (0.165, 0.2, 0.18), (0, 0.07, BOW_Z), R.trim, bevel=0.035)                 # rope wrap, over the hand
-    box(b, (0.1, 0.18, 0.02), (0, 0.07, BOW_Z - 0.093), R.dark, bevel=0.006)           # leather strip
-    for y in (0.0, 0.07, 0.14):
-        box(b, (0.169, 0.012, 0.184), (0, y, BOW_Z), R.dark, bevel=0)                  # wrap turns
+    turn = (0.014, (0.15, 0.15), R.dark)
+    lo, hi = grip_stack(b, [turn, (0.272, (0.12, 0.12), R.trim, 'bow_grip'), turn])   # rope wrap and its last turns
+    limbs_round_grip(b, bow_shape(WORN, H), 0.12, 0.12, R.metal, 0.06, 0.065, lo, hi)
     pts = half_pts(WORN, H)
     for s in (-1, 1):
         limb_band(b, pts, len(pts) - 2, 0.09, 0.06, 0.1, R.trim, s)                    # whipping
@@ -273,13 +319,12 @@ def bow_hunter(S):
     """Hunter's Bow: a tall, slender bow of orange wood swelling mid-limb, a green grip wrap between steel rings and
     pointed steel tips."""
     b, H = bow_frame(S), 0.85
-    limb_tube(b, bow_shape(HUNTER, H), 0.115, 0.12, R.metal, 0.045, 0.05)
-    box(b, (0.135, 0.18, 0.15), (0, 0.09, BOW_Z), HUNTER_WRAP, bevel=0.03)            # green wrap, over the hand
-    for y in (-0.0025, 0.1825):
-        box(b, (0.15, 0.035, 0.165), (0, y, BOW_Z), R.dark, bevel=0.01)                   # steel rings
+    ring = (0.035, (0.15, 0.165), R.dark)
+    lo, hi = grip_stack(b, [ring, (0.23, (0.12, 0.12), HUNTER_WRAP, 'bow_grip'), ring])  # green wrap, steel rings
+    limbs_round_grip(b, bow_shape(HUNTER, H), 0.115, 0.12, R.metal, 0.045, 0.05, lo, hi)
     pts = half_pts(HUNTER, H)
     for s in (-1, 1):
-        bow_tip(b, pts, 0.11, 0.06, R.dark, s, w1=0.004)
+        bow_tip(b, pts, 0.11, 0.06, R.dark, s, w1=0.004, straight=True)
     bow_string(b, (pts[-1][0], pts[-1][1] - BOW_Z))
 
 
@@ -296,12 +341,9 @@ def bow_recurve(S):
     gold bands, and long gold sheaths over the curled tips coming to a point."""
     b, H = bow_frame(S), 0.84
     pts = half_pts(RECURVE, H)
-    limb_tube(b, bow_shape(RECURVE[:9], H), 0.12, 0.115, R.metal, 0.08, 0.085)      # to the sheaths
-    box(b, (0.15, 0.2, 0.16), (0, 0.125, BOW_Z), R.dark, bevel=0.03)                   # grip, over the hand
-    for y in (0.065, 0.105, 0.145, 0.185):
-        box(b, (0.154, 0.012, 0.164), (0, y, BOW_Z), 0x1A1210, bevel=0)                 # ribs
-    for y in (0.0, 0.25):
-        box(b, (0.17, 0.05, 0.18), (0, y, BOW_Z), R.trim, bevel=0.015)                  # gold bands
+    band, grip, rib = (0.05, (0.17, 0.18), R.trim), (0.03, (0.12, 0.12), R.dark), (0.012, (0.15, 0.148), 0x1A1210)
+    lo, hi = grip_stack(b, [band, grip, rib, (0.226, (0.12, 0.12), R.dark, 'bow_grip'), rib, grip, band])  # ribbed grip
+    limbs_round_grip(b, bow_shape(RECURVE[:9], H), 0.12, 0.115, R.metal, 0.08, 0.085, lo, hi)  # to the sheaths
     for s in (-1, 1):
         limb_tube(b, [(s * y, z) for y, z in pts[8:]], 0.1, 0.1, R.trim, 0.012, 0.012, n=3, ends=True)  # gold sheath
     bow_string(b, (RECURVE_NOCK * H, RECURVE_STRING * 2 * H))
@@ -316,10 +358,9 @@ def bow_drakebone(S):
     at the tips, a dark grip between red bands, red bands mid-limb and red pointed tips."""
     b, H = bow_frame(S), 0.82
     pts = half_pts(DRAKE, H)
-    limb_tube(b, bow_shape(DRAKE, H), 0.12, 0.12, R.metal, 0.09, 0.08, smooth=False, seg=5, knuckle=0.22)
-    box(b, (0.16, 0.18, 0.17), (0, 0.1, BOW_Z), R.dark, bevel=0.03)                    # grip, over the hand
-    for y in (0.0, 0.2):
-        box(b, (0.18, 0.05, 0.19), (0, y, BOW_Z), R.trim, bevel=0.015)                  # red bands at the grip
+    band = (0.05, (0.18, 0.19), R.trim)
+    lo, hi = grip_stack(b, [band, (0.23, (0.12, 0.12), R.dark, 'bow_grip'), band])    # dark grip, red bands
+    limbs_round_grip(b, bow_shape(DRAKE, H), 0.12, 0.12, R.metal, 0.09, 0.08, lo, hi, smooth=False, seg=5, knuckle=0.22)
     for s in (-1, 1):
         limb_band(b, pts, 2, 0.18, 0.06, 0.17, R.trim, s)                               # red band mid-limb
         bow_tip(b, pts, 0.11, 0.1, R.trim, s, w1=0.004)                                  # red point

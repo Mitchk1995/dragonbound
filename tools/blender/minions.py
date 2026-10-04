@@ -44,36 +44,44 @@ MOUTH = 0x4A3020
 CLUB = 0x6E4426
 # The goblin's LEGO hand: as the hero's (hero.py HAND), a little chunkier.
 GOB_HAND = dict(outer=0.145, inner=(0.068, 0.082), depth=0.24, gap=0.07, gap_tilt=0.6, stub=(0.13, 0.08, 0.14))
+# Where the goblin's and kobold's legs hinge (each under its seat or hips); their hip axes are 0.55 and 0.36.
+GOB_HINGE, KOB_HINGE = 0.38, 0.3
 
 
 def goblin():
     scene, root = fresh_scene('DB_goblin')
-    hip = 0.55
+    # As the hero's (hero.py), the legs hinge low, at the thigh's foot under the seat, each thigh's top rounded about
+    # the hinge so it turns inside the seat; the seat, belt, flaps and pouch hang on the hips (sock_hips), which stay
+    # level with the legs as the body leans over them, so no stride, swing or flinch puts a leg through the loincloth
+    # (skirtcheck.py skirt_clip_all). (Heights below are from the hip axis, so the legs keep their looks.)
+    hip, hinge = 0.55, GOB_HINGE
+    up = hip - hinge
     for name, x in (('legL', 0.16), ('legR', -0.16)):
         s = 1 if x > 0 else -1
-        l = pivot(root, name, (x, hip, 0))
-        box(l, (0.27, 0.22, 0.29), (0, -0.08, 0), GOB_DK, bevel=0.04)                     # thigh
-        box(l, (0.24, 0.16, 0.26), (0, -0.23, 0), GOB, bevel=0.035)                       # knee
-        box(l, (0.29, 0.17, 0.31), (0, -0.37, 0), LEATHER, bevel=0.035)                   # boot shaft
-        box(l, (0.3, 0.045, 0.32), (0, -0.33, 0), LEATHER_DK, bevel=0.01)                 # wrap
-        box(l, (0.3, 0.045, 0.32), (0, -0.4, 0), LEATHER_DK, bevel=0.01)
-        box(l, (0.31, 0.14, 0.42), (0, -0.47, 0.05), LEATHER, bevel=0.04)                 # foot
-        box(l, (0.32, 0.045, 0.43), (0, -0.5275, 0.05), 0x2A1E16, bevel=0.012)           # sole
+        l = pivot(root, name, (x, hinge, 0))
+        joint_limb(l, 0.27, 0.29, 0.0, -0.19 + up, GOB_DK, round_top=True, bevel=0.04)    # thigh
+        box(l, (0.24, 0.16, 0.26), (0, -0.23 + up, 0), GOB, bevel=0.035)                  # knee
+        box(l, (0.29, 0.17, 0.31), (0, -0.37 + up, 0), LEATHER, bevel=0.035)              # boot shaft
+        box(l, (0.3, 0.045, 0.32), (0, -0.33 + up, 0), LEATHER_DK, bevel=0.01)            # wrap
+        box(l, (0.3, 0.045, 0.32), (0, -0.4 + up, 0), LEATHER_DK, bevel=0.01)
+        box(l, (0.31, 0.14, 0.42), (0, -0.47 + up, 0.05), LEATHER, bevel=0.04)            # foot
+        box(l, (0.32, 0.045, 0.43), (0, -0.5275 + up, 0.05), 0x2A1E16, bevel=0.012)      # sole
     body = pivot(root, 'body', (0, hip, 0))
-    # Belt, flaps and pouch.
-    box(body, (0.62, 0.22, 0.44), (0, -0.02, 0), LEATHER_DK, bevel=0.04)                  # seat
-    box(body, (0.66, 0.11, 0.48), (0, 0.06, 0.01), LEATHER, bevel=0.03)                   # belt
+    # Seat, belt, flaps and pouch, on the hips.
+    hips = pivot(body, 'sock_hips')
+    box(hips, (0.62, 0.22, 0.44), (0, -0.02, 0), LEATHER_DK, bevel=0.04)                  # seat
+    box(hips, (0.66, 0.11, 0.48), (0, 0.06, 0.01), LEATHER, bevel=0.03)                   # belt
     for x in (-0.24, -0.08, 0.08, 0.24):
-        box(body, (0.035, 0.035, 0.02), (x, 0.06, 0.252), IRON, rot=(0, 0, PI / 4), bevel=0.008)
+        box(hips, (0.035, 0.035, 0.02), (x, 0.06, 0.252), IRON, rot=(0, 0, PI / 4), bevel=0.008)
     for x, w, ln, col in ((-0.17, 0.15, 0.12, HIDE), (0.0, 0.17, 0.2, LEATHER_DK), (0.16, 0.14, 0.1, HIDE)):   # torn flaps
-        box(body, (w, ln, 0.035), (x, -ln / 2, 0.235), col, rot=(-0.08, 0, 0), bevel=0.01)
-        prism(body, [(-w / 2 + 0.01, 0), (0.0, -0.05), (w / 2 - 0.01, 0)], 0.035, (x, -ln + 0.005, 0.235 + ln * 0.08), col,
+        box(hips, (w, ln, 0.035), (x, -ln / 2, 0.235), col, rot=(-0.08, 0, 0), bevel=0.01)
+        prism(hips, [(-w / 2 + 0.01, 0), (0.0, -0.05), (w / 2 - 0.01, 0)], 0.035, (x, -ln + 0.005, 0.235 + ln * 0.08), col,
               rot=(-0.08, 0, 0))
     for x in (-0.15, 0.13):                                                                 # and behind
-        box(body, (0.2, 0.2, 0.035), (x, -0.1, -0.235), HIDE_DK, rot=(0.08, 0, 0), bevel=0.01)
-    box(body, (0.16, 0.18, 0.11), (0.2, -0.02, 0.27), LEATHER, bevel=0.03)                # pouch
-    box(body, (0.17, 0.07, 0.12), (0.2, 0.05, 0.275), LEATHER_DK, rot=(0.15, 0, 0), bevel=0.015)
-    box(body, (0.03, 0.06, 0.02), (0.2, 0.0, 0.33), IRON, bevel=0.006)
+        box(hips, (0.2, 0.2, 0.035), (x, -0.1, -0.235), HIDE_DK, rot=(0.08, 0, 0), bevel=0.01)
+    box(hips, (0.16, 0.18, 0.11), (0.2, -0.02, 0.27), LEATHER, bevel=0.03)                # pouch
+    box(hips, (0.17, 0.07, 0.12), (0.2, 0.05, 0.275), LEATHER_DK, rot=(0.15, 0, 0), bevel=0.015)
+    box(hips, (0.03, 0.06, 0.02), (0.2, 0.0, 0.33), IRON, bevel=0.006)
     # Bare barrel chest leaning forward, shoulders broader than the waist.
     box(body, (0.64, 0.52, 0.44), (0, 0.36, 0.03), GOB, rot=(0.18, 0, 0), taper=(1.06, 1.05), bevel=0.07)
     box(body, (0.46, 0.18, 0.06), (0, 0.42, 0.26), GOB_DK, rot=(0.18, 0, 0), bevel=0.03)   # pecs
@@ -150,23 +158,29 @@ SPINE = 0x7A3C16
 
 def kobold():
     scene, root = fresh_scene('DB_kobold')
-    hip = 0.36
+    # The legs hinge low, each thigh's top rounded about the hinge inside the hips, which with the belt, the pouches and
+    # the tail stay level with the legs (sock_hips) as the body leans over them; the belly sits on the hips above the
+    # thighs, its foot under the belt (as the goblin's above).
+    hip, hinge = 0.36, KOB_HINGE
+    up = hip - hinge
     for name, x in (('legL', 0.14), ('legR', -0.14)):
-        l = pivot(root, name, (x, hip, 0))
-        box(l, (0.24, 0.24, 0.28), (0, -0.07, 0), KOB, bevel=0.045)                          # thigh
-        box(l, (0.19, 0.14, 0.2), (0, -0.21, -0.01), KOB, bevel=0.035)                        # shank
-        box(l, (0.24, 0.12, 0.32), (0, -hip + 0.06, 0.05), KOB_DK, bevel=0.035)               # foot
+        l = pivot(root, name, (x, hinge, 0))
+        joint_limb(l, 0.24, 0.28, 0.0, -0.19 + up, KOB, round_top=True, bevel=0.045)         # thigh
+        box(l, (0.19, 0.14, 0.2), (0, -0.21 + up, -0.01), KOB, bevel=0.035)                   # shank
+        box(l, (0.24, 0.12, 0.32), (0, -hinge + 0.06, 0.05), KOB_DK, bevel=0.035)             # foot
         for dx in (-0.065, 0.0, 0.065):                                                       # three toe claws
-            beam(l, (dx, -hip + 0.055, 0.19), (dx * 1.15, -hip + 0.008, 0.29), 0.05, BONE, w1=0.012, d=0.045, d1=0.01)
-        beam(l, (0, -hip + 0.06, -0.1), (0, -hip + 0.01, -0.18), 0.045, BONE, w1=0.01, d=0.04, d1=0.01)   # heel spur
+            beam(l, (dx, -hinge + 0.055, 0.19), (dx * 1.15, -hinge + 0.008, 0.29), 0.05, BONE, w1=0.012, d=0.045, d1=0.01)
+        beam(l, (0, -hinge + 0.06, -0.1), (0, -hinge + 0.01, -0.18), 0.045, BONE, w1=0.01, d=0.04, d1=0.01)   # heel spur
     body = pivot(root, 'body', (0, hip, 0))
-    box(body, (0.48, 0.46, 0.38), (0, 0.23, 0), KOB, rot=(0.1, 0, 0), taper=(1.06, 1), bevel=0.06)
-    for i, y in enumerate((0.1, 0.22, 0.34)):                                                 # belly plates
-        box(body, (0.3 - i * 0.02, 0.11, 0.05), (0, y, 0.19 + y * 0.1), BELLY, rot=(0.1, 0, 0), bevel=0.02)
-    box(body, (0.5, 0.09, 0.4), (0, 0.04, 0), K_LEATHER, bevel=0.025)                         # belt
+    hips = pivot(body, 'sock_hips')
+    box(hips, (0.55, 0.22, 0.37), (0, 0.01, 0), KOB, bevel=0.05)                              # hips
+    box(body, (0.48, 0.36, 0.38), (0, 0.28, 0), KOB, rot=(0.1, 0, 0), taper=(1.06, 1), bevel=0.06)   # belly and chest
+    for i, y in enumerate((0.16, 0.26, 0.36)):                                                # belly plates
+        box(body, (0.3 - i * 0.02, 0.1, 0.05), (0, y, 0.19 + y * 0.1), BELLY, rot=(0.1, 0, 0), bevel=0.02)
+    box(hips, (0.57, 0.09, 0.4), (0, 0.11, 0), K_LEATHER, bevel=0.025)                        # belt
     # Stone pouches: one on each hip at the front, one on the back of the strap.
     for x, z, yaw in ((0.19, 0.17, 0.3), (-0.19, 0.17, -0.3), (0.08, -0.22, PI + 0.2)):
-        p = pivot(body, 'pouch', (x, 0.0, z), (0, yaw, 0))
+        p = pivot(hips, 'pouch', (x, 0.04, z), (0, yaw, 0))
         box(p, (0.15, 0.14, 0.11), (0, 0, 0), K_LEATHER, bevel=0.03)
         box(p, (0.16, 0.035, 0.12), (0, 0.06, 0.0), K_LEATHER_DK, bevel=0.01)
         box(p, (0.09, 0.085, 0.09), (0, 0.095, -0.005), STONE, rot=(0.4, 0.6, 0.3), bevel=0.025)
@@ -174,7 +188,7 @@ def kobold():
     box(body, (0.07, 0.56, 0.03), (0.0, 0.25, 0.225), K_LEATHER_DK, rot=(0.1, 0, -0.75), bevel=0.008)
     box(body, (0.07, 0.56, 0.03), (0.0, 0.25, -0.2), K_LEATHER_DK, rot=(0.1, 0, -0.75), bevel=0.008)
     # Tail: three tapering segments to the ground, dark spikes along the top.
-    t1 = pivot(body, 'tail1', (0, 0.07, -0.14))
+    t1 = pivot(hips, 'tail1', (0, 0.07, -0.14))
     beam(t1, (0, 0.0, 0.05), (0, -0.09, -0.3), 0.24, KOB, w1=0.18, d=0.22, d1=0.16)
     t2 = pivot(t1, 'tail2', (0, -0.09, -0.3))
     beam(t2, (0, 0.01, 0.03), (0, -0.12, -0.28), 0.18, KOB, w1=0.12, d=0.16, d1=0.11)

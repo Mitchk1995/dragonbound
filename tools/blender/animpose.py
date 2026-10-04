@@ -13,15 +13,18 @@ _strip = lambda n: re.sub(r'\.\d{3}$', '', n)
 IMPACT = 0.55                                  # src/data/tuning.ts COMBAT_TUNING.impact
 FOLLOW = 0.75                                  # SHOULDER_FOLLOW
 SPLAY = 0.1                                    # ARM_SPLAY
-LEG_SWING, LEG_REACH = 0.7, 0.9
+LEG_SWING = 0.7
 ELBOW_REST, HOLD_BEND, HOLD_WRIST, SIDE_WRIST = -0.25, -1.57, 0.17, 0.5
-BOW_OUT, BOW_CARRY, BOW_PLUMB = 0.2, -0.5, -0.2
+BOW_DEPTH, BOW_SWING = 0.3, 0.045
+BOW_FWD, BOW_OUT, BOW_OUT_K = -0.42, 0.24, 1.63
+BOW_BEND, BOW_ELBOW_TURN, BOW_TIP, BOW_WRIST_ROLL = 0.69, -0.08, -0.07, 0.46
+BOW_SPIN, BOW_SPIN_K = 0.64, 0.58
 WIND_ARM, WIND_ELBOW, SWING_WRIST, STRIKE_ELBOW = 2.6, -1.0, 1.3, -0.15
 CAST_ARM, CAST_ELBOW, CAST_WRIST, CAST_REACH = 2.1, -0.1, 0.885, 1.7
-BOW_TURN, BOW_HEAD = math.pi / 2, 0.85
-BOW_AIM = (-0.807, 0.07, 0.586)
+BOW_TURN, BOW_HEAD, BOW_RAISE = math.pi / 2, 1.0, 0.2
+BOW_AIM = (-0.8097, -0.0192, 0.5865)
 BOW_ROLL = (0, 1, 0.3)
-BOW_MID, DRAW_GRAB, DRAW_ANCHOR = 0.15, 1.29, 1.35
+BOW_MID, DRAW_GRAB, DRAW_ANCHOR = 0.15, 1.289, 1.349
 BOW_STRING = (1, 0, 0)
 DRAW_POLE = (1, 0.1, 0.6)
 RELEASE = IMPACT                               # bowDraw.ts
@@ -47,22 +50,30 @@ def hold_of(weapon):
     return 'upright' if weapon.startswith('staff_') or weapon == 'u_kindled_ash' else 'side'
 
 
-def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty', move=None, hurt=0.0):
+def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty', move=None, hurt=0.0, stance=None):
     """anim.ts Rig.update for a humanoid: rotation offsets {part: (x, y, z)} for the walk phase sw (sin of the stride)
     at `move` of full speed (by default full speed whenever sw is not 0), `hurt` (0..1, just hit) and attack `kind` at
     progress a (-1: none), the right hand carrying in `hold`, and 'lift', how far the body (arms, torso and head; the
     legs hang from the root) rises in the stride. The bow shot's arms are placed by pose_scene (anim.ts bowPose),
-    which this marks with 'bow': a."""
+    which this marks with 'bow': a and 'stance', the weight the shot's pose is blended in by (anim.ts: the eased
+    Rig.stance): by default as far as the shot's own rise has taken it; less while lowering the bow after it, a = 1."""
     move = (1.0 if sw else 0.0) if move is None else move
-    fore, bow = hold in ('upright', 'bow'), hold == 'bow'     # the forearm level and forward; a bow out from the body
-    swl, swr = -sw * 0.5 * move, sw * (0.15 if fore else 0.3) * move
+    upright, bow = hold == 'upright', hold == 'bow'
+    swl = -sw * 0.5 * move
+    swr = sw * (0.15 if upright else BOW_SWING if bow else 0.3) * move
     p = {'body': (-hurt * 0.3 + 0.08 * move, 0, 0), 'lift': abs(sw) * 0.06 * move, 'head': (-0.05 * move, 0, 0),
-         'armL': (swl, 0, SPLAY), 'armR': (swr, 0, -SPLAY - (BOW_OUT if bow else 0)),
+         'armL': (swl, 0, SPLAY), 'armR': (swr + (BOW_FWD if bow else 0), 0, -SPLAY - (BOW_OUT if bow else 0)),
          'legL': (sw * LEG_SWING * move, 0, 0), 'legR': (-sw * LEG_SWING * move, 0, 0),
          'elbowL': (ELBOW_REST + min(0, swl) * 0.5, 0, 0),
-         'elbowR': (HOLD_BEND - swr if fore else ELBOW_REST + min(0, swr) * 0.5, BOW_CARRY if bow else 0, 0),
+         'elbowR': ((HOLD_BEND - swr, 0, 0) if upright else (-BOW_BEND, BOW_ELBOW_TURN, 0) if bow
+                    else (ELBOW_REST + min(0, swr) * 0.5, 0, 0)),
          'handL': (0, 0, 0),
-         'handR': (SIDE_WRIST - swr if hold == 'side' else HOLD_WRIST if hold == 'upright' else 0, BOW_PLUMB if bow else 0, 0)}
+         'handR': ((SIDE_WRIST - swr, 0, 0) if hold == 'side' else (HOLD_WRIST, 0, 0) if upright
+                   else (BOW_TIP - swr, BOW_WRIST_ROLL, 0) if bow else (0, 0, 0))}
+    if bow:
+        # The bow turned in the hand, its string toward the archer, and held further forward and out the deeper it
+        # is (pose_scene, from the bow in the scene: anim.ts Rig.update).
+        p['bowspin'] = 1.0
     if a < 0 or kind is None:
         return p
     # Every attack starts and ends at the carry (anim.ts Rig.carry).
@@ -92,8 +103,9 @@ def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty', move=None, hurt=0.0):
         p['elbowR'], p['elbowL'] = (_lerp(e0, -0.5, lift), 0, 0), (_lerp(el, -0.5, lift), 0, 0)
         p['body'] = (-0.2 if a < IMPACT else 0.25, 0, 0)
     elif kind == 'bow':
-        p['bow'] = a
-        p['head'] = (0, -BOW_TURN * BOW_HEAD * _ease(min(1, a / 0.2)), 0)
+        w = _ease(min(1, a / BOW_RAISE)) if stance is None else stance
+        p['bow'], p['stance'] = a, w
+        p['head'] = (0, -BOW_TURN * BOW_HEAD * w, 0)
     elif kind == 'cast':
         lift = _ease(a / IMPACT) if a < IMPACT else 1 - _ease((a - IMPACT) / (1 - IMPACT))
         p['armR'], p['elbowR'] = (_lerp(x0, -CAST_ARM, lift), 0, -SPLAY), (_lerp(e0, CAST_ELBOW, lift), 0, 0)
@@ -108,16 +120,21 @@ def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty', move=None, hurt=0.0):
 
 
 # The frames each attack is checked at: wind-up, impact and follow-through (the bow: taking the string, mid-draw, full
-# draw and after the release). The bow coming up from the carry (before 0.2) is a quick blend, not checked: in it the
-# draw arm's shoulder dips up to 0.075 into the chest, under the shoulder cap.
+# draw and after the release, then lowering it). The bow coming up from the carry (before 0.2, a sixth of a second) is
+# not checked for arms: in it the chain shirt's draw arm dips up to 0.045 into the chest, under the shoulder cap
+# (bowcheck.py checks those frames for the bow itself).
 ATTACK_FRAMES = {'swing': (0.36, 0.45, 0.55, 0.67), 'slam': (0.45, 0.6), 'cast': (0.4, 0.55, 0.8), 'throw': (0.36, 0.55),
                  'bow': (0.2, 0.35, 0.5, 0.8)}
+# The bow lowered after the last shot, back to the carry (anim.ts Rig.stance), at these weights of the shot's pose.
+BOW_FADE = (0.75, 0.5, 0.25)
 
 
 def pose_list(kinds, hold='empty'):
     out = [('idle', anim_pose(hold=hold)), ('walk+', anim_pose(sw=1.0, hold=hold)), ('walk-', anim_pose(sw=-1.0, hold=hold))]
     for k in kinds:
         out += [(f'{k}@{a}', anim_pose(k, a, hold=hold)) for a in ATTACK_FRAMES[k]]
+        if k == 'bow':
+            out += [(f'bow lowering {w}', anim_pose(k, 1.0, hold=hold, stance=w)) for w in BOW_FADE]
     return out
 
 
@@ -190,7 +207,7 @@ def _reach(parts, side, target, pole, k):
     elbow.rotation_euler = (_lerp(e[0], elbow['rest_rot'][0] - bend, k), e[1], e[2])
 
 
-def _orient_hand(parts, side, axis, along, k):
+def _orient_hand(parts, side, axis, along, k, start=None):
     """anim.ts Rig.orientHand."""
     hand = parts[f'hand{side}']
     fore = _body_space(parts, hand.parent).to_quaternion()
@@ -201,27 +218,86 @@ def _orient_hand(parts, side, axis, along, k):
         y = fore @ Vector((0, 1, 0))
         z = (axis - y * axis.dot(y)).normalized()
     want = _basis(y.cross(z), y, z)
-    _set_quat(hand, _quat(hand).slerp(fore.inverted() @ want, k))
+    if start is not None:
+        _set_quat(hand, fore.inverted() @ start.slerp(want, k))
+    else:
+        _set_quat(hand, _quat(hand).slerp(fore.inverted() @ want, k))
 
 
-def bow_pose(parts, a):
-    """anim.ts Rig.bowPose (the body's own turn is left out: it moves nothing relative to the body)."""
-    raise_ = _ease(min(1, a / 0.2))
-    if not all(n in parts for n in ('body', 'armR', 'armL', 'elbowL', 'handL', 'handR', 'sock_handR')):
+def bow_string(parts):
+    """The middle of a held bow's static string in the hand socket's frame, as BowDraw (bowDraw.ts) finds it: the
+    longest long, thin piece under the socket. None without a bow."""
+    sock = parts.get('sock_handR')
+    if sock is None:
+        return None
+    bpy.context.view_layer.update()
+    inv = sock.matrix_world.inverted()
+    best = None
+    for o in sock.children_recursive:
+        if o.type != 'MESH' or not len(o.data.vertices):
+            continue
+        pts = [inv @ (o.matrix_world @ v.co) for v in o.data.vertices]
+        lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        dims = sorted(hi - lo)
+        if dims[0] < 0.035 and dims[1] < 0.035 and dims[2] > 0.6 and (best is None or dims[2] > best[0]):
+            best = (dims[2], (lo + hi) / 2)
+    return best and best[1]
+
+
+def bow_depth(parts):
+    """How far a bow's string lies from its grip (the socket's axis, through the hand's hole): what BowDraw measures.
+    None without a bow."""
+    c = bow_string(parts)
+    return c and math.hypot(c.x, c.z)
+
+
+def bow_spin(depth):
+    """anim.ts bowSpin: how far the carried bow is turned in the hand (about the grip) from its frame in the draw, for
+    a string `depth` from the grip."""
+    return BOW_SPIN + BOW_SPIN_K * (depth - BOW_DEPTH) if depth else 0.0
+
+
+def _spin(parts, w):
+    """Turns the bow in the hand: the carry's turn, by w (anim.ts Rig: sock_handR)."""
+    sock = parts.get('sock_handR')
+    if sock is None:
         return
-    _point_arm(parts['armR'], Vector(BOW_AIM), Vector(BOW_ROLL), raise_)
-    er = parts['elbowR']
-    carry = er.rotation_euler[0] - er['rest_rot'][0]                   # the carry's bend (anim.ts Rig.carry)
-    er.rotation_euler = (er['rest_rot'][0] + _lerp(carry, 0, raise_), er['rest_rot'][1] + _lerp(BOW_CARRY, 0, raise_),
-                         er.rotation_euler[2])
-    _orient_hand(parts, 'R', Vector((0, 1, 0)), Vector((0, 0, -1)), raise_)
+    if sock.get('rest_rot') is None:
+        sock['rest_rot'] = tuple(sock.rotation_euler)
+    sock.rotation_mode = 'ZYX'
+    r = sock['rest_rot']
+    sock.rotation_euler = (r[0], r[1] + bow_spin(bow_depth(parts)) * w, r[2])
+
+
+def bow_pose(parts, a, w):
+    """anim.ts Rig.bowPose at stance w (the body's own turn is left out: it moves nothing relative to the body)."""
+    if not all(n in parts for n in ('body', 'armR', 'elbowR', 'armL', 'elbowL', 'handL', 'handR', 'sock_handR')):
+        return
+    arm, er = parts['armR'], parts['elbowR']
+    carried = _body_space(parts, parts['handR']).to_quaternion()      # the bow hand as carried, before the arm moves
+    carry = (_quat(arm), tuple(er.rotation_euler))                     # the bow arm's carry (anim.ts Rig.carry)
+    # The draw hand's target, measured on the bow as it is aimed (the stance in full).
+    _aim_bow(parts, 1.0, carried, carry)
     s = _body_space(parts, parts['sock_handR'])
     target = s @ Vector((0, BOW_MID, 0))
     back = (s.to_3x3() @ Vector(BOW_STRING)).normalized()
     target += back * _lerp(DRAW_GRAB, DRAW_ANCHOR, draw_amount(a) if a < IMPACT else 1)
-    _reach(parts, 'L', target, Vector(DRAW_POLE).normalized(), raise_)
-    s = _body_space(parts, parts['sock_handR'])
-    _orient_hand(parts, 'L', s.to_3x3() @ Vector((0, 1, 0)), None, raise_)
+    along = s.to_3x3() @ Vector((0, 1, 0))
+    _set_quat(arm, carry[0])
+    _aim_bow(parts, w, carried, carry)
+    _reach(parts, 'L', target, Vector(DRAW_POLE).normalized(), w)
+    _orient_hand(parts, 'L', along, None, w)
+
+
+def _aim_bow(parts, w, carried, carry):
+    """anim.ts Rig.aimBow: the bow arm into the shot by w from its carry (the arm's quaternion and the elbow's Euler)."""
+    _spin(parts, 1 - w ** 4)
+    _point_arm(parts['armR'], Vector(BOW_AIM), Vector(BOW_ROLL), w)
+    er, (_, e) = parts['elbowR'], carry
+    r = er['rest_rot']
+    er.rotation_euler = (r[0] + _lerp(e[0] - r[0], 0, w), r[1] + _lerp(e[1] - r[1], 0, w), e[2])
+    _orient_hand(parts, 'R', Vector((0, 1, 0)), Vector((-math.cos(BOW_TURN), 0, -math.sin(BOW_TURN))), w, carried)
 
 
 def pose_scene(scene, offsets):
@@ -234,22 +310,29 @@ def pose_scene(scene, offsets):
     if 'body' in parts:
         parts['body'].location = Vector(parts['body']['rest_loc']) + Vector((0, offsets.get('lift', 0.0), 0))
     # Legs hinged low under level hips swing further (anim.ts Rig: swing).
-    leg = parts.get('legL')
-    k = math.sqrt(LEG_REACH / leg.location.y) if 'sock_hips' in parts and leg and leg.location.y > 0 else 1.0
+    leg, body = parts.get('legL'), parts.get('body')
+    hip = Vector(body['rest_loc']).y if body is not None else 0.0
+    k = math.sqrt(hip / leg.location.y) if 'sock_hips' in parts and leg and 0 < leg.location.y < hip else 1.0
+    # A deeper bow is carried further out (anim.ts Rig.update: BOW_OUT_K).
+    depth = bow_depth(parts) if 'bowspin' in offsets else None
+    dd = depth - BOW_DEPTH if depth else 0.0
     for name, r in offsets.items():
         o = parts.get(name)
-        if o is None or name in ('bow', 'lift', 'root'):
+        if o is None or name in ('bow', 'stance', 'bowspin', 'lift', 'root'):
             continue
         if name in ('legL', 'legR'):
             r = (r[0] * k, r[1], r[2])
+        if name == 'armR' and dd:
+            r = (r[0], r[1], r[2] - BOW_OUT_K * dd)
         base = o.get('rest_rot')
         if base is None:
             o['rest_rot'] = base = tuple(o.rotation_euler)
         # three.js Euler order 'XYZ' (Blender 'ZYX'); an elbow's is 'YXZ' (Blender 'ZXY'): it bends, then turns.
         o.rotation_mode = 'ZXY' if name in ('elbowL', 'elbowR') else 'ZYX'
         o.rotation_euler = tuple(b + v for b, v in zip(base, r))
+    _spin(parts, offsets.get('bowspin', 0.0))
     if 'bow' in offsets:
-        bow_pose(parts, offsets['bow'])
+        bow_pose(parts, offsets['bow'], offsets['stance'])
     for side in ('L', 'R'):
         arm, sock = parts.get(f'arm{side}'), parts.get(f'sock_shoulder{side}')
         if not arm or not sock or arm.parent is not sock.parent:

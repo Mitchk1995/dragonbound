@@ -8,7 +8,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { Rig, newAnimState, type AnimState, type AttackKind } from '../src/render/anim';
+import { BOW_TURN, Rig, newAnimState, type AnimState, type AttackKind } from '../src/render/anim';
 import { BowDraw } from '../src/render/bowDraw';
 import { HeroDresser, MODEL_FILES, hasModel, makeModel, registerModelScene } from '../src/render/registry';
 import { bowFacts, partCenter, partForward, shoulderCap, weaponFacts } from '../src/render/poseMetrics';
@@ -78,11 +78,11 @@ describe('pose audit: models loaded', () => {
     };
     // Merged, every rig part drops to a few meshes (Cinderwing measured 29), with rig parts intact.
     // Cinderwing's glowing cracks (on the body, neck and every leg), eyes and molten mouth each keep their own material,
-    // hence its extra meshes. A goblin is one mesh per rig part: body, head, legs, and each arm's upper arm, forearm
-    // (below the elbow) and hand (below the wrist), and the club.
+    // hence its extra meshes. A goblin is one mesh per rig part: body, the hips (the seat and loincloth, kept level),
+    // head, legs, and each arm's upper arm, forearm (below the elbow) and hand (below the wrist), and the club.
     expect(count('drakeling')).toBeLessThanOrEqual(20);
     expect(count('cinderwing')).toBeLessThanOrEqual(31);
-    expect(count('goblin')).toBeLessThanOrEqual(11);
+    expect(count('goblin')).toBeLessThanOrEqual(12);
     for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
   });
 });
@@ -302,22 +302,28 @@ describe('pose audit: bow', () => {
     }
     return crossings % 2 === 1;
   };
-  // A bow's limbs sweep in toward its string, which lies on the body's side of the hand: carried, the bow is held out
-  // from the body so its lower limb never cuts into the striding leg, and it stays plumb.
-  for (const weapon of ['worn_bow', 'hunter_bow']) {
-    it(`${weapon}: carried while walking, plumb and clear of the right leg`, () => {
+  // The owner: a held bow's string faces the archer and its limbs curve away from him, in every state ("holding bow
+  // completely backwards"). Carried, the bow is held at the side angled down and forward the way games show archers
+  // walking, its back forward and its string toward him, and never cuts into the striding leg (tests/bow-audit.test.ts
+  // measures every rule in every frame).
+  for (const weapon of ['worn_bow', 'hunter_bow', 'recurve_bow', 'drakebone_bow']) {
+    it(`${weapon}: carried angled down and forward, back forward, string toward the archer, clear of the right leg`, () => {
       const h = hero({ weapon });
       const legMeshes: THREE.Mesh[] = [];
       h.root.getObjectByName('legR')!.traverse((o) => {
         if (o instanceof THREE.Mesh) legMeshes.push(o);
       });
       const bow = h.root.getObjectByName('gear:sock_handR')!;
+      const hand = h.dresser.socket('sock_handL')!;
       const v = new THREE.Vector3();
       for (let k = 0; k < 30; k++) {
         h.pose('bow', -1, { speed: 5.6 }, 0.05);
-        // The bow runs along the hand socket's +Y (gear.py bow_frame).
+        // The bow runs along the hand socket's +Y (gear.py bow_frame): its top tipped down and forward from upright.
         const axis = new THREE.Vector3(0, 1, 0).transformDirection(h.root.getObjectByName('sock_handR')!.matrixWorld);
-        expect(axis.y, `walk frame ${k}: plumb`).toBeGreaterThan(0.97);
+        expect(axis.z, `walk frame ${k}: top tip forward`).toBeGreaterThan(0.3);
+        expect(axis.y, `walk frame ${k}: tipped from upright`).toBeLessThan(0.95);
+        expect(axis.y, `walk frame ${k}: not lying flat`).toBeGreaterThan(0.4);
+        expect(bowFacts(h.root, hand)!.stringFacing, `walk frame ${k}: string toward the archer`).toBeGreaterThan(0.5);
         const boxes = legMeshes.map((m) => new THREE.Box3().setFromObject(m));
         let cut = 0;
         bow.traverse((o) => {
@@ -356,6 +362,40 @@ describe('pose audit: bow', () => {
       expect(rest.upright).toBe(true);
       expect(rest.stringBehindGrip, 'brace faces the archer at rest').toBeLessThan(-0.12);
       expect(rest.arrowVisible).toBe(false);
+    });
+  }
+  // A shot as the game plays it, frame by frame (Player.update, swingTiming): the archer turns side-on into it, holds
+  // the stance through the next shot, and a moment after the last lowers the bow back to the carry. Nothing jumps, and
+  // the string faces the archer in every frame.
+  for (const weapon of ['worn_bow', 'recurve_bow']) {
+    it(`${weapon}: turns into the shot and back out smoothly, the string facing the archer throughout`, () => {
+      const h = hero({ weapon });
+      const hand = h.dresser.socket('sock_handL')!;
+      const dt = 1 / 60, dur = COMBAT_TUNING.swingFrac / 1.1, gap = (1 - COMBAT_TUNING.swingFrac) / 1.1;
+      const bowHand = () => h.root.getObjectByName('sock_handR')!.getWorldPosition(new THREE.Vector3());
+      h.pose('bow', -1, { speed: 3 }, dt);   // from the model's bind pose to the carry, which never shows
+      let yaw = 0, at = bowHand(), worst = { yaw: 0, hand: 0, facing: 1 };
+      const step = (attack: number, speed = 0) => {
+        h.pose('bow', attack, { speed }, dt);
+        const y = h.root.rotation.y, p = bowHand();
+        worst.yaw = Math.max(worst.yaw, Math.abs(y - yaw));
+        worst.hand = Math.max(worst.hand, p.distanceTo(at));
+        worst.facing = Math.min(worst.facing, bowFacts(h.root, hand)!.stringFacing);
+        yaw = y;
+        at = p;
+      };
+      for (let t = 0; t < 0.5; t += dt) step(-1, 3);
+      for (let shot = 0; shot < 2; shot++) {
+        for (let t = 0; t < dur; t += dt) step(t / dur);
+        for (let t = 0; t < gap; t += dt) step(-1);
+        if (shot === 0) expect(h.root.rotation.y, 'held side-on between shots').toBeGreaterThan(BOW_TURN * 0.99);
+      }
+      for (let t = 0; t < 1.2; t += dt) step(-1, t > 0.4 ? 3 : 0);
+      expect(h.root.rotation.y, 'turned back to the carry').toBe(0);
+      // The bow comes up quickly (BOW_RAISE of the shot, a fifth of a second) but never in a single frame.
+      expect(worst.yaw, 'largest turn in one frame (rad)').toBeLessThan(0.3);
+      expect(worst.hand, 'largest move of the bow hand in one frame').toBeLessThan(0.25);
+      expect(worst.facing, 'the string toward the archer in every frame').toBeGreaterThan(0.5);
     });
   }
 });
