@@ -75,7 +75,7 @@ def build_hero(scene_name='DB_hero'):
     box(body, (0.68, 0.66, 0.42), (0, 0.42, 0), R.cloth, taper=(1.03, 1.04), bevel=0.05)
     # Everything below the belt hangs on the hips (sock_hips, on the hip axis), which stay level with the legs while the
     # body leans over them (anim.ts Rig.levelHips); armour's skirts hang there too, and the tunic's comes off under them
-    # (it would show below their hems). The tunic's skirt, its top rounded under the belt (_common.hip_skirt), its front
+    # (it would show below their hems). The tunic's skirt, its top rounded under the belt (hips.py hip_skirt), its front
     # split up to the belt, the pale trim down both edges of the split and round the hem, which is where the legs hinge.
     hips = pivot(body, 'sock_hips')
     skirt = pivot(hips, 'outfit_body_skirt')

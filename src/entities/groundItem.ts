@@ -19,6 +19,9 @@ export const RARITY_CSS: Record<Rarity, string> = {
   unique: '#ff9a2e',
 };
 
+/** How far the hero's hips socket (sock_hips) sits below his chest socket (tools/blender/hips.py CHEST_Y). */
+export const HIPS_BELOW_CHEST = 0.44;
+
 /** The item's real model, laid on the ground: gear uses its worn mesh, materials their chunk. */
 function groundModel(item: Item): THREE.Group {
   const base = BASES[item.base];
@@ -26,7 +29,13 @@ function groundModel(item: Item): THREE.Group {
   const gl = base.kind === 'gear' || base.kind === 'tool' ? gearLook(item) : null;
   if (gl && base.slot !== 'amulet' && base.slot !== 'ring') {
     const parts = joinCuffs(buildGear(gl.model, gl.palette));
-    const main = parts.get('sock_handR') ?? parts.get('sock_chest') ?? parts.get('sock_head') ?? parts.get('sock_handL') ?? parts.get('sock_footL');
+    // Off the hero a body armour's skirt (worn on the hips) hangs from its cuirass again.
+    const chest = parts.get('sock_chest'), hips = parts.get('sock_hips');
+    if (chest && hips) {
+      hips.position.y -= HIPS_BELOW_CHEST;
+      chest.add(hips);
+    }
+    const main = parts.get('sock_handR') ?? chest ?? parts.get('sock_head') ?? parts.get('sock_handL') ?? parts.get('sock_footL');
     if (main) {
       const box = new THREE.Box3().setFromObject(main);
       const size = box.getSize(new THREE.Vector3());

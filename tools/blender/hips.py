@@ -40,8 +40,12 @@ def hip_skirt(parent, half_w, half_d, hem, color, belt, flare=(0.0, 0.0), bevel=
     leans, its belt turns over this round top: it never opens a gap above the skirt or catches its corner."""
     dx, dz = flare
     fold, top = belt[0], belt[1] + 0.02
-    rise = lambda y: math.asin(min(1.0, y / half_d))
-    ups = sorted({rise(fold), rise(top)} | {math.pi * k / seg for k in range(1, seg) if math.pi * k / seg < rise(top)})
+    assert 0 < fold < top < half_d, f'the belt {belt} must sit above the hip axis and below the top of the round, {half_d}'
+    rise = lambda y: math.asin(y / half_d)
+    marks = (rise(fold), rise(top))
+    # The round's facets, every pi/seg up to its flat top, and its fold at the belt's lower edge (no sliver beside it).
+    ups = sorted(set(marks) | {a for a in (math.pi * k / seg for k in range(1, seg))
+                               if a < marks[1] and min(abs(a - m) for m in marks) > 0.02})
     front = [(half_d * math.cos(a), half_d * math.sin(a)) for a in ups]                   # (z, y) up the round top
     prof = [(half_d + dz, hem), (half_d, 0.0)] + front + [(-z, y) for z, y in reversed(front)] + [(-half_d, 0.0), (-half_d - dz, hem)]
     below = lambda y: half_w + dx * y / hem                                               # the sides flare to the hem

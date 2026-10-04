@@ -171,11 +171,21 @@ def skirt_clip_all(limit=0.0, steps=STRIDE_STEPS, who=None):
     want = lambda n: who is None or n in who
 
     def check(name, scene, poses):
+        if name.startswith('hero:'):
+            # Everything the hero wears on the hips must be a closed solid, or the check would pass over it (only
+            # flat details lying on a surface, mail links and stitches, are not).
+            for o in scene.objects:
+                if o.type == 'MESH' and _ancestor(o, ('sock_hips',)) and not _strip(o.name).startswith(('mail_link', 'stitch')) \
+                        and not _closed(o):
+                    fails.append(f'{name}: {_hero_part(o)} on the hips is not a closed solid')
         worst = (0.0, None, None)
         for pose, offs in poses:
             pose_scene(scene, offs)
             r = skirt_clip(scene)
             if r is None:
+                if name.startswith('hero:'):
+                    fails.append(f'{name}: no legs to check')
+                out[name] = 'no legs'
                 return
             if r[0] > worst[0]:
                 worst = (*r, pose)
@@ -199,7 +209,9 @@ def skirt_clip_all(limit=0.0, steps=STRIDE_STEPS, who=None):
                 else:
                     g['build'](mdl)
             scene, _ = build_hero('DB_fitcheck')
-            dress(scene, [f'DB_{m}' if m.startswith('pv_') else f'DB_gear_{m}' for m in models])
+            missing = dress(scene, [f'DB_{m}' if m.startswith('pv_') else f'DB_gear_{m}' for m in models])
+            if missing:
+                fails.append(f'hero:{label}: sockets the hero lacks: {missing}')
             check(f'hero:{label}', scene, stride_poses(HERO_ATTACKS, 'side', steps))
     for name, (fn, kinds, hold) in _minion_builders().items():
         if want(name):
