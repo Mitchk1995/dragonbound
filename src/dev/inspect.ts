@@ -140,18 +140,18 @@ export async function runInspect(g: Game, suites: string) {
     if (want('models') || want('hero')) await modelsSuite(g, shot, !want('models'));
     if (want('anims')) await animsSuite(g, shot);
     if (want('icons')) await iconsSuite(shot);
-    // Tree style comparison (explicit only: `trees`, `trees:oak` for the grown oak alone, `trees:grown:<kind>` for a grown
-    // kind's progress pictures, or `trees:scout` to pick the forest patch).
+    // Tree style comparison (explicit: `trees`; `trees:oak` the grown oak, `trees:grown:<kind>` a kind, `trees:scout` the patch).
     const treeArg = suites.split(',').find((s) => s === 'trees' || s.startsWith('trees:'));
     if (treeArg) report.trees = await (await import('./treeLineup')).treesSuite(g, shot, treeArg.split(':').slice(1));
-    // Approved artwork in every consumer, and the Steel Platebody's fit (explicit only: `approved`; `approved:ui` or
-    // `approved:fit` runs one half).
+    // Approved artwork and the Steel Platebody's fit (explicit: `approved`, or one half: `approved:ui`, `approved:fit`).
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
     // The redesigned characters close up and at the play camera, the hero's skirts mid-stride, the bow in his hands (its
     // measurements, taken in the running game, go in the report) and the minifigure body (explicit only: `characters`,
     // `skirts`, `bow`, `minifig` or `minifig:<tag>`).
     if (/(^|,)(characters|skirts|bow|minifig(:[^,]*)?)(,|$)/.test(suites)) Object.assign(report, await (await import('./charactersInspect')).characterSuites(g, shot, suites));
+    const kitArg = suites.split(',').find((s) => s === 'kit' || s.startsWith('kit:')); // the building kit's house (kitInspect.ts)
+    if (kitArg) report.kit = await (await import('./kitInspect')).kitSuite(g, shot, kitArg.split(':').slice(1).join(':').split('+'));
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).
