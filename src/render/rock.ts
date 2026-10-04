@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { shareResource } from './resources';
 import { mulberry32 } from '../core/rng';
-import { addPatch, type SurfaceSpace } from './surface';
+import { abs, cross, dFdx, dFdy, dot, inverseSqrt, mix, positionWorld, pow, select, smoothstep, vec2, vec3 } from 'three/tsl';
+import { addPatch, objectPosition, type F, type SurfaceSpace, type Tex, type V3 } from './patch';
 import { fbm, SIZE, tileNoise, worley, type Gen } from './textures';
 
 /**
@@ -229,46 +230,46 @@ const rockUniforms = new WeakMap<THREE.Material, { uRockTex: { value: THREE.Text
 /** Paint a material applyRock already painted with the stacked strata instead (cave walls). */
 export function useStrataRock(mat: THREE.Material) {
   const u = rockUniforms.get(mat);
-  if (u) u.uRockTex.value = rockAtlas('strata');
+  if (!u) return;
+  u.uRockTex.value = rockAtlas('strata');
+  // (The atlas is bound to the program: the new one needs its own.)
+  mat.needsUpdate = true;
 }
 
 /**
- * GLSL: `vec3 rockPaint(vec3 base, vec3 p, vec3 n, float k)` paints rock of colour `base` at
- * position `p` with flat face normal `n`, strength `k` (0 = untouched). Needs `uRockTex` and
- * `uRockScale`. Four fetches: a slow one for drift, then one per projection plane.
+ * The flat face normal from screen derivatives of a position, guarded: a face seen exactly edge-on
+ * has no area on screen, and a NaN here would bloom across the whole frame.
  */
-export const ROCK_GLSL = `
-  uniform sampler2D uRockTex;
-  uniform float uRockScale;
-  // The flat face normal from screen derivatives of a position, guarded: a face seen exactly
-  // edge-on has no area on screen, and a NaN here would bloom across the whole frame.
-  vec3 rockFaceN(vec3 p) {
-    vec3 c = cross(dFdx(p), dFdy(p));
-    float l2 = dot(c, c);
-    return l2 > 1e-24 ? c * inversesqrt(l2) : vec3(0.0, 1.0, 0.0);
-  }
-  vec3 rockPaint(vec3 base, vec3 p, vec3 n, float k) {
-    vec3 an = abs(n);
-    vec3 w = pow(an, vec3(10.0)) + 1e-4;
-    w /= (w.x + w.y + w.z);
-    vec3 q = p * uRockScale;
-    // Slow drift: shifts the strata up and down along the wall and warms or cools the rock, so
-    // the tile never repeats visibly on a long face.
-    float drift = texture2D(uRockTex, (q.xz + q.y * 0.3) * 0.17 + vec2(0.29, 0.53)).a;
-    float vy = q.y + (drift - 0.5) * 0.45;
-    vec4 tx = texture2D(uRockTex, vec2(q.z, vy));
-    vec4 tz = texture2D(uRockTex, vec2(q.x + 0.37, vy));
-    vec4 ty = texture2D(uRockTex, q.xz + vec2(0.61, 0.13));
-    float pat = tx.r * w.x + tz.r * w.z + ty.g * w.y;
-    float gr = tx.b * w.x + tz.b * w.z + ty.b * w.y;
-    float blot = mix(tx.a * w.x + tz.a * w.z + ty.a * w.y, drift, 0.5);
-    vec3 c = base * (0.42 + 1.16 * pat);
-    c *= 0.84 + 0.32 * gr;
-    c *= mix(vec3(0.9, 0.95, 1.07), vec3(1.1, 1.0, 0.86), smoothstep(0.25, 0.75, blot));
+export function rockFaceN(p: V3): V3 {
+  const c = cross(dFdx(p), dFdy(p)).toVar();
+  const l2 = dot(c, c);
+  return select(l2.greaterThan(1e-24), c.mul(inverseSqrt(l2)), vec3(0, 1, 0));
+}
+
+/**
+ * Paints rock of colour `base` at position `p` with flat face normal `n`, strength `k` (0 = untouched),
+ * from the rock atlas `tex` at `scale` (1 / ROCK_TILE). Four fetches: a slow one for drift, then one
+ * per projection plane.
+ */
+export function rockPaint(tex: Tex, scale: F, base: V3, p: V3, n: V3, k: F | number): V3 {
+  const w0 = pow(abs(n), vec3(10)).add(1e-4);
+  const w = w0.div(w0.x.add(w0.y).add(w0.z)).toVar();
+  const q = p.mul(scale).toVar();
+  // Slow drift: shifts the strata up and down along the wall and warms or cools the rock, so the
+  // tile never repeats visibly on a long face.
+  const drift = tex.sample(q.xz.add(q.y.mul(0.3)).mul(0.17).add(vec2(0.29, 0.53))).a.toVar();
+  const vy = q.y.add(drift.sub(0.5).mul(0.45)).toVar();
+  const tx = tex.sample(vec2(q.z, vy)).toVar(), tz = tex.sample(vec2(q.x.add(0.37), vy)).toVar(), ty = tex.sample(q.xz.add(vec2(0.61, 0.13))).toVar();
+  const pat = tx.r.mul(w.x).add(tz.r.mul(w.z)).add(ty.g.mul(w.y));
+  const gr = tx.b.mul(w.x).add(tz.b.mul(w.z)).add(ty.b.mul(w.y));
+  const blot = mix(tx.a.mul(w.x).add(tz.a.mul(w.z)).add(ty.a.mul(w.y)), drift, 0.5);
+  const c = base.mul(pat.mul(1.16).add(0.42))
+    .mul(gr.mul(0.32).add(0.84))
+    .mul(mix(vec3(0.9, 0.95, 1.07), vec3(1.1, 1.0, 0.86), smoothstep(0.25, 0.75, blot)))
     // Ledge tops catch the light, overhangs sit in shade.
-    c *= 1.0 + 0.16 * n.y;
-    return mix(base, c, k);
-  }`;
+    .mul(n.y.mul(0.16).add(1));
+  return mix(base, c, k);
+}
 
 /**
  * Paint a MeshStandardMaterial as rock (replaces any painted surface in the same slot). `space`
@@ -281,31 +282,13 @@ export function applyRock(mat: THREE.Material, space: SurfaceSpace = 'world', sc
   addPatch(mat, {
     key: `rock:${space}`,
     slot: 'surface',
-    apply(shader) {
-      Object.assign(shader.uniforms, uniforms);
-      const vert = space === 'world'
-        ? `{
-            vec4 rw = vec4(transformed, 1.0);
-            #ifdef USE_INSTANCING
-              rw = instanceMatrix * rw;
-            #endif
-            vRockPos = (modelMatrix * rw).xyz;
-          }`
-        : 'vRockPos = transformed;';
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vRockPos;')
-        .replace('#include <project_vertex>', `#include <project_vertex>\n${vert}`);
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nvarying vec3 vRockPos;\n${ROCK_GLSL}`)
-        .replace(
-          '#include <color_fragment>',
-          `#include <color_fragment>
-          {
-            // The flat face normal in the projection's own space (hard facets, crisp pattern per face).
-            vec3 rn = rockFaceN(vRockPos);
-            diffuseColor.rgb = rockPaint(diffuseColor.rgb, vRockPos, rn, 1.0);
-          }`,
-        );
+    uniforms,
+    nodes(u, b) {
+      const pos = space === 'world' ? positionWorld : objectPosition(b);
+      return {
+        // The flat face normal in the projection's own space (hard facets, crisp pattern per face).
+        color: (c) => rockPaint(u.tex('uRockTex'), u.f('uRockScale'), c, pos, rockFaceN(pos), 1),
+      };
     },
   });
 }

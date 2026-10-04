@@ -185,21 +185,6 @@ function sentinelDragon(k: ModelKit, g: THREE.Object3D): THREE.Vector3 {
 /** The garden trees' wind clock (ticked by each tree, the world's time). */
 const TREE_WIND = { uWindT: { value: 0 } };
 const treeParts = new Map<string, THREE.BufferGeometry>(), treeMats = new Map<string, THREE.MeshStandardMaterial>();
-const leafDepths = new Map<GrownKind, THREE.MeshDepthMaterial>();
-
-/**
- * A grown kind's leaf shadows: plain depth cut to the leaves' outline by their own atlas, one per kind
- * (three.js sets a custom depth material's map from the leaves it draws, so kinds never share one).
- */
-function leafDepth(kind: GrownKind) {
-  let mat = leafDepths.get(kind);
-  if (!mat) {
-    const leaves = treeMaterial(kind, 'canopy');
-    mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leaves.map, alphaTest: leaves.alphaTest });
-    leafDepths.set(kind, shareResource(mat));
-  }
-  return mat;
-}
 
 /**
  * One shape of a grown kind's wood or leaves for a garden tree: the woods' own buffers (shared, never
@@ -670,16 +655,14 @@ export const BAILEY_PROPS: Record<string, Builder> = {
         k.box(g, [0.12, 0.02, 0.09], [Math.cos(a) * r, 0.03, Math.sin(a) * r], o.petals, [0, a, 0]);
       }
     }
-    const canopy = g.getObjectByName('garden-tree-canopy') as THREE.InstancedMesh, depth = leafDepth(kind);
+    // (The leaves' shadows are cut to their outline by their own atlas, as the woods' are.)
     return {
       obj: g,
       tick: (t) => {
         TREE_WIND.uWindT.value = t;
-        // (The world makes every occluder's shadow the cut-away's plain depth once the prop is built;
-        // on its first tick the tree takes back its leaves' own, cut to their outline as the woods'.)
-        if (canopy.customDepthMaterial !== depth) canopy.customDepthMaterial = depth;
       },
     };
+
   },
   /** A garden bench (facing +Z): an oak seat and back on stone ends. */
   garden_bench: (k, g) => {

@@ -1,8 +1,5 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { WebGPURenderer } from 'three/webgpu';
 import { holdTarget, pressTarget, type HoldMode } from './combat/holdInput';
 import type { PlayerStats } from './combat/stats';
 import type { AbilityKey } from './data/abilities';
@@ -17,9 +14,11 @@ import { Particles } from './fx/particles';
 import { Sfx } from './fx/sfx';
 import { Rig, newAnimState } from './render/anim';
 import { PAL } from './render/kit';
-import { LIGHT_BALANCE, steadyShadows, zoneLighting, type ZoneLighting } from './render/env';
+import { LIGHT_BALANCE, steadyShadowPass, steadyShadows, zoneLighting, type ZoneLighting } from './render/env';
+import { initIcons } from './render/icons3d';
 import { fitSunShadow, hazeFog, SUN_DIR } from './render/light';
-import { ShadePass } from './render/shadePass';
+import { installPatchedMaterials } from './render/patch';
+import { PostChain } from './render/post';
 import { SKY_LIGHT } from './render/sky';
 import { makeModel } from './render/registry';
 import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
@@ -40,15 +39,21 @@ import { ZoneRuntime } from './world/zone';
 
 export type Mode = 'title' | 'create' | 'play';
 
+/** Neither WebGPU nor its WebGL 2 fallback could start on this machine. */
+export class GraphicsError extends Error {
+  constructor(cause: unknown) {
+    super('The graphics could not start', { cause });
+  }
+}
+
 export class Game {
-  readonly renderer: THREE.WebGLRenderer;
+  /** WebGPU where the machine has it, else WebGL 2 (the renderer falls back by itself). */
+  readonly renderer: WebGPURenderer;
   /**
    * Scene → ambient occlusion and colour grade → bloom (HDR, only values above ~1 glow: emissives,
    * fire, lava, portals) → tone map.
    */
-  private composer!: EffectComposer;
-  private shade!: ShadePass;
-  private bloom!: UnrealBloomPass;
+  readonly post: PostChain;
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(42, 1, 0.5, 400);
   readonly sun = new THREE.DirectionalLight(0xffe2b8, 2.6);
@@ -121,23 +126,19 @@ export class Game {
   private titleDragon: { obj: THREE.Group; rig: Rig; anim: ReturnType<typeof newAnimState> } | null = null;
 
   constructor(public canvas: HTMLCanvasElement) {
-    steadyShadows();
-    hazeFog();
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    // (Multisampling is the post chain's: the canvas only shows its finished frame. Development
+    // builds time the GPU's passes, for the inspect harness's frame costs.)
+    this.renderer = new WebGPURenderer({ canvas, antialias: false, powerPreference: 'high-performance', trackTimestamp: import.meta.env.DEV });
+    installPatchedMaterials(this.renderer);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    // (The scene pass keeps its depth: the ambient occlusion reads it.)
-    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4, depthTexture: new THREE.DepthTexture(1, 1) });
-    this.composer = new EffectComposer(this.renderer, rt);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.shade = new ShadePass(this.camera, () => this.scene.fog as THREE.Fog | null);
-    this.composer.addPass(this.shade);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.5, 0.95);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
+    this.post = new PostChain(this.renderer, this.scene, this.camera, () => this.scene.fog as THREE.Fog | null);
     this.scene.fog = new THREE.Fog(0x2c2630, 38, 85);
+    Object.assign(this.scene, { fogNode: hazeFog(this.scene, this.sun) });
+    Object.assign(this.sun.shadow, { filterNode: steadyShadows });
+    steadyShadowPass();
     this.scene.add(this.hemi);
     // The shadow camera, its filter and its biases are fitted to the view every frame (see light()).
     this.sun.castShadow = true;
@@ -179,6 +180,9 @@ export class Game {
   }
 
   async start() {
+    await Promise.all([this.renderer.init(), initIcons()]).catch((cause: unknown) => {
+      throw new GraphicsError(cause);
+    });
     this.claimSave();
     const loaded = await loadSave(this.backend);
     this.hasSave = !!loaded?.character;
@@ -516,29 +520,18 @@ export class Game {
       low: { ratio: 1, msaa: 0, shadow: 1024, bloom: false, ao: false },
     }[level];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
-    // (A target allocates its buffers once: on a new sample count it is released and rebuilt on next use,
-    // its depth texture with it, even when its size stays the same.)
-    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) {
-      if (rt.samples === p.msaa) continue;
-      rt.samples = p.msaa;
-      rt.dispose();
-    }
-    this.bloom.enabled = p.bloom;
     // (Without occlusion the low preset skips the whole pass and its grade.)
-    this.shade.enabled = p.ao;
+    this.post.setQuality({ msaa: p.msaa, shade: p.ao, bloom: p.bloom });
     setLawnShells(LAWN_SHELLS[level]);
-    if (this.sun.shadow.mapSize.x !== p.shadow) {
-      this.sun.shadow.mapSize.set(p.shadow, p.shadow);
-      this.sun.shadow.map?.dispose();
-      this.sun.shadow.map = null;
-    }
+    // (The renderer resizes the shadow map to match on its next draw.)
+    this.sun.shadow.mapSize.set(p.shadow, p.shadow);
     this.resize();
   }
 
   /** Render the current view through the post chain. */
   draw() {
     this.light();
-    this.composer.render();
+    this.post.render();
   }
 
   /** The zone's lights (relight), before the indoor softening. */
@@ -585,11 +578,8 @@ export class Game {
   private resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);
-    this.composer.setPixelRatio(this.renderer.getPixelRatio());
-    this.composer.setSize(w, h);
-    // Bloom is soft by nature: half resolution looks the same and costs a quarter.
-    this.bloom.setSize(Math.round((w * this.renderer.getPixelRatio()) / 2), Math.round((h * this.renderer.getPixelRatio()) / 2));
     this.camera.aspect = w / h;
+
     this.camera.updateProjectionMatrix();
   }
 

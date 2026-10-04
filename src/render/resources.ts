@@ -18,9 +18,6 @@ export function disposeObjects(objects: Iterable<THREE.Object3D>) {
     if (shared.has(material)) return;
     collect(material);
     for (const value of Object.values(material)) if (value instanceof THREE.Texture) collect(value);
-    if (material instanceof THREE.ShaderMaterial) {
-      for (const uniform of Object.values(material.uniforms)) if (uniform.value instanceof THREE.Texture) collect(uniform.value);
-    }
   };
   for (const obj of objects) {
     obj.removeFromParent();
@@ -33,8 +30,6 @@ export function disposeObjects(objects: Iterable<THREE.Object3D>) {
       for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
         collectMaterial(material);
       }
-      if (node instanceof THREE.Mesh && node.customDepthMaterial) collectMaterial(node.customDepthMaterial);
-      if (node instanceof THREE.Mesh && node.customDistanceMaterial) collectMaterial(node.customDistanceMaterial);
     });
   }
   for (const instance of instances) instance.dispose();

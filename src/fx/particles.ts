@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { attribute, cameraProjectionMatrix, modelViewMatrix, positionGeometry, vec4 } from 'three/tsl';
 
 export interface BurstOpts {
   count: number;
@@ -50,27 +52,32 @@ export class Particles {
   private s = new THREE.Vector3();
   private t = new THREE.Vector3();
   private c = new THREE.Color();
+  /** Glow particles: each one's centre and size (the billboard faces the camera from there). */
+  private bill: THREE.InstancedBufferAttribute | null = null;
 
   constructor(private max: number, additive: boolean) {
-    const mat = new THREE.MeshBasicMaterial({
+    const opts = {
       transparent: additive,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       depthWrite: !additive,
       map: additive ? softDot() : null,
-    });
+    };
     // Solid particles are chunky cubes (debris, sparks); glow particles are soft camera-facing discs.
+    let mat: THREE.Material, geo: THREE.BufferGeometry;
     if (additive) {
-      mat.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader.replace(
-          '#include <project_vertex>',
-          `vec4 mvPosition = modelViewMatrix * vec4(instanceMatrix[3].xyz, 1.0);
-          mvPosition.xy += position.xy * length(instanceMatrix[0].xyz) * 2.2;
-          gl_Position = projectionMatrix * mvPosition;`,
-        );
-      };
-      mat.customProgramCacheKey = () => 'glow-billboard';
+      geo = new THREE.PlaneGeometry(1, 1);
+      this.bill = new THREE.InstancedBufferAttribute(new Float32Array(max * 4), 4);
+      geo.setAttribute('aBill', this.bill);
+      const glow = new MeshBasicNodeMaterial(opts);
+      const bill = attribute('aBill', 'vec4');
+      const mv = modelViewMatrix.mul(vec4(bill.xyz, 1));
+      glow.vertexNode = cameraProjectionMatrix.mul(vec4(mv.xy.add(positionGeometry.xy.mul(bill.w).mul(2.2)), mv.zw));
+      mat = glow;
+    } else {
+      geo = new THREE.BoxGeometry(1, 1, 1);
+      mat = new THREE.MeshBasicMaterial(opts);
     }
-    this.mesh = new THREE.InstancedMesh(additive ? new THREE.PlaneGeometry(1, 1) : new THREE.BoxGeometry(1, 1, 1), mat, max);
+    this.mesh = new THREE.InstancedMesh(geo, mat, max);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
@@ -153,6 +160,7 @@ export class Particles {
       this.t.set(this.p[j], this.p[j + 1], this.p[j + 2]);
       this.m.compose(this.t, this.q, this.s);
       this.mesh.setMatrixAt(i, this.m);
+      this.bill?.setXYZW(i, this.t.x, this.t.y, this.t.z, sc);
       this.c.setRGB(this.col[j], this.col[j + 1], this.col[j + 2]);
       this.mesh.setColorAt(i, this.c);
       i++;
@@ -160,6 +168,8 @@ export class Particles {
     this.mesh.count = this.n;
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    if (this.bill) this.bill.needsUpdate = true;
+
   }
 
   private copy(from: number, to: number) {

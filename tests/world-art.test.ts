@@ -4,6 +4,7 @@ import { chamferBox, octagon, prism, rockBlock, slabBlock, taper, wedge } from '
 import { rockAtlas } from '../src/render/rock';
 import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/paint';
 import { patchKeys } from '../src/render/surface';
+import { patchGraph } from './patchGraph';
 import { ZONES } from '../src/data/zones';
 import { Cell, Ground } from '../src/world/layout';
 import { raisedAt } from '../src/world/building';
@@ -127,31 +128,23 @@ describe('painted albedo', () => {
     applyPaint(mat, 'masonry', 'world');
     applyPaint(mat, 'wood', 'object');
     expect(patchKeys(mat)).toEqual(['paint:object']);
-    const lib = THREE.ShaderLib.standard;
-    const shader = { uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader } as any;
-    mat.onBeforeCompile(shader, null as any);
-    // Side faces take the distance along the face and y, so blocks keep one size at any turn.
-    expect(shader.fragmentShader).toContain('dot(q.xz, normalize(vec2(-vPaintNrm.z, vPaintNrm.x))), q.y');
-    expect(shader.fragmentShader).not.toContain('normal = ');
+    // Colour only: the paint leaves the normal alone (only dressed stone carries relief).
+    const g = patchGraph(mat);
+    expect(g.hooks.has('color')).toBe(true);
+    expect(g.hooks.has('normal')).toBe(false);
+    expect(g.textures).toContain(paintAtlas(PAINTS.wood.atlas));
   });
 });
 
 describe('painted rock', () => {
-  const compile = (mat: THREE.Material) => {
-    const lib = THREE.ShaderLib.standard;
-    const shader = { uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader } as any;
-    mat.onBeforeCompile(shader, null as any);
-    return shader;
-  };
-  it('rock paint is the shared triplanar rock (strata, cracks, grain), colour only and NaN-safe', () => {
+  it('rock paint is the shared triplanar rock (strata, cracks, grain), colour only', () => {
     const mat = new THREE.MeshStandardMaterial();
     applyPaint(mat, 'rock', 'world');
     expect(patchKeys(mat)).toEqual(['rock:world']);
-    const s = compile(mat);
-    expect(s.fragmentShader).toContain('rockPaint(');
-    expect(s.fragmentShader).toContain('rockFaceN(vRockPos)');
-    expect(s.fragmentShader).not.toContain('normal = ');
-    expect(s.uniforms.uRockTex.value).toBe(rockAtlas());
+    const g = patchGraph(mat);
+    expect(g.hooks.has('color')).toBe(true);
+    expect(g.hooks.has('normal')).toBe(false);
+    expect([...g.textures]).toEqual([rockAtlas()]);
   });
   it('code-built rock props (boulders, rubble, ore rocks) are painted as rock', () => {
     for (const kind of ['boulder', 'rubble', 'rock_copper']) {
