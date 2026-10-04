@@ -8,17 +8,15 @@ export const GHOST = '#cdbb95';
 export const GHOST_SW = 2.4;
 
 export type Tone =
-  | 'iron' | 'gold' | 'ember' | 'blood' | 'arcane' | 'poison' | 'wood' | 'bone'
-  | 'leather' | 'stone' | 'violet' | 'cloud' | 'spark' | 'darkIron' | 'redLeather';
+  | 'iron' | 'gold' | 'blood' | 'poison' | 'wood' | 'bone'
+  | 'leather' | 'stone' | 'violet' | 'darkIron' | 'redLeather';
 
 /** [lit, mid, shadow] */
 const TONE: Record<Tone, [string, string, string]> = {
   iron: ['#b9c2cc', '#8d959f', '#5f6670'],
   darkIron: ['#8d959f', '#646b75', '#41464d'],
   gold: ['#f3d98a', '#d8b25a', '#a07a30'],
-  ember: ['#ffd070', '#ffb040', '#ff7a1a'],
   blood: ['#d9503a', '#b02a1a', '#6e1409'],
-  arcane: ['#bfe0ff', '#5a9cff', '#2c5fc4'],
   poison: ['#a8e27e', '#6cc24a', '#3b7d27'],
   wood: ['#9a6a42', '#6b4426', '#482b17'],
   bone: ['#fbf6ea', '#eee4cc', '#c9b893'],
@@ -26,8 +24,6 @@ const TONE: Record<Tone, [string, string, string]> = {
   redLeather: ['#a8412c', '#7e2a1b', '#521509'],
   stone: ['#aea896', '#827b6c', '#57524a'],
   violet: ['#e2bcff', '#a45ee0', '#62279a'],
-  cloud: ['#a7afc0', '#6f788c', '#454c5d'],
-  spark: ['#ffffff', '#fff3a8', '#f3cd5a'],
 };
 
 export const HI = '#fffaf0'; // highlight colour
