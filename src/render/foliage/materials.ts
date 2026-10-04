@@ -54,6 +54,26 @@ export interface DeadWood {
   gain: number;
   low: number;
   high: number;
+  /** Exposed grain keeps each limb's wrap fixed; two charts blend at the collar instead of twisting one. */
+  branchAligned?: boolean;
+}
+
+/** A circular wrap with its seam chosen away from this fragment's derivatives. */
+function barkUV(w: V4, off: F, v: F): V2 {
+  const ang = atan(w.y, w.x).mul(0.15915494).toVar();
+  const s1 = ang.mul(w.z).toVar(), s2 = ang.add(1).fract().mul(w.z).toVar();
+  return vec2(select(fwidth(s1).lessThanEqual(fwidth(s2)), s1, s2).add(off), v).toVar();
+}
+
+/** A sourced relief's tilt in the view-space directions of its own texture chart. */
+function barkTilt(n: V3, nl: V3, uv: V2): V3 {
+  const q0 = dFdx(positionView), q1 = dFdy(positionView);
+  const st0 = dFdx(uv), st1 = dFdy(uv);
+  const q1n = cross(q1, n), q0n = cross(n, q0);
+  const bu0 = q1n.mul(st0.x).add(q0n.mul(st1.x)).toVar(), bv0 = q1n.mul(st0.y).add(q0n.mul(st1.y)).toVar();
+  const bu = select(dot(bu0, bu0).greaterThan(0), normalize(bu0), vec3(0));
+  const bv = select(dot(bv0, bv0).greaterThan(0), normalize(bv0), vec3(0));
+  return bu.mul(nl.x).add(bv.mul(nl.y));
 }
 
 /**
@@ -83,12 +103,13 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
   };
   addPatch(mat, {
     // (The maps are looked up when the material is first drawn, so a world can be built without them.)
-    key: `grown-bark:${look.kind}${look.dead ? `+${look.dead.wood}` : ''}`,
+    key: `grown-bark:${look.kind}${look.dead ? `+${look.dead.wood}${look.dead.branchAligned ? ':branch' : ''}` : ''}`,
     uniforms,
     nodes(u, b) {
       const maps = barkFor(look.kind);
       const barkA = attribute('aBarkA', 'vec4') as V4, barkB = attribute('aBarkB', 'vec4') as V4, wood = attribute('aWood', 'vec4') as V4;
       let uv: V2 = vec2(0), nl: V3 = vec3(0), detail: F = float(0);
+      let parentUV: V2 = vec2(0), parentNL: V3 = vec3(0), collarBlend: F = float(1);
       return {
         position: (p) => p.add(treeSway(positionGeometry, wood.x, u.f('uWindT'), instanceOrigin(b))),
         color(c) {
@@ -97,13 +118,18 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
           // coordinate. A collar takes its branch's wrap, turned toward the parent's bark at the rim
           // (the turn eased in and out, so the furrows bend smoothly from one into the other).
           const collar = (varying(wood.w).setInterpolation('flat') as F).greaterThan(0.5);
-          const foot = varying(barkA.w).setInterpolation('flat') as F;
-          const w = select(collar, barkB, barkA).toVar();
-          const rim = float(1).sub(wood.w).toVar();
-          const off = select(collar, foot.add(select(rim.greaterThan(1e-4), w.w.div(rim), float(0)).mul(rim).mul(rim).mul(float(3).sub(rim.mul(2)))), w.w);
-          const ang = atan(w.y, w.x).mul(0.15915494).toVar();
-          const s1 = ang.mul(w.z).toVar(), s2 = ang.add(1).fract().mul(w.z).toVar();
-          uv = vec2(select(fwidth(s1).lessThanEqual(fwidth(s2)), s1, s2).add(off), wood.z.div(u.f('uBarkTile'))).toVar();
+          if (look.dead?.branchAligned) {
+            // The UV seams are cut in the mesh: both charts interpolate linearly, with no
+            // circular-vector singularity on the broad triangles around a fork.
+            const charts = attribute('aBarkUV', 'vec4') as V4;
+            uv = vec2(charts.x, charts.y.div(u.f('uBarkTile'))).toVar();
+            parentUV = vec2(charts.z, charts.w.div(u.f('uBarkTile'))).toVar();
+          } else {
+            const foot = varying(barkA.w).setInterpolation('flat') as F;
+            const w = select(collar, barkB, barkA).toVar(), rim = float(1).sub(wood.w).toVar();
+            const off = select(collar, foot.add(select(rim.greaterThan(1e-4), w.w.div(rim), float(0)).mul(rim).mul(rim).mul(float(3).sub(rim.mul(2)))), w.w);
+            uv = barkUV(w, off, wood.z.div(u.f('uBarkTile')));
+          }
           const col = texture(maps.map).sample(uv).rgb.toVar();
           nl = texture(maps.normal).sample(uv).xyz.mul(2).sub(1).toVar();
           // Young branches' relief is gentler.
@@ -115,6 +141,17 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
           if (!look.dead) return c.mul(bark);
           const bare = deadBark(u, b, uv, wood, bark, look.dead);
           nl = mix(nl, bare.relief, bare.bare).toVar();
+          if (look.dead.branchAligned) {
+            // Keep both cylindrical charts straight; blend their sampled surfaces, never their UVs.
+            const parentCol = texture(maps.map).sample(parentUV).rgb;
+            const parentLum = dot(parentCol, vec3(0.2126, 0.7152, 0.0722));
+            const parentMoss = saturate(up.mul(0.7).add(base.mul(0.6))).mul(float(1).sub(smoothstep(0.04, 0.12, parentLum)));
+            const parentBark = mix(parentCol, u.v3('uBarkMoss'), parentMoss.mul(0.55)).mul(u.f('uBarkGain'));
+            const parentBare = deadBark(u, b, parentUV, wood, parentBark, look.dead);
+            parentNL = mix(texture(maps.normal).sample(parentUV).xyz.mul(2).sub(1), parentBare.relief, parentBare.bare).toVar();
+            collarBlend = select(collar, smoothstep(0, 1, wood.w), float(1)).toVar();
+            return c.mul(mix(parentBare.color, bare.color, collarBlend));
+          }
           return c.mul(bare.color);
         },
         emissive(e) {
@@ -125,13 +162,9 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
         },
         normal(n) {
           // The relief along the wrap's own directions on the surface: round the limb (u) and up it (v).
-          const q0 = dFdx(positionView), q1 = dFdy(positionView);
-          const st0 = dFdx(uv), st1 = dFdy(uv);
-          const q1n = cross(q1, n), q0n = cross(n, q0);
-          const bu0 = q1n.mul(st0.x).add(q0n.mul(st1.x)).toVar(), bv0 = q1n.mul(st0.y).add(q0n.mul(st1.y)).toVar();
-          const bu = select(dot(bu0, bu0).greaterThan(0), normalize(bu0), vec3(0));
-          const bv = select(dot(bv0, bv0).greaterThan(0), normalize(bv0), vec3(0));
-          const tilt = bu.mul(nl.x).add(bv.mul(nl.y)).mul(u.f('uBarkRelief').mul(detail)).toVar();
+          let chartTilt = barkTilt(n, nl, uv);
+          if (look.dead?.branchAligned) chartTilt = mix(barkTilt(n, parentNL, parentUV), chartTilt, collarBlend);
+          const tilt = chartTilt.mul(u.f('uBarkRelief').mul(detail)).toVar();
           return normalize(n.add(tilt).sub(n.mul(dot(tilt, n))));
         },
       };

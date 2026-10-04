@@ -2,6 +2,7 @@ import { grownBark, grownLeaves, type BarkLook } from '../render/foliage';
 import { shareResource } from '../render/resources';
 import { growTree, leafGeometry, woodGeometry, type Species } from './treeGrowth';
 import { DEAD_ASH, killTree, type Death } from './treeGrowth/deadwood';
+import { branchAlignedWoodGeometry } from './treeGrowth/wood';
 import { BUSH, growShrub } from './treeGrowth/shrub';
 import type { GrownLook, GrownStandIn } from './trees';
 
@@ -34,7 +35,7 @@ export const BUSHES: { seed: number; form?: Partial<Species> }[] = [
  * A dead ash's bark: an ash's grey-brown bark, still on most of its trunk low down, fallen away in
  * long patches higher up and off most of its limbs, baring weathered grey wood (DeadWood).
  */
-const DEAD_BARK: BarkLook = { kind: 'ash', tile: 0.9, relief: 1.1, gain: 1.5, moss: [0.11, 0.14, 0.06], dead: { wood: 'deadwood', gain: 1.4, low: 1.2, high: 7 } };
+const DEAD_BARK: BarkLook = { kind: 'ash', tile: 0.9, relief: 1.1, gain: 1.5, moss: [0.11, 0.14, 0.06], dead: { wood: 'deadwood', gain: 1.4, low: 1.2, high: 7, branchAligned: true } };
 /** A bush's stems: a common broadleaf's smooth grey-brown bark, in small. */
 const BUSH_BARK: BarkLook = { kind: 'tree', tile: 0.2, relief: 0.8, gain: 1.5, moss: [0.13, 0.17, 0.07] };
 
@@ -67,7 +68,7 @@ export function grownStandIns() {
     const ash = DEAD_ASHES.map(({ seed, form, death }) => killTree(growTree({ ...DEAD_ASH, ...form }, seed), seed, death));
     const bush = BUSHES.map(({ seed, form }) => growShrub({ ...BUSH, ...form }, seed));
     made = {
-      ash: { trunk: ash.map(woodGeometry), canopy: [], look: DEAD_ASH_LOOK },
+      ash: { trunk: ash.map(branchAlignedWoodGeometry), canopy: [], look: DEAD_ASH_LOOK },
       bush: { trunk: bush.map(woodGeometry), canopy: bush.map((sk, i) => leafGeometry(sk, BUSHES[i].seed)), look: BUSH_LOOK },
     };
     for (const g of [...made.ash.trunk, ...made.bush.trunk, ...made.bush.canopy]) shareResource(g);
