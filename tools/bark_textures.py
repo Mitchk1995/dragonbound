@@ -6,7 +6,10 @@ public/textures/leaves/ (each listed with its source in the LICENSES.md beside i
 For each bark: the colour image is made to tile (a minimum-error cut through an overlap, both ways), its
 large-scale light and stains are evened out so no stripe repeats round a trunk, and it is toned to the
 bark's colour in the game's warm light. The normal map (OpenGL convention, green up) is drawn from the
-colour's shading: the dark furrows deep, the light plates raised.
+colour's shading: the dark furrows deep, the light plates raised. A photographed bark is cut from its photo
+(`crop`, true to its scale on the trunk), cleared of knots and other marks that would repeat round a trunk by
+covering each with bark from elsewhere in the photo (`patch`), and draws its relief from the photo's own
+height map (`height`), cut and cleared with it.
 
 Each leaf atlas is a 3 x 3 grid of the species' sourced spray (a painted spray on a clear ground), each cell
 turned, mirrored, sized and toned a little differently, its twig's foot at the foot of the cell. Its colours are
@@ -16,7 +19,7 @@ and a share of its hue, round a mean brightness. Saved as WebP with lossless alp
 Run with Python 3 (Pillow with WebP, and NumPy) after putting the sources in SRC and CODEX; name barks or
 leaf sprays to make only those (the rest are left as they are):
     python tools/bark_textures.py
-    python tools/bark_textures.py deadwood charred bush
+    python tools/bark_textures.py ash deadwood bush
 """
 
 import sys
@@ -32,8 +35,10 @@ OUT = PUBLIC / 'bark'
 LEAVES = PUBLIC / 'leaves'
 SIZE = 1024
 
-# name: colour source (a painted bark generated with Codex, see LICENSES.md), toned mean colour (sRGB), contrast,
-# overlap cut away to make it tile (px at 1024), the relief's depth, and the share of the source's own hue kept.
+# name: colour source (a painted bark generated with Codex or a CC0 photograph, see LICENSES.md), toned mean colour
+# (sRGB), contrast, overlap cut away to make it tile (px at 1024), the relief's depth, and the share of the source's
+# own hue kept; `tiles` for a source that already tiles both ways. A photograph's `crop` (x0, y0, x1, y1 in its px)
+# and `patch`es (each a disc of radius r at x, y covered from the same place shifted by dx, dy, in the crop's px).
 BARKS = {
     'oak': dict(color=SRC / 'oak-bark.png', mean=(98, 88, 77), contrast=1.0, overlap=96, depth=4.5),
     'tree': dict(color=SRC / 'tree-bark.png', mean=(118, 110, 98), contrast=0.95, overlap=96, depth=3.0),
@@ -45,10 +50,13 @@ BARKS = {
     'yew': dict(color=CODEX / 'bark' / 'bark-yew.png', mean=(122, 74, 56), contrast=1.05, overlap=96, depth=3.0, hue=0.6),
     # Magic: pale silver-blue, smooth flowing ridges with fine glowing veins (most of its own hue kept).
     'magic': dict(color=CODEX / 'bark' / 'bark-magic.png', mean=(176, 184, 196), contrast=0.9, overlap=96, depth=2.2, hue=0.85),
-    # A dead tree's bare wood: weathered silver-grey, long cracks along the grain (its source already wraps top to bottom).
-    'deadwood': dict(color=CODEX / 'retiled' / 'foothills' / 'bark-dead.png', mean=(128, 127, 124), contrast=1.0, overlap=96, depth=3.0, wraps=True, hue=0.2),
-    # The char a fire leaves on a dead tree's foot: black, cracked into blocks, grey ash in the cracks.
-    'charred': dict(color=CODEX / 'nature-bark' / 'bark-burnt-a.png', mean=(40, 37, 35), contrast=1.1, overlap=96, depth=4.0, hue=0.3),
+    # The dead ash's bark: grey-brown, narrow ridges interlacing round long furrows (Poly Haven's Bark Brown 02, a
+    # metre of trunk photographed: 0.4 m round by 0.6 m up cut from it, its knots and a white speck covered).
+    'ash': dict(color=SRC / 'bark_brown_02_diff_1k.jpg', height=SRC / 'bark_brown_02_disp_1k.jpg', crop=(215, 0, 615, 600),
+                patch=[(305, 262, 34, 0, 170), (168, 272, 44, 0, 190), (360, 570, 9, 0, -40)],
+                mean=(96, 94, 90), contrast=0.85, overlap=96, depth=5.0, hue=0.12),
+    # The bare wood under it: weathered silver-grey, the grain running up it, long dry checks along it.
+    'deadwood': dict(color=CODEX / 'building-wood' / 'face-weathered-c.png', mean=(106, 112, 117), contrast=0.95, depth=3.0, tiles=True, hue=0.15),
 }
 
 # name: spray source (generated with Codex, see LICENSES.md), where its twig's foot is in the source (px), the
@@ -146,13 +154,54 @@ def normal_from(lin, depth):
     # The furrows' broad depth (the dark bands) under the plates' fine relief.
     lum = np.sqrt(lin @ np.array([0.2126, 0.7152, 0.0722]))
     lum = (lum - lum.mean()) / lum.std()
-    h = blur(lum, 5.0) * 0.7 + blur(lum, 1.0) * 0.3
+    return normal_map(blur(lum, 5.0) * 0.7 + blur(lum, 1.0) * 0.3, depth)
+
+
+def normal_from_height(height, depth):
+    """A normal map from a photographed bark's own height map (lighter is higher), its finest grain softened."""
+    h = (height - height.mean()) / height.std()
+    return normal_map(blur(h, 3.0) * 0.5 + blur(h, 1.0) * 0.5, depth)
+
+
+def normal_map(h, depth):
+    """A normal map (OpenGL convention, green up) from heights in standard deviations."""
     dx = (np.roll(h, -1, 1) - np.roll(h, 1, 1)) * 0.5 * depth
     dy = (np.roll(h, -1, 0) - np.roll(h, 1, 0)) * 0.5 * depth
     # Image rows run down; texture v runs up, so green follows -dy.
     n = np.stack([-dx, dy, np.ones_like(h)], -1)
     n /= np.linalg.norm(n, axis=-1, keepdims=True)
     return n * 0.5 + 0.5
+
+
+def patched(img, x, y, r, dx, dy):
+    """Cover a disc of radius r at (x, y) with the image shifted by (dx, dy), feathered over the disc's outer third."""
+    yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+    m = np.clip((r - np.hypot(xx - x, yy - y)) / (r / 3), 0, 1)[..., None]
+    return img * (1 - m) + np.roll(img, (-dy, -dx), (0, 1)) * m
+
+
+def resized(a, size):
+    """A float image (0..1, any channels) resized to size x size."""
+    return np.dstack([np.asarray(Image.fromarray(a[..., k].astype(np.float32), 'F').resize((size, size), Image.LANCZOS)) for k in range(a.shape[2])]).astype(np.float64)
+
+
+def bark_source(b):
+    """A bark's colour (0..1) made to tile at SIZE, and its height map (0..1) if it has one."""
+    src = np.asarray(Image.open(b['color']).convert('RGB')).astype(np.float64) / 255.0
+    if 'height' not in b:
+        if not b.get('tiles'):
+            src = make_tile(src, int(b['overlap'] * src.shape[0] / SIZE))
+        return np.asarray(Image.fromarray((src * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)).astype(np.float64) / 255.0, None
+    # (A photograph: its height cut, cleared and made to tile with its colour; only its height's relief is kept,
+    # not the trunk's own curve and lean, so a patch of bark carried elsewhere sits at the height round it.)
+    height = np.asarray(Image.open(b['height']).convert('L')).astype(np.float64) / 255.0
+    img = np.dstack([src, height - blur(height, 24) + height.mean()])
+    x0, y0, x1, y1 = b['crop']
+    img = img[y0:y1, x0:x1]
+    for x, y, r, dx, dy in b.get('patch', []):
+        img = patched(img, x, y, r, dx, dy)
+    img = np.clip(resized(make_tile(img, int(b['overlap'] * img.shape[0] / SIZE)), SIZE), 0, 1)
+    return img[..., :3], img[..., 3]
 
 
 def save(img01, path, quality):
@@ -250,14 +299,10 @@ def main(only):
     for name, b in BARKS.items():
         if only and name not in only:
             continue
-        src = np.asarray(Image.open(b['color']).convert('RGB')).astype(np.float64) / 255.0
-        cut = int(b['overlap'] * src.shape[0] / SIZE)
-        # (A source that already wraps top to bottom is cut only side to side: a cut across the grain would show.)
-        src = tile_x(src, cut) if b.get('wraps') else make_tile(src, cut)
-        src = np.asarray(Image.fromarray((src * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)).astype(np.float64) / 255.0
+        src, height = bark_source(b)
         lin = tone(to_linear(src), b['mean'], b['contrast'], b.get('hue', 0.35))
         save(to_srgb(lin), OUT / f'{name}.jpg', 86)
-        save(normal_from(to_linear(src), b['depth']), OUT / f'{name}-normal.jpg', 90)
+        save(normal_from(to_linear(src), b['depth']) if height is None else normal_from_height(height, b['depth']), OUT / f'{name}-normal.jpg', 90)
         print(name, 'mean sRGB', (to_srgb(lin).mean((0, 1)) * 255).round())
     for name, b in LEAF_SPRAYS.items():
         if only and name not in only:

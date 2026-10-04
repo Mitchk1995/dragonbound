@@ -19,9 +19,9 @@ import { grownStandIns } from './treeStandIns';
  *   (GROWN), each in three or four shapes. A zone's woods (ZoneTheme.woods) say which species grow
  *   in place of each of its tree kinds; any kind a zone gives no species keeps its block model. The
  *   dead ash and the bushes are grown too (TreeSet.grown): a dead ash is a tree grown and then
- *   killed (bare, its top and limbs snapped off, weathered silver-grey wood charred at its foot), a
- *   bush is grown from the ground up (several stems out of one root crown under a dome of leaf
- *   sprays).
+ *   killed (its top and limbs snapped off, its grey-brown bark fallen away up it and off most of its
+ *   limbs, baring weathered grey wood), a bush is grown from the ground up (several stems out of one
+ *   root crown under a dome of leaf sprays).
  * - 'block': stepped block canopies. Each broadleaf is a crown of bevelled
  *   blocks of mixed proportions, tiers stepping in and shifting as they rise, a few small blocks
  *   stepping out at the edges and small tufts breaking the flat tops, every block tilted a little

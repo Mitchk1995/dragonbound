@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/core/rng';
 import { SPRAY_CELLS, sprayCell } from '../src/render/foliage';
-import { growTree, leafGeometry, woodGeometry } from '../src/world/treeGrowth';
+import { growTree, leafGeometry, OAK, woodGeometry } from '../src/world/treeGrowth';
 import { DEAD_ASH, killTree } from '../src/world/treeGrowth/deadwood';
 import { BUSH, growShrub } from '../src/world/treeGrowth/shrub';
 import { clearOfStones, thinWood, treeSet } from '../src/world/trees';
@@ -119,6 +119,26 @@ describe('the dead ash', () => {
 
   it('stays within its triangle budget', () => {
     for (const { wood } of ashes) expect(tris(wood)).toBeLessThanOrEqual(4000);
+  });
+
+  it('carries, for where its bark has gone, the direction of the limb under each point and how far back from its break that lies', () => {
+    for (const { sk, wood } of ashes) {
+      const dead = wood.getAttribute('aDead');
+      expect(dead.count).toBe(wood.getAttribute('position').count);
+      let tips = 0, breaks = 0;
+      for (let i = 0; i < dead.count; i++) {
+        expect(Math.hypot(dead.getX(i), dead.getY(i), dead.getZ(i))).toBeCloseTo(1, 3);
+        expect(dead.getW(i)).toBeGreaterThanOrEqual(-1e-6);
+        if (dead.getW(i) < 1e-4) tips++;
+        if (dead.getW(i) < 0.99) breaks++;
+      }
+      // Each snapped limb's tallest splinter reaches the limb's end (0); the rest of its break lies short of its foot (1).
+      expect(tips).toBeGreaterThanOrEqual(sk.limbs.filter((L) => L.broken !== undefined).length);
+      expect(breaks).toBeGreaterThan(tips);
+    }
+    // A living tree's wood and a bush's carry none.
+    expect(woodGeometry(growTree(OAK, 1)).getAttribute('aDead')).toBeUndefined();
+    for (const { wood } of bushes) expect(wood.getAttribute('aDead')).toBeUndefined();
   });
 });
 

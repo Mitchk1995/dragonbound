@@ -33,7 +33,8 @@ export const DEAD_ASH: Species = {
   sprayEvery: 0.42,
   fill: [0.2, 0.4],
   roots: 5,
-  bark: 0.5,
+  // (Its bark laid as finely as the oak's and the common tree's: a tile 0.6 m round, DEAD_BARK's 0.9 m up.)
+  bark: 0.6,
   leaf: 'oval',
   arch: 0.08,
 };

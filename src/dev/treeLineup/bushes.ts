@@ -21,7 +21,7 @@ function standIn(part: GrownStandIn, v: number, at: THREE.Matrix4, color: number
 }
 
 /** Plant shape v of a stand-in at (x, z), turned `yaw`, at `size`. */
-function plant(g: Game, stage: THREE.Group, part: GrownStandIn, v: number, x: number, z: number, yaw: number, size = 1) {
+export function plant(g: Game, stage: THREE.Group, part: GrownStandIn, v: number, x: number, z: number, yaw: number, size = 1) {
   const pos = new THREE.Vector3(x, g.zone.view.heightAt(x, z) - 0.05, z);
   stage.add(...standIn(part, v, new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(size, size * (part.canopy.length ? 0.75 : 1), size)), part.look.palette[0]));
   return pos;
@@ -48,7 +48,7 @@ function standing(g: Game) {
  * (out from under the trees' crowns) among its trees: open walkable ground out from under any crown,
  * the camera drawn back a little.
  */
-function woodSpot(g: Game, ashWeight: number) {
+export function woodSpot(g: Game, ashWeight: number) {
   const s = standing(g), L = g.zone.layout;
   const clear = (p: THREE.Vector3, d = 0) => s.tree.every((t) => Math.hypot(t.x - p.x, t.z - p.z) > (t.r ?? 4) + d);
   const open = s.bush.filter((p) => clear(p, 0.3));

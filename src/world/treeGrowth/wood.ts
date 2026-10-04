@@ -26,11 +26,15 @@ interface Bark {
  * turned from the branch's (0 on the branch's first ring; elsewhere `aBarkB` is a copy of
  * `aBarkA`). `aWood` = the wind's weight, the limb's radius, the bark's coordinate along the limb
  * (bark metres) and 1 on a branch's first ring, whose collar triangles (each drawn last from that
- * ring) take `aBarkB`.
+ * ring) take `aBarkB`. A dead tree's wood (its limbs snapped: deadwood.ts) also carries, for where
+ * its bark has fallen away (foliage.ts), `aDead` = its limb's direction there and how far back
+ * from the limb's break it lies, in the break's own lengths (0 at the break's tip, 1 at its foot,
+ * far more on a limb that never snapped).
  */
 export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   const { limbs, crown } = sk;
   const pos: number[] = [], col: number[] = [], wood: number[] = [], ba: number[] = [], bb: number[] = [], idx: number[] = [];
+  const dead = limbs.some((L) => L.broken !== undefined), dd: number[] = [], G = new THREE.Vector3();
   const kids: number[][] = limbs.map(() => []);
   limbs.forEach((L, i) => L.parent >= 0 && kids[L.parent].push(i));
   /** Each limb's rings (vertex indices) and bark, and each branch's hole rim in its parent with the rim point its bark lines up on. */
@@ -39,8 +43,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   const rims: number[][] = [];
   const rimFoot: number[] = [];
   const P = new THREE.Vector3(), T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), V = new THREE.Vector3();
-  const vertex = (p: THREE.Vector3, a: number, bark: Bark, r: number, s: number, shade: number, w: number) => {
+  const vertex = (p: THREE.Vector3, a: number, bark: Bark, r: number, s: number, shade: number, w: number, L: Limb) => {
     pos.push(p.x, p.y, p.z);
+    if (dead) {
+      const len = lengthOf(L);
+      tangentOn(L, s, G);
+      dd.push(G.x, G.y, G.z, L.broken !== undefined ? (len - s) / breakLength(L, len) : 99);
+    }
     ba.push(Math.cos(a), Math.sin(a), bark.tiles, bark.u);
     bb.push(Math.cos(a), Math.sin(a), bark.tiles, bark.u);
     // The damp foot, and the inner crown in the shade of the leaves.
@@ -71,7 +80,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       return lay.angles.map((a, j) => {
         const rr = footRadius(sk.roots, rootAngles, a, P.y, r, flute);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
-        return vertex(V.copy(P).addScaledVector(D, rr), lay.bark[j], bark, rr, s, 1, w);
+        return vertex(V.copy(P).addScaledVector(D, rr), lay.bark[j], bark, rr, s, 1, w, L);
       });
     });
     // (A trunk whose tube starts at its very foot, a limb leaving it that low, has no foot rings.)
@@ -146,7 +155,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
         const a = (j / S) * Math.PI * 2;
         const rr = r * (L.order === 0 ? buttress(rootAngles, a, P.y, flute) : 1);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
-        return vertex(V.copy(P).addScaledVector(D, rr), a, bark, rr, s, 1, w);
+        return vertex(V.copy(P).addScaledVector(D, rr), a, bark, rr, s, 1, w, L);
       });
     });
     const ring = rings[li];
@@ -189,9 +198,9 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     }
     // The tip closes on one point (a snapped limb's in a ragged break).
     const last = ring[ring.length - 1];
-    if (L.broken !== undefined) brokenEnd(L, last, len - tipLen, len, (p, a, r, s) => vertex(p, a, bark, r, s, 1, along(L.sway, L, s)), idx);
+    if (L.broken !== undefined) brokenEnd(L, last, len - tipLen, len, (p, a, r, s) => vertex(p, a, bark, r, s, 1, along(L.sway, L, s), L), idx);
     else {
-      const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len));
+      const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len), L);
       for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
     }
     if (L.order === 0) trunkFoot(L, bark, start);
@@ -220,7 +229,8 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   g.setAttribute('aWood', pick(wood, 4));
   g.setAttribute('aBarkA', pick(ba, 4));
   g.setAttribute('aBarkB', pick(bb, 4));
-  packAttributes(g, ['aWood', 'aBarkA', 'aBarkB']);
+  if (dead) g.setAttribute('aDead', pick(dd, 4));
+  packAttributes(g, ['aWood', 'aBarkA', 'aBarkB', 'aDead']);
   g.setIndex(idx.map((i) => keep[i]));
   g.computeVertexNormals();
   g.computeBoundingSphere();

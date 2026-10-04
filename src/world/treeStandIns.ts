@@ -30,8 +30,11 @@ export const BUSHES: { seed: number; form?: Partial<Species> }[] = [
   { seed: 14, form: { height: [1.8, 2.0], spread: [1.5, 1.7], crownBase: 0.12, rise: [1.15, 1.4], limbs: [6, 7], fill: [0.3, 0.4] } },
 ];
 
-/** A dead ash's wood: bare, weathered silver-grey with long cracks, black with char from its foot up. */
-const DEAD_BARK: BarkLook = { kind: 'deadwood', tile: 0.85, relief: 1.2, gain: 1.35, moss: [0.04, 0.04, 0.035], char: { kind: 'charred', height: 1.6, lick: 1.6 } };
+/**
+ * A dead ash's bark: an ash's grey-brown bark, still on most of its trunk low down, fallen away in
+ * long patches higher up and off most of its limbs, baring weathered grey wood (DeadWood).
+ */
+const DEAD_BARK: BarkLook = { kind: 'ash', tile: 0.9, relief: 1.1, gain: 1.5, moss: [0.11, 0.14, 0.06], dead: { wood: 'deadwood', gain: 1.4, low: 1.2, high: 7 } };
 /** A bush's stems: a common broadleaf's smooth grey-brown bark, in small. */
 const BUSH_BARK: BarkLook = { kind: 'tree', tile: 0.2, relief: 0.8, gain: 1.5, moss: [0.13, 0.17, 0.07] };
 
