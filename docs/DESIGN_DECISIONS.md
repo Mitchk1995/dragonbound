@@ -43,6 +43,7 @@ One line per area; the area's file holds the decisions themselves, in Mitchell's
 
 ### Order of work
 
+0. **The code cleanup comes first (October 4, Mitchell: "we need to do the cleanup soon it keeps being put off by feedback stuff").** Before new feedback work, split the files still over the size limit (`src/dev/inspect.ts`, `tools/blender/_common.py`, `tools/blender/gear.py`, `tests/castle-geometry.test.ts`), one agent per file; the castle and old building files go when the castle is rebuilt from the kit.
 1. The building kit, proven on one hub-town house (October 3; kit v2 and the rebuilt bakery await Mitchell's yes or no, October 4).
 2. The hub town on the ground below the castle: layout options in-game first, then one agent per building.
 3. The castle as the king's seat, the same way.
