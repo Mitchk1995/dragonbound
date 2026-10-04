@@ -1,5 +1,8 @@
 import type { Game } from '../game';
 
+/** How long the Veilstone takes (the medium diary halves it). */
+const recallSecs = (g: Game) => (g.save.diaryClaimed.medium ? 1.5 : 3);
+
 /** Start the Veilstone recall home (interrupted by moving, being hit or dying). */
 export function recall(g: Game) {
   if (g.mode !== 'play' || g.player.dead || g.traveling) return;
@@ -8,7 +11,7 @@ export function recall(g: Game) {
     return;
   }
   if (g.recallT >= 0) return;
-  g.recallT = g.save.diaryClaimed.medium ? 1.5 : 3;
+  g.recallT = recallSecs(g);
   g.skilling.stop();
   g.player.stop();
   g.announce('You grip the Veilstone...', 'info');
@@ -23,10 +26,7 @@ export function updateRecall(g: Game, dt: number) {
     return;
   }
   g.recallT -= dt;
-  for (let i = 0; i < 3; i++) {
-    const a = Math.random() * Math.PI * 2;
-    g.glow.spawn(p.x + Math.cos(a) * 0.7, 0.1, p.z + Math.sin(a) * 0.7, 0, 2 + Math.random() * 2, 0, 0.8, 0.07, 0x9ab8ff, 0, 0.5);
-  }
+  g.fx.recalling(p.x, p.z, dt, 1 - g.recallT / recallSecs(g));
   if (g.recallT <= 0) {
     g.recallT = -1;
     g.story.onRecall();

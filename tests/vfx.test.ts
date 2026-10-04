@@ -202,9 +202,13 @@ describe('fires and missiles', () => {
     expect(g.children[0].scale.x).not.toBe(1);
   });
 
-  it('share a missile kind\'s look', () => {
+  it('share a missile kind\'s look; Cinderwing\'s meteor is a painted ball of fire of its own size', () => {
     expect(missileLook('fireball').material).toBe(missileLook('fireball').material);
     expect(missileLook('bolt').material).not.toBe(missileLook('fireball').material);
+    const meteor = missileLook('meteor');
+    expect(meteor.material).toBe(missileLook('meteor').material);
+    expect(meteor.material).not.toBe(missileLook('fireball').material);
+    expect(meteor.geometry.boundingSphere!.radius).toBeGreaterThan(missileLook('fireball').geometry.boundingSphere!.radius);
   });
 });
 
@@ -225,10 +229,12 @@ const goblin = { x: 0, z: 0, pos: new THREE.Vector3(), radius: 0.45, model: { he
 describe('the effects', () => {
   it('each build their layers without error, and the cards show', () => {
     const g = fakeGame(), fx = new Fx(g);
-    fx.arc(0, 3, -Math.PI / 2, 2.5, 2, 0xffffff);
+    fx.arc(0, 3, -Math.PI / 2, 2.5, 2, 0xffffff, 0.55);
     fx.hit(goblin, false, 0, 3);
     fx.hit(goblin, true, 0, 3);
+    fx.hit(goblin, true, 0, 3, 'arrow');
     fx.death(goblin);
+    fx.recalling(0, 3, 0.1, 0.5);
     fx.trail('fireball', 0, 1, 0);
     fx.trail('bolt', 0, 1, 0);
     fx.fireBurst(0, 0, 2.6);
@@ -260,9 +266,35 @@ describe('the effects', () => {
     const impact = () => instances(g.scene.getObjectByName('fx-impact') as THREE.Mesh);
     expect(impact()).toBe(0);
     g.time += 1 / 60;
-    fx.hit(goblin, false, 0, 3, true);
+    fx.hit(goblin, false, 0, 3, 'tick');
     expect(impact()).toBe(0);
     fx.hit(goblin, false, 0, 3);
     expect(impact()).toBe(1);
+  });
+
+  it('land an arrow with a hit of its own: no flash of the sword\'s, splinters of its shaft, a puff and blood', () => {
+    const g = fakeGame(), fx = new Fx(g);
+    const count = (name: string) => instances(g.scene.getObjectByName(`fx-${name}`) as THREE.Mesh);
+    fx.hit(goblin, false, 0, 3, 'arrow');
+    g.particles.update(1 / 60);
+    expect(count('impact')).toBe(0);
+    expect((g.particles.mesh as THREE.InstancedMesh).count).toBe(5);
+    // The puff and six drops of blood, drawn over what lies behind.
+    expect(count('c')).toBe(7);
+    // A critical one bursts small and red-gold too.
+    fx.hit(goblin, true, 0, 3, 'arrow');
+    expect(count('crit')).toBe(1);
+    expect(count('impact')).toBe(0);
+  });
+
+  it('give the recall\'s motes so many a second, whatever the frame rate, more as it nears its end', () => {
+    const motes = (fps: number, k: number) => {
+      const g = fakeGame(), fx = new Fx(g);
+      for (let i = 0; i < fps; i++) fx.recalling(0, 3, 1 / fps, k);
+      return instances(g.glow.mesh as THREE.Mesh);
+    };
+    expect(Math.abs(motes(60, 0) - motes(20, 0))).toBeLessThanOrEqual(1);
+    expect(motes(60, 0)).toBeGreaterThanOrEqual(40);
+    expect(motes(60, 1)).toBeGreaterThan(motes(60, 0) * 1.5);
   });
 });

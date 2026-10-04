@@ -10,15 +10,17 @@ import { pageTexture } from './textures';
 /**
  * What a spell looks like in flight: a painted flipbook on a card facing the camera and laid along its flight on
  * screen (the missile's own forward, +z), looping. The fireball is a ball of fire trailing its flames; the arcane
- * bolt a crackling orb of blue lightning. Shared by every missile of a kind.
+ * bolt a crackling orb of blue lightning; Cinderwing's meteor a great ball of fire falling. Shared by every missile
+ * of a kind.
  */
 
-export type MissileKind = 'fireball' | 'bolt';
+export type MissileKind = 'fireball' | 'bolt' | 'meteor';
 
 const LOOKS: Record<MissileKind, { sheet: SheetId; length: number; width: number; fps: number; tint: number; gain: number; ahead: number }> = {
   // The painted ball sits at the card's front, its flames trailing behind it.
   fireball: { sheet: 'fireball', length: 1.7, width: 1.0, fps: 20, tint: 0xffffff, gain: 1.3, ahead: 0.28 },
   bolt: { sheet: 'electric', length: 1.0, width: 1.0, fps: 18, tint: PAL.arcane, gain: 1.6, ahead: 0 },
+  meteor: { sheet: 'fireball', length: 3.4, width: 2.0, fps: 16, tint: 0xffd8b0, gain: 1.2, ahead: 0.3 },
 };
 
 function missileMaterial(kind: MissileKind) {

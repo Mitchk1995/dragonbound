@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Enemy } from '../src/entities/enemy';
 import type { Game } from '../src/game';
 import { Combat, type Hazard } from '../src/systems/combat';
+import { missileLook } from '../src/fx/missiles';
 import { Telegraph } from '../src/fx/telegraph';
 import { Fx } from '../src/systems/fx';
 
@@ -50,6 +51,14 @@ describe('boss retreat cleanup', () => {
     expect(damage).not.toHaveBeenCalled();
     expect(game.fx.fireBurst).not.toHaveBeenCalled();
     expect(zone.telegraphs).toHaveLength(0);
+  });
+
+  it('drops each meteor as a painted ball of fire, with no solid shell drawn round it', () => {
+    const { combat, game, boss } = fixture();
+    combat.meteor(4, 4, boss);
+    const ball = vi.mocked(game.fx.add).mock.calls[0][0] as THREE.Mesh;
+    expect(ball.material).toBe(missileLook('meteor').material);
+    expect(ball.children).toHaveLength(0);
   });
 
   it('still resolves an engaged boss meteor normally', () => {

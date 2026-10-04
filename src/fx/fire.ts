@@ -1,22 +1,27 @@
 import * as THREE from 'three';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
-import { cameraProjectionMatrix, dot, float, floor, Fn, fract, length, mix, mod, modelViewMatrix, modelWorldMatrix, positionGeometry, pow, sin, texture, time, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { cameraProjectionMatrix, clamp, dot, float, floor, Fn, fract, length, mix, mod, modelViewMatrix, modelWorldMatrix, positionGeometry, pow, sin, texture, time, uv, vec2, vec3, vec4 } from 'three/tsl';
 import type { F, V4 } from '../render/patch';
 import { shareResource } from '../render/resources';
 import { PAGES, SHEETS, type SheetId } from './sheets';
-import { pageTexture } from './textures';
+import { maskTexture, pageTexture } from './textures';
 
 /**
  * Fires burning in the world (torches, braziers, campfires, hearths, the forge): a painted flame flipbook on a card
- * that always faces the camera and stands on its point, looping at 16 frames a second with each frame blended into
- * the next. Every fire starts its loop at a place of its own (from where it stands), so no two flicker together. One
- * shared card and material per size (a torch's narrow flame, a fire's broad one): a fire costs one small draw, and
- * nothing on the CPU (the loop runs on the renderer's clock).
+ * that always faces the camera and stands on its point. The painted frames were painted one by one, so played fast
+ * they boil; here they loop slowly, each blended into the next, while the flame licks upward through cloud noise
+ * rising through it (its foot still, its tongues swaying), the way effects artists keep a flipbook flame flowing.
+ * Every fire starts its loop at a place of its own (from where it stands), so no two flicker together. One shared
+ * card and material per size (a torch's narrow flame, a fire's broad one): a fire costs one small draw, and nothing
+ * on the CPU (the loop runs on the renderer's clock).
  */
 
 /** The card's height for a flame of scale 1 (the painted flame fills the lower part of its cell). */
 const CARD = 1.25;
-const FPS = 16;
+const FPS = 8;
+/** How far the rising noise sways a flame's tips (a share of its width), and how fast it rises (cards a second). */
+const SWAY = 0.1;
+const RISE = 0.6;
 /** How much nearer the camera a flame of scale 1 is drawn (world units). */
 const PULL = 0.45;
 
@@ -41,10 +46,14 @@ function fireMaterial(sheetId: SheetId) {
     return cameraProjectionMatrix.mul(vec4(foot.xy.add(off), foot.z, 1));
   })();
   m.colorNode = Fn(() => {
-    const fi = mod(time.mul(FPS).add(phase().mul(sheet.frames)), sheet.frames).toVar();
+    const ph = phase().toVar();
+    const fi = mod(time.mul(FPS).add(ph.mul(sheet.frames)), sheet.frames).toVar();
     const f0 = floor(fi).toVar();
     const f1 = mod(f0.add(1), sheet.frames);
-    const inCell = vec2(uv().x.mul(0.8).add(0.1), float(1).sub(uv().y));
+    // Noise rising through the flame sways it sideways, more toward its tips.
+    const flow = texture(maskTexture('noise'), vec2(uv().x.mul(0.5).add(ph), uv().y.mul(0.45).sub(time.mul(RISE)))).r;
+    const sway = flow.sub(0.5).mul(SWAY * 2).mul(uv().y);
+    const inCell = vec2(clamp(uv().x.mul(0.8).add(0.1).add(sway), 0.01, 0.99), float(1).sub(uv().y));
     const at = (f: F) => vec2(float(sheet.col).add(mod(f, 4)), float(sheet.row).add(floor(f.div(4)))).add(inCell).div(grid);
     const paint = mix(texture(map, at(f0)), texture(map, at(f1)), fi.sub(f0)) as V4;
     return vec4(paint.rgb.mul(1.15).add(pow(paint.rgb, vec3(3)).mul(0.9)), 0);

@@ -37,6 +37,12 @@ const lin = (hex: number, k = 1) => new THREE.Color(hex).multiplyScalar(k);
 /** Each creature's blood (the painted drops are grey: this is their colour). */
 const BLOOD: Record<string, number> = { goblin: 0x5a8a2a, cultist: 0x6a1a30, priest: 0x6a1a30 };
 
+/** An arrow's shaft, splintering: pale ash wood and its darker grain. */
+const SPLINTERS = [0xd8b884, 0xb89060, 0xe8d0a0];
+
+/** How a blow lands: a weapon's (or a spell's), an arrow's, or a tick of damage over time (arrow rain's). */
+export type HitKind = 'blow' | 'arrow' | 'tick';
+
 export class Fx {
   private list: FxMesh[] = [];
   private cards: Record<string, SpriteLayer> | null = null;
@@ -49,6 +55,8 @@ export class Fx {
    * that same moment show no impact flash of their own (the spell's burst is their flash), only sparks and blood.
    */
   private burstAt = -1;
+  /** Motes owed to the recall's pull (it gives so many a second). */
+  private recallDue = 0;
 
   constructor(private g: Game) {
     preloadEffectTextures();
@@ -108,7 +116,10 @@ export class Fx {
     return this.g.zoneOrNull?.groundY(x, z) ?? 0;
   }
 
-  /** A point `d` toward the camera from (x, y, z): where a burst card stands so the body it bursts from never hides it. */
+  /**
+   * A point `d` toward the camera from (x, y, z) (away from it, if `d` is negative): where a burst card stands so the
+   * body it bursts from never hides it, or behind a body so the body stays in sight in front of it.
+   */
   private front(x: number, y: number, z: number, d: number) {
     const c = this.g.camera.position;
     this.v.set(c.x - x, c.y - y, c.z - z).normalize().multiplyScalar(d);
@@ -133,43 +144,69 @@ export class Fx {
 
   /**
    * A weapon's slash round the hero at (x, z), toward `dir`: a crescent swept through `angle`, out to `r`, its edge
-   * burning white, its tail breaking into wisps.
+   * burning white (`gain` its brightness), its tail breaking into wisps.
    */
-  arc(x: number, z: number, dir: number, r: number, angle: number, color: number) {
-    this.mesh.slash({ x, y: this.groundY(x, z) + 0.95, z, dir, sweep: angle, r0: r * 0.55, r1: r, tilt: 0.45, color, gain: 1.0 });
+  arc(x: number, z: number, dir: number, r: number, angle: number, color: number, gain = 1) {
+    this.mesh.slash({ x, y: this.groundY(x, z) + 0.95, z, dir, sweep: angle, r0: r * 0.55, r1: r, tilt: 0.45, color, gain });
   }
 
   /**
-   * A blow landing on `e`, struck from (fromX, fromZ): a painted impact flash on the struck side (a bigger, redder
-   * burst and a shock ring for a crit), sparks streaking away from the blow, and the creature's blood. Steel and
-   * arrows flash white-gold; a magic weapon's blows burst in arcane blue. A `light` blow (a tick of damage over
-   * time, such as arrow rain's) shows only a little blood and a few sparks, as does a blow landed by a spell in the
-   * moment of its own burst (the burst is its flash).
+   * A blow landing on `e`, struck from (fromX, fromZ), every part of it small and brief enough that the creature stays
+   * in plain sight throughout: a painted impact flash at the struck point (a red-gold burst and a ring on the ground
+   * for a crit), sparks streaking away from the blow, and the creature's blood. Steel flashes white-gold; a magic
+   * weapon's blows burst in arcane blue. An arrow thuds in instead (arrowHit). A blow landed by a spell in the moment
+   * of its own burst shows no flash of its own (the burst is its flash).
    */
-  hit(e: Enemy, crit: boolean, fromX?: number, fromZ?: number, light = false) {
+  hit(e: Enemy, crit: boolean, fromX?: number, fromZ?: number, kind: HitKind = 'blow') {
     const g = this.g, gy = e.pos.y, h = e.model.height;
-    const away = fromX === undefined || fromZ === undefined ? Math.random() * Math.PI * 2 : Math.atan2(e.z - fromZ, e.x - fromX);
-    const y = gy + h * 0.55;
-    // On the struck side, in front of the body.
-    const sx = e.x - Math.cos(away) * e.radius * 0.5, sz = e.z - Math.sin(away) * e.radius * 0.5;
-    const at = this.front(sx, y, sz, e.radius + 0.35);
-    const magic = g.stats?.style === 'magic', quiet = light || this.burstAt === g.time;
-    if (!quiet) {
-      const rot = Math.random() * 6.3;
-      if (magic) this.card('arcane', { x: at.x, y: at.y, z: at.z, life: crit ? 0.42 : 0.32, size: crit ? 2.5 : 1.7, rot, color: lin(0x7aaeff, 1.5), heat: 0.7 });
-      else this.card(crit ? 'crit' : 'impact', { x: at.x, y: at.y, z: at.z, life: crit ? 0.38 : 0.28, size: crit ? 2.3 : 1.55, rot, color: lin(0xffffff, 0.95), heat: 0.45 });
-      if (crit) {
-        this.card('impact', { x: at.x, y: at.y, z: at.z, life: 0.24, size: 1.15, rot: rot + 0.8, color: lin(0xffffff, 1.0), heat: 0.6 });
-        this.mesh.decal({ kind: 'ring', x: e.x, y: gy + 0.06, z: e.z, from: 0.8, to: 3.2, life: 0.32, color: 0xffb060, gain: 1.6, fadeIn: 0.01 });
-      }
+    // (Arrow rain falls from above: its ticks come from no side.)
+    const away = kind === 'tick' || fromX === undefined || fromZ === undefined ? Math.random() * Math.PI * 2 : Math.atan2(e.z - fromZ, e.x - fromX);
+    // At the struck point on the body's surface, chest high (clear of the striker's head as the camera sees it) and
+    // drawn a little toward the camera so the body never hides it.
+    const sx = e.x - Math.cos(away) * e.radius * 0.85, sz = e.z - Math.sin(away) * e.radius * 0.85;
+    const at = this.front(sx, gy + h * 0.68, sz, e.radius * 0.6 + 0.3);
+    const blood = lin(BLOOD[e.def.model] ?? 0x9a2418);
+    if (kind !== 'blow') {
+      this.arrowHit(at, gy, away, crit, kind === 'tick', blood);
+      return;
     }
-    this.spray(at.x, at.y, at.z, light ? 3 : crit ? 16 : 9, {
-      speed: [5, crit ? 13 : 10], up: [0.5, 4], life: [0.22, 0.42], size: [0.05, 0.085], gravity: 14, drag: 2.2,
+    const magic = g.stats?.style === 'magic';
+    if (this.burstAt !== g.time) {
+      const rot = Math.random() * 6.3;
+      if (magic) this.card('arcane', { x: at.x, y: at.y, z: at.z, life: crit ? 0.34 : 0.26, size: crit ? 1.7 : 1.25, rot, color: lin(0x7aaeff, 1.0), heat: 0.3 });
+      else this.card(crit ? 'crit' : 'impact', { x: at.x, y: at.y, z: at.z, life: crit ? 0.32 : 0.28, size: crit ? 1.6 : 1.2, rot, color: lin(0xfff0d8, 0.75), heat: crit ? 0.2 : 0.15 });
+      if (crit) this.mesh.decal({ kind: 'ring', x: e.x, y: gy + 0.06, z: e.z, from: 0.8, to: 2.6, life: 0.3, color: 0xffb060, gain: 1.1, fadeIn: 0.01 });
+    }
+    this.spray(at.x, at.y, at.z, crit ? 12 : 7, {
+      speed: [5, crit ? 12 : 9], up: [0.5, 4], life: [0.2, 0.38], size: [0.045, 0.075], gravity: 14, drag: 2.2,
       colors: magic ? [0xcfe4ff, 0x8ab8ff, 0xffffff] : crit ? [0xffe070, 0xff8a3a, 0xffffff] : [0xffe8a0, 0xffffff], dir: away, spread: 1.1,
     });
-    const blood = lin(BLOOD[e.def.model] ?? 0x9a2418);
-    for (let i = 0; i < (light ? 2 : crit ? 8 : 5); i++) {
-      const a = away + (Math.random() - 0.5) * 2.2, sp = rand(2.5, 5.5);
+    this.bleed(at, gy, away, crit ? 7 : 5, blood);
+  }
+
+  /**
+   * An arrow thudding into a creature at `at`, flying on toward `away`: a dull glow for the instant it strikes, a
+   * small puff, splinters of its shaft kicked back toward the archer, and the creature's blood spurting on along its
+   * flight; a crit bursts small and red-gold too. A tick of arrow rain shows only a splinter or two and a little blood.
+   */
+  private arrowHit(at: THREE.Vector3, gy: number, away: number, crit: boolean, tick: boolean, blood: THREE.Color) {
+    const back = away + Math.PI;
+    if (!tick) {
+      this.g.glow.spawn(at.x, at.y, at.z, 0, 0, 0, 0.12, 0.16, 0xffe2b0, 0, 0, 'mote');
+      this.card('dust', { x: at.x, y: at.y - 0.1, z: at.z, vx: Math.cos(back) * 0.8, vy: 0.4, vz: Math.sin(back) * 0.8, drag: 3, life: 0.38, size: crit ? 0.95 : 0.75, rot: rand(-0.3, 0.3), color: lin(0xe0d2bc), opacity: 0.6 });
+      if (crit) this.card('crit', { x: at.x, y: at.y, z: at.z, life: 0.26, size: 1.1, rot: Math.random() * 6.3, color: lin(0xffffff, 0.65), heat: 0.15 });
+    }
+    for (let i = 0; i < (tick ? 2 : crit ? 7 : 5); i++) {
+      const a = back + (Math.random() - 0.5) * 1.8, sp = rand(1.5, 3.5);
+      this.g.particles.spawn(at.x, at.y, at.z, Math.cos(a) * sp, rand(1.5, 3), Math.sin(a) * sp, rand(0.5, 0.8), rand(0.07, 0.1), pick(SPLINTERS), 12, 1.5);
+    }
+    this.bleed(at, gy, away, tick ? 2 : crit ? 8 : 6, blood, 0.8);
+  }
+
+  /** `n` drops of blood thrown from `at` mostly toward `away`, splashing to the ground (`spread` how widely). */
+  private bleed(at: THREE.Vector3, gy: number, away: number, n: number, blood: THREE.Color, spread = 1.1) {
+    for (let i = 0; i < n; i++) {
+      const a = away + (Math.random() - 0.5) * 2 * spread, sp = rand(2.5, 5.5);
       this.card('blood', {
         x: at.x, y: at.y - 0.1, z: at.z, vx: Math.cos(a) * sp, vy: rand(1.5, 4), vz: Math.sin(a) * sp, gravity: 13, drag: 1.2,
         floor: gy + 0.03, life: rand(0.45, 0.7), size: rand(0.22, 0.36), grow: 0.8, stretch: 0.03, color: blood,
@@ -178,11 +215,14 @@ export class Fx {
     }
   }
 
-  /** A creature's death: a puff of smoke and sparkle where it stood, chips flying, embers rising. */
+  /**
+   * A creature's death: a puff of smoke and sparkle behind it as the camera sees it (so it stays in sight, falling,
+   * in front of its own puff), chips flying, embers rising.
+   */
   death(e: Enemy) {
     const gy = e.pos.y, h = e.model.height;
-    const at = this.front(e.x, gy + h * 0.5, e.z, e.radius + 0.3);
-    this.card('poof', { x: at.x, y: at.y, z: at.z, vy: 0.5, life: 0.85, size: h * 1.2 + 0.7, rot: rand(-0.3, 0.3), color: lin(0xffffff, 0.9), heat: 0.25 });
+    const at = this.front(e.x, gy + h * 0.45, e.z, -0.35);
+    this.card('poof', { x: at.x, y: at.y, z: at.z, vy: 0.4, life: 0.8, size: h * 0.9 + 0.5, rot: rand(-0.3, 0.3), color: lin(0xffffff, 0.8), heat: 0.08 });
     this.g.particles.burst(new THREE.Vector3(e.x, gy + h * 0.5, e.z), { count: 12, color: [0x4a4038, 0x6a5a50, 0x3a3030], speed: 4.5, up: 4, life: 0.9, size: 0.16 });
     this.spray(e.x, gy + h * 0.5, e.z, 10, { speed: [0.5, 2], up: [1.5, 3.5], life: [0.6, 1.1], size: [0.06, 0.1], colors: [PAL.ember, PAL.fire], kind: 'mote', gravity: -0.5, drag: 1.5 });
   }
@@ -199,19 +239,24 @@ export class Fx {
 
   /**
    * A ball of fire bursting at (x, z), `r` across its blast: the painted explosion, a ring of fire racing out along
-   * the ground, flames and embers thrown, smoke rolling up after, scorched chips.
+   * the ground, flames and embers thrown, smoke rolling up after, scorched chips. Its light is kept below a white-out
+   * and its smoke thin and rising behind the blast, so whoever stands in it stays in sight. Against a wall or cliff
+   * (`onWall`) its fire and smoke are drawn out in front of the rock instead.
    */
-  fireBurst(x: number, z: number, r: number) {
+  fireBurst(x: number, z: number, r: number, onWall = false) {
     this.burstAt = this.g.time;
     const gy = this.groundY(x, z);
-    const at = this.front(x, gy + r * 0.45, z, 1);
-    this.card('explosion', { x: at.x, y: at.y, z: at.z, life: 0.85, size: r * 1.55 + 0.8, rot: rand(-0.4, 0.4), color: lin(0xffd0a0, 0.85), heat: 0.25 });
+    // A little behind the burst as the camera sees it: whoever stands at its heart stands in front of its fire, in the
+    // flames to the knees.
+    const at = onWall ? this.front(x, gy + r * 0.45, z, 1) : this.front(x, gy + r * 0.38 + 0.35, z, -0.45);
+    this.card('explosion', { x: at.x, y: at.y, z: at.z, life: 0.72, size: r * 1.25 + 0.6, rot: rand(-0.4, 0.4), color: lin(0xffc890, 0.55), heat: 0.06 });
     this.mesh.decal({ kind: 'ring', x, y: gy + 0.07, z, from: r * 0.4, to: r * 2.3, life: 0.45, color: 0xff7a2a, gain: 1.6, fadeIn: 0.01 });
-    this.spray(x, gy + 0.5, z, Math.round(10 + r * 4), { speed: [r * 1.2, r * 2.6], up: [1, 4], life: [0.35, 0.65], size: [0.22, 0.36], colors: [PAL.fire, PAL.ember, 0xffffff], kind: 'flame', gravity: -1.5, drag: 3 });
+    this.spray(x, gy + 0.5, z, Math.round(10 + r * 4), { speed: [r * 1.2, r * 2.6], up: [1, 4], life: [0.35, 0.65], size: [0.18, 0.3], colors: [PAL.fire, PAL.ember, 0xffffff], kind: 'flame', gravity: -1.5, drag: 3 });
     this.spray(x, gy + 0.6, z, Math.round(8 + r * 3), { speed: [r * 2, r * 4.5], up: [3, 7], life: [0.5, 0.9], size: [0.05, 0.08], colors: [PAL.ember, 0xffe080], gravity: 9, drag: 1.2 });
     for (let i = 0; i < 4; i++) {
       const a = Math.random() * Math.PI * 2, d = rand(0, r * 0.5);
-      this.card('smoke', { x: x + Math.cos(a) * d, y: gy + r * 0.5, z: z + Math.sin(a) * d, vx: Math.cos(a) * 0.4, vy: rand(0.6, 1.2), vz: Math.sin(a) * 0.4, drag: 0.5, life: rand(1.5, 2.1), size: r * rand(1.1, 1.5), rot: rand(0, 6.3), spin: rand(-0.3, 0.3), color: lin(0x4a4440), opacity: 0.85 });
+      const s = this.front(x + Math.cos(a) * d, gy + r * 0.6, z + Math.sin(a) * d, onWall ? 1 : -r * 0.4);
+      this.card('smoke', { x: s.x, y: s.y, z: s.z, vx: Math.cos(a) * 0.4, vy: rand(0.8, 1.4), vz: Math.sin(a) * 0.4, drag: 0.5, life: rand(1.5, 2.1), size: r * rand(0.9, 1.2), rot: rand(0, 6.3), spin: rand(-0.3, 0.3), color: lin(0x4a4440), opacity: 0.6 });
     }
     this.g.particles.burst(new THREE.Vector3(x, gy + 0.3, z), { count: 10, color: [0x2a2020, 0x4a3a30], speed: r * 2, up: 5, life: 0.9, size: 0.14 });
   }
@@ -373,6 +418,22 @@ export class Fx {
     this.mesh.decal({ kind: 'ring', x, y: gy + 0.06, z, from: 0.5, to: unique ? 3.6 : 2.4, life: 0.5, color: unique ? 0xff9a30 : 0xffe060, gain: 2.2, fadeIn: 0.01 });
     this.spray(x, y, z, unique ? 26 : 12, { speed: [1, unique ? 5 : 3], up: [2, unique ? 7 : 5], life: [0.6, 1.1], size: [0.07, 0.12], colors: unique ? [0xff8a1a, 0xffe080, 0xffffff] : [0xffd84a, 0xffffff], kind: 'glint', gravity: 3, drag: 1 });
     if (unique) this.mesh.pillar({ x, y: gy, z, radius: 0.45, height: 6, life: 1.1, color: 0xffa040, gain: 2.4, rise: 2 });
+  }
+
+  /**
+   * The Veilstone's pull while the hero recalls (each frame, `k` how far along, 0 → 1): blue motes and glints
+   * spiralling up round him from his feet, more of them as it nears its end (so many a second, at any frame rate).
+   */
+  recalling(x: number, z: number, dt: number, k: number) {
+    const gy = this.groundY(x, z);
+    this.recallDue += dt * (45 + 45 * k);
+    for (; this.recallDue >= 1; this.recallDue--) {
+      const a = Math.random() * Math.PI * 2, r = rand(0.65, 1.05), sp = rand(1.2, 1.8), glint = Math.random() < 0.3;
+      this.g.glow.spawn(
+        x + Math.cos(a) * r, gy + rand(0.05, 0.6), z + Math.sin(a) * r, -Math.sin(a) * sp, rand(1.8, 3.2), Math.cos(a) * sp,
+        rand(1, 1.3), glint ? rand(0.1, 0.14) : rand(0.16, 0.24), pick([0x7aa8ff, 0xa8c8ff, 0x9ab8ff, 0xffffff]), -0.3, 0.8, glint ? 'glint' : 'mote',
+      );
+    }
   }
 
   /** Portal arrival (and the end of a recall): a column of blue light and sparkles round the arrival, a circle turning at the feet. */
