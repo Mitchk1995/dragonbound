@@ -28,12 +28,13 @@ export function setWaterSky(hemi: number, bg: number) {
 
 /**
  * Whether two projections are the same lens, apart from the fraction of a pixel the smooth edges
- * shift each frame by (elements 8 and 9: the view's offset), so a lazy mirror rests while the camera does.
+ * shift each frame by (elements 8 and 9: the view's offset, under a pixel either way on a frame `size`
+ * pixels across), so a lazy mirror rests while the camera does.
  */
-function sameLens(a: THREE.Matrix4, b: THREE.Matrix4) {
+function sameLens(a: THREE.Matrix4, b: THREE.Matrix4, size: THREE.Vector2) {
   const x = a.elements, y = b.elements;
   for (let i = 0; i < 16; i++) if (i !== 8 && i !== 9 && x[i] !== y[i]) return false;
-  return Math.abs(x[8] - y[8]) < 0.002 && Math.abs(x[9] - y[9]) < 0.002;
+  return Math.abs(x[8] - y[8]) < 2.5 / size.x && Math.abs(x[9] - y[9]) < 2.5 / size.y;
 }
 
 /** Where something strikes a pool: centre (x, z) in the pool mesh's own space, and a strength. */
@@ -345,7 +346,7 @@ export function planarReflection(level: number | (() => number), layer?: number,
     if (lazy && on.value && drawnFor === camera && !busy) {
       renderer.getDrawingBufferSize(size);
       const a = drawnAt.elements, b = camera.matrixWorld.elements;
-      const lens = sameLens(drawnProj, (camera as THREE.PerspectiveCamera).projectionMatrix);
+      const lens = sameLens(drawnProj, (camera as THREE.PerspectiveCamera).projectionMatrix, size);
       const still = drawnAt.equals(camera.matrixWorld) && lens;
       // (A step of the following camera, not a cut to somewhere else.)
       const near = lens && Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]) < 0.3 && [0, 1, 2, 4, 5, 6, 8, 9, 10].every((k) => Math.abs(a[k] - b[k]) < 0.01);

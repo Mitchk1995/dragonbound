@@ -1,13 +1,14 @@
 import * as THREE from 'three';
-import { BlendMode, DepthTexture, NodeMaterial, QuadMesh, RendererUtils, RenderPipeline, RenderTarget, TextureNode, type Node, type NodeBuilder, type NodeFrame, type PassNode, type Renderer } from 'three/webgpu';
-import { abs, cameraViewMatrix, clamp, cross, diffuseColor, dot, exp, float, Fn, getViewPosition, If, interleavedGradientNoise, mat3, max, mix, mrt, NodeUpdateType, normalize, normalView, output, packNormalToRGB, pass, perspectiveDepthToViewZ, roughness, rtt, sample, screenCoordinate, select, smoothstep, uniform, unpackRGBToNormal, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
+import { BlendMode, RenderPipeline, type Node, type NodeBuilder, type PassNode, type Renderer, type TextureNode } from 'three/webgpu';
+import { abs, cameraViewMatrix, clamp, cross, diffuseColor, dot, exp, float, Fn, getViewPosition, If, interleavedGradientNoise, mat3, max, mix, mrt, normalize, normalView, output, packNormalToRGB, pass, perspectiveDepthToViewZ, roughness, rtt, sample, screenCoordinate, select, smoothstep, uniform, unpackRGBToNormal, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js';
 import { ao as gtao, type default as GTAONode } from 'three/examples/jsm/tsl/display/GTAONode.js';
-import SSGINode from 'three/examples/jsm/tsl/display/SSGINode.js';
+import type SSGINode from 'three/examples/jsm/tsl/display/SSGINode.js';
 import { ssr, type default as SSRNode } from 'three/examples/jsm/tsl/display/SSRNode.js';
 import { sharpen } from 'three/examples/jsm/tsl/display/SharpenNode.js';
 import { traa, type default as TRAANode } from 'three/examples/jsm/tsl/display/TRAANode.js';
+import { FlatDepth, ScaledSSGI } from './effectNodes';
 import type { F, V2, V3, V4 } from './patch';
 import { isEffectsWater, setEffectsBuffers, waterShine } from './surfaces';
 
@@ -140,8 +141,10 @@ const surfaceValue = (value: (builder: NodeBuilder) => V3) => Fn((builder: NodeB
 /**
  * Gloss, for the reflections: how much the surface reflects (x) and how rough it is (y). The water
  * reflects; dry surfaces only when polished or wet (smooth: wet rock, obsidian, coal), never metal
- * (its studio sheen already shows) and never the matt paint everything else wears. (Two channels, so
- * no alpha to blend by: a see-through thing writes no gloss over what lies behind it.)
+ * (its studio sheen already shows) and never the matt paint everything else wears. (Two channels,
+ * which three.js writes with no alpha to blend by, and four would pass the bytes a pixel allows: a
+ * see-through thing in front, a spark or a pane, writes none, so a reflection breaks off where one
+ * stands.)
  */
 const gloss = Fn((builder: NodeBuilder): V2 => {
   const m = builder.material as Plain | null;
@@ -216,58 +219,6 @@ function surfaceBuffers(layout: { name: string }[]) {
   return m;
 }
 
-/**
- * The scene's depth with one sample a pixel, for effects that read four texels at once (GTAO): a
- * multisampled depth cannot be gathered. Before each frame a quad writes sample 0 of each pixel into
- * a plain depth texture (as an RTTNode renders its picture: every copy of this node refers back to it,
- * so it draws once a frame wherever it is read).
- */
-class FlatDepth extends TextureNode {
-  private readonly rt: RenderTarget;
-  private readonly material = new NodeMaterial();
-  private readonly quad = new QuadMesh(this.material);
-  private state: unknown;
-  private readonly drawSize = new THREE.Vector2();
-  constructor(source: TextureNode) {
-    const rt = new RenderTarget(1, 1, { depthBuffer: true, depthTexture: new DepthTexture(1, 1) });
-    super(rt.depthTexture!);
-    this.rt = rt;
-    this.updateBeforeType = NodeUpdateType.FRAME;
-    this.material.colorWrite = false;
-    this.material.depthFunc = THREE.AlwaysDepth;
-    this.material.depthNode = source.sample(uv()).r;
-  }
-  updateBefore(frame: NodeFrame) {
-    const r = frame.renderer!;
-    r.getDrawingBufferSize(this.drawSize);
-    if (this.rt.width !== this.drawSize.x || this.rt.height !== this.drawSize.y) this.rt.setSize(this.drawSize.x, this.drawSize.y);
-    this.state = RendererUtils.resetRendererState(r as never, this.state as never);
-    r.setRenderTarget(this.rt);
-    this.quad.render(r as never);
-    RendererUtils.restoreRendererState(r as never, this.state as never);
-    return undefined;
-  }
-  clone() {
-    const n = new TextureNode(this.value, this.uvNode, this.levelNode);
-    n.sampler = this.sampler;
-    n.referenceNode = this;
-    return n as unknown as this;
-  }
-  dispose() {
-    this.rt.dispose();
-    this.material.dispose();
-    super.dispose();
-  }
-}
-
-/** SSGI worked at a fraction of the screen's size (its node always works at full size). */
-class ScaledSSGI extends SSGINode {
-  scale = 1;
-  setSize(width: number, height: number) {
-    (SSGINode.prototype as unknown as { setSize(w: number, h: number): void }).setSize.call(this, Math.max(1, Math.round(width * this.scale)), Math.max(1, Math.round(height * this.scale)));
-  }
-}
-
 /** The half-size occlusion, as the composite smooths it onto the frame. */
 interface Occlusion {
   tex: TextureNode;
@@ -285,7 +236,9 @@ export interface EffectNodes {
 
 export class PostChain {
   private readonly pipeline: RenderPipeline;
-  private scenePass!: PassNode;
+  /** The scene pass drawing now, and the one kept for each set of surface buffers (see passFor). */
+  private scenePass: PassNode;
+  private readonly passes = new Map<string, PassNode>();
   /** The camera's projection, as the half-size occlusion pass reads it (its own quad has another camera). */
   private readonly projInv = uniform(new THREE.Matrix4());
   private readonly projScale = uniform(new THREE.Vector2());
@@ -301,24 +254,31 @@ export class PostChain {
   private readonly size = new THREE.Vector2();
   /** The switched-on effects' nodes (for tuning in development). */
   fx: EffectNodes = {};
+  /** The last quality set, and the effect buffer shown in its place (development, see showBuffer). */
+  private last: PostQuality | null = null;
+  private show: string | null = null;
 
   constructor(private renderer: Renderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera, private fog: () => THREE.Fog | null) {
     this.pipeline = new RenderPipeline(renderer);
+    this.scenePass = this.passFor([], 4);
   }
 
   /** Set what the chain does (a graphics preset); rebuilds it when anything changed. */
   setQuality(q: PostQuality) {
     const e = q.effects ?? {};
-    const fx: LightingEffects = { bounce: !!e.bounce, contact: !!e.contact, reflections: !!e.reflections, smooth: !!e.smooth };
+    // (Contact shading replaces the occlusion, so without it, as on the low preset, there is none.)
+    const fx: LightingEffects = { bounce: !!e.bounce, contact: !!e.contact && q.shade && q.occlusion !== false, reflections: !!e.reflections, smooth: !!e.smooth };
     const level = LEVELS[q.level ?? 'high'];
-    const key = JSON.stringify({ msaa: q.msaa, shade: q.shade, bloom: q.bloom, occlusion: q.occlusion !== false, fx, level: q.level ?? 'high' });
+    const any = fx.bounce || fx.contact || fx.reflections || fx.smooth;
+    // (The level only matters to the effects: with none on, a preset that changes nothing else changes nothing.)
+    const key = JSON.stringify({ msaa: q.msaa, shade: q.shade, bloom: q.bloom, occlusion: q.occlusion !== false, fx, level: any ? q.level ?? 'high' : null });
     if (key === this.quality) return;
     this.quality = key;
     this.last = { ...q };
     this.freeOwned();
     this.fx = {};
     const own = <T extends { dispose(): void }>(n: T) => (this.owned.push(n), n);
-    const buffers = fx.bounce || fx.contact || fx.reflections || fx.smooth;
+    const buffers = any;
     // (Smooth edges replace the multisampling: the two never run together.)
     const samples = fx.smooth ? 0 : q.msaa;
     const scenePass = this.passFor(surfaceLayout(fx), samples);
@@ -437,7 +397,6 @@ export class PostChain {
     }
     return p;
   }
-  private readonly passes = new Map<string, PassNode>();
 
   /** Draw the frame through the chain. */
   render() {
@@ -456,17 +415,17 @@ export class PostChain {
   }
 
   /**
-   * Development: show one effect's own buffer instead of the frame ('ao', 'gi', 'reflection',
-   * 'normal', 'albedo', 'motion'), or the frame (null). Rebuilds the chain.
+   * Development only (the inspect suite's buffer pictures, for tuning): show one effect's own buffer
+   * instead of the frame ('ao', 'gi', 'reflection', 'normal', 'albedo', 'motion'), or the frame
+   * (null). Rebuilds the chain; the game never calls it.
    */
   showBuffer(which: string | null) {
     this.show = which;
     this.quality = null;
     if (this.last) this.setQuality(this.last);
   }
-  private show: string | null = null;
-  private last: PostQuality | null = null;
 
+  /** The buffer showBuffer asked for, as the frame (development only). */
   private debugView(which: string | null, b: { ao: Occlusion | null; gi: TextureNode | null; reflection: TextureNode | null; normal: Node | null; albedo: TextureNode | null; motion: TextureNode | null }): V4 | null {
     if (!which) return null;
     const at = uv();
