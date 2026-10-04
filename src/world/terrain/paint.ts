@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Cell, Fluid, Ground } from '../layout';
+import type { ZoneTheme } from '../../data/zones';
 import type { StrandField } from '../strands';
 import { CAVE_WALL_H, CLIFF_H, distToSeg, isRelief, LAWN_ROOT, SPLAT, sstep, type Grid } from './grid';
 
@@ -32,7 +33,7 @@ export interface Tally {
 const c = new THREE.Color(), c2 = new THREE.Color(), cliffC = new THREE.Color(), stoneC = new THREE.Color();
 
 /** The rock colour pair of a theme (cliff shades, else the cave's or the open land's default). */
-export function cliffShadesOf(theme: Grid['theme']) {
+export function cliffShadesOf(theme: ZoneTheme) {
   return theme.cliff ?? (theme.wall === 'cave' ? [0x4e4238, 0x3e342c] : [0x7a6e62, 0x5e544a]);
 }
 

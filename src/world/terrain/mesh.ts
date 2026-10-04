@@ -10,7 +10,8 @@ import type { Tally } from './paint';
 /**
  * The flat ground mesh over the vertex grid. Cells with a corner raised above FLOOR_CAP are relief:
  * they leave the grid mesh entirely (relief.ts rebuilds them finer) and are listed in `caveCells`
- * as x, z pairs. Returns the ground geometry and the vertex positions.
+ * as x, z pairs. Takes the per-channel colours (paint.ts) and returns the ground geometry, the
+ * vertex positions and those cells.
  */
 export function buildGround(g: Grid, t: Tally, hs: Heights, chanCol: Float32Array[]) {
   const { w, h, nV, vi, at } = g;
