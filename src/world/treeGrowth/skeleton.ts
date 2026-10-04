@@ -40,6 +40,8 @@ export interface Limb {
   sides: number;
   step: { s: number; sides: number } | null;
   joint: Joint | null;
+  /** A dead tree's limb snapped off at its end (deadwood.ts): it ends in a jagged break, not a tapering tip; the number seeds its splinters. */
+  broken?: number;
 }
 
 /** A spray of leaves: where it springs from, which way it grows, its size (m) and sway weight. */
@@ -154,9 +156,10 @@ export function around(d: THREE.Vector3, ref: THREE.Vector3, a: number) {
 /**
  * A crooked growth path from `from` along `dir`: steps of about `step` m, each turning by up to
  * `crook` radians about a random axis and lifted a little by `pull`. Inside a crown, a step that
- * would leave the envelope turns back toward its centre instead.
+ * would leave the envelope turns back toward its centre instead. Below `floor` (m) a step heading
+ * down levels out (a tree's limbs never droop to the ground; a bush's arch over toward it).
  */
-export function crooked(rng: Rng, from: THREE.Vector3, dir: THREE.Vector3, len: number, step: number, crook: number, pull: number, crown: Crown | null) {
+export function crooked(rng: Rng, from: THREE.Vector3, dir: THREE.Vector3, len: number, step: number, crook: number, pull: number, crown: Crown | null, floor = 2.8) {
   const nodes = [from.clone()];
   const d = dir.clone().normalize();
   const inward = new THREE.Vector3();
@@ -169,7 +172,7 @@ export function crooked(rng: Rng, from: THREE.Vector3, dir: THREE.Vector3, len: 
       next.copy(last).addScaledVector(d, l);
     }
     // Nothing droops to the ground: a limb sinking toward head height levels out instead.
-    if (next.y < 2.8 && d.y < 0) {
+    if (next.y < floor && d.y < 0) {
       d.y = 0.15;
       d.normalize();
       next.copy(last).addScaledVector(d, l);

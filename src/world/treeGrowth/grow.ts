@@ -208,10 +208,10 @@ export function growTree(sp: Species, seed: number): Skeleton {
 /**
  * Radii by the pipe model: at any point a limb carries the leaf sprays beyond it (and its own
  * tip), and its radius grows as a power of that load, the power set so the trunk is the species'
- * girth at breast height. Steps where branches leave are smoothed into a continuous taper, and the
- * trunk flares toward its foot.
+ * girth at breast height (`breast` m up; a bush's at its root crown). Steps where branches leave
+ * are smoothed into a continuous taper, and the trunk flares toward its foot.
  */
-function pipeModel(limbs: Limb[], sprays: Spray[], sp: Species) {
+export function pipeModel(limbs: Limb[], sprays: Spray[], sp: Species, breast = 1.3) {
   const total = new Array(limbs.length).fill(0);
   const kids: number[][] = limbs.map(() => []);
   limbs.forEach((L, i) => L.parent >= 0 && kids[L.parent].push(i));
@@ -223,8 +223,8 @@ function pipeModel(limbs: Limb[], sprays: Spray[], sp: Species) {
     total[li] = load[li][0];
   }
   const trunk = limbs[0];
-  const breast = load[0][seg(trunk.arc, arcAtHeight(trunk, 1.3))[0]];
-  const q = Math.log(sp.trunk / sp.tip) / Math.log(Math.max(2, breast));
+  const held = load[0][seg(trunk.arc, arcAtHeight(trunk, breast))[0]];
+  const q = Math.log(sp.trunk / sp.tip) / Math.log(Math.max(2, held));
   limbs.forEach((L, li) => {
     const raw = load[li].map((x) => sp.tip * Math.pow(x, q));
     // Smoothed over about two radii either way, so forks thin the limb gradually.
@@ -243,7 +243,7 @@ function pipeModel(limbs: Limb[], sprays: Spray[], sp: Species) {
  * Sway weights: the trunk stands still to the fork and its leader barely moves; limbs move a little
  * more toward their ends, branches more again toward their tips, and leaf sprays most.
  */
-function sway(limbs: Limb[], sprays: Spray[], fork: number) {
+export function sway(limbs: Limb[], sprays: Spray[], fork: number) {
   limbs.forEach((L) => {
     const len = lengthOf(L);
     if (L.order === 0) L.sway = L.path.map((p) => clamp((p.y - fork) / 12, 0, 1) * 0.3);
@@ -256,7 +256,7 @@ function sway(limbs: Limb[], sprays: Spray[], fork: number) {
 }
 
 /** Cut a limb back to arc length `s`, carrying its tip's sprays in to its new tip. */
-function trim(L: Limb, s: number, tipSprays: Spray[]) {
+export function trim(L: Limb, s: number, tipSprays: Spray[]) {
   const [i, f] = seg(L.arc, s), end = pointOn(L, s), shift = end.clone().sub(L.path[L.path.length - 1]);
   const cut = <T>(a: T[], last: T) => [...a.slice(0, i + 1), last];
   const at = (a: number[]) => a[i] + (a[i + 1] - a[i]) * f;
@@ -273,7 +273,7 @@ function trim(L: Limb, s: number, tipSprays: Spray[]) {
 }
 
 /** Drop the limbs that found no place or were left off (and their leaves), renumbering the rest; `dropped` counts those that found no place. */
-function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, roots: Root[], height: number, species: Species, dropped: number): Skeleton {
+export function compact({ limbs, dead }: { limbs: Limb[]; dead: Set<number> }, sprays: Spray[], crown: Crown, roots: Root[], height: number, species: Species, dropped: number): Skeleton {
   const map = new Map<number, number>();
   const kept = limbs.filter((_, i) => !dead.has(i));
   limbs.forEach((L, i) => !dead.has(i) && map.set(i, map.size));
