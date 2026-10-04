@@ -105,9 +105,10 @@ arms a little out (`ARM_SPLAY`), and every character's arms sit just outside its
 body armour's sides stand at x ±0.38 and its sleeves start there (`gear.py` `ARM_IN`, `sleeve`); the tunic's own
 sleeves come off under body armour. `fitcheck.py` `arm_clip_all()` poses every humanoid (hero in every gear set,
 creatures and town NPCs, and a bow in every kind of armour) as the game does (idle, walk, the frames of each attack and
-of the bow draw), elbows, wrists and the draw's reach included, and measures any arm cutting into the body; only the
-goblin's club arm passing behind its ear is allowed (and the draw arm's shoulder dipping under its cap for the instant
-the bow comes up). `held_clip_all()` does the same for what the hands carry (every hero weapon, in the starting outfit and
+of the bow draw), elbows, wrists and the draw's reach included, and measures any arm cutting into the body (a point
+counts as inside a part only if a ray out from it crosses that part an odd number of times, so the space under a
+mantle or hood is not mistaken for the cloth); only the draw arm's shoulder dipping under its cap for the instant the
+bow comes up is allowed. `held_clip_all()` does the same for what the hands carry (every hero weapon, in the starting outfit and
 in plate, and every creature's staff, club or hammer): it runs through the holding hand but cuts into nothing else, so
 no bow limb in the striding leg, staff foot in a robe or pommel in a forearm.
 
@@ -204,8 +205,33 @@ head), so no shell floats off the head with a dark gap under it, and `even_rim` 
 the hairline. Every hairline point must be reachable from the pole without crossing bare skin: with a pole low behind
 the head the side lines run level, so the temples cannot come lower than the hair over the ear.
 
+### The minifigure body: `minifig.py`
+Every humanoid shares one minifigure body, the way LEGO does it (owner, October 4): the hero's own torso, hips, legs,
+arms with elbows and C-hands at his sizes (`minifig.figure`), so every gear piece made for the hero fits any humanoid
+built on it. Its legs are the hero's (`legs='normal'`), LEGO-style short legs about half as long for short races
+(`'short'`), or none where a robe or skirt piece stands in for them (`'robe'`: the body's pivot is then on the ground,
+so the robe stays planted when the figure leans). A character gets its identity from its own head (the hero's head
+cube, or its own), headgear, hair or beard, colours, robe or skirt pieces and accessories, hung on the hero's sockets
+plus these attachment points:
+
+| Point | Parent | Position | For |
+|---|---|---|---|
+| `sock_neck` | `body` | top of the torso, round the neck | mantles, collars, capes, things worn round the neck |
+| `sock_back` | `body` | middle of the torso's back | back plates, quivers, things slung on the back |
+| `sock_belt` | `body` | centre of the belt line | belts, buckles, pouches, sashes |
+| `sock_skirt` | `body` | the hip line | robes, skirts, tassets, loincloths |
+
+`minifig.finish` fuses what a character hangs on a fixed point into the rig part it rides, so a figure costs no more
+draw calls than its parts; shoulder pads (on `sock_shoulderL/R`, following the arm by 3/4), what the right hand holds
+and outfit pieces keep their own. A figure that wears gear is built `dressable`: its upper arms and feet are outfit
+pieces (`outfit_body_sleeveL/R`, `outfit_boots_L/R`) that come off under body armour and boots, as the hero's sleeves
+and boots do; so dressed, it takes every gear set as the hero does (`fitcheck.py fit_all`). Boots are made for the
+hero's legs and do not fit short legs, and a character's own head (the goblin's) does not take the hero's helms, as
+with LEGO's special heads. `tests/character-art.test.ts` checks that every figure's sockets, arm joints and hands sit
+where the hero's do.
+
 ### Enemies/NPCs/props
-Goblin Grunt, Kobold Slinger, Ember Cultist and Cinder Priest (`priest.glb`) are built in `minions.py` from their approved concept sheets (October 3).
+Goblin Grunt, Kobold Slinger, Ember Cultist and Cinder Priest (`priest.glb`) are built in `minions.py` from their approved concept sheets (October 3); the goblin (short legs) and the cultist (a robe in place of legs) on the minifigure body.
 The staffs of the cult and the Warden run through a `sock_handR` empty in the hand, framed by a `staffbody` empty: a
 model carrying one, anim.ts carries it upright (forearm level), raised and still upright in the cast. A club, hammer or
 other thing at the side hangs on a `weapon` empty in the hand (carried at the side); the kobold's sling on `sling`.

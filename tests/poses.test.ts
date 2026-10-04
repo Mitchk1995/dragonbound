@@ -79,10 +79,11 @@ describe('pose audit: models loaded', () => {
     // Merged, every rig part drops to a few meshes (Cinderwing measured 29), with rig parts intact.
     // Cinderwing's glowing cracks (on the body, neck and every leg), eyes and molten mouth each keep their own material,
     // hence its extra meshes. A goblin is one mesh per rig part: body, head, legs, and each arm's upper arm, forearm
-    // (below the elbow) and hand (below the wrist), and the club.
+    // (below the elbow) and hand (below the wrist), the club, and the shoulder pad (it rides the shoulder, which
+    // follows the arm by 3/4).
     expect(count('drakeling')).toBeLessThanOrEqual(20);
     expect(count('cinderwing')).toBeLessThanOrEqual(31);
-    expect(count('goblin')).toBeLessThanOrEqual(11);
+    expect(count('goblin')).toBeLessThanOrEqual(12);
     for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
   });
 });

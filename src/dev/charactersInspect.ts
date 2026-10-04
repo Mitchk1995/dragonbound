@@ -103,6 +103,18 @@ export async function charactersSuite(g: Game, shot: Shot) {
   await playCamera(g, shot);
 }
 
+/**
+ * The character suites (explicit only): `characters`, the redesigned hero and enemies (charactersSuite), and `minifig` or
+ * `minifig:<tag>`, the goblin and the cultist on the minifigure body every humanoid shares (minifigInspect.ts; the tag
+ * names the captures of a run on other models, e.g. the ones they replace).
+ */
+export async function characterSuites(g: Game, shot: Shot, suites: string) {
+  const list = suites.split(',');
+  if (list.includes('characters')) await charactersSuite(g, shot);
+  const minifig = list.find((s) => s === 'minifig' || s.startsWith('minifig:'));
+  if (minifig) await (await import('./minifigInspect')).minifigSuite(g, shot, minifig.slice(8));
+}
+
 /** A town NPC as the game stands it (idle). */
 function npc(model: string) {
   return creature(model, 'swing', -1);

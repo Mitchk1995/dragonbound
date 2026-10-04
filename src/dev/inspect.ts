@@ -23,7 +23,7 @@ import type { Slot } from '../types';
  * trees:grown:<kind> for one grown kind's progress pictures, trees:roots for their roots and crowns), approved (approved artwork, see approvedInspect.ts),
  * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts),
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
- * charactersInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), dragons (the
+ * charactersInspect.ts; minifig: the shared minifigure body, see minifigInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), dragons (the
  * drakeling and Cinderwing, see dragonInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
@@ -142,8 +142,8 @@ export async function runInspect(g: Game, suites: string) {
     // `approved:fit` runs one half).
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
-    // The redesigned characters close up and at the play camera (explicit only: `characters`).
-    if (suites.split(',').includes('characters')) await (await import('./charactersInspect')).charactersSuite(g, shot);
+    // The redesigned characters close up and at the play camera, and the minifigure body (explicit only: `characters`, `minifig`).
+    if (/(^|,)(characters|minifig)(,|:|$)/.test(suites)) await (await import('./charactersInspect')).characterSuites(g, shot, suites);
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).

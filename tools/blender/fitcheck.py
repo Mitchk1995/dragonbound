@@ -208,6 +208,23 @@ def _within(p, lo, hi):
     return lo.x <= p.x <= hi.x and lo.y <= p.y <= hi.y and lo.z <= p.z <= hi.z
 
 
+RAY = Vector((1, 0.0013, 0.0007))
+
+
+def _crossed_odd(tree, P):
+    """Whether P is inside a closed mesh: a ray out from it crosses the surface an odd number of times. The nearest
+    surface facing away from a point is not enough on its own: under a cloth shell (a mantle, a hood) the nearest
+    surface is the cloth's inner face, though the point is outside the cloth."""
+    hits, q = 0, P.copy()
+    for _ in range(16):
+        h = tree.ray_cast(q, RAY, 5)
+        if h[0] is None:
+            break
+        hits += 1
+        q = h[0] + RAY * 1e-4
+    return hits % 2 == 1
+
+
 def arm_clip(scene, joint=0.1):
     """How deep each arm cuts into the rest of the body: {side: (max depth, where)} for the arm proper and, separately,
     for its root inside `joint` of the shoulder pivot (where the arm meets the body under the shoulder cap)."""
@@ -238,7 +255,7 @@ def arm_clip(scene, joint=0.1):
                     if not _within(to_local @ P, lo, hi):
                         continue
                     loc, nor, _, dist = tree.find_nearest(P)
-                    if loc is not None and (P - loc).dot(nor) < -1e-4 and dist > deep:
+                    if loc is not None and (P - loc).dot(nor) < -1e-4 and dist > deep and _crossed_odd(tree, P):
                         deep, hit = dist, b
                 if not hit:
                     continue
@@ -294,11 +311,6 @@ def _weapon(models):
                                                     'u_emberstring', 'u_kindled_ash'))), None)
 
 
-# The goblin's club arm, raised overhead, passes behind its big wedge ear (the ear is hidden by the arm, nothing pokes
-# out): measured and reported, not failed.
-EXEMPT_CHAR = {('goblin', 'swing', 'R')}
-
-
 def arm_clip_all(limit=0.02, joint_limit=0.04, who=None):
     """Every character in every pose: {character: {pose: {side: {limb, joint}}}} plus 'fails', the poses where an arm
     cuts deeper than `limit` into the body (`joint_limit` at the shoulder root)."""
@@ -313,8 +325,6 @@ def arm_clip_all(limit=0.02, joint_limit=0.04, who=None):
             r = arm_clip(scene)
             rep[pose] = r
             for side, w in r.items():
-                if (name, pose.split('@')[0], side) in EXEMPT_CHAR:
-                    continue
                 if w['limb'][0] > limit or w['joint'][0] > joint_limit:
                     fails.append(f'{name} {pose} {side}: {w}')
         out[name] = rep
@@ -377,7 +387,6 @@ def held_clip(scene):
         mw = o.matrix_world
         points += [mw @ v.co for v in o.data.vertices] + [mw @ p.center for p in o.data.polygons]
     worst = (0.0, None)
-    ray = Vector((1, 0.0013, 0.0007))
     for b, to_local, lo, hi, tree in map(_solid, rest):
         for P in points:
             if not _within(to_local @ P, lo, hi):
@@ -385,14 +394,7 @@ def held_clip(scene):
             loc, nor, _, d = tree.find_nearest(P)
             if loc is None or (P - loc).dot(nor) >= -1e-4 or d <= worst[0]:
                 continue
-            hits, q = 0, P.copy()                     # inside a closed mesh: an odd number of crossings out
-            for _ in range(16):
-                h = tree.ray_cast(q, ray, 5)
-                if h[0] is None:
-                    break
-                hits += 1
-                q = h[0] + ray * 1e-4
-            if hits % 2:
+            if _crossed_odd(tree, P):
                 worst = (round(d, 3), _hero_part(b))
     return worst
 
