@@ -64,7 +64,4 @@ describe('saved lighting settings', () => {
     expect((await load({ bounce: 'yes', contact: 1, reflections: false, smooth: false, glow: true }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, reflections: false });
     for (const junk of [null, 'all', 3, ['bounce']]) expect((await load(junk))!.settings.lighting).toEqual(DEFAULT_LIGHTING);
   });
-    expect((await load({ bounce: 'yes', contact: 1, reflections: true, smooth: false, glow: true }))!.settings.lighting).toEqual({ reflections: true });
-    for (const junk of [null, 'all', 3, ['bounce']]) expect((await load(junk))!.settings.lighting).toEqual({});
-  });
 });
