@@ -1,9 +1,11 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BrickBuild, overlaps } from '../src/world/brick/build';
+import { BrickBuild, overlaps, turn, type Placed } from '../src/world/brick/build';
 import { ELEMENTS, type Box } from '../src/world/brick/elements';
-import { buildTownhouse, DOOR, H, HOUSE, inWell, STAIR, standsIn } from '../src/world/brick/house';
+import { buildTownhouse, DOOR, H, HOUSE, inWell, STAIR, standsIn, type Cut } from '../src/world/brick/house';
 import { treadTop } from '../src/world/brick/houseInside';
-import { BRICK, HERO_H, LDU, PLATE, STUD } from '../src/world/brick/scale';
+import { BRICK, HERO_H, LDU, PLATE, STUD, type Rot } from '../src/world/brick/scale';
+import { stud } from '../src/world/brick/shapes';
 import { DOOR_OPENING } from '../src/world/brick/shapesOpen';
 import { course, joints, masonryBricks, plainBricks, type Line } from '../src/world/brick/walls';
 
@@ -12,38 +14,72 @@ const HERO_W = 1.37;
 const ldu = (m: number) => m / LDU;
 
 describe('the brick kit\'s scale', () => {
-  it('keeps the real system\'s proportions at the hero\'s size', () => {
+  it('is the real system\'s, at the hero\'s size: a brick 9.6 mm high, a stud pitch 8 mm, a stud Ø 4.8 mm and 1.7 mm tall', () => {
     expect(STUD / BRICK).toBeCloseTo(5 / 6, 6);
-    expect(PLATE * 3).toBeCloseTo(BRICK, 6);
     // A minifigure is about four bricks tall without a hat; so is the hero.
     expect(HERO_H / BRICK).toBeGreaterThan(3.9);
     expect(HERO_H / BRICK).toBeLessThan(4.1);
+    // The shapes themselves: a 1 × 1 brick, a plate, a stud.
+    const [lo, hi] = ELEMENTS.brick1x1.parts[0].mesh().bounds();
+    expect((hi.y - lo.y) * LDU).toBeCloseTo(BRICK, 6);
+    expect((hi.x - lo.x) * LDU).toBeCloseTo(STUD - 0.2 * 0.05625, 6);
+    const [pl, ph] = ELEMENTS.plate1x1.parts[0].mesh().bounds();
+    expect((ph.y - pl.y) * LDU).toBeCloseTo(PLATE, 6);
+    const [sl, sh] = stud().bounds();
+    expect((sh.x - sl.x) * LDU).toBeCloseTo(0.27, 3);
+    expect(sh.y * LDU).toBeCloseTo(1.7 * 0.05625, 3);
   });
 
-  it('has a door the hero walks through with room over his head', () => {
+  it('has a door the hero walks through with room over his head and either side', () => {
     const clearH = (DOOR_OPENING.y1 - DOOR_OPENING.y0) * LDU, clearW = (DOOR_OPENING.x1 - DOOR_OPENING.x0) * LDU;
     expect(clearH).toBeGreaterThan(HERO_H + 0.6);
     expect(clearW).toBeGreaterThan(HERO_W + 0.12);
   });
 });
 
+/** Every part of every element, with its id. */
+const allParts = () => Object.values(ELEMENTS).flatMap((e) => e.parts.map((p, k) => ({ e, k, mesh: p.mesh() })));
+
 describe('the elements', () => {
-  it('each stay inside the space they claim (so space that never overlaps means shapes that never clip)', () => {
-    for (const e of Object.values(ELEMENTS)) {
-      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
-      // (A frame's round head reaches into the opening its glass fills.)
-      for (const b of [...e.boxes, ...(e.holds ? [e.holds] : [])]) for (let k = 0; k < 3; k++) {
-        lo[k] = Math.min(lo[k], b[k]);
-        hi[k] = Math.max(hi[k], b[k + 3]);
+  it('turn every face outward: each triangle\'s winding agrees with its shading normals', () => {
+    const bad: string[] = [];
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+    for (const { e, k, mesh } of [...allParts(), { e: { id: 'stud' }, k: 0, mesh: stud() }]) {
+      const P = mesh.pos, N = mesh.nor;
+      for (let t = 0; t < mesh.idx.length; t += 3) {
+        const [i, j, l] = [mesh.idx[t], mesh.idx[t + 1], mesh.idx[t + 2]];
+        a.fromArray(P, i * 3);
+        b.fromArray(P, j * 3).sub(a);
+        c.fromArray(P, l * 3).sub(a);
+        const face = b.cross(c);
+        if (face.length() < 1e-6) continue;
+        n.fromArray(N, i * 3).add(c.fromArray(N, j * 3)).add(c.fromArray(N, l * 3));
+        if (face.dot(n) < 0) bad.push(`${e.id}#${k} at ${a.toArray().map((v) => v.toFixed(1))}`);
       }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('stay, at every turn, inside the space they claim (so space that never overlaps means shapes that never clip)', () => {
+    const out: string[] = [];
+    for (const e of Object.values(ELEMENTS)) for (const rot of [0, 1, 2, 3] as Rot[]) {
+      const b = new BrickBuild(), p = b.place(e.id, 10, 0, 10, 'red', { rot });
+      const space = b.boxesOf(p), [ox, oy, oz] = b.origin(p);
+      const lo = [0, 1, 2].map((k) => Math.min(...space.map((q) => q[k]))), hi = [3, 4, 5].map((k) => Math.max(...space.map((q) => q[k])));
       // (Glass is seated a hair into its frame's groove.)
       const slack = e.kind === 'pane' ? 1.1 : 0.05;
       for (const part of e.parts) {
-        const [a, b] = part.mesh().bounds();
-        expect([a.x, a.y, a.z].every((v, k) => v >= lo[k] - slack), `${e.id} reaches out of its space`).toBe(true);
-        expect([b.x, b.y, b.z].every((v, k) => v <= hi[k] + slack), `${e.id} reaches out of its space`).toBe(true);
+        const P = part.mesh().pos;
+        for (let i = 0; i < P.length; i += 3) {
+          const [x, z] = turn(P[i], P[i + 2], rot), w = [ox + x, oy + P[i + 1], oz + z];
+          if (w.some((v, k) => v < lo[k] - slack || v > hi[k] + slack)) {
+            out.push(`${e.id} turned ${rot}`);
+            break;
+          }
+        }
       }
     }
+    expect([...new Set(out)]).toEqual([]);
   });
 
   it('stand within their footprint and height unless they hang outside it on purpose', () => {
@@ -57,6 +93,17 @@ describe('the elements', () => {
     }
   });
 });
+
+/** Every pair of consecutive courses of a line: joint positions they share (none in running bond), and joints seen. */
+function shared(b: BrickBuild, l: Line, y0: number, n: number, h = 3) {
+  let clash = 0, seen = 0;
+  for (let k = 0; k + 1 < n; k++) {
+    const lo = joints(b, l, y0 + h * k, h), up = joints(b, l, y0 + h * (k + 1), h);
+    seen += up.size;
+    for (const j of up) if (lo.has(j)) clash++;
+  }
+  return { clash, seen };
+}
 
 describe('building with the kit', () => {
   it('places on the grid only, and refuses anything passing through what is there', () => {
@@ -81,35 +128,46 @@ describe('building with the kit', () => {
     expect(covered).toEqual([true, true, false, false]);
   });
 
-  /** Every pair of consecutive courses of a line: joint positions they share (none in running bond). */
-  const shared = (b: BrickBuild, l: Line, y0: number, n: number) => {
-    let clash = 0;
-    for (let k = 0; k + 1 < n; k++) {
-      const lo = joints(b, l, y0 + 3 * k), up = joints(b, l, y0 + 3 * (k + 1));
-      for (const j of up) if (lo.has(j)) clash++;
-    }
-    return clash;
-  };
-
   it('lays a wall in running bond, every joint broken by the course above', () => {
-    const b = new BrickBuild(), l: Line = { axis: 'x', at: 0, from: 0, to: 30 };
-    for (let k = 0; k < 8; k++) course(b, l, k * 3, { sizes: [6, 4, 3, 2, 1], id: plainBricks, color: 'tan', part: 'w', rot: 0 });
-    expect(shared(b, l, 0, 8)).toBe(0);
+    const l: Line = { axis: 'x', at: 0, from: 0, to: 30 };
+    const b = new BrickBuild();
+    for (let k = 0; k < 8; k++) course(b, l, k * 3, { sizes: [6, 4, 3, 2, 1], id: plainBricks, color: 'tan', part: 'w', rot: 0, parity: k % 2 });
+    expect(shared(b, l, 0, 8)).toMatchObject({ clash: 0 });
+    expect(shared(b, l, 0, 8).seen).toBeGreaterThan(20);
     // Masonry too, from 1 × 2 and 1 × 4 masonry bricks.
     const m = new BrickBuild();
-    for (let k = 0; k < 8; k++) course(m, l, k * 3, { sizes: [4, 2, 1], id: masonryBricks, color: 'lightGrey', part: 'w', rot: 0, cost: (n) => (n === 1 ? 2 : 0) });
-    expect(shared(m, l, 0, 8)).toBe(0);
+    for (let k = 0; k < 8; k++) course(m, l, k * 3, { sizes: [4, 2, 1], id: masonryBricks, color: 'tan', part: 'w', rot: 0, cost: (n) => (n === 1 ? 2 : 0) });
+    expect(shared(m, l, 0, 8)).toMatchObject({ clash: 0 });
+    expect(shared(m, l, 0, 8).seen).toBeGreaterThan(20);
   });
 
-  it('breaks the joints round an opening and against pieces already set', () => {
+  it('breaks the joints round an opening and against pieces already set, and between courses of plates', () => {
     const b = new BrickBuild(), l: Line = { axis: 'z', at: 4, from: 0, to: 20 };
     b.place('window1x2x3', 4, 3, 7, 'white', { rot: 1 });
     b.place('brick1x6', 4, 12, 6, 'darkGrey', { rot: 1 });
     for (let k = 0; k < 7; k++) course(b, l, k * 3, { sizes: [6, 4, 3, 2, 1], id: plainBricks, color: 'white', part: 'w', rot: 1 });
-    expect(shared(b, l, 0, 7)).toBe(0);
+    expect(shared(b, l, 0, 7)).toMatchObject({ clash: 0 });
+    expect(shared(b, l, 0, 7).seen).toBeGreaterThan(5);
     for (let z = 0; z < 20; z++) for (let y = 0; y < 21; y++) expect(b.free(4, z, y, y + 1)).toBe(false);
+    const p = new BrickBuild(), pl: Line = { axis: 'x', at: 0, from: 0, to: 24 };
+    for (let k = 0; k < 6; k++) course(p, pl, k, { sizes: [6, 4, 3, 2, 1], id: (n) => `plate1x${n}`, color: 'tan', part: 'p', rot: 0, h: 1 });
+    expect(shared(p, pl, 0, 6, 1)).toMatchObject({ clash: 0 });
+    expect(shared(p, pl, 0, 6, 1).seen).toBeGreaterThan(10);
   });
 });
+
+/** Pieces that hang on clips and hinges (shutters, the sign and its bracket, the door) or sit in a frame (glass). */
+const hung = (p: Placed) => ['shutter1x3', 'signBracket', 'signBoard3x2', 'door1x4x6'].includes(p.el.id) || p.el.kind === 'pane';
+
+/** Does p stand on q, gripping at least one of q's studs? */
+function grips(b: BrickBuild, p: Placed, q: Placed) {
+  const feet = b.boxesOf(p).filter((f) => Math.abs(f[1] - p.y * 8) < 1e-6);
+  return b.studsOf(q).some(([x, y, z]) => Math.abs(y - p.y * 8) < 1e-6 && feet.some((f) => x > f[0] && x < f[3] && z > f[2] && z < f[5]));
+}
+
+/** What p stands on: everything touching its foot from below. */
+const under = (b: BrickBuild, p: Placed) => b.boxesOf(p).filter((f) => Math.abs(f[1] - p.y * 8) < 1e-6)
+  .flatMap(([x0, y, z0, x1, , z1]) => b.hits([x0 + 0.5, y - 1, z0 + 0.5, x1 - 0.5, y - 0.01, z1 - 0.5], p));
 
 describe('the hub-town house', () => {
   const b = buildTownhouse();
@@ -117,7 +175,7 @@ describe('the hub-town house', () => {
   it('is all on the grid and nothing in it passes through anything else', () => {
     expect(b.items.length).toBeGreaterThan(800);
     for (const p of b.items) expect([p.x, p.y, p.z].every(Number.isInteger)).toBe(true);
-    // (Checked again pair by pair, independently of the checks made while building.)
+    // (Every pair checked again by brute force over the stud columns, apart from the checks made while building.)
     const all = b.items.map((p) => ({ p, boxes: b.boxesOf(p) }));
     const cells = new Map<string, Set<number>>();
     all.forEach(({ boxes }, i) => {
@@ -136,45 +194,40 @@ describe('the hub-town house', () => {
     expect([...clashes]).toEqual([]);
   });
 
-  it('breaks every joint of every wall, plinth and gable on the course above', () => {
+  it('breaks every joint of every wall and gable on the course above', () => {
     const { x0, z0, x1, z1 } = HOUSE;
     const lines: [Line, number, number][] = [];
-    for (const [y0, n] of [[0, 1], [H.ground, 7], [H.upper, 6]] as [number, number][]) {
+    for (const [y0, n] of [[H.ground, 7], [H.upper, 6]] as [number, number][]) {
       lines.push([{ axis: 'x', at: z1 - 1, from: x0, to: x1 }, y0, n], [{ axis: 'x', at: z0, from: x0, to: x1 }, y0, n]);
-      lines.push([{ axis: 'z', at: x0, from: z0, to: z1 }, y0, n], [{ axis: 'z', at: x1 - 1, from: z0, to: z1 }, y0, n]);
     }
-    // The gables run on from the walls under them.
+    // The side walls run on up into the gables.
+    lines.push([{ axis: 'z', at: x0, from: z0, to: z1 }, H.ground, 7], [{ axis: 'z', at: x1 - 1, from: z0, to: z1 }, H.ground, 7]);
     lines.push([{ axis: 'z', at: x0, from: z0, to: z1 }, H.upper, 14], [{ axis: 'z', at: x1 - 1, from: z0, to: z1 }, H.upper, 14]);
-    let clash = 0, joined = 0;
-    for (const [l, y0, n] of lines) for (let k = 0; k + 1 < n; k++) {
-      const lo = joints(b, l, y0 + 3 * k), up = joints(b, l, y0 + 3 * (k + 1));
-      joined += up.size;
-      for (const j of up) if (lo.has(j)) clash++;
+    let clash = 0, seen = 0;
+    for (const [l, y0, n] of lines) {
+      const s = shared(b, l, y0, n);
+      clash += s.clash;
+      seen += s.seen;
     }
-    expect(joined).toBeGreaterThan(150);
+    expect(seen).toBeGreaterThan(150);
     expect(clash).toBe(0);
   });
 
-  it('holds together: every piece is joined, foot to top, to pieces standing on the ground (hung pieces aside)', () => {
-    // Hung pieces hang on clips and hinges (shutters, the sign and its bracket, the door) or sit in a frame (glass).
-    const hung = (id: string) => ['shutter1x3', 'signBracket', 'signBoard3x2', 'door1x4x6'].includes(id) || ELEMENTS[id].kind === 'pane';
-    const root = b.items.map((_, i) => i), GROUND = -1;
-    const find = (i: number): number => (i === GROUND || root[i] === i ? i : (root[i] = find(root[i])));
-    const ground = new Set<number>();
-    const join = (i: number, j: number) => {
-      const a = find(i), c = find(j);
-      if (a !== c) root[a] = c;
-    };
-    for (const p of b.items) {
-      if (hung(p.el.id)) continue;
-      if (p.y === 0) ground.add(p.i);
-      for (const [x0, y, z0, x1, , z1] of b.boxesOf(p).filter((q) => Math.abs(q[1] - p.y * 8) < 1e-6)) {
-        for (const q of b.hits([x0 + 0.5, y - 1, z0 + 0.5, x1 - 0.5, y - 0.01, z1 - 0.5], p)) if (!hung(q.el.id)) join(p.i, q.i);
-      }
-    }
-    const grounded = new Set([...ground].map(find));
-    const loose = b.items.filter((p) => !hung(p.el.id) && !grounded.has(find(p.i))).map((p) => `${p.el.id} at ${p.x}, ${p.y}, ${p.z}`);
-    expect(loose).toEqual([]);
+  /**
+   * The pieces (of those `shown`) not held to the ground: a piece is held to another when it grips one
+   * of its studs, so a plate can hang from the tiles laid across it as well as sit on what is under it.
+   */
+  const loose = (shown: (p: Placed) => boolean) => {
+    const root = b.items.map((_, i) => i);
+    const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
+    const counts = (p: Placed) => shown(p) && !hung(p);
+    for (const p of b.items.filter(counts)) for (const q of under(b, p)) if (counts(q) && grips(b, p, q)) root[find(p.i)] = find(q.i);
+    const grounded = new Set(b.items.filter((p) => p.y === 0 && counts(p)).map((p) => find(p.i)));
+    return b.items.filter((p) => counts(p) && !grounded.has(find(p.i))).map((p) => `${p.el.id} at ${p.x}, ${p.y}, ${p.z}`);
+  };
+
+  it('holds together: every piece grips a stud of the pieces round it, all the way down to the ground (hung pieces aside)', () => {
+    expect(loose(() => true)).toEqual([]);
   });
 
   it('has ceilings well over the hero on both floors', () => {
@@ -203,12 +256,12 @@ describe('the hub-town house', () => {
   });
 
   /**
-   * Cells the hero can stand in on a floor: two studs square, clear from the floor to over his head
-   * (the door swings out of his way).
+   * Where the hero can stand on a floor: three studs square (his shoulders' width), clear from the
+   * floor to over his head (the door swings out of his way).
    */
   const walkable = (walk: number) => (x: number, z: number) => {
     const top = walk + Math.ceil(ldu(HERO_H + 0.1) / 8);
-    const box: Box = [x * 20 + 0.5, walk * 8 + 0.5, z * 20 + 0.5, (x + 2) * 20 - 0.5, top * 8, (z + 2) * 20 - 0.5];
+    const box: Box = [x * 20 + 0.5, walk * 8 + 0.5, z * 20 + 0.5, (x + 3) * 20 - 0.5, top * 8, (z + 3) * 20 - 0.5];
     return b.hits(box).every((p) => p.el.id === 'door1x4x6');
   };
   const reach = (ok: (x: number, z: number) => boolean, from: [number, number], to: [number, number]) => {
@@ -218,7 +271,8 @@ describe('the hub-town house', () => {
       if (x === to[0] && z === to[1]) return true;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const n: [number, number] = [x + dx, z + dz];
-        if (!seen.has(n.join()) && n[0] >= 1 && n[1] >= 1 && n[0] < 22 && n[1] < 16 && ok(...n)) {
+        const inside = n[0] > HOUSE.x0 && n[1] > HOUSE.z0 && n[0] + 3 < HOUSE.x1 && n[1] + 3 < HOUSE.z1;
+        if (!seen.has(n.join()) && inside && ok(...n)) {
           seen.add(n.join());
           queue.push(n);
         }
@@ -227,27 +281,39 @@ describe('the hub-town house', () => {
     return false;
   };
 
-  it('leaves the hero room to walk from the door to the stair, and round the room upstairs', () => {
+  it('leaves the hero room to walk from the door to the stair and behind the counter, and round the room upstairs', () => {
     const ground = walkable(H.groundWalk), upper = walkable(H.upperWalk);
-    expect(ground(DOOR.x + 1, HOUSE.z1 - 3)).toBe(true);
-    expect(reach(ground, [DOOR.x + 1, HOUSE.z1 - 3], [STAIR.foot, STAIR.z0 + 1])).toBe(true);
-    expect(reach(ground, [DOOR.x + 1, HOUSE.z1 - 3], [3, 7])).toBe(true);
-    expect(reach(upper, [STAIR.top - 2, STAIR.z0 + 1], [18, 13])).toBe(true);
-    expect(reach(upper, [STAIR.top - 2, STAIR.z0 + 1], [19, 3])).toBe(true);
+    const inside: [number, number] = [DOOR.x + 1, HOUSE.z1 - 4];
+    expect(ground(...inside)).toBe(true);
+    expect(reach(ground, inside, [STAIR.foot, STAIR.z0 + 1])).toBe(true);
+    expect(reach(ground, inside, [3, 6])).toBe(true);
+    const landing: [number, number] = [STAIR.top - 3, STAIR.z0 + 1];
+    expect(reach(upper, landing, [18, 13])).toBe(true);
+    expect(reach(upper, landing, [19, 2])).toBe(true);
   });
 
-  it('cuts away by whole courses: inside, nothing on the camera side stands over the stub', () => {
+  it('cuts away by whole courses: no wall brick on the camera side straddles its stub', () => {
     for (const p of b.items) {
-      if (p.part === 'gS' && standsIn('ground', p.part, p.y, p.el.h)) expect(p.y + p.el.h).toBeLessThanOrEqual(HOUSE.stubGround);
-      if (p.part.startsWith('u') && p.part !== 'u.floor') expect(standsIn('ground', p.part, p.y, p.el.h)).toBe(false);
-      if (p.part === 'roof') expect(standsIn('upper', p.part, p.y, p.el.h)).toBe(false);
+      if (p.el.kind !== 'brick') continue;
+      const stub = p.part === 'gS' ? HOUSE.stubGround : p.part === 'uS' ? HOUSE.stubUpper - 1 : null;
+      if (stub !== null) expect(p.y < stub && p.y + p.el.h > stub, `${p.el.id} at ${p.x}, ${p.y}, ${p.z}`).toBe(false);
+    }
+  });
+
+  it('leaves nothing floating in either cut-away: everything shown is held to the ground by what is shown', () => {
+    for (const cut of ['ground', 'upper'] as Cut[]) {
+      const shown = (p: Placed) => standsIn(cut, p.part, p.y, p.el.h);
+      expect(loose(shown), cut).toEqual([]);
+      // And the cut does lift the roof (and, on the ground floor, the upper storey).
+      expect(b.items.some((p) => p.part === 'roof' && shown(p))).toBe(false);
+      if (cut === 'ground') expect(b.items.some((p) => p.part.startsWith('u') && shown(p))).toBe(false);
     }
   });
 
   it('keeps the door\'s swing clear', () => {
     const door = b.items.find((p) => p.el.id === 'door1x4x6')!;
     expect(door.x).toBe(DOOR.x);
-    const swing = b.boxesOf(door)[1] as Box;
+    const swing = b.boxesOf(door)[1];
     expect(b.hits(swing, door)).toEqual([]);
   });
 });

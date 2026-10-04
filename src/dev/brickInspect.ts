@@ -48,7 +48,7 @@ export async function brickSuite(g: Game, shot: Shot, args: string[]) {
   view.group.position.copy(origin);
   g.scene.add(view.group);
   const cut = (c: Cut) => view.setVisible((p) => standsIn(c, p.part, p.y, p.el.h));
-  out.house = { ...view.stats(), studs: view.stats().studs };
+  out.house = view.stats();
 
   // The hero stands where he is put (the game's own update would drop him to the meadow under the house).
   const hero = g.player;
@@ -219,9 +219,12 @@ async function gallery(g: Game, origin: THREE.Vector3, free: (n: string, eye: TH
   v.group.position.set(origin.x - 4 * STUD, origin.y, origin.z - 6 * STUD);
   g.scene.add(v.group);
   const c = v.group.position, mid = new THREE.Vector3(c.x + (W / 2) * STUD, c.y, c.z + (depth / 2) * STUD);
-  await free('gallery', mid.clone().add(new THREE.Vector3(0, 13, 13)), mid, 50);
-  await free('gallery-close', mid.clone().add(new THREE.Vector3(-3, 4, 6.5)), mid.clone().add(new THREE.Vector3(-3, 0.3, 1.5)), 45);
-  v.dispose();
+  try {
+    await free('gallery', mid.clone().add(new THREE.Vector3(0, 13, 13)), mid, 50);
+    await free('gallery-close', mid.clone().add(new THREE.Vector3(-3, 4, 6.5)), mid.clone().add(new THREE.Vector3(-3, 0.3, 1.5)), 45);
+  } finally {
+    v.dispose();
+  }
 }
 
 /**
@@ -241,16 +244,19 @@ async function costs(g: Game, build: BrickBuild, origin: THREE.Vector3, house: B
     g.draw();
   };
   const runs: Record<'none' | 'house' | 'street', { cpu: number[]; gpu: number[] }> = { none: { cpu: [], gpu: [] }, house: { cpu: [], gpu: [] }, street: { cpu: [], gpu: [] } };
-  for (let round = 0; round < 5; round++) for (const k of ['none', 'house', 'street'] as const) {
-    house.group.visible = k === 'house';
-    street.group.visible = k === 'street';
-    const p = await perf(g, 24, pose);
-    runs[k].cpu.push(...(p.cpuRaw ?? []));
-    runs[k].gpu.push(...(p.gpuRaw ?? []));
-  }
-  house.group.visible = true;
   const stats = street.stats();
-  street.dispose();
+  try {
+    for (let round = 0; round < 5; round++) for (const k of ['none', 'house', 'street'] as const) {
+      house.group.visible = k === 'house';
+      street.group.visible = k === 'street';
+      const p = await perf(g, 24, pose);
+      runs[k].cpu.push(...(p.cpuRaw ?? []));
+      runs[k].gpu.push(...(p.gpuRaw ?? []));
+    }
+  } finally {
+    house.group.visible = true;
+    street.dispose();
+  }
   const med = (x: number[]) => +x.slice().sort((a, b) => a - b)[Math.floor(x.length / 2)].toFixed(2);
   const out: Record<string, unknown> = { streetHouses: copies.length, streetDrawn: stats };
   for (const [k, v] of Object.entries(runs)) out[k] = { cpu: med(v.cpu), gpu: v.gpu.length ? med(v.gpu) : null };

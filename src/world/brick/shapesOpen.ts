@@ -92,7 +92,7 @@ export function sash(o: Opening, cols: number, rows: number): Mesh3 {
   const top = o.round ? o.y1 - (o.x1 - o.x0) / 2 : o.y1;
   for (let i = 1; i < cols; i++) {
     const x = o.x0 + ((o.x1 - o.x0) * i) / cols;
-    parts.push(box(x - 0.7, o.y0 + t, -1.2, x + 0.7, (o.round ? o.y1 : top) - t, 1.0, 0.3));
+    parts.push(box(x - 0.7, o.y0 + t, -1.2, x + 0.7, o.y1 - t, 1.0, 0.3));
   }
   for (let j = 1; j < rows; j++) {
     const y = o.y0 + ((top - o.y0) * j) / rows;

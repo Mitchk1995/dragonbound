@@ -142,8 +142,10 @@ export function ring(poly: V2[], bevel: number, groups?: number[], curve = 0.36)
     const p = poly[i], prev = poly[(i - 1 + n) % n], next = poly[(i + 1) % n];
     const g = groups?.[i] ?? 0;
     if (bevel > 0 && turn(i) > curve) {
+      // (A quarter of a short edge at most from each end, so enough of it is left for the cap's own
+      // bevel to inset without turning it inside out: a 33° slope's toe is only 2 LDU.)
       const lp = len(sub(p, prev)), ln = len(sub(next, p));
-      const cp = Math.min(bevel, lp * 0.4), cn = Math.min(bevel, ln * 0.4);
+      const cp = Math.min(bevel, lp * 0.25), cn = Math.min(bevel, ln * 0.25);
       const dp = norm(sub(prev, p)), dn = norm(sub(next, p));
       out.pts.push([p[0] + dp[0] * cp, p[1] + dp[1] * cp], [p[0] + dn[0] * cn, p[1] + dn[1] * cn]);
       out.smooth.push(false, false);

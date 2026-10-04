@@ -114,7 +114,9 @@ export class BrickView {
       this.studs.push({ owner: p, cover: build.coverOf(s, p), m });
     }
     studGeo ??= shareResource(stud().geometry());
+    // (A build with no studs keeps one slot, drawn none of.)
     this.studMesh = new THREE.InstancedMesh(studGeo, material('plastic'), Math.max(1, this.studs.length * n));
+    this.studMesh.count = this.studs.length * n;
     this.studMesh.name = 'studs';
     this.studMesh.castShadow = this.studMesh.receiveShadow = true;
     for (let c = 0; c < n; c++) this.studs.forEach((s, i) => this.studMesh.setColorAt(c * this.studs.length + i, col.setHex(s.owner.color)));
@@ -163,7 +165,10 @@ export class BrickView {
     for (const b of this.batches) if (b.state) b.mesh.visible = b.state === state;
   }
 
-  /** What the view draws: elements and studs placed, draw calls and triangles per frame (before shadows). */
+  /**
+   * What the view draws: elements and studs placed, draw calls and the triangles of what is shown per
+   * frame (before shadows; hidden instances are shrunk to nothing but still pass through the GPU).
+   */
   stats() {
     let tris = 0, calls = 0, shown = 0;
     for (const b of this.batches) {

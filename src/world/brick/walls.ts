@@ -44,14 +44,17 @@ export interface Course {
 /** The cell of a line at position `pos`: [x, z] (also the footprint corner of a piece laid along the line from there). */
 export const cellOf = (l: Line, pos: number): [number, number] => (l.axis === 'x' ? [pos, l.at] : [l.at, pos]);
 
-/** The joints between one wall brick and the next in a course: positions along the line. */
+/** The pieces a course is laid from: bricks (three plates), or plates and tiles (one). */
+const COURSED = new Set(['brick', 'plate', 'tile']);
+
+/** The joints between one piece of a course and the next (bricks, or plates and tiles): positions along the line. */
 export function joints(b: BrickBuild, l: Line, y: number, h = 3): Set<number> {
   const out = new Set<number>();
   let prev: Placed | undefined;
   for (let pos = l.from; pos < l.to; pos++) {
     const [x, z] = cellOf(l, pos);
     const q = b.at(x, y, z);
-    const brick = q && q.el.kind === 'brick' && q.y === y && q.el.h === h ? q : undefined;
+    const brick = q && COURSED.has(q.el.kind) && q.y === y && q.el.h === h ? q : undefined;
     if (brick && prev && brick !== prev) out.add(pos);
     prev = brick;
   }
@@ -66,7 +69,7 @@ function fixedEdges(b: BrickBuild, l: Line, y: number, h: number): Set<number> {
     const fa = b.free(ax, az, y, y + h), fb = b.free(bx, bz, y, y + h);
     if (fa !== fb) {
       const q = b.at(fa ? bx : ax, y, fa ? bz : az);
-      if (q?.el.kind === 'brick') out.add(pos);
+      if (q && COURSED.has(q.el.kind) && q.y === y && q.el.h === h) out.add(pos);
     }
   }
   return out;

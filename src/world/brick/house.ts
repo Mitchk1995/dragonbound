@@ -33,7 +33,11 @@ export const H = {
   chimneyTop: 81,
 } as const;
 
-/** The walls' footprint, and the stubs the walls on the camera side are cut down to when the hero is inside (plates). */
+/**
+ * The walls' footprint, and the stubs (plates) the walls on the camera's side are cut down to while the hero
+ * is inside: on the ground floor two courses over the floor plates; upstairs the sill beam and the course over it,
+ * whose top (plate 32) carries the window boxes; the stub stands one plate higher so the boxes keep their flowers.
+ */
 export const HOUSE = { x0: 0, z0: 0, x1: 24, z1: 18, stubGround: 10, stubUpper: 33 } as const;
 
 /** The door frame's corner; the stair (treads along the back wall climbing west), its rail and the well over it. */
@@ -153,7 +157,7 @@ function runs(l: Line): Line[] {
 function groundFloor(b: BrickBuild) {
   const y = (c: number) => H.ground + c * 3;
   const S = HOUSE.z1 - 1, N = HOUSE.z0;
-  // The door and the shop windows, each under a dark stone lintel the width of the opening, on its
+  // The door and the shop windows, each under a plain stone lintel the width of the opening, on its
   // frame's studs (its ends on the joints the running bond wants in its course).
   b.place('doorFrame1x4x6', DOOR.x, H.ground, S, C.frame, { part: 'gS' });
   b.place('door1x4x6', DOOR.x, H.ground, S, C.door, { part: 'door' });
@@ -176,7 +180,7 @@ function groundFloor(b: BrickBuild) {
   b.place('sash1x2x3', 3, y(2), N, C.sash, { rot: 2, part: 'gN' });
   b.place('window1x2x2', 14, y(4), N, C.frame, { rot: 2, part: 'gN' });
   b.place('sash1x2x2', 14, y(4), N, C.sash, { rot: 2, part: 'gN' });
-  // Seven courses of coursed stone, dark quoins at the corners.
+  // Seven courses of coursed stone, plain quoins of the same stone at the corners.
   const stone = (s: Side): Course => ({ sizes: [4, 2, 1], id: masonryBricks, color: C.stone, part: `g${s}`, rot: OUT[s], cost: (n) => (n === 1 ? 2 : 0) });
   for (let k = 0; k < 7; k++) ringCourse(b, y(k), k, { color: C.quoin, part: (s) => `g${s}` }, stone);
 }
