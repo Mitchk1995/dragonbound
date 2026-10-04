@@ -17,7 +17,6 @@ const IGNORED = new Set(['node_modules', 'previews', '__pycache__']);
 // splits every one and empties this list; never add to it.
 const ALLOWED = {
   'docs/CASTLE_DESIGN.md': 29410,
-  'src/data/zoneMaps.ts': 1779,
   'src/dev/inspect.ts': 1181,
   'src/game.ts': 966,
   'src/render/masonry.ts': 655,
@@ -28,7 +27,6 @@ const ALLOWED = {
   'src/world/castleProps/curtain.ts': 914,
   'src/world/props.ts': 3395,
   'src/world/terrain.ts': 1241,
-  'src/world/worldView.ts': 1319,
   'tests/castle-geometry.test.ts': 879,
   'tools/blender/_common.py': 728,
   'tools/blender/gear.py': 1079,
