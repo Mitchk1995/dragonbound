@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ModelKit, PAL, type V3 } from '../../render/kit';
 import { studioEnv } from '../../render/env';
 import { COURSE, drumStones } from '../../render/masonry';
+import { abs, diffuseColor, dot, float, fwidth, max, mix, normalize, normalView, positionGeometry, positionView, pow, saturate, smoothstep, vec2, vec3 } from 'three/tsl';
 import { addPatch } from '../../render/surface';
 import { chamferBox, hash01, taper } from '../../render/blocks';
 import { type Builder, archPane, archRing, ASHLAR, ASHLAR_L, ASHLAR_W, BASE, BASE_COURSE, boardedLeaf, cb, CLIMBER_BLOOM, CLIMBER_IVY, CLIMBER_ROSE_LEAF, crownFoot, DARK, DECK, DOORS, DRESS, dressedArch, drum, flag, GILT, glassMat, INLAY, IRON, LAMP_NAVY, lenOf, limb, livery, PAVE, pointedArch, pointedDoor, roomMat, spandrels, spire, spread, vOf, WOOD_D } from '../props';
@@ -340,24 +341,20 @@ function glassFace(k: ModelKit) {
       transparent: true, depthWrite: false, premultipliedAlpha: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     });
-    addPatch(m, { key: 'glass-face', apply: (sh) => {
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vPane;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPane = position.xy;');
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vPane;')
-        .replace('#include <opaque_fragment>', `{
-          // (The cames' and bars' distances in metres, antialiased over the pixel.)
-          vec2 q = vec2(vPane.x / 0.25, vPane.y / 0.4);
-          float came = (0.5 - max(abs(fract(q.x + q.y) - 0.5), abs(fract(q.x - q.y) - 0.5))) / length(vec2(4.0, 2.5));
-          float bar = abs(fract(vPane.y / 0.75 + 0.5) - 0.5) * 0.75, fw = max(fwidth(vPane.x), fwidth(vPane.y));
-          float lead = max(1.0 - smoothstep(0.007, 0.007 + fw, came), 1.0 - smoothstep(0.012, 0.012 + fw, bar));
-          float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 5.0);
-          outgoingLight = mix(outgoingLight + vec3(0.006, 0.016, 0.04), vec3(0.03, 0.03, 0.035) + outgoingLight * 0.4, lead);
-          diffuseColor.a = max(lead, fres * 0.85);
-        }
-        #include <opaque_fragment>`);
-    } });
+    addPatch(m, { key: 'glass-face', nodes: () => ({
+      output(light) {
+        // (The cames' and bars' distances in metres, antialiased over the pixel.)
+        const pane = positionGeometry.xy;
+        const q = vec2(pane.x.div(0.25), pane.y.div(0.4));
+        const came = float(0.5).sub(max(abs(q.x.add(q.y).fract().sub(0.5)), abs(q.x.sub(q.y).fract().sub(0.5)))).div(Math.hypot(4, 2.5));
+        const bar = abs(pane.y.div(0.75).add(0.5).fract().sub(0.5)).mul(0.75), fw = max(fwidth(pane.x), fwidth(pane.y));
+        const lead = max(float(1).sub(smoothstep(0.007, fw.add(0.007), came)), float(1).sub(smoothstep(0.012, fw.add(0.012), bar))).toVar();
+        const fres = pow(float(1).sub(saturate(abs(dot(normalize(positionView), normalView)))), 5);
+        diffuseColor.a.assign(max(lead, fres.mul(0.85)));
+        return mix(light.add(vec3(0.006, 0.016, 0.04)), vec3(0.03, 0.03, 0.035).add(light.mul(0.4)), lead);
+      },
+    }) });
+
     m.userData.cloth = true;
     m.userData.decal = true;
     m.userData.baseEmissive = new THREE.Color(0);

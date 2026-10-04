@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { ZoneTheme } from '../data/zones';
-import { addPatch } from '../render/surface';
+import { abs, atan, attribute, cameraPosition, clamp, cos, dFdx, dFdy, Discard, distance, dot, float, If, length, max, mix, normalize, positionGeometry, pow, select, sin, smoothstep, varying, vec2, vec3 } from 'three/tsl';
+import { addPatch, type F, type V2, type V3 } from '../render/patch';
 import { noiseTexture } from '../render/textures';
 import { Cell, Ground, Lawn, type ZoneLayout } from './layout';
 import { strandField } from './strands';
@@ -92,156 +93,105 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
     uLawnGap: SPACING,
   };
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
-  addPatch(mat, { key: 'lawn1', apply: (sh) => {
-    Object.assign(sh.uniforms, uniforms);
-    sh.vertexShader = sh.vertexShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        attribute float aShell;
-        attribute vec2 aLawn;
-        attribute vec2 aLawnX;
-        uniform float uWindT;
-        uniform vec2 uLawnFade;
-        varying float vShell;
-        varying vec3 vLawn;
-        varying vec2 vLawnX;
-        varying vec3 vLawnPos;`,
-      )
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        {
-          // Far away only the bottom layer stays (the upper shells fold down onto it).
-          float fade = 1.0 - smoothstep(uLawnFade.x, uLawnFade.y, distance(position.xz, cameraPosition.xz));
-          float lift = aShell * aLawn.y * fade;
-          float sway = sin(uWindT * 1.7 + position.x * 0.45 + position.z * 0.3) + 0.5 * sin(uWindT * 2.9 + position.z * 0.8);
-          transformed.y += 0.012 + lift;
-          transformed.xz += vec2(0.3, 0.18) * sway * aShell * aShell * aLawn.y * fade;
-          vShell = aShell;
-          vLawn = vec3(aLawn, fade);
-          vLawnX = aLawnX;
-          vLawnPos = vec3(position.x, position.y + 0.012 + lift, position.z);
-        }`,
-      );
-    sh.fragmentShader = sh.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        uniform vec3 uLawnRoot;
-        uniform vec3 uLawnTip;
-        uniform sampler2D uLawnNoise;
-        varying float vShell;
-        varying vec3 vLawn;
-        varying vec2 vLawnX;
-        varying vec3 vLawnPos;
-        uniform vec2 uLawnGap;
-        vec3 lawnHash(vec2 p) {
-          vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
-          q += dot(q, q.yzx + 33.33);
-          return fract((q.xxy + q.yzz) * q.zyx);
-        }
-        // One field of jittered blades at grid scale p: is this shell inside a blade? Each blade
-        // has its own height, thickness and lean, and tapers to a point at its tip. Returns the
-        // height along the blade (0 root .. 1 tip) where covered, else -1; tint gets its shade.
-        // seg: how far the view ray runs across the gap down to the next shell (grid units); the
-        // blade is tested along it, so from a low camera the slices of a blade join up into one
-        // solid blade instead of a stack of thin slivers. thin: how many times longer than wide.
-        float lawnBlade(vec2 p, float s, float tall, vec3 lean0, vec2 seg, float gap, float thin, out float tint) {
-          vec2 id = floor(p), f = fract(p);
-          vec3 r = lawnHash(id);
-          float hb = (0.55 + 0.45 * r.z) * tall;
-          tint = r.x;
-          if (s > hb) return -1.0;
-          float t = s / max(hb, 1e-3);
-          // Flat, narrow blades, each turned its own way, curving over as they rise and narrowing
-          // to a point near the tip.
-          vec2 c = 0.5 + (r.xy - 0.5) * 0.78 + ((r.yz - 0.5) * lean0.z + lean0.xy) * t * t;
-          vec2 dir = normalize(fract(r.zx * 7.31) - 0.5 + 1e-3);
-          vec2 o = f - c, side = vec2(-dir.y, dir.x);
-          float rad = (1.0 - t * t * t) * (0.7 + 0.2 * r.y);
-          // The first (highest) point along the ray inside the blade gives the height seen there.
-          for (int k = 0; k < 2; k++) {
-            float u = float(k) * 0.5;
-            vec2 ok = o + seg * u;
-            if (length(vec2(dot(ok, dir), dot(ok, side) * thin)) * 2.0 < rad) return clamp((s - gap * u) / max(hb, 1e-3), 0.0, 1.0);
-          }
-          return -1.0;
-        }`,
-      )
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        {
-          vec2 wp = vLawnPos.xz;
-          bool clipped = vLawn.y < 0.2;
+  addPatch(mat, {
+    key: 'lawn1',
+    uniforms,
+    nodes(u) {
+      const shell = attribute('aShell', 'float') as F, lawnA = attribute('aLawn', 'vec2') as V2, lawnX = attribute('aLawnX', 'vec2') as V2;
+      const fadeR = u.v2('uLawnFade');
+      // Far away only the bottom layer stays (the upper shells fold down onto it).
+      const fade = float(1).sub(smoothstep(fadeR.x, fadeR.y, distance(positionGeometry.xz, cameraPosition.xz)));
+      const lift = shell.mul(lawnA.y).mul(fade);
+      const noise = (q: V2) => u.tex('uLawnNoise').sample(q).r;
+      return {
+        position(p) {
+          const t = u.f('uWindT');
+          const sway = sin(t.mul(1.7).add(positionGeometry.x.mul(0.45)).add(positionGeometry.z.mul(0.3))).add(sin(t.mul(2.9).add(positionGeometry.z.mul(0.8))).mul(0.5));
+          const k = sway.mul(shell).mul(shell).mul(lawnA.y).mul(fade);
+          return vec3(p.x.add(k.mul(0.3)), p.y.add(lift).add(0.012), p.z.add(k.mul(0.18)));
+        },
+        color() {
+          const vFade = varying(fade) as F;
+          const lawnPos = varying(vec3(positionGeometry.x, positionGeometry.y.add(lift).add(0.012), positionGeometry.z)) as V3;
+          const root = u.v3('uLawnRoot'), tipC = u.v3('uLawnTip'), gapU = u.v2('uLawnGap');
+          const wp = lawnPos.xz.toVar();
+          const clipped = lawnA.y.lessThan(0.2);
           // Fine blades on clipped lawns (several hundred to a cell, mown short into a dense turf);
           // in meadows longer, slender blades, two interleaved fields of them so the sward stays full.
-          float bladeScale = clipped ? 40.0 : 8.5;
-          vec2 p1 = wp * bladeScale;
-          // How small a blade is on screen (the narrow side of a pixel's footprint on the ground, so
-          // a lawn seen low across keeps its blades): tiny blades shimmer, so the far lawn settles
-          // into one layer and loses its upper shells.
-          vec2 ddx = dFdx(p1), ddy = dFdy(p1);
-          float minor = abs(ddx.x * ddy.y - ddx.y * ddy.x) / max(max(length(ddx), length(ddy)), 1e-4);
-          float lod = max(smoothstep(0.35, 0.9, minor), 1.0 - vLawn.z);
-          // vLawn.x: the lawn's outline where the layout cuts a circle from it (else 1); the carpet
-          // otherwise covers exactly its own cells. vLawnX: x the share of garden lawn (clover), y how close a hedge, bed or statue stands (the grass grows long at its foot).
-          if (vLawn.x < 0.5) discard;
-          bool lowest = vShell < ${(LOWEST + 0.01).toFixed(3)};
-          if (!lowest && vShell > 1.0 - lod) discard;
+          const p1 = wp.mul(select(clipped, float(40), float(8.5))).toVar();
+          // How small a blade is on screen (the narrow side of a pixel's footprint on the ground, so a
+          // lawn seen low across keeps its blades): tiny blades shimmer, so the far lawn settles into
+          // one layer and loses its upper shells.
+          const ddx = dFdx(p1).toVar(), ddy = dFdy(p1).toVar();
+          const minor = abs(ddx.x.mul(ddy.y).sub(ddx.y.mul(ddy.x))).div(max(max(length(ddx), length(ddy)), 1e-4));
+          const lod = max(smoothstep(0.35, 0.9, minor), float(1).sub(vFade)).toVar();
+          // aLawn.x: the lawn's outline where the layout cuts a circle from it (else 1); the carpet
+          // otherwise covers exactly its own cells. aLawnX: x the share of garden lawn (clover), y how
+          // close a hedge, bed or statue stands (the grass grows long at its foot).
+          If(lawnA.x.lessThan(0.5), () => {
+            Discard();
+          });
+          const lowest = shell.lessThan(LOWEST + 0.01);
+          If(lowest.not().and(shell.greaterThan(float(1).sub(lod))), () => {
+            Discard();
+          });
           // Soft mower stripes two cells wide, north to south.
-          float stripe = clipped ? clamp(sin(wp.x * 1.5708) * 2.5, -1.0, 1.0) : 0.0;
-          float n2 = texture2D(uLawnNoise, wp * 0.13 + vec2(0.41, 0.17)).r;
-          float foot = vLawnX.y;
-          float tall = (0.82 + 0.36 * n2) * (1.0 + (clipped ? 0.1 : 0.45) * foot);
+          const stripe = select(clipped, clamp(sin(wp.x.mul(1.5708)).mul(2.5), -1, 1), float(0)).toVar();
+          const n2 = noise(wp.mul(0.13).add(vec2(0.41, 0.17))).toVar();
+          const foot = lawnX.y;
+          const tall = n2.mul(0.36).add(0.82).mul(foot.mul(select(clipped, float(0.1), float(0.45))).add(1));
           // Clipped lawns stand up straight (leaning a little with the mower's stripe); meadow grass flops.
-          vec3 lean0 = clipped ? vec3(stripe * 0.06, 0.04, 0.32) : vec3(0.0, 0.1, 0.9);
-          float gap = clipped ? uLawnGap.x : uLawnGap.y;
-          vec3 ray = vLawnPos - cameraPosition;
-          vec2 run = ray.xz / max(abs(ray.y), 0.2 * length(ray.xz)) * gap * vLawn.y;
-          float tint;
-          float t = lawnBlade(p1, vShell, tall, lean0, run * bladeScale, gap, clipped ? 2.6 : 4.2, tint);
+          const lean0 = select(clipped, vec3(stripe.mul(0.06), 0.04, 0.32), vec3(0, 0.1, 0.9)).toVar();
+          const gap = select(clipped, gapU.x, gapU.y).toVar();
+          const ray = lawnPos.sub(cameraPosition);
+          const run = ray.xz.div(max(abs(ray.y), length(ray.xz).mul(0.2))).mul(gap).mul(lawnA.y).mul(select(clipped, float(40), float(8.5))).toVar();
+          const tint = float(0).toVar();
+          const t = lawnBlade(p1, shell, tall, lean0, run, gap, select(clipped, float(2.6), float(4.2)), tint).toVar();
           // (The second field only where the first leaves a gap: the shell shows one blade either way.)
-          if (!clipped && t < 0.0) t = lawnBlade(p1 + vec2(37.5, 11.5), vShell, tall, lean0, run * bladeScale, gap, 4.2, tint);
-          // Clover in the private gardens and the paddock: low trefoil leaves under the grass (no
-          // white heads, which read as spots strewn on the lawn: the owner, October 3).
-          vec3 bloom = vec3(-1.0);
-          if (vLawnX.x > 0.5 && lod < 0.6) {
-            vec2 q = wp * 2.4, qi = floor(q), qf = fract(q);
-            vec3 h = lawnHash(qi + 17.0);
-            if (h.z > 0.8 && vShell < 0.45) {
-              vec2 o = qf - (0.25 + 0.5 * h.yx);
-              float a = atan(o.y, o.x), rr = length(o);
-              if (rr < 0.17 * (0.65 + 0.35 * abs(cos(a * 1.5)))) bloom = uLawnRoot * 2.1 * vec3(0.92, 1.05, 0.9);
-            }
-          }
-          // The lowest shell closes up into one layer far away (tiny blades would shimmer) and
-          // along the lawn's border, where it is the dark root of the carpet right up to the edge.
-          if (t < 0.0 && bloom.x < 0.0 && !lowest) discard;
-          // Colour: dark root to a light tip, drifting between a warmer and a cooler green, each
-          // blade its own shade and hue.
-          float n1 = texture2D(uLawnNoise, wp * 0.031).r;
-          vec3 tip = uLawnTip * mix(vec3(1.07, 1.02, 0.78), vec3(0.88, 1.0, 1.04), smoothstep(0.3, 0.7, n1));
-          tip *= 0.86 + 0.28 * n2 + (tint - 0.5) * 0.26;
-          tip *= mix(vec3(1.06, 1.02, 0.86), vec3(0.9, 1.0, 1.06), fract(tint * 7.13));
-          tip *= 1.0 - 0.22 * foot;
+          If(clipped.not().and(t.lessThan(0)), () => {
+            t.assign(lawnBlade(p1.add(vec2(37.5, 11.5)), shell, tall, lean0, run, gap, float(4.2), tint));
+          });
+          // Clover in the private gardens and the paddock: low trefoil leaves under the grass (no white
+          // heads, which read as spots strewn on the lawn: the owner, October 3).
+          const bloom = vec3(-1).toVar();
+          If(lawnX.x.greaterThan(0.5).and(lod.lessThan(0.6)), () => {
+            const q = wp.mul(2.4);
+            const h = lawnHash(q.floor().add(17)).toVar();
+            If(h.z.greaterThan(0.8).and(shell.lessThan(0.45)), () => {
+              const o = q.fract().sub(h.yx.mul(0.5).add(0.25)).toVar();
+              const a = atan(o.y, o.x);
+              If(length(o).lessThan(abs(cos(a.mul(1.5))).mul(0.35).add(0.65).mul(0.17)), () => {
+                bloom.assign(root.mul(2.1).mul(vec3(0.92, 1.05, 0.9)));
+              });
+            });
+          });
+          // The lowest shell closes up into one layer far away (tiny blades would shimmer) and along
+          // the lawn's border, where it is the dark root of the carpet right up to the edge.
+          If(t.lessThan(0).and(bloom.x.lessThan(0)).and(lowest.not()), () => {
+            Discard();
+          });
+          // Colour: dark root to a light tip, drifting between a warmer and a cooler green, each blade
+          // its own shade and hue.
+          const n1 = noise(wp.mul(0.031)).toVar();
+          const tip = tipC.mul(mix(vec3(1.07, 1.02, 0.78), vec3(0.88, 1.0, 1.04), smoothstep(0.3, 0.7, n1)))
+            .mul(n2.mul(0.28).add(0.86).add(tint.sub(0.5).mul(0.26)))
+            .mul(mix(vec3(1.06, 1.02, 0.86), vec3(0.9, 1.0, 1.06), tint.mul(7.13).fract()))
+            .mul(float(1).sub(foot.mul(0.22))).toVar();
           // (Mown turf is close and even: its blades shade from a lighter root, so it reads as one
           // velvet surface, not tufts.)
-          vec3 col = mix(clipped ? mix(uLawnRoot, tip, 0.45) : uLawnRoot, tip, pow(clamp(t, 0.0, 1.0), 0.85));
-          // The far lawn (one layer): the carpet's average painted with the grain of its blades
-          // (two scales of mipmapped noise), never one flat green.
-          if (lowest && t < 0.0) {
-            float g1 = texture2D(uLawnNoise, wp * 0.9 + vec2(0.3, 0.7)).r, g2 = texture2D(uLawnNoise, wp * 0.27).r;
-            col = mix(uLawnRoot * (0.9 + 0.2 * g1), mix(uLawnRoot, tip, 0.42 + 0.3 * (g1 - 0.5) + 0.2 * (g2 - 0.5)), lod);
-          }
-          if (bloom.x >= 0.0) col = bloom;
+          const col = mix(select(clipped, mix(root, tip, 0.45), root), tip, pow(clamp(t, 0, 1), 0.85)).toVar();
+          // The far lawn (one layer): the carpet's average painted with the grain of its blades (two
+          // scales of mipmapped noise), never one flat green.
+          If(lowest.and(t.lessThan(0)), () => {
+            const g1 = noise(wp.mul(0.9).add(vec2(0.3, 0.7))).toVar(), g2 = noise(wp.mul(0.27));
+            col.assign(mix(root.mul(g1.mul(0.2).add(0.9)), mix(root, tip, g1.sub(0.5).mul(0.3).add(0.42).add(g2.sub(0.5).mul(0.2))), lod));
+          });
           // Mower stripes on clipped lawns; broad lighter and darker drifts across meadows.
-          col *= clipped ? 1.0 + 0.2 * stripe : 0.84 + 0.32 * smoothstep(0.2, 0.8, n1);
-          diffuseColor.rgb = col;
-        }`,
-      );
-  } });
+          return select(bloom.x.greaterThanEqual(0), bloom, col).mul(select(clipped, stripe.mul(0.2).add(1), smoothstep(0.2, 0.8, n1).mul(0.32).add(0.84)));
+        },
+      };
+    },
+  });
 
   // The carpet covers exactly the lawn's own cells (its mesh is built from them), so its edge is
   // straight and square against paving and beds. At every grid corner: the outline where the
@@ -309,7 +259,7 @@ export function buildLawn(layout: ZoneLayout, theme: ZoneTheme, heightAt: (x: nu
       index.push(...((x + z) & 1 ? [a, d, b, b, d, c] : [a, d, c, a, c, b]));
     }
     if (!index.length) continue;
-    const geo = new THREE.InstancedBufferGeometry();
+    const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(pos.length).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
     geo.setAttribute('aLawn', new THREE.Float32BufferAttribute(attr, 2));
@@ -363,4 +313,41 @@ function brinkDistance(layout: ZoneLayout, theme: ZoneTheme) {
     }
   }
   return d;
+}
+
+/** A hash of a cell to three values in 0..1. */
+function lawnHash(p: V2): V3 {
+  const q = vec3(p.x, p.y, p.x).mul(vec3(0.1031, 0.103, 0.0973)).fract().toVar();
+  q.addAssign(dot(q, q.yzx.add(33.33)));
+  return q.xxy.add(q.yzz).mul(q.zyx).fract();
+}
+
+/**
+ * One field of jittered blades at grid scale p: is this shell (height `s`) inside a blade? Each blade
+ * has its own height, thickness and lean, and tapers to a point at its tip. Returns the height along
+ * the blade (0 root .. 1 tip) where covered, else -1; `tint` takes its shade. `seg`: how far the view
+ * ray runs across the gap down to the next shell (grid units); the blade is tested along it, so from a
+ * low camera the slices of a blade join up into one solid blade instead of a stack of thin slivers.
+ * `thin`: how many times longer than wide.
+ */
+function lawnBlade(p: V2, s: F, tall: F, lean0: V3, seg: V2, gap: F, thin: F, tint: F): F {
+  const r = lawnHash(p.floor()).toVar();
+  const f = p.fract();
+  const hb = r.z.mul(0.45).add(0.55).mul(tall).toVar();
+  tint.assign(r.x);
+  const out = float(-1).toVar();
+  If(s.lessThanEqual(hb), () => {
+    const t = s.div(max(hb, 1e-3)).toVar();
+    // Flat, narrow blades, each turned its own way, curving over as they rise and narrowing to a
+    // point near the tip.
+    const c = r.xy.sub(0.5).mul(0.78).add(0.5).add(r.yz.sub(0.5).mul(lean0.z).add(lean0.xy).mul(t.mul(t)));
+    const dir = normalize(r.zx.mul(7.31).fract().sub(0.5).add(1e-3)).toVar();
+    const o = f.sub(c).toVar(), side = vec2(dir.y.negate(), dir.x);
+    const rad = float(1).sub(t.mul(t).mul(t)).mul(r.y.mul(0.2).add(0.7)).toVar();
+    // The first (highest) point along the ray inside the blade gives the height seen there.
+    const hit = (ok: V2) => length(vec2(dot(ok, dir), dot(ok, side).mul(thin))).mul(2).lessThan(rad);
+    const h0 = clamp(s.div(max(hb, 1e-3)), 0, 1), h1 = clamp(s.sub(gap.mul(0.5)).div(max(hb, 1e-3)), 0, 1);
+    out.assign(select(hit(o), h0, select(hit(o.add(seg.mul(0.5))), h1, float(-1))));
+  });
+  return out;
 }

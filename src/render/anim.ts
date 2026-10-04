@@ -117,6 +117,11 @@ export const DRAW_GRAB = 1.29;
 export const DRAW_ANCHOR = 1.35;
 export const DRAW_POLE: [number, number, number] = [1, 0.1, 0.6];
 
+/** How far a humanoid's legs swing either way at a run (radians), for legs LEG_REACH long; tools/blender/animpose.py
+ * mirrors both. */
+export const LEG_SWING = 0.7;
+export const LEG_REACH = 0.9;
+
 /** Procedural animation over named rigid parts. */
 export class Rig {
   private parts = new Map<string, THREE.Object3D>();
@@ -125,6 +130,8 @@ export class Rig {
   private phase = 0;
   private time = Math.random() * 10;
   readonly quadruped: boolean;
+  /** How far the legs swing either way at a run (see LEG_SWING). */
+  private readonly swing: number = LEG_SWING;
   /** A creature's own hold, from what its model carries (see Hold). */
   private readonly modelHold: Hold;
   /** The arms' carry this frame (update): each arm's swing (x), each elbow's bend (e) and the right wrist (w). */
@@ -142,6 +149,14 @@ export class Rig {
     });
     this.quadruped = this.parts.has('legFL');
     this.modelHold = this.parts.has('staffbody') ? 'upright' : this.parts.has('weapon') ? 'side' : 'empty';
+    // Legs hinged low under level hips (a sock_hips, see levelHips) are shorter from the hinge than LEG_REACH: they
+    // swing a little further and step a little quicker, so the feet still keep pace with the ground.
+    const leg = this.parts.get('legL');
+    if (this.parts.has('sock_hips') && leg && leg.position.y > 0) {
+      const k = Math.sqrt(LEG_REACH / leg.position.y);
+      this.swing = LEG_SWING * k;
+      this.stride *= k;
+    }
   }
 
   part(name: string) {
@@ -239,8 +254,8 @@ export class Rig {
     }
 
     // Humanoid
-    this.rot('legL', sw * 0.7 * moveAmt);
-    this.rot('legR', -sw * 0.7 * moveAmt);
+    this.rot('legL', sw * this.swing * moveAmt);
+    this.rot('legR', -sw * this.swing * moveAmt);
     this.offset('body', 0, Math.abs(sw) * 0.06 * moveAmt + breathe);
     this.rot('body', hurtLean + moveAmt * 0.08);
     this.rot('head', -moveAmt * 0.05, Math.sin(t * 0.7) * 0.05);
@@ -265,6 +280,20 @@ export class Rig {
 
     if (s.attack >= 0) this.attackPose(s);
     this.followShoulders();
+    this.levelHips();
+  }
+
+  /**
+   * What hangs from the hips (the sock_hips socket: a tunic's or an armour's skirt, its flaps and tabard) stays level
+   * with the legs while the body leans over it: the legs hinge just under it and only ever swing below it, so nothing
+   * there ever tips into a striding leg (tools/blender/skirtcheck.py skirt_clip_all). The body's belt turns over the
+   * skirt's round top (tools/blender/hips.py hip_skirt).
+   */
+  private levelHips() {
+    const hips = this.parts.get('sock_hips'), body = this.parts.get('body');
+    if (!hips || !body || hips.parent !== body) return;
+    // hips = body⁻¹ · body at rest · hips at rest
+    hips.quaternion.copy(body.quaternion).invert().multiply(QA.setFromEuler(this.baseRot.get(body)!)).multiply(QB.setFromEuler(this.baseRot.get(hips)!));
   }
 
   /**
@@ -321,7 +350,9 @@ export class Rig {
         // Wrist: cock the blade back in line with the forearm in the wind-up, keep it through the impact, relax after.
         const wrist = a < IMPACT ? lerp(w0, SWING_WRIST, ease(Math.min(1, a / up))) : lerp(SWING_WRIST, w0, ease((a - IMPACT) / (1 - IMPACT)));
         this.rot('handR', wrist);
-        this.rot('body', a < up ? -0.1 : 0.15, a < up ? 0.3 * ease(a / up) : -0.3 * (1 - a), 0);
+        this.rot('body', a < up ? -0.1 : 0.15);
+        // The whole hero turns into the swing, legs and all, so the hips never twist against the legs.
+        this.root.rotation.y = a < up ? 0.3 * ease(a / up) : -0.3 * (1 - a);
         break;
       }
       case 'slam': {

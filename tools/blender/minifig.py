@@ -4,9 +4,11 @@ built on it; hero.py itself is left as it is, and tests/character-art.test.ts ke
 
 A figure is the hero's parts in its own colours:
   torso   a block flaring a little to the shoulders, a belt line under it and the hips below
-  legs    the hero's legs ('normal'), LEGO-style short legs for short races ('short': about half the hero's legs below
-          the hips), or none, for a figure whose robe or skirt piece stands in their place ('robe': the body's pivot is
-          then on the ground, so the robe stays on it when the figure leans)
+  legs    the hero's legs ('normal': hinged under his hips at their hem, the hips on the hero's level hips socket,
+          sock_hips, as hero.py and hips.py build them), LEGO-style short legs for short races ('short': about half the
+          hero's legs below the hips, hinged at the hip axis, the hips on the body), or none, for a figure whose robe or
+          skirt piece stands in their place ('robe': the body's pivot is then on the ground, so the robe stays on it
+          when the figure leans)
   arms    an upper arm, a forearm and a LEGO C-hand on the hero's three pivots (shoulder, elbow, wrist)
   neck    and the head's pivot at its top: the hero's head cube, or the character's own head
 Each character gets its identity from what it adds: its head, headgear, hair or beard, colours, a robe or skirt piece
@@ -16,11 +18,13 @@ and accessories, hung on these attachment points (empties; three.js coordinates 
   sock_chest        torso centre (body)                      body armour (the hero's)
   sock_back         middle of the torso's back (body)        back plates, quivers, things slung on the back
   sock_belt         centre of the belt line (body)           belts, buckles, pouches, sashes
-  sock_skirt        the hip line (body)                      robes, skirts, tassets, loincloths
+  sock_hips         the hip axis (body), with normal legs: the hero's hips socket, level with the legs however the
+                    body leans (anim.ts levelHips): everything below the belt, armour's skirts included (hips.py)
+  sock_skirt        the hip line (body), with short legs or a robe: robes, skirts, loincloths
   sock_shoulderL/R  top of each shoulder (body)              shoulder pads: they follow the arm by 3/4 (anim.ts)
   sock_upperL/R, sock_cuffL/R, sock_handL, sock_gloveR, sock_handR, sock_footL/R: the hero's arm and foot sockets
-finish() fuses what a character hung on a fixed point into the part it rides (everything but the shoulder pads, what
-the right hand holds and outfit pieces), so a figure costs no more draw calls than its rig parts.
+finish() fuses what a character hung on a fixed point into the part it rides (everything but the shoulder pads, the
+level hips, what the right hand holds and outfit pieces), so a figure costs no more draw calls than its rig parts.
 """
 import math
 import re
@@ -30,10 +34,12 @@ import bpy
 from mathutils import Vector
 
 from _common import box, clip_hand, fresh_scene, joint_limb, pivot, _mesh_obj
+from hips import hip_skirt
 
 PI = math.pi
-HIP = 0.9                  # hip pivot over the ground, the hero's legs
-SHORT_HIP = 0.53           # short legs
+HIP = 0.9                  # the hip axis over the ground (the body's pivot), the hero's legs
+LEG_HINGE = 0.725          # where the hero's legs hinge, under his hips at their hem (hero.py)
+SHORT_HIP = 0.53           # short legs: the hip axis, where they hinge
 LEG_X = 0.19
 ANKLE = 0.18               # the ankle (sock_foot) over the ground
 ARM_X, ARM_Y = 0.47, 0.62  # shoulder pivots, over the hip line
@@ -44,18 +50,22 @@ HAND = dict(outer=0.135, inner=0.07, depth=0.22, gap=0.07, gap_tilt=0.6, stub=(0
 TORSO_Y, TORSO = 0.42, (0.68, 0.66, 0.42)   # centre height and size; it flares a little to the shoulders
 TORSO_FLARE = (1.03, 1.04)
 BELT_Y, BELT = 0.07, (0.72, 0.12, 0.46)
+# The hero's hips (his tunic's skirt, hero.py): half width and depth at the hip axis, hem, the belt over its round top
+# and the flare to the hem (hips.py hip_skirt).
+HIPS = dict(half_w=0.34, half_d=0.2138, hem=-0.17, belt=(0.01, 0.13), flare=(0.0099, 0.0062))
 UPPER = (0.25, 0.32, 0.27)                  # upper arm (the hero's sleeve), from just above the shoulder pivot
 FOREARM = (0.18, 0.21)                      # forearm width and depth, its top rounded about the elbow
 
-# Attachment points on the body, over the hip line.
+# Attachment points on the body, over the hip line (sock_hips with normal legs, sock_skirt with short legs or a robe).
 BODY_SOCKETS = {
     'sock_neck': (0, 0.75, 0), 'sock_chest': (0, 0.44, 0), 'sock_back': (0, 0.42, -0.21),
-    'sock_belt': (0, BELT_Y, 0), 'sock_skirt': (0, 0, 0),
+    'sock_belt': (0, BELT_Y, 0), 'sock_hips': (0, 0, 0), 'sock_skirt': (0, 0, 0),
     'sock_shoulderL': (0.46, 0.72, 0), 'sock_shoulderR': (-0.46, 0.72, 0),
 }
-# Shoulder pads follow the arm by 3/4 (anim.ts followShoulders) and what the right hand holds moves with it: they keep
-# their own parts. Everything else a character hangs on the figure is fused into the part it rides.
-MOVING = ('sock_shoulderL', 'sock_shoulderR', 'sock_handR')
+# Shoulder pads follow the arm by 3/4 (anim.ts followShoulders), the hips stay level (levelHips) and what the right
+# hand holds moves with it: they keep their own parts. Everything else a character hangs on the figure is fused into
+# the part it rides.
+MOVING = ('sock_shoulderL', 'sock_shoulderR', 'sock_hips', 'sock_handR')
 RIG = ('body', 'head', 'armL', 'armR', 'elbowL', 'elbowR', 'handL', 'handR', 'legL', 'legR', 'weapon', 'staffbody',
        'sling') + MOVING
 
@@ -100,28 +110,34 @@ def figure(scene_name, colors=None, legs='normal', head=True, dressable=False):
     hip = {'normal': HIP, 'short': SHORT_HIP, 'robe': 0.0}[legs]
     y0 = HIP if legs == 'robe' else 0.0          # the hip line in the body's frame
     if legs != 'robe':
+        hinge = LEG_HINGE if legs == 'normal' else hip
         for name, x in (('legL', LEG_X), ('legR', -LEG_X)):
-            leg = fig.add(pivot(root, name, (x, hip, 0)))
-            if legs == 'normal':
-                box(leg, (0.29, 0.44, 0.31), (0, -0.2, 0), col['thigh'], bevel=0.04)
+            leg = fig.add(pivot(root, name, (x, hinge, 0)))
+            if legs == 'normal':   # the hero's: the thigh's top rounded about the hinge, the shin down into the foot
+                joint_limb(leg, 0.29, 0.31, 0.0, 0.48 - hinge, col['thigh'], round_top=True, bevel=0.04)
+                box(leg, (0.26, 0.37, 0.28), (0, 0.345 - hinge, 0), col['shin'], bevel=0.035)
             else:   # LEGO's short legs: a short thigh, a shin, the same foot
                 box(leg, (0.29, 0.27, 0.31), (0, -0.115, 0), col['thigh'], bevel=0.04)
                 box(leg, (0.27, 0.15, 0.29), (0, -0.31, 0), col['shin'], bevel=0.035)
             foot = pivot(leg, 'outfit_boots_' + name[-1]) if dressable else leg
-            box(foot, (0.31, 0.13, 0.42), (0, ANKLE - hip - 0.075, 0.05), col['foot'], bevel=0.04)      # foot
-            box(foot, (0.32, 0.045, 0.44), (0, 0.0225 - hip, 0.055), col['sole'], bevel=0.012)          # sole
-            if legs == 'normal':   # the shin runs down into the foot
-                box(leg, (0.26, 0.37, 0.28), (0, -0.555, 0), col['shin'], bevel=0.035)
-            fig.add(pivot(leg, 'sock_foot' + name[-1], (0, ANKLE - hip, 0)))
+            box(foot, (0.31, 0.13, 0.42), (0, ANKLE - hinge - 0.075, 0.05), col['foot'], bevel=0.04)    # foot
+            box(foot, (0.32, 0.045, 0.44), (0, 0.0225 - hinge, 0.055), col['sole'], bevel=0.012)        # sole
+            fig.add(pivot(leg, 'sock_foot' + name[-1], (0, ANKLE - hinge, 0)))
     body = fig.add(pivot(root, 'body', (0, hip, 0)))
     fig.body = body
     box(body, TORSO, (0, y0 + TORSO_Y, 0), col['torso'], taper=TORSO_FLARE, bevel=0.05)
-    if legs != 'robe':   # under a robe the robe is the hips
-        box(body, (0.7, 0.24, 0.44), (0, y0 - 0.05, 0), col['hips'], taper=(0.96, 0.96), bevel=0.04)
-    box(body, BELT, (0, y0 + BELT_Y, 0), col['belt'], bevel=0.03)
+    # The belt (an outfit piece on a dressable figure, as the hero's: armour has its own).
+    box(pivot(body, 'outfit_body_belt') if dressable else body, BELT, (0, y0 + BELT_Y, 0), col['belt'], bevel=0.03)
     box(body, (0.2, 0.12, 0.2), (0, y0 + 0.8, 0), col['neck'], bevel=0.03)
     for name, p in BODY_SOCKETS.items():
-        fig.add(pivot(body, name, (p[0], y0 + p[1], p[2])))
+        if name != ('sock_skirt' if legs == 'normal' else 'sock_hips'):
+            fig.add(pivot(body, name, (p[0], y0 + p[1], p[2])))
+    if legs == 'normal':   # the hero's hips, on the level hips socket (an outfit piece on a dressable figure)
+        h = fig['sock_hips']
+        hip_skirt(pivot(h, 'outfit_body_skirt') if dressable else h, HIPS['half_w'], HIPS['half_d'], HIPS['hem'],
+                  col['hips'], HIPS['belt'], flare=HIPS['flare'], bevel=0.04)
+    elif legs == 'short':   # under a robe the robe is the hips
+        box(body, (0.7, 0.24, 0.44), (0, -0.05, 0), col['hips'], taper=(0.96, 0.96), bevel=0.04)
     hd = fig.add(pivot(body, 'head', (0, y0 + NECK_Y, 0)))
     if head:
         box(hd, (HEAD, HEAD, HEAD), (0, 0.24, 0), col['head'], bevel=0.06)

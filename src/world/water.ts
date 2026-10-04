@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { WebGPUCoordinateSystem } from 'three';
+import type { Node, Renderer } from 'three/webgpu';
+import { abs, attribute, cameraViewMatrix, cos, diffuseColor, dot, float, If, length, mat3, max, min, mix, normalize, normalView, positionGeometry, positionView, positionWorld, pow, reflect, saturate, sin, smoothstep, transpose, vec2, vec3, vec4 } from 'three/tsl';
+import { addPatch, rot2, type F, type V2, type V3, type V4 } from '../render/patch';
 import { noiseTexture } from '../render/textures';
 
 /**
@@ -33,6 +37,20 @@ export interface PoolMirror {
   on: { value: number };
 }
 
+/** Towards the sun the water's glints show: low ahead of the play camera. */
+export const SUN_GLINT = vec3(0.25, 0.5, -0.83).normalize();
+
+/**
+ * Where a world position lands in a mirror's picture (its `texMat`, see planarReflection), nudged by
+ * `off` (in the picture's own units, up the picture positive).
+ */
+export function mirrorUV(texMat: Node<'mat4'>, world: V3, off: V2): V2 {
+  const rc = texMat.mul(vec4(world, 1)) as V4;
+  const q = rc.xy.div(rc.w).add(off);
+  // (The picture's rows run top-down as the renderer stores it; the projection counts up.)
+  return vec2(q.x, q.y.oneMinus());
+}
+
 /**
  * Still pool water: a depth tint from pale at the rim to deep at the centre over a dark floor, two
  * drifting octaves of ripple normals, rings spreading from every impact point with broken white
@@ -43,139 +61,118 @@ export interface PoolMirror {
  */
 export function poolWater(time: { value: number }, r: number, impacts: Impact[] = [], mirror: PoolMirror | null = null) {
   const imps = impacts.slice(0, MAX_IMPACTS);
-  const uniforms = {
+  const uniforms: Record<string, { value: unknown }> = {
     uPoolT: time,
     uNoise: { value: noiseTexture() },
     uPoolR: { value: r },
     uShallow: { value: new THREE.Color(0x3f9a9e) },
     uDeep: { value: new THREE.Color(0x0e4450) },
     uImp: { value: Array.from({ length: MAX_IMPACTS }, (_, i) => new THREE.Vector3(...(imps[i] ?? [0, 0, 0]))) },
-    uRefl: { value: mirror?.texture ?? null },
     uReflMat: { value: mirror?.texMat ?? new THREE.Matrix4() },
     uReflOn: mirror?.on ?? { value: 0 },
     ...WATER_SKY,
   };
+  if (mirror) uniforms.uRefl = { value: mirror.texture };
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0, transparent: true, depthWrite: false });
-  mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vPoolW;\nvarying vec2 vPoolL;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvPoolW = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvPoolL = position.xz;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        varying vec3 vPoolW;
-        varying vec2 vPoolL;
-        uniform float uPoolT;
-        uniform float uPoolR;
-        uniform sampler2D uNoise;
-        uniform vec3 uShallow;
-        uniform vec3 uDeep;
-        uniform vec3 uSkyHigh;
-        uniform vec3 uSkyLow;
-        uniform vec3 uImp[${MAX_IMPACTS}];
-        uniform float uReflOn;
-        uniform mat4 uReflMat;
-        ${mirror ? 'uniform sampler2D uRefl;' : ''}
-        float poolN(vec2 p) { return texture2D(uNoise, p).r; }
-        vec2 poolG(vec2 p) { float c = poolN(p); return vec2(poolN(p + vec2(0.01, 0.0)) - c, poolN(p + vec2(0.0, 0.01)) - c) / 0.01; }`,
-      )
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        // Deep at the heart of the pool, turquoise toward the kerb where the floor shows through.
-        float poolRr = clamp(length(vPoolL) / uPoolR, 0.0, 1.0);
-        vec3 poolTint = mix(uDeep * 0.8, uShallow * 1.08, smoothstep(0.2, 0.98, poolRr));
-        poolTint *= 0.85 + 0.3 * poolN(vPoolW.xz * 0.11 + vec2(uPoolT * 0.004, 0.0));
-        // Broken white foam round each impact, churning.
-        float poolFoam = 0.0;
-        for (int i = 0; i < ${MAX_IMPACTS}; i++) {
-          float s = uImp[i].z;
-          if (s <= 0.0) continue;
-          float d = length(vPoolL - uImp[i].xy);
-          float lace = smoothstep(0.38, 0.66, poolN(vPoolL * 0.85 + vec2(uPoolT * 0.21, -uPoolT * 0.17) + float(i) * 0.37) * 0.6 + poolN(vPoolL * 2.1 - vec2(uPoolT * 0.33, uPoolT * 0.26)) * 0.5);
-          poolFoam = max(poolFoam, (1.0 - smoothstep(0.15 * s, 0.8 * s, d)) * mix(lace, 1.0, 1.0 - smoothstep(0.0, 0.3 * s, d)));
-        }
-        // A thin broken line of foam where the water laps the kerb.
-        float rimLace = smoothstep(0.42, 0.64, poolN(vPoolL * 1.7 + vec2(uPoolT * 0.09, -uPoolT * 0.07)));
-        poolFoam = max(poolFoam, smoothstep(0.955, 0.995, poolRr) * rimLace * 0.8);
-        diffuseColor.rgb = poolTint;`,
-      )
-      .replace(
-        '#include <normal_fragment_maps>',
-        `#include <normal_fragment_maps>
-        {
+  addPatch(mat, {
+    key: mirror ? 'pool4-mirror' : 'pool4',
+    uniforms,
+    nodes(u) {
+      const t = u.f('uPoolT');
+      const poolN = (p: V2) => u.tex('uNoise').sample(p).r;
+      const poolG = (p: V2) => {
+        const c = poolN(p).toVar();
+        return vec2(poolN(p.add(vec2(0.01, 0))).sub(c), poolN(p.add(vec2(0, 0.01))).sub(c)).div(0.01);
+      };
+      const W = positionWorld, L = positionGeometry.xz;
+      const imp = u.v3a('uImp');
+      // Set by the colour, read by the emission.
+      let tint: V3 = vec3(0), foam: F = float(0), envC: V3 = vec3(0), rw: V3 = vec3(0), rr: F = float(0);
+      return {
+        color() {
+          // Deep at the heart of the pool, turquoise toward the kerb where the floor shows through.
+          rr = saturate(length(L).div(u.f('uPoolR'))).toVar();
+          tint = mix(u.v3('uDeep').mul(0.8), u.v3('uShallow').mul(1.08), smoothstep(0.2, 0.98, rr))
+            .mul(poolN(W.xz.mul(0.11).add(vec2(t.mul(0.004), 0))).mul(0.3).add(0.85)).toVar();
+          // Broken white foam round each impact, churning.
+          foam = float(0).toVar();
+          for (let i = 0; i < MAX_IMPACTS; i++) {
+            const im = imp.element(i);
+            const s = im.z;
+            const d = length(L.sub(im.xy));
+            const lace = smoothstep(0.38, 0.66, poolN(L.mul(0.85).add(vec2(t.mul(0.21), t.mul(-0.17))).add(i * 0.37)).mul(0.6).add(poolN(L.mul(2.1).sub(vec2(t.mul(0.33), t.mul(0.26)))).mul(0.5)));
+            If(s.greaterThan(0), () => {
+              foam.assign(max(foam, float(1).sub(smoothstep(s.mul(0.15), s.mul(0.8), d)).mul(mix(lace, 1, float(1).sub(smoothstep(0, s.mul(0.3), d))))));
+            });
+          }
+          // A thin broken line of foam where the water laps the kerb.
+          const rimLace = smoothstep(0.42, 0.64, poolN(L.mul(1.7).add(vec2(t.mul(0.09), t.mul(-0.07)))));
+          foam.assign(max(foam, smoothstep(0.955, 0.995, rr).mul(rimLace).mul(0.8)));
+          // Fresnel (Schlick, water's 0.04 at normal incidence) between the depth tint and the sky the
+          // rippled surface reflects; sun glints where the ripples catch it. The reflection sees a
+          // calmer surface than the lighting (the ripples soften what it shows, as roughness blurs it):
+          // sky as a smooth gradient, never blotches.
+          const vdir = positionView.negate().normalize();
+          const flatV = normalize(mat3(cameraViewMatrix).mul(vec3(0, 1, 0))).toVar();
+          const calm = normalize(mix(flatV, normalView, 0.35)).toVar();
+          const ndv = saturate(dot(vdir, calm)).toVar();
+          const fres = pow(float(1).sub(ndv), 5).mul(0.96).add(0.04).toVar();
+          rw = transpose(mat3(cameraViewMatrix)).mul(reflect(vdir.negate(), calm)).toVar();
+          const sky = mix(u.v3('uSkyLow'), u.v3('uSkyHigh'), smoothstep(-0.1, 0.9, rw.y)).mul(poolN(rw.xz.div(max(rw.y, 0.25)).mul(0.05).add(W.xz.mul(0.02))).mul(0.1).add(0.95));
+          envC = sky.mul(fres.mul(1.3).add(0.03)).toVar();
+          const col = tint.toVar();
+          if (mirror) {
+            // The statue mirrored over the pool, wavering with the ripples; the sky round it. A soft,
+            // coherent image: sampled through the calm surface (only a gentle waver, never torn by the
+            // impact rings), blurred over a disc of taps into a soft glow, and only as strong as the
+            // angle allows: gone when looked down on from the play camera (the pool then shows its sky
+            // and teal) and at the most grazing looks, clearest at a low oblique view. Tinted by the water.
+            const ruv = mirrorUV(u.m4('uReflMat'), W, calm.xy.sub(flatV.xy).mul(0.012)).toVar();
+            let mir: V4 = vec4(0);
+            for (let j = 0; j < 7; j++) {
+              const a = j * 2.39996, k = j === 0 ? 0 : 0.012 + 0.004 * j;
+              mir = mir.add(u.tex('uRefl').sample(ruv.add(vec2(Math.cos(a) * k, Math.sin(a) * k))));
+            }
+            const m = mir.div(7).toVar();
+            const glance = float(1).sub(ndv);
+            const cover = smoothstep(0.15, 0.85, m.a).mul(u.f('uReflOn')).mul(0.55).mul(smoothstep(0.45, 0.78, glance)).mul(float(1).sub(smoothstep(0.93, 1, glance))).toVar();
+            envC.assign(mix(envC, mix(m.rgb, m.rgb.mul(tint).mul(2.2), 0.35).mul(fres.mul(0.3).add(0.85)), cover));
+            col.mulAssign(float(1).sub(cover.mul(0.5)));
+          }
+          col.mulAssign(float(1).sub(fres).mul(0.7));
+          diffuseColor.a.assign(saturate(fres.mul(0.5).add(0.8).add(foam.mul(0.4))));
+          return mix(col, vec3(0.88, 0.94, 0.95), foam.mul(0.85));
+        },
+        normal(n) {
           // Two drifting octaves of ripple, then rings spreading from each impact: h = sin(9d - 6t)·e^-d.
-          vec2 g = poolG(vPoolW.xz * 0.21 + vec2(uPoolT * 0.035, uPoolT * 0.022)) * 0.026
-                 + poolG(vPoolW.xz * 0.63 - vec2(uPoolT * 0.06, -uPoolT * 0.045)) * 0.012;
-          for (int i = 0; i < ${MAX_IMPACTS}; i++) {
-            float s = uImp[i].z;
-            if (s <= 0.0) continue;
-            vec2 dv = vPoolL - uImp[i].xy;
-            float d = max(length(dv), 1e-3);
-            float ph = 9.0 * d / s - 6.0 * uPoolT;
-            g += dv / d * exp(-d / s) * (9.0 * cos(ph) - sin(ph)) * 0.022 * smoothstep(0.05, 0.25, d);
+          let g = poolG(W.xz.mul(0.21).add(vec2(t.mul(0.035), t.mul(0.022)))).mul(0.026)
+            .add(poolG(W.xz.mul(0.63).sub(vec2(t.mul(0.06), t.mul(-0.045)))).mul(0.012));
+          for (let i = 0; i < MAX_IMPACTS; i++) {
+            const im = imp.element(i);
+            const s = max(im.z, 1e-3);
+            const dv = L.sub(im.xy);
+            const d = max(length(dv), 1e-3);
+            const ph = d.mul(9).div(s).sub(t.mul(6));
+            g = g.add(dv.div(d).mul(d.negate().div(s).exp()).mul(cos(ph).mul(9).sub(sin(ph))).mul(smoothstep(0.05, 0.25, d)).mul(0.022).mul(im.z.greaterThan(0).select(float(1), float(0))));
           }
-          vec3 gv = (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz;
-          normal = normalize(normal - gv + dot(gv, normal) * normal);
-        }`,
-      )
-      .replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-        {
-          // Fresnel (Schlick, water's 0.04 at normal incidence) between the depth tint and the sky
-          // the rippled surface reflects; sun glints where the ripples catch it.
-          vec3 vdir = normalize(vViewPosition);
-          // The reflection sees a calmer surface than the lighting (the ripples soften what it shows,
-          // as roughness blurs it): sky as a smooth gradient, never blotches.
-          vec3 flatV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-          vec3 calm = normalize(mix(flatV, normal, 0.35));
-          float ndv = clamp(dot(vdir, calm), 0.0, 1.0);
-          float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
-          vec3 rw = (vec4(reflect(-vdir, calm), 0.0) * viewMatrix).xyz;
-          vec3 sky = mix(uSkyLow, uSkyHigh, smoothstep(-0.1, 0.9, rw.y));
-          sky *= 0.95 + 0.1 * poolN(rw.xz / max(0.25, rw.y) * 0.05 + vPoolW.xz * 0.02);
-          vec3 envC = sky * (fres * 1.3 + 0.03);
-          ${mirror ? `// The statue mirrored over the pool, wavering with the ripples; the sky round it.
-          vec4 rc = uReflMat * vec4(vPoolW, 1.0);
-          vec3 flatN = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-          // A soft, coherent image: sampled through the calm surface (only a gentle waver, never
-          // torn by the impact rings), blurred over a disc of taps into a soft glow, and only as
-          // strong as the angle allows: gone when looked down on from the play camera (the pool then
-          // shows its sky and teal) and at the most grazing looks, clearest at a low oblique view.
-          // Tinted by the water.
-          vec2 ruv = rc.xy / rc.w + (calm.xy - flatN.xy) * 0.012;
-          vec4 mir = vec4(0.0);
-          for (int j = 0; j < 7; j++) {
-            float a = float(j) * 2.39996;
-            vec2 o = j == 0 ? vec2(0.0) : vec2(cos(a), sin(a)) * (0.012 + 0.004 * float(j));
-            mir += texture2D(uRefl, ruv + o);
-          }
-          mir /= 7.0;
-          float glance = 1.0 - ndv;
-          float cover = smoothstep(0.15, 0.85, mir.a) * uReflOn * 0.55 * smoothstep(0.45, 0.78, glance) * (1.0 - smoothstep(0.93, 1.0, glance));
-          envC = mix(envC, mix(mir.rgb, mir.rgb * poolTint * 2.2, 0.35) * (0.85 + 0.3 * fres), cover);
-          diffuseColor.rgb *= 1.0 - cover * 0.5;` : ''}
-          diffuseColor.rgb *= (1.0 - fres) * 0.7;
-          totalEmissiveRadiance += poolTint * 0.18 + envC;
+          const gv = mat3(cameraViewMatrix).mul(vec3(g.x, 0, g.y)).toVar();
+          return normalize(n.sub(gv).add(n.mul(dot(gv, n))));
+        },
+        emissive(e) {
           // Caustic light over the shallow floor near the kerb.
-          float ca = poolN(vPoolW.xz * 0.55 + vec2(uPoolT * 0.035, uPoolT * 0.013));
-          float cb = poolN(vPoolW.xz * 0.73 + vec2(0.37, 0.61) - vec2(uPoolT * 0.015, uPoolT * 0.03));
-          float caus = pow((1.0 - abs(ca * 2.0 - 1.0)) * (1.0 - abs(cb * 2.0 - 1.0)), 4.0);
-          totalEmissiveRadiance += vec3(0.45, 0.9, 0.85) * caus * smoothstep(0.45, 0.95, poolRr) * 0.18;
-          vec3 sunDir = normalize(vec3(0.25, 0.5, -0.83));
-          float sd = max(dot(normalize(rw), sunDir), 0.0);
-          float twinkle = smoothstep(0.42, 0.62, poolN(vPoolW.xz * 1.13 + vec2(uPoolT * 0.11, -uPoolT * 0.07)) * poolN(mat2(0.8, 0.6, -0.6, 0.8) * vPoolW.xz * 1.71 - vec2(uPoolT * 0.05, uPoolT * 0.09)));
-          totalEmissiveRadiance += vec3(1.0, 0.96, 0.86) * min(pow(sd, 350.0) * twinkle * 0.45 + pow(sd, 24.0) * 0.06, 0.5);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.88, 0.94, 0.95), poolFoam * 0.85);
-          totalEmissiveRadiance += vec3(0.25, 0.3, 0.32) * poolFoam;
-          diffuseColor.a = clamp(0.8 + fres * 0.5 + poolFoam * 0.4, 0.0, 1.0);
-        }`,
-      );
-  };
-  mat.customProgramCacheKey = () => (mirror ? 'pool4-mirror' : 'pool4');
+          const ca = poolN(W.xz.mul(0.55).add(vec2(t.mul(0.035), t.mul(0.013))));
+          const cb = poolN(W.xz.mul(0.73).add(vec2(0.37, 0.61)).sub(vec2(t.mul(0.015), t.mul(0.03))));
+          const caus = pow(float(1).sub(abs(ca.mul(2).sub(1))).mul(float(1).sub(abs(cb.mul(2).sub(1)))), 4);
+          const sd = max(dot(normalize(rw), SUN_GLINT), 0).toVar();
+          const twinkle = smoothstep(0.42, 0.62, poolN(W.xz.mul(1.13).add(vec2(t.mul(0.11), t.mul(-0.07)))).mul(poolN(rot2(W.xz, 0.8, 0.6, -0.6, 0.8).mul(1.71).sub(vec2(t.mul(0.05), t.mul(0.09))))));
+          return e.add(tint.mul(0.18)).add(envC)
+            .add(vec3(0.45, 0.9, 0.85).mul(caus.mul(smoothstep(0.45, 0.95, rr)).mul(0.18)))
+            .add(vec3(1.0, 0.96, 0.86).mul(min(pow(sd, 350).mul(twinkle).mul(0.45).add(pow(sd, 24).mul(0.06)), 0.5)))
+            .add(vec3(0.25, 0.3, 0.32).mul(foam));
+        },
+      };
+    },
+  });
   mat.userData.decal = true;
   mat.userData.noOcclude = true;
   return mat;
@@ -197,49 +194,36 @@ export function fallingWaterMaterial(time: { value: number }, seed: number, len:
     uFallSeed: { value: (seed * 0.6180339) % 1 },
   };
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, transparent: true, depthWrite: false, side: THREE.DoubleSide, emissive: 0x1e4a52 });
-  mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vFallUv;\nuniform float uFallT;\nuniform float uFallSeed;\nuniform float uFallLen;')
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvFallUv = vec2(uv.x, 1.0 - uv.y);')
-      .replace(
-        '#include <begin_vertex>',
-        '#include <begin_vertex>\ntransformed.x += sin(uFallT * 5.0 + vFallUv.y * uFallLen * 1.7 + uFallSeed * 40.0) * 0.03 * vFallUv.y;',
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        varying vec2 vFallUv;
-        uniform float uFallT;
-        uniform float uFallLen;
-        uniform float uFallW;
-        uniform float uFallSeed;
-        uniform sampler2D uNoise;
-        float fallN(vec2 p) { return texture2D(uNoise, p).r; }`,
-      )
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        {
-          float fy = vFallUv.y * uFallLen, fx = vFallUv.x * uFallW;
-          float s1 = fallN(vec2(fx * 1.6 + uFallSeed, fy * 0.2 - uFallT * 0.9));
-          float s2 = fallN(vec2(fx * 3.1 - uFallSeed, fy * 0.39 - uFallT * 1.75));
-          float streak = smoothstep(0.42, 0.8, s1 * 0.55 + s2 * 0.55);
-          float aer = smoothstep(0.3, 1.0, vFallUv.y);
-          float lip = 1.0 - smoothstep(0.0, min(0.15, 0.35 / max(uFallLen, 0.1)), vFallUv.y);
-          float en = fallN(vec2(fy * 0.45 - uFallT * 1.3, uFallSeed + fx * 0.6));
-          float ex = abs(vFallUv.x * 2.0 - 1.0);
-          float edge = 1.0 - smoothstep(0.45 - 0.3 * en, 1.0 - 0.2 * en, ex);
-          float white = clamp(streak * 0.65 + aer * (0.45 + 0.4 * s2) + lip * 0.6, 0.0, 1.0);
-          diffuseColor.rgb = mix(vec3(0.16, 0.42, 0.5), vec3(0.88, 0.96, 0.98), white);
-          diffuseColor.a = clamp((0.5 + 0.35 * streak + 0.3 * aer + 0.3 * lip) * edge, 0.0, 0.95);
-          ${fade ? 'diffuseColor.a *= 1.0 - smoothstep(0.45, 1.0, vFallUv.y);' : ''}
-        }`,
-      )
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= 1.0 + 2.0 * diffuseColor.r;');
-  };
-  mat.customProgramCacheKey = () => (fade ? 'fall2-fade' : 'fall2');
+  addPatch(mat, {
+    key: fade ? 'fall2-fade' : 'fall2',
+    uniforms,
+    nodes(u) {
+      const t = u.f('uFallT'), seedU = u.f('uFallSeed'), lenU = u.f('uFallLen');
+      const uv = attribute('uv', 'vec2') as V2;
+      const fallUv = vec2(uv.x, float(1).sub(uv.y));
+      const fallN = (p: V2) => u.tex('uNoise').sample(p).r;
+      return {
+        position: (p) => vec3(p.x.add(sin(t.mul(5).add(fallUv.y.mul(lenU).mul(1.7)).add(seedU.mul(40))).mul(0.03).mul(fallUv.y)), p.y, p.z),
+        color() {
+          const fy = fallUv.y.mul(lenU).toVar(), fx = fallUv.x.mul(u.f('uFallW')).toVar();
+          const s1 = fallN(vec2(fx.mul(1.6).add(seedU), fy.mul(0.2).sub(t.mul(0.9))));
+          const s2 = fallN(vec2(fx.mul(3.1).sub(seedU), fy.mul(0.39).sub(t.mul(1.75)))).toVar();
+          const streak = smoothstep(0.42, 0.8, s1.mul(0.55).add(s2.mul(0.55))).toVar();
+          const aer = smoothstep(0.3, 1, fallUv.y).toVar();
+          const lip = float(1).sub(smoothstep(0, min(0.15, float(0.35).div(max(lenU, 0.1))), fallUv.y)).toVar();
+          const en = fallN(vec2(fy.mul(0.45).sub(t.mul(1.3)), seedU.add(fx.mul(0.6))));
+          const ex = abs(fallUv.x.mul(2).sub(1));
+          const edge = float(1).sub(smoothstep(float(0.45).sub(en.mul(0.3)), float(1).sub(en.mul(0.2)), ex));
+          const white = saturate(streak.mul(0.65).add(aer.mul(s2.mul(0.4).add(0.45))).add(lip.mul(0.6)));
+          let a = streak.mul(0.35).add(0.5).add(aer.mul(0.3)).add(lip.mul(0.3)).mul(edge).clamp(0, 0.95);
+          if (fade) a = a.mul(float(1).sub(smoothstep(0.45, 1, fallUv.y)));
+          diffuseColor.a.assign(a);
+          return mix(vec3(0.16, 0.42, 0.5), vec3(0.88, 0.96, 0.98), white);
+        },
+        emissive: (e) => e.mul(diffuseColor.r.mul(2).add(1)),
+      };
+    },
+  });
   mat.userData.decal = true;
   mat.userData.noOcclude = true;
   return mat;
@@ -318,6 +302,9 @@ export function mistTexture() {
   return mistTex;
 }
 
+/** A light, with its shadow if it casts one. */
+type Shadowed = THREE.Light & { shadow?: THREE.LightShadow };
+
 /**
  * A mirror of the scene about a water plane, rendered into a reduced-resolution HDR target just
  * before the water draws (three.js Reflector's oblique-clip method, so nothing under the surface
@@ -330,8 +317,8 @@ export function mistTexture() {
  */
 export function planarReflection(level: number | (() => number), layer?: number, coarse = 2, lazy = false) {
   let y = typeof level === 'number' ? level : 0;
-  let lit = false;
-  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  let lights: Shadowed[] | null = null;
+  const rt = new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType });
   const texMat = new THREE.Matrix4(), vcam = new THREE.PerspectiveCamera();
   const normal = new THREE.Vector3(0, 1, 0), onPlane = new THREE.Vector3(0, y, 0);
   const camPos = new THREE.Vector3(), view = new THREE.Vector3(), look = new THREE.Vector3(), target = new THREE.Vector3();
@@ -340,7 +327,9 @@ export function planarReflection(level: number | (() => number), layer?: number,
   const on = { value: 0 };
   let busy = false, drawnFor: THREE.Camera | null = null, waited = 0;
   const drawnAt = new THREE.Matrix4(), drawnProj = new THREE.Matrix4();
-  const render = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, self: THREE.Object3D) => {
+  // (`frame`: the renderer drawing the frame, as an object's onBeforeRender receives it.)
+  const render = (frame: unknown, scene: THREE.Scene, camera: THREE.Camera, self: THREE.Object3D) => {
+    const renderer = frame as Renderer;
     if (lazy && on.value && drawnFor === camera && !busy) {
       renderer.getDrawingBufferSize(size);
       const a = drawnAt.elements, b = camera.matrixWorld.elements;
@@ -356,13 +345,17 @@ export function planarReflection(level: number | (() => number), layer?: number,
     on.value = 0;
     if (busy || !(camera as THREE.PerspectiveCamera).isPerspectiveCamera) return;
     if (typeof level !== 'number') y = level();
-    if (layer !== undefined) {
-      vcam.layers.set(layer);
-      if (!lit) {
-        scene.traverse((o) => (o as THREE.Light).isLight && o.layers.enable(layer));
-        lit = true;
-      }
+    // (The scene's lights: their shadows were drawn for this frame already, and every light shines in a layer mirror.)
+    if (!lights) {
+      const found: Shadowed[] = [];
+      scene.traverse((o) => {
+        if (!(o as THREE.Light).isLight) return;
+        found.push(o as Shadowed);
+        if (layer !== undefined) o.layers.enable(layer);
+      });
+      lights = found;
     }
+    if (layer !== undefined) vcam.layers.set(layer);
     camPos.setFromMatrixPosition(camera.matrixWorld);
     view.subVectors(onPlane.set(camPos.x, y, camPos.z), camPos);
     if (view.dot(normal) > 0) return;
@@ -370,6 +363,7 @@ export function planarReflection(level: number | (() => number), layer?: number,
     rot.extractRotation(camera.matrixWorld);
     look.set(0, 0, -1).applyMatrix4(rot).add(camPos);
     target.subVectors(onPlane, look).reflect(normal).negate().add(onPlane);
+    vcam.coordinateSystem = camera.coordinateSystem;
     vcam.position.copy(view);
     vcam.up.set(0, 1, 0).applyMatrix4(rot).reflect(normal);
     vcam.lookAt(target);
@@ -382,17 +376,21 @@ export function planarReflection(level: number | (() => number), layer?: number,
     clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
     const pm = vcam.projectionMatrix.elements;
     qv.set((Math.sign(clip.x) + pm[8]) / pm[0], (Math.sign(clip.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
-    clip.multiplyScalar(2 / clip.dot(qv));
+    // (Depth runs 0..1 in WebGPU's clip space and -1..1 in WebGL's.)
+    const gpu = renderer.coordinateSystem === WebGPUCoordinateSystem;
+    clip.multiplyScalar((gpu ? 1 : 2) / clip.dot(qv));
     pm[2] = clip.x;
     pm[6] = clip.y;
-    pm[10] = clip.z + 1 - 0.003;
+    pm[10] = clip.z + (gpu ? 0 : 1) - 0.003;
     pm[14] = clip.w;
+    vcam.projectionMatrixInverse.copy(vcam.projectionMatrix).invert();
     renderer.getDrawingBufferSize(size);
     const W = Math.max(64, Math.round(size.x / coarse)), H = Math.max(64, Math.round(size.y / coarse));
     if (rt.width !== W || rt.height !== H) rt.setSize(W, H);
     busy = true;
     self.visible = false;
-    const prevTarget = renderer.getRenderTarget(), prevShadow = renderer.shadowMap.autoUpdate, prevXr = renderer.xr.enabled;
+    const prevTarget = renderer.getRenderTarget(), prevXr = renderer.xr.enabled;
+    const shadows = lights.map((l) => l.shadow?.autoUpdate);
     // No background in the mirror: its alpha then marks where something was reflected, and the
     // painted sky gradient fills the rest.
     const bg = scene.background, prevAlpha = renderer.getClearAlpha();
@@ -400,10 +398,8 @@ export function planarReflection(level: number | (() => number), layer?: number,
     scene.background = null;
     renderer.setClearColor(clearC, 0);
     renderer.xr.enabled = false;
-    renderer.shadowMap.autoUpdate = false;
+    for (const l of lights) if (l.shadow) l.shadow.autoUpdate = false;
     renderer.setRenderTarget(rt);
-    renderer.state.buffers.depth.setMask(true);
-    if (renderer.autoClear === false) renderer.clear();
     // (The scene's matrices were brought up to date by the frame this mirror draws in.)
     const prevAuto = scene.matrixWorldAutoUpdate;
     scene.matrixWorldAutoUpdate = false;
@@ -412,10 +408,10 @@ export function planarReflection(level: number | (() => number), layer?: number,
     scene.background = bg;
     renderer.setClearColor(clearC, prevAlpha);
     renderer.xr.enabled = prevXr;
-    renderer.shadowMap.autoUpdate = prevShadow;
+    lights.forEach((l, i) => {
+      if (l.shadow) l.shadow.autoUpdate = shadows[i] ?? true;
+    });
     renderer.setRenderTarget(prevTarget);
-    const vp = (camera as THREE.Camera & { viewport?: THREE.Vector4 }).viewport;
-    if (vp) renderer.state.viewport(vp);
     self.visible = true;
     busy = false;
     on.value = 1;

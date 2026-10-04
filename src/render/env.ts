@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { ShadowNode } from 'three/webgpu';
+import { float, Fn, reference, renderGroup, texture, vec2 } from 'three/tsl';
+import type { F, V2, V3 } from './patch';
 import { shareResource } from './resources';
 
 /**
@@ -126,7 +129,7 @@ export const LIGHT_BALANCE = {
 /**
  * The lights for a zone, from its theme: a warm key (the sun) strong enough that its shadows read
  * clearly, a gentler sky light (cool from above) and a warm bounce from the sunlit ground below, and
- * a cool fill from the side away from the sun. The ambient occlusion (shadePass.ts) gives the shade
+ * a cool fill from the side away from the sun. The ambient occlusion (post.ts) gives the shade
  * its depth, so the sky and bounce light fill the shadows with colour instead of washing them out.
  */
 export function zoneLighting(t: LightingTheme): ZoneLighting {
@@ -147,20 +150,43 @@ export function zoneLighting(t: LightingTheme): ZoneLighting {
 }
 
 /**
- * Soft, steady shadow edges: the stock PCF filter turns its few samples by a per-pixel noise, which
+ * Soft, steady shadow edges: the stock filter turns its few samples by a per-pixel noise, which
  * reads as a dithered stripe along every shadow edge on a wall or a basin's rim. A fixed 4 × 4 grid
- * of filtered taps across the light's shadow radius gives an even soft edge with no noise. (Patched into the shader
- * chunk once, before any material compiles.)
+ * of filtered taps across the light's shadow radius gives an even soft edge with no noise. (Set as a
+ * light's shadow filter: `light.shadow.filterNode`.)
  */
-export function steadyShadows() {
-  const chunk = THREE.ShaderChunk.shadowmap_pars_fragment;
-  if (chunk.includes('steady-shadows')) return;
-  const next = chunk.replace(/float phi = interleavedGradientNoise\( gl_FragCoord\.xy \) \* PI2;[\s\S]*?\) \* 0\.2;/, `// steady-shadows
-				shadow = 0.0;
-				for ( int i = 0; i < 4; i ++ ) for ( int j = 0; j < 4; j ++ ) {
-					shadow += texture( shadowMap, vec3( shadowCoord.xy + ( vec2( float( i ), float( j ) ) - 1.5 ) * radius * 0.66, shadowCoord.z ) );
-				}
-				shadow /= 16.0;`);
-  if (next === chunk) throw new Error('steadyShadows: the shadow chunk has changed; update the patch');
-  THREE.ShaderChunk.shadowmap_pars_fragment = next;
+export const steadyShadows = Fn(({ depthTexture, shadowCoord, shadow }: { depthTexture: THREE.DepthTexture; shadowCoord: V3; shadow: THREE.LightShadow }) => {
+  const mapSize = (reference('mapSize', 'vec2', shadow) as unknown as { setGroup(g: unknown): V2 }).setGroup(renderGroup);
+  const radius = (reference('radius', 'float', shadow) as unknown as { setGroup(g: unknown): F }).setGroup(renderGroup).div(mapSize.x).mul(0.66).toVar();
+  let sum: F = float(0);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    sum = sum.add(texture(depthTexture, shadowCoord.xy.add(vec2(i - 1.5, j - 1.5).mul(radius))).compare(shadowCoord.z) as unknown as F);
+  }
+  return sum.div(16);
+});
+
+/**
+ * Keep the shadow pass cheap on the CPU. The pass draws every caster with one shared material that
+ * takes each caster's alpha test in turn, and three.js counts each switch between cut-out casters
+ * (leaves) and solid ones as a new material version, so every caster's draw re-derived its program
+ * key every frame (about 5 ms a frame in the keep). Each caster's draw is built once with its own
+ * alpha test either way, so the shared material takes the value without counting a new version.
+ */
+let shadowPassSteady = false;
+export function steadyShadowPass() {
+  if (shadowPassSteady) return;
+  shadowPassSteady = true;
+  const proto = ShadowNode.prototype as unknown as { getShadowMaterial(): THREE.Material };
+  const get = proto.getShadowMaterial;
+  proto.getShadowMaterial = function (this: unknown) {
+    const mat = get.call(this) as THREE.Material & { _alphaTest: number; steadyAlphaTest?: boolean };
+    if (!mat.steadyAlphaTest) {
+      mat.steadyAlphaTest = true;
+      Object.defineProperty(mat, 'alphaTest', {
+        get: () => mat._alphaTest,
+        set: (v: number) => (mat._alphaTest = v),
+      });
+    }
+    return mat;
+  };
 }

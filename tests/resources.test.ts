@@ -42,9 +42,9 @@ describe('instance resource cleanup', () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it('releases instancing buffers and shader-owned textures', () => {
+  it('releases instancing buffers and material-owned textures', () => {
     const texture = new THREE.Texture();
-    const material = new THREE.ShaderMaterial({ uniforms: { image: { value: texture } } });
+    const material = new THREE.MeshBasicMaterial({ map: texture });
     const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(), material, 3);
     const release = vi.spyOn(mesh, 'dispose'), texRelease = vi.spyOn(texture, 'dispose');
     disposeObject(mesh);
@@ -64,7 +64,7 @@ describe('instance resource cleanup', () => {
   });
 
   it('releases the drowned city reflection target when its terrain is retired', () => {
-    const release = vi.spyOn(THREE.WebGLRenderTarget.prototype, 'dispose');
+    const release = vi.spyOn(THREE.RenderTarget.prototype, 'dispose');
     const terrain = buildTerrain(ZONES.ruin.build(123), ZONES.ruin.theme, 123);
     disposeObjects(terrain.meshes);
     expect(release).toHaveBeenCalledOnce();

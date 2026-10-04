@@ -9,6 +9,9 @@ import { HeroDresser, makeModel } from '../render/registry';
 import type { Slot } from '../types';
 import { Studio, equip, fit } from './inspect';
 
+/** The hero's tunic and armour skirts mid-stride (explicit suite: `skirts`). */
+import { skirtsSuite } from './skirtsInspect';
+
 type Shot = (n: string) => Promise<void>;
 
 const LOOK = { name: '', skin: 1, hair: 1, hairColor: 1, beard: 0, cloth: 0, cloth2: 5 };
@@ -107,13 +110,15 @@ export async function charactersSuite(g: Game, shot: Shot) {
 }
 
 /**
- * The character suites (explicit only): `characters`, the redesigned hero and enemies (charactersSuite), and `minifig` or
- * `minifig:<tag>`, the goblin and the cultist on the minifigure body every humanoid shares (minifigInspect.ts; the tag
- * names the captures of a run on other models, e.g. the ones they replace).
+ * The character suites (explicit only): `characters`, the redesigned hero and enemies (charactersSuite); `skirts`, the
+ * hero's skirts mid-stride (skirtsInspect.ts); and `minifig` or `minifig:<tag>`, the goblin and the cultist on the
+ * minifigure body every humanoid shares (minifigInspect.ts; the tag names the captures of a run on other models, e.g.
+ * the ones they replace).
  */
 export async function characterSuites(g: Game, shot: Shot, suites: string) {
   const list = suites.split(',');
   if (list.includes('characters')) await charactersSuite(g, shot);
+  if (list.includes('skirts')) await skirtsSuite(g, shot);
   const minifig = list.find((s) => s === 'minifig' || s.startsWith('minifig:'));
   if (minifig) await (await import('./minifigInspect')).minifigSuite(g, shot, minifig.slice('minifig:'.length));
 }

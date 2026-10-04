@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { abs, atan, attribute, cameraPosition, cameraProjectionMatrix, cos, Discard, dot, exp, float, Fn, If, length, mat3, max, min, mix, modelViewMatrix, modelWorldMatrix, normalize, positionGeometry, positionWorld, pow, saturate, select, sin, smoothstep, step, texture, transpose, uv, varying, vec2, vec3, vec4, viewportSize } from 'three/tsl';
+import { own, type F, type V2, type V3, type V4 } from '../render/patch';
 import type { ZoneTheme } from '../data/zones';
 import { noiseTexture } from '../render/textures';
 import { FONT_SETS } from '../ui/fontGlyphs';
@@ -112,285 +115,296 @@ export function portalFacing(foot: { x: number; y: number; z: number }, cam: { x
   return { yaw: flat > 1e-4 ? Math.atan2(dx, dz) : 0, lean: Math.max(0, Math.min(1.5, Math.atan2(dy, Math.max(flat, 1e-4)))) };
 }
 
-const WINDOW_VERT = `
-  varying vec2 vUv;
-  varying vec3 vDir;
-  void main() {
-    vUv = uv;
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    // The view ray in the portal's own frame (no scale on portals).
-    vDir = transpose(mat3(modelMatrix)) * (wp.xyz - cameraPosition);
-    gl_Position = projectionMatrix * viewMatrix * wp;
-  }`;
+/**
+ * What every portal's materials read (their own `portal` property): its clock, its zone colour and
+ * its glimpse's palette.
+ */
+interface PortalLook {
+  time: { value: number };
+  color: THREE.Color;
+  skyTop: THREE.Color;
+  skyLow: THREE.Color;
+  fog: THREE.Color;
+  ground: THREE.Color;
+  sil: THREE.Color;
+  glow: THREE.Color;
+  /** The mote rise (world units). */
+  height: number;
+}
+
+const look = {
+  t: () => own.f('portal.time.value'),
+  c: (name: Exclude<keyof PortalLook, 'time' | 'height'>) => own.color(`portal.${name}`),
+};
+
+const GROUND = -1.5;
+const hash = (x: F) => sin(x.mul(127.1).add(11.7)).mul(43758.5453).fract();
+const vnoise = (x: F) => {
+  const i = x.floor().toVar(), f0 = x.fract();
+  const f = f0.mul(f0).mul(float(3).sub(f0.mul(2)));
+  return mix(hash(i), hash(i.add(1)), f);
+};
+/** The noise texture at its full level (some samples sit in branches, where implicit derivatives fail). */
+const tnoise = (p: V2) => texture(noiseTexture(), p).level(float(0)).r;
+
+/** Silhouette height above the ground at x for one layer (k: 0 near, 1 mid, 2 far) of a style. */
+function silhouette(style: GlimpseStyle, x: F, k: number): F {
+  const s = k * 17.3 + 3;
+  switch (style) {
+    case GlimpseStyle.Void: {
+      // Void: the keep's island with towers and spires on the mid layer; drifting islets beyond.
+      if (k === 0) return float(-1);
+      if (k === 1) {
+        const c = x.div(0.55).floor().toVar(), f = x.div(0.55).fract().toVar();
+        const tower = step(0.22, f).mul(step(f, 0.78)).mul(step(abs(x.sub(0.6)), 2.4)).mul(hash(c.add(s)).mul(1.8).add(1)).toVar();
+        const spire = max(0, float(1).sub(abs(f.sub(0.5)).mul(3.6))).mul(0.8).mul(step(0.35, hash(c.add(9))));
+        return select(abs(x.sub(0.6)).greaterThan(3), float(-1), max(0.2, tower.add(spire.mul(step(0.01, tower)))).add(1));
+      }
+      const c2 = x.div(3).floor().toVar();
+      return select(hash(c2.add(s)).greaterThan(0.55), hash(c2.add(4)).mul(1.2).add(2.2).sub(abs(x.div(3).fract().sub(0.5)).mul(3.2)), float(-1));
+    }
+    case GlimpseStyle.Cave: {
+      // Cave: rubble banks and pillars, walls closing in at the sides.
+      const h = vnoise(x.mul(1.4).add(s)).mul(0.9).add(0.3).add(step(0.84, vnoise(x.mul(0.8).add(s * 2))).mul(2.8));
+      return max(h.mul(step(1.1, abs(x))), abs(x).sub(2 + k * 1.1).mul(2.4));
+    }
+    case GlimpseStyle.Forest: {
+      // Forest: pines near, a pine ridge mid, mountains far.
+      if (k === 2) return vnoise(x.mul(0.35).add(s)).mul(2.6).add(1.8).add(vnoise(x.mul(1.1).add(s)).mul(0.6));
+      const w = k === 0 ? 0.9 : 0.6;
+      const c = x.div(w).floor(), f = x.div(w).fract();
+      const h = hash(c.add(s)).mul(k === 0 ? 1.4 : 0.8).add(k === 0 ? 1.6 : 0.9);
+      const tri = float(1).sub(abs(f.sub(0.5)).mul(2)).toVar();
+      const tiers = tri.sub(tri.mod(0.34).mul(0.45));
+      return h.mul(tiers).add(vnoise(x.mul(0.5).add(s)).mul(0.5)).add(k === 0 ? 0 : 0.6);
+    }
+    case GlimpseStyle.Water: {
+      // Water: broken columns near, a ruined colonnade mid, low hills far.
+      if (k === 2) return vnoise(x.mul(0.4).add(s)).mul(0.9).add(0.4);
+      const w = k === 0 ? 1.7 : 1.0;
+      const c = x.div(w).floor().toVar(), f = x.div(w).fract().toVar();
+      const h = hash(c.add(s)).mul(1.6).add(k === 0 ? 1.8 : 1.3).toVar();
+      const gone = step(hash(c.add(s + 1)), 0.3);
+      const wall = step(0.5, k).mul(step(0.8, hash(c.add(s + 7))));
+      const col = step(0.38, f).mul(step(f, 0.62));
+      const broken = select(hash(c.add(s + 5)).greaterThan(0.45), float(1).sub(f.sub(0.38).mul(1.6).mul(hash(c.add(2)))), float(1));
+      const hh = select(wall.greaterThan(0.5), h.mul(0.55).add(vnoise(x.mul(3)).mul(0.3)), select(col.greaterThan(0.5), h.mul(broken), float(-1)));
+      return select(gone.greaterThan(0.5), float(-1), hh);
+    }
+    default: {
+      // Lava: jagged spires.
+      const w = k === 0 ? 1.3 : 0.8;
+      const c = x.div(w).floor(), f = x.div(w).fract();
+      const spike = pow(max(0, float(1).sub(abs(f.sub(0.5)).mul(2))), 1.6).mul(hash(c.add(s)).mul(2.6).add(1.2));
+      return spike.add(vnoise(x.mul(0.9).add(s)).mul(k === 2 ? 1.6 : 0.5));
+    }
+  }
+}
+
+function sky(style: GlimpseStyle, r: V3): V3 {
+  const t = look.t(), top = look.c('skyTop');
+  const h = saturate(r.y.mul(2.2).add(0.1)).toVar();
+  let c: V3 = mix(look.c('skyLow'), top, pow(h, 0.7));
+  // Below the horizon (only seen past the edge of the keep's island): the abyss.
+  c = mix(c, top.mul(0.35), smoothstep(-0.02, -0.3, r.y));
+  // Sun / moon / tunnel glow just above the horizon.
+  const g = exp(length(vec2(r.x.mul(1.3).sub(0.18), r.y.sub(0.05))).mul(-6));
+  c = c.add(look.c('glow').mul(g).mul(style === GlimpseStyle.Cave ? 1.5 : 0.45));
+  if (style === GlimpseStyle.Void || style === GlimpseStyle.Water || style === GlimpseStyle.Lava) {
+    let q = r.xy.div(max(r.z.negate(), 0.2)).mul(26);
+    if (style === GlimpseStyle.Lava) q = vec2(q.x, q.y.sub(t.mul(1.5)));
+    const cell = q.floor().toVar();
+    const st = hash(cell.x.mul(7.1).add(cell.y.mul(13.7))).toVar();
+    const dd = length(q.fract().sub(0.5));
+    if (style === GlimpseStyle.Void) c = c.add(vec3(1.0, 0.95, 1.1).mul(step(0.93, st).mul(smoothstep(0.2, 0, dd)).mul(sin(t.mul(2).add(st.mul(40))).mul(0.4).add(0.6)).mul(h).mul(1.4)));
+    else if (style === GlimpseStyle.Lava) c = c.add(vec3(1.6, 0.5, 0.1).mul(step(0.95, st).mul(smoothstep(0.18, 0, dd))));
+    else c = c.add(vec3(0.9).mul(step(0.97, st).mul(smoothstep(0.15, 0, dd)).mul(h).mul(0.6)));
+  }
+  return c;
+}
 
 /**
- * The window. The destination style (STYLE, 0–4) and open/sealed (OPEN) are compile-time defines,
- * so each program holds only its own scene: one program branching over every style unrolls into a
- * shader the D3D compiler (ANGLE on Windows) chokes on, and the GL context is lost.
+ * One silhouette layer (the plane z = -D, haze 0..1): whether the ray from o meets the layer's rock
+ * before parameter tLimit, and the colour it shows there.
  */
-const WINDOW_FRAG = `
-  uniform float uTime;
-  uniform vec3 uColor;
-  uniform vec3 uSkyTop, uSkyLow, uFog, uGround, uSil, uGlow;
-  uniform sampler2D uNoise;
-  varying vec2 vUv;
-  varying vec3 vDir;
-
-  const float GROUND = -1.5;
-  float hash(float x) { return fract(sin(x * 127.1 + 11.7) * 43758.5453); }
-  float vnoise(float x) { float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(hash(i), hash(i + 1.0), f); }
-  // Explicit LOD: some samples sit in branches (implicit derivatives there fail on D3D).
-  float tnoise(vec2 p) { return textureLod(uNoise, p, 0.0).r; }
-
-#if OPEN
-  // Silhouette height above the ground at x for one layer (k: 0 near, 1 mid, 2 far).
-  float silhouette(float x, float k) {
-    float s = k * 17.3 + 3.0;
-  #if STYLE == 0
-    // Void: the keep's island with towers and spires on the mid layer; drifting islets beyond.
-    if (k < 0.5) return -1.0;
-    if (k < 1.5) {
-      if (abs(x - 0.6) > 3.0) return -1.0;
-      float c = floor(x / 0.55), f = fract(x / 0.55);
-      float tower = step(0.22, f) * step(f, 0.78) * step(abs(x - 0.6), 2.4) * (1.0 + hash(c + s) * 1.8);
-      float spire = max(0.0, 1.0 - abs(f - 0.5) * 3.6) * 0.8 * step(0.35, hash(c + 9.0));
-      return 1.0 + max(0.2, tower + spire * step(0.01, tower));
-    }
-    float c2 = floor(x / 3.0);
-    return hash(c2 + s) > 0.55 ? 2.2 + hash(c2 + 4.0) * 1.2 - abs(fract(x / 3.0) - 0.5) * 3.2 : -1.0;
-  #elif STYLE == 1
-    // Cave: rubble banks and pillars, walls closing in at the sides.
-    float h = 0.3 + vnoise(x * 1.4 + s) * 0.9 + step(0.84, vnoise(x * 0.8 + s * 2.0)) * 2.8;
-    return max(h * step(1.1, abs(x)), (abs(x) - (2.0 + k * 1.1)) * 2.4);
-  #elif STYLE == 2
-    // Forest: pines near, a pine ridge mid, mountains far.
-    if (k > 1.5) return 1.8 + vnoise(x * 0.35 + s) * 2.6 + vnoise(x * 1.1 + s) * 0.6;
-    float w = k < 0.5 ? 0.9 : 0.6;
-    float c = floor(x / w), f = fract(x / w);
-    float h = (k < 0.5 ? 1.6 : 0.9) + hash(c + s) * (k < 0.5 ? 1.4 : 0.8);
-    float tri = 1.0 - abs(f - 0.5) * 2.0;
-    float tiers = tri - mod(tri, 0.34) * 0.45;
-    return (k < 0.5 ? 0.0 : 0.6) + h * tiers + vnoise(x * 0.5 + s) * 0.5;
-  #elif STYLE == 3
-    // Water: broken columns near, a ruined colonnade mid, low hills far.
-    if (k > 1.5) return 0.4 + vnoise(x * 0.4 + s) * 0.9;
-    float w = k < 0.5 ? 1.7 : 1.0;
-    float c = floor(x / w), f = fract(x / w);
-    float h = (k < 0.5 ? 1.8 : 1.3) + hash(c + s) * 1.6;
-    float gone = step(hash(c + s + 1.0), 0.3);
-    float wall = step(0.5, k) * step(0.8, hash(c + s + 7.0));
-    float col = step(0.38, f) * step(f, 0.62);
-    float broken = hash(c + s + 5.0) > 0.45 ? 1.0 - (f - 0.38) * 1.6 * hash(c + 2.0) : 1.0;
-    float hh = wall > 0.5 ? h * 0.55 + vnoise(x * 3.0) * 0.3 : (col > 0.5 ? h * broken : -1.0);
-    return gone > 0.5 ? -1.0 : hh;
-  #else
-    // Lava: jagged spires.
-    float w = k < 0.5 ? 1.3 : 0.8;
-    float c = floor(x / w), f = fract(x / w);
-    float spike = pow(max(0.0, 1.0 - abs(f - 0.5) * 2.0), 1.6) * (1.2 + hash(c + s) * 2.6);
-    return spike + vnoise(x * 0.9 + s) * (k > 1.5 ? 1.6 : 0.5);
-  #endif
-  }
-
-  vec3 sky(vec3 r) {
-    float h = clamp(r.y * 2.2 + 0.1, 0.0, 1.0);
-    vec3 c = mix(uSkyLow, uSkyTop, pow(h, 0.7));
-    // Below the horizon (only seen past the edge of the keep's island): the abyss.
-    c = mix(c, uSkyTop * 0.35, smoothstep(-0.02, -0.3, r.y));
-    // Sun / moon / tunnel glow just above the horizon.
-    float g = exp(-length(vec2(r.x * 1.3 - 0.18, r.y - 0.05)) * 6.0);
-  #if STYLE == 1
-    c += uGlow * g * 1.5;
-  #else
-    c += uGlow * g * 0.45;
-  #endif
-  #if STYLE == 0 || STYLE == 3 || STYLE == 4
-    vec2 q = r.xy / max(0.2, -r.z) * 26.0;
-    #if STYLE == 4
-      q.y -= uTime * 1.5;
-    #endif
-    vec2 cell = floor(q);
-    float st = hash(cell.x * 7.1 + cell.y * 13.7);
-    float dd = length(fract(q) - 0.5);
-    #if STYLE == 0
-      c += vec3(1.0, 0.95, 1.1) * step(0.93, st) * smoothstep(0.2, 0.0, dd) * (0.6 + 0.4 * sin(uTime * 2.0 + st * 40.0)) * h * 1.4;
-    #elif STYLE == 4
-      c += vec3(1.6, 0.5, 0.1) * step(0.95, st) * smoothstep(0.18, 0.0, dd);
-    #else
-      c += vec3(0.9) * step(0.97, st) * smoothstep(0.15, 0.0, dd) * h * 0.6;
-    #endif
-  #endif
-    return c;
-  }
-
-  // One silhouette layer (the plane z = -D, haze 0..1): true, with its colour, if the ray from o
-  // meets the layer's rock before parameter tLimit.
-  bool layer(vec3 o, vec3 r, float tLimit, float k, float D, float haze, inout vec3 c) {
-    float t = (D + o.z) / -r.z;
-    if (t <= 0.0 || t > tLimit) return false;
-    vec3 p = o + r * t;
-    float top = GROUND + silhouette(p.x, k);
-    if (p.y >= top) return false;
-    c = mix(uSil, uFog, haze);
+function layer(style: GlimpseStyle, o: V3, r: V3, tLimit: F | number, k: number, D: number, haze: number) {
+  const t = o.z.add(D).div(r.z.negate()).toVar();
+  const p = o.add(r.mul(t)).toVar();
+  const top = silhouette(style, p.x, k).add(GROUND).toVar();
+  const hit = t.greaterThan(0).and(t.lessThanEqual(tLimit)).and(p.y.lessThan(top));
+  const color = () => {
+    const glow = look.c('glow');
     // Lit rim along the top edge, soft body shading downward.
-    c += uGlow * smoothstep(0.09, 0.0, top - p.y) * (0.4 - haze * 0.3);
-    c *= 0.8 + 0.2 * smoothstep(GROUND, top, p.y);
-  #if STYLE == 0
-    if (k > 0.5 && k < 1.5) {
+    let c: V3 = mix(look.c('sil'), look.c('fog'), haze).add(glow.mul(smoothstep(0.09, 0, top.sub(p.y)).mul(0.4 - haze * 0.3)));
+    c = c.mul(smoothstep(GROUND, top, p.y).mul(0.2).add(0.8));
+    if (style === GlimpseStyle.Void && k === 1) {
       // Lit windows in the keep's towers.
-      vec2 wq = vec2(p.x * 7.0, p.y * 5.0);
-      float win = step(0.78, hash(floor(wq.x) * 3.1 + floor(wq.y) * 7.7)) * step(0.35, fract(wq.x)) * step(0.3, fract(wq.y)) * step(GROUND + 1.2, p.y);
-      c += uGlow * win * 1.3;
+      const wq = vec2(p.x.mul(7), p.y.mul(5));
+      const win = step(0.78, hash(wq.x.floor().mul(3.1).add(wq.y.floor().mul(7.7)))).mul(step(0.35, wq.x.fract())).mul(step(0.3, wq.y.fract())).mul(step(GROUND + 1.2, p.y));
+      c = c.add(glow.mul(win).mul(1.3));
+    } else if (style === GlimpseStyle.Cave) {
+      // Lantern light pooled low on the walls, and a lantern hung on each wall of each layer.
+      c = c.add(glow.mul(0.22).mul(float(1).sub(smoothstep(GROUND, GROUND + 1.6, p.y))).mul(1 - haze));
+      const lp = vec2(abs(p.x).sub(1.75 + k * 1.1), p.y.sub(GROUND + 1.5)).toVar();
+      c = c.add(glow.mul(exp(dot(lp, lp).mul(-30)).mul(2.5).add(exp(length(lp).mul(-3.5)).mul(0.35))).mul(1 - haze * 0.6));
     }
-  #elif STYLE == 1
-    // Lantern light pooled low on the walls, and a lantern hung on each wall of each layer.
-    c += uGlow * 0.22 * (1.0 - smoothstep(GROUND, GROUND + 1.6, p.y)) * (1.0 - haze);
-    vec2 lp = vec2(abs(p.x) - (1.75 + k * 1.1), p.y - (GROUND + 1.5));
-    c += uGlow * (exp(-dot(lp, lp) * 30.0) * 2.5 + exp(-length(lp) * 3.5) * 0.35) * (1.0 - haze * 0.6);
-  #endif
-    return true;
-  }
+    return c;
+  };
+  return { hit, color };
+}
 
-  #if STYLE == 1
-    #define DEPTH 0.8
-  #else
-    #define DEPTH 1.0
-  #endif
-
-  vec3 scene(vec3 o, vec3 r) {
-    float tg = r.y < -0.001 ? (GROUND - o.y) / r.y : 1e5;
-    float gz = -r.z * tg;
-    float tl = tg;
-  #if STYLE == 1
+/** The glimpse along the ray r from o (the portal's own frame: the far side lies toward -z). */
+function scene(style: GlimpseStyle, o: V3, r: V3): V3 {
+  const depthK = style === GlimpseStyle.Cave ? 0.8 : 1.0;
+  const tg = select(r.y.lessThan(-0.001), float(GROUND).sub(o.y).div(r.y), float(1e5)).toVar();
+  const gz = r.z.negate().mul(tg).toVar();
+  let tl: F = tg;
+  let tc: F = float(1e5);
+  if (style === GlimpseStyle.Cave) {
     // Cave ceiling: a low rock roof with hanging teeth, receding into the dark.
-    float tc = r.y > 0.001 ? (1.3 + vnoise(o.x * 2.0 + r.x * 9.0) * 0.3 - o.y) / r.y : 1e5;
+    tc = select(r.y.greaterThan(0.001), vnoise(o.x.mul(2).add(r.x.mul(9))).mul(0.3).add(1.3).sub(o.y).div(r.y), float(1e5)).toVar();
     tl = min(tg, tc);
-  #endif
-    vec3 c = vec3(0.0);
-    if (layer(o, r, tl, 0.0, 4.5 * DEPTH, 0.12, c)) return c;
-    if (layer(o, r, tl, 1.0, 9.0 * DEPTH, 0.42, c)) return c;
-    if (layer(o, r, tl, 2.0, 18.0 * DEPTH, 0.7, c)) return c;
-  #if STYLE == 1
-    if (tc < 1e4) {
-      vec3 pc = o + r * tc;
-      float teeth = vnoise(pc.x * 2.6) * 0.6 + vnoise(-pc.z * 1.1) * 0.4;
-      return mix(uSil * (0.7 + teeth * 0.5), uFog * 0.6, smoothstep(2.0, 16.0, -pc.z));
-    }
-  #endif
-  #if STYLE == 0
-    if (abs(o.x + r.x * tg - 0.6) > 3.0 || gz > 11.0) tg = 1e5;
-  #endif
-    if (tg > 1e4) return sky(r);
-    vec3 p = o + r * tg;
-    float haze = smoothstep(1.0, 22.0, gz);
-  #if STYLE == 3
-    // Still water: near and mid layers mirrored and rippled over deep teal, glints on the ripples.
-    vec2 rip = vec2(tnoise(p.xz * vec2(0.3, 0.9) + vec2(uTime * 0.02, 0.0)), tnoise(p.xz * vec2(0.5, 1.2) - vec2(0.0, uTime * 0.03))) - 0.5;
-    vec3 rr = normalize(vec3(r.x + rip.x * 0.06, -r.y, r.z + rip.y * 0.06));
-    vec3 refl = sky(rr);
-    if (!layer(p, rr, 1e5, 0.0, 4.5, 0.12, refl)) layer(p, rr, 1e5, 1.0, 9.0, 0.42, refl);
-    float fres = 0.3 + 0.6 * pow(1.0 - abs(r.y), 5.0);
-    c = mix(uGround, refl * 0.9, fres);
-    c += uGlow * pow(max(0.0, tnoise(p.xz * vec2(1.4, 3.0) + uTime * 0.04) - 0.7), 2.0) * 4.0 * (1.0 - haze);
-  #elif STYLE == 4
-    float n = tnoise(p.xz * 0.3 + vec2(0.0, uTime * 0.01));
-    float crack = smoothstep(0.045, 0.0, abs(n - 0.5)) * (1.0 - haze * 0.5);
-    c = mix(uGround, vec3(2.4, 0.6, 0.1), crack);
-  #else
-    c = uGround * (0.75 + tnoise(p.xz * 0.25) * 0.5);
-  #if STYLE == 1
-    // A mine-cart track running off into the dark: sleepers and two steel rails.
-    float rz = fract(p.z * 1.6);
-    float sleeper = step(abs(p.x - 0.1), 0.62) * step(rz, 0.35);
-    c = mix(c, vec3(0.16, 0.09, 0.05), sleeper);
-    float rail = step(abs(abs(p.x - 0.1) - 0.42), 0.05);
-    c = mix(c, vec3(0.5, 0.48, 0.46) + uGlow * 0.15, rail);
-  #endif
-  #endif
-    return mix(c, uFog, haze * 0.85);
   }
-#endif
+  const out = vec3(0).toVar();
+  const near = layer(style, o, r, tl, 0, 4.5 * depthK, 0.12), mid = layer(style, o, r, tl, 1, 9 * depthK, 0.42), far = layer(style, o, r, tl, 2, 18 * depthK, 0.7);
+  const open = () => {
+    if (style === GlimpseStyle.Void) {
+      If(abs(o.x.add(r.x.mul(tg)).sub(0.6)).greaterThan(3).or(gz.greaterThan(11)), () => {
+        tg.assign(1e5);
+      });
+    }
+    If(tg.greaterThan(1e4), () => {
+      out.assign(sky(style, r));
+    }).Else(() => {
+      const p = o.add(r.mul(tg)).toVar();
+      const haze = smoothstep(1, 22, gz).toVar();
+      const t = look.t(), ground = look.c('ground');
+      let c: V3;
+      if (style === GlimpseStyle.Water) {
+        // Still water: near and mid layers mirrored and rippled over deep teal, glints on the ripples.
+        const rip = vec2(tnoise(p.xz.mul(vec2(0.3, 0.9)).add(vec2(t.mul(0.02), 0))), tnoise(p.xz.mul(vec2(0.5, 1.2)).sub(vec2(0, t.mul(0.03))))).sub(0.5);
+        const rr = normalize(vec3(r.x.add(rip.x.mul(0.06)), r.y.negate(), r.z.add(rip.y.mul(0.06)))).toVar();
+        const a = layer(style, p, rr, 1e5, 0, 4.5, 0.12), b = layer(style, p, rr, 1e5, 1, 9, 0.42);
+        const refl = select(a.hit, a.color(), select(b.hit, b.color(), sky(style, rr)));
+        const fres = pow(float(1).sub(abs(r.y)), 5).mul(0.6).add(0.3);
+        c = mix(ground, refl.mul(0.9), fres).add(look.c('glow').mul(pow(max(0, tnoise(p.xz.mul(vec2(1.4, 3)).add(t.mul(0.04))).sub(0.7)), 2)).mul(4).mul(float(1).sub(haze)));
+      } else if (style === GlimpseStyle.Lava) {
+        const n = tnoise(p.xz.mul(0.3).add(vec2(0, t.mul(0.01))));
+        const crack = smoothstep(0.045, 0, abs(n.sub(0.5))).mul(float(1).sub(haze.mul(0.5)));
+        c = mix(ground, vec3(2.4, 0.6, 0.1), crack);
+      } else {
+        c = ground.mul(tnoise(p.xz.mul(0.25)).mul(0.5).add(0.75));
+        if (style === GlimpseStyle.Cave) {
+          // A mine-cart track running off into the dark: sleepers and two steel rails.
+          const rz = p.z.mul(1.6).fract();
+          const sleeper = step(abs(p.x.sub(0.1)), 0.62).mul(step(rz, 0.35));
+          c = mix(c, vec3(0.16, 0.09, 0.05), sleeper);
+          const rail = step(abs(abs(p.x.sub(0.1)).sub(0.42)), 0.05);
+          c = mix(c, vec3(0.5, 0.48, 0.46).add(look.c('glow').mul(0.15)), rail);
+        }
+      }
+      out.assign(mix(c, look.c('fog'), haze.mul(0.85)));
+    });
+  };
+  const chain = If(near.hit, () => {
+    out.assign(near.color());
+  }).ElseIf(mid.hit, () => {
+    out.assign(mid.color());
+  }).ElseIf(far.hit, () => {
+    out.assign(far.color());
+  });
+  if (style === GlimpseStyle.Cave) {
+    chain.ElseIf(tc.lessThan(1e4), () => {
+      const pc = o.add(r.mul(tc)).toVar();
+      const teeth = vnoise(pc.x.mul(2.6)).mul(0.6).add(vnoise(pc.z.mul(-1.1)).mul(0.4));
+      out.assign(mix(look.c('sil').mul(teeth.mul(0.5).add(0.7)), look.c('fog').mul(0.6), smoothstep(2, 16, pc.z.negate())));
+    }).Else(open);
+  } else chain.Else(open);
+  return out;
+}
 
-  void main() {
+/** The window's colour and alpha, for a glimpse style, open or sealed. */
+function windowColor(style: GlimpseStyle, open: boolean) {
+  return Fn(() => {
+    const t = look.t(), color = look.c('color');
     // Oval coordinates: e = 1 on the rim.
-    vec2 q = (vUv - 0.5) * 2.0 * ${HALO.toFixed(3)};
-    float e = length(q);
-    float ang = atan(q.y, q.x + 1e-5);
-    float rimN = tnoise(vec2(ang * 0.477 + uTime * 0.07, e * 0.6 - uTime * 0.25));
-    float edge = e + (rimN - 0.5) * 0.06;
-    if (edge > ${HALO.toFixed(3)}) discard;
-    vec3 col;
-    float alpha;
-  #if OPEN
-    float rimN2 = tnoise(vec2(ang * 0.318 - uTime * 0.05, e * 1.3 + uTime * 0.11) + 0.37);
-    // Through the window: the view ray, flattened toward the horizon and widened (a virtual
-    // eye close behind the surface), swirled near the rim.
-    vec3 d = normalize(vDir);
-    d.z = -abs(d.z);
-    vec3 dc = normalize(vec3(d.x, d.y * 0.22 + 0.06, d.z));
-    float swirl = smoothstep(0.55, 1.0, e) * 0.5 * sin(uTime * 0.8 + e * 6.0);
-    vec2 s = q * vec2(${(PORTAL_W / 2).toFixed(3)}, ${(PORTAL_H / 2).toFixed(3)});
-    s = mat2(cos(swirl), sin(swirl), -sin(swirl), cos(swirl)) * s;
-    s += (vec2(tnoise(q * 0.4 + uTime * 0.05), tnoise(q * 0.4 - uTime * 0.04)) - 0.5) * 0.12;
-    col = scene(vec3(s, 0.0), normalize(vec3(s, 0.0) + dc * 2.4));
+    const q = uv().sub(0.5).mul(2 * HALO).toVar();
+    const e = length(q).toVar();
+    const ang = atan(q.y, q.x.add(1e-5)).toVar();
+    const rimN = tnoise(vec2(ang.mul(0.477).add(t.mul(0.07)), e.mul(0.6).sub(t.mul(0.25)))).toVar();
+    const edge = e.add(rimN.sub(0.5).mul(0.06)).toVar();
+    If(edge.greaterThan(HALO), () => {
+      Discard();
+    });
+    if (!open) {
+      // Sealed: a dark, slowly turning membrane with a cold, dim rim.
+      const smoke = tnoise(vec2(ang.mul(0.318).add(t.mul(0.01)), e.mul(0.8).sub(t.mul(0.02))));
+      const ring = smoothstep(0.86, 0.97, edge).mul(float(1).sub(smoothstep(0.98, 1.03, edge)));
+      const col = vec3(0.008, 0.008, 0.011).add(vec3(0.022, 0.024, 0.03).mul(smoke).mul(float(1).sub(smoothstep(0.2, 1, e)))).add(vec3(0.1, 0.1, 0.12).mul(ring).mul(rimN.add(0.5)));
+      return vec4(col, select(edge.lessThan(1), float(0.92), float(0)));
+    }
+    const rimN2 = tnoise(vec2(ang.mul(0.318).sub(t.mul(0.05)), e.mul(1.3).add(t.mul(0.11))).add(0.37));
+    // Through the window: the view ray, flattened toward the horizon and widened (a virtual eye
+    // close behind the surface), swirled near the rim.
+    const d0 = normalize(varying(transpose(mat3(modelWorldMatrix)).mul(positionWorld.sub(cameraPosition))) as V3);
+    const d = vec3(d0.x, d0.y, abs(d0.z).negate());
+    const dc = normalize(vec3(d.x, d.y.mul(0.22).add(0.06), d.z));
+    const swirl = smoothstep(0.55, 1, e).mul(0.5).mul(sin(t.mul(0.8).add(e.mul(6)))).toVar();
+    const s0 = q.mul(vec2(PORTAL_W / 2, PORTAL_H / 2)).toVar();
+    const s = vec2(cos(swirl).mul(s0.x).sub(sin(swirl).mul(s0.y)), sin(swirl).mul(s0.x).add(cos(swirl).mul(s0.y)))
+      .add(vec2(tnoise(q.mul(0.4).add(t.mul(0.05))), tnoise(q.mul(0.4).sub(t.mul(0.04)))).sub(0.5).mul(0.12)).toVar();
+    let col: V3 = scene(style, vec3(s, 0), normalize(vec3(s, 0).add(dc.mul(2.4))));
     // The zone colour washes in toward the rim; a bright ring of flowing energy on it.
-    col = mix(col, uColor * 0.8, smoothstep(0.72, 0.99, e) * 0.35);
-    float ring = smoothstep(0.8, 0.96, edge) * (1.0 - smoothstep(0.98, 1.04, edge));
-    float streak = smoothstep(0.45, 0.8, rimN * 0.6 + rimN2 * 0.5);
-    col += uColor * ring * (0.8 + streak * 1.8) + vec3(1.0) * ring * streak * 0.3;
-    float halo = (1.0 - smoothstep(1.0, ${HALO.toFixed(3)}, edge)) * step(1.0, edge);
-    col += uColor * halo * 0.9;
-    alpha = edge < 1.0 ? 1.0 : halo * 0.6;
-  #else
-    // Sealed: a dark, slowly turning membrane with a cold, dim rim.
-    float smoke = tnoise(vec2(ang * 0.318 + uTime * 0.01, e * 0.8 - uTime * 0.02));
-    col = vec3(0.008, 0.008, 0.011) + vec3(0.022, 0.024, 0.03) * smoke * (1.0 - smoothstep(0.2, 1.0, e));
-    float ring = smoothstep(0.86, 0.97, edge) * (1.0 - smoothstep(0.98, 1.03, edge));
-    col += vec3(0.1, 0.1, 0.12) * ring * (0.5 + rimN);
-    alpha = edge < 1.0 ? 0.92 : 0.0;
-  #endif
-    gl_FragColor = vec4(col, alpha);
-  }`;
+    col = mix(col, color.mul(0.8), smoothstep(0.72, 0.99, e).mul(0.35));
+    const ring = smoothstep(0.8, 0.96, edge).mul(float(1).sub(smoothstep(0.98, 1.04, edge))).toVar();
+    const streak = smoothstep(0.45, 0.8, rimN.mul(0.6).add(rimN2.mul(0.5))).toVar();
+    col = col.add(color.mul(ring).mul(streak.mul(1.8).add(0.8))).add(vec3(1).mul(ring).mul(streak).mul(0.3));
+    const halo = float(1).sub(smoothstep(1, HALO, edge)).mul(step(1, edge)).toVar();
+    col = col.add(color.mul(halo).mul(0.9));
+    return vec4(col, select(edge.lessThan(1), float(1), halo.mul(0.6)));
+  })();
+}
 
-const POOL_FRAG = `
-  uniform float uTime;
-  uniform vec3 uColor;
-  varying vec2 vUv;
-  void main() {
-    vec2 p = abs(vUv - 0.5) * 2.0;
-    float d = max(p.x, p.y) * 0.55 + length(vUv - 0.5) * 0.9;
-    float glow = smoothstep(1.0, 0.1, d) * (0.8 + 0.2 * sin(uTime * 2.1));
-    gl_FragColor = vec4(uColor * glow * 0.3, 1.0);
-  }`;
+/** One shared program per glimpse style, open and sealed. */
+const windows = new Map<string, ReturnType<typeof windowColor>>();
+const windowNode = (style: GlimpseStyle, open: boolean) => {
+  const key = `${style}:${open}`;
+  let n = windows.get(key);
+  if (!n) windows.set(key, (n = windowColor(style, open)));
+  return n;
+};
 
-const MOTE_VERT = `
-  uniform float uTime;
-  uniform float uHeight;
-  attribute float aSeed;
-  varying float vFade;
-  void main() {
-    vec3 p = position;
-    float life = fract(aSeed * 7.31 + uTime * (0.16 + aSeed * 0.12));
-    p.y += life * uHeight;
-    float a = uTime * (0.6 + aSeed) + aSeed * 40.0;
-    p.x += sin(a) * 0.12;
-    p.z += cos(a) * 0.12;
-    vFade = smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.65, 1.0, life));
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_PointSize = (0.9 + aSeed * 0.8) * 120.0 / -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }`;
+/** The floor glow under an open portal. */
+const POOL = Fn(() => {
+  const p = abs(uv().sub(0.5)).mul(2);
+  const d = max(p.x, p.y).mul(0.55).add(length(uv().sub(0.5)).mul(0.9));
+  const glow = smoothstep(1, 0.1, d).mul(sin(look.t().mul(2.1)).mul(0.2).add(0.8));
+  return vec4(look.c('color').mul(glow).mul(0.3), 1);
+})();
 
-const MOTE_FRAG = `
-  uniform vec3 uColor;
-  varying float vFade;
-  void main() {
-    float d = length(gl_PointCoord - 0.5) * 2.0;
-    float a = smoothstep(1.0, 0.0, d);
-    gl_FragColor = vec4(mix(uColor, vec3(1.0), 0.5) * a * vFade * 1.4, 1.0);
-  }`;
+/**
+ * Motes rising through an open portal: soft dots on camera-facing quads, from fixed seeds (aMote:
+ * where each starts and its seed), animated here.
+ */
+const mote = (() => {
+  const m = attribute('aMote', 'vec4') as V4;
+  const t = look.t(), seed = m.w;
+  const life = seed.mul(7.31).add(t.mul(seed.mul(0.12).add(0.16))).fract().toVar();
+  const a = t.mul(seed.add(0.6)).add(seed.mul(40)).toVar();
+  const p = vec3(m.x.add(sin(a).mul(0.12)), m.y.add(life.mul(own.f('portal.height'))), m.z.add(cos(a).mul(0.12)));
+  const fade = smoothstep(0, 0.15, life).mul(float(1).sub(smoothstep(0.65, 1, life)));
+  const mv = modelViewMatrix.mul(vec4(p, 1)).toVar();
+  // (Sized in pixels as a point sprite was: larger near the camera.)
+  const px = seed.mul(0.8).add(0.9).mul(120).div(mv.z.negate());
+  const clip = cameraProjectionMatrix.mul(mv).toVar();
+  const vertex = vec4(clip.xy.add(positionGeometry.xy.mul(px).mul(2).div(viewportSize).mul(clip.w)), clip.zw);
+  const dd = length(uv().sub(0.5)).mul(2);
+  const color = vec4(mix(look.c('color'), vec3(1), 0.5).mul(smoothstep(1, 0, dd)).mul(varying(fade) as F).mul(1.4), 1);
+  return { vertex, color };
+})();
 
-const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending } as const;
+const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false } as const;
+
 const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpFoot = new THREE.Vector3(), tmpCam = new THREE.Vector3();
 
 // ─── Title ──────────────────────────────────────────────────────────────────
@@ -579,55 +593,51 @@ export function makePortal(spec: PortalSpec, baseY: number): PortalFx | null {
   const obj = new THREE.Group();
   obj.name = open ? 'portal-fx' : 'portal-sealed';
   const c = new THREE.Color(spec.color ?? 0x888890);
-  const time = { value: 0 };
-  const noise = noiseTexture();
   const gl = glimpseFor(spec.dest ?? 'keep', spec.theme);
-  const col = (hex: number) => ({ value: new THREE.Color(hex) });
+  const portal: PortalLook = {
+    time: { value: 0 }, color: c, height: PORTAL_H * 1.1,
+    skyTop: new THREE.Color(gl.skyTop), skyLow: new THREE.Color(gl.skyLow), fog: new THREE.Color(gl.fog), ground: new THREE.Color(gl.ground), sil: new THREE.Color(gl.sil), glow: new THREE.Color(gl.glow),
+  };
+  const time = portal.time;
   // The window and title turn together to face the camera (see tick); the window pivots on its
   // foot to lean back.
   const facing = new THREE.Group();
   obj.add(facing);
-  const win = new THREE.Mesh(
-    new THREE.PlaneGeometry(PORTAL_W * HALO, PORTAL_H * HALO).translate(0, PORTAL_H / 2, 0),
-    new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      defines: { STYLE: gl.style, OPEN: open ? 1 : 0 },
-      uniforms: {
-        uTime: time, uColor: { value: c },
-        uSkyTop: col(gl.skyTop), uSkyLow: col(gl.skyLow), uFog: col(gl.fog), uGround: col(gl.ground), uSil: col(gl.sil), uGlow: col(gl.glow),
-        uNoise: { value: noise },
-      },
-      vertexShader: WINDOW_VERT, fragmentShader: WINDOW_FRAG,
-    }),
-  );
+  const winMat = Object.assign(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false }), { portal });
+  winMat.colorNode = windowNode(gl.style, open);
+  winMat.userData = { style: gl.style, open };
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(PORTAL_W * HALO, PORTAL_H * HALO).translate(0, PORTAL_H / 2, 0), winMat);
   win.position.y = baseY + 0.3;
   win.rotation.x = -LEAN;
   win.name = 'portal-window';
   win.renderOrder = 3;
   facing.add(win);
   if (open) {
-    const pool = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.4, 2.4).rotateX(-Math.PI / 2),
-      new THREE.ShaderMaterial({ ...additive, uniforms: { uTime: time, uColor: { value: c } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', fragmentShader: POOL_FRAG }),
-    );
+    const poolMat = Object.assign(new MeshBasicNodeMaterial(additive), { portal });
+    poolMat.colorNode = POOL;
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4).rotateX(-Math.PI / 2), poolMat);
     pool.position.y = baseY + 0.02;
     pool.renderOrder = 2;
     obj.add(pool);
     // Motes rising in front of and around the window: fixed seeds, animated in the vertex shader.
-    const n = 16, pos: number[] = [], seed: number[] = [];
+    const n = 16, at: number[] = [];
     for (let i = 0; i < n; i++) {
       const s = (i * 0.618034) % 1, a = i * 2.39996;
-      pos.push(Math.cos(a) * PORTAL_W * 0.55 * Math.sqrt((i * 0.3819) % 1), baseY + 0.1, Math.sin(a) * 0.45);
-      seed.push(s);
+      at.push(Math.cos(a) * PORTAL_W * 0.55 * Math.sqrt((i * 0.3819) % 1), baseY + 0.1, Math.sin(a) * 0.45, s);
     }
-    const mg = new THREE.BufferGeometry();
-    mg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    mg.setAttribute('aSeed', new THREE.Float32BufferAttribute(seed, 1));
-    const motes = new THREE.Points(mg, new THREE.ShaderMaterial({ ...additive, uniforms: { uTime: time, uHeight: { value: PORTAL_H * 1.1 }, uColor: { value: c } }, vertexShader: MOTE_VERT, fragmentShader: MOTE_FRAG }));
+    const mg = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1) as unknown as THREE.InstancedBufferGeometry);
+    mg.setAttribute('aMote', new THREE.InstancedBufferAttribute(new Float32Array(at), 4));
+    mg.instanceCount = n;
+    const moteMat = Object.assign(new MeshBasicNodeMaterial(additive), { portal });
+    moteMat.vertexNode = mote.vertex;
+    moteMat.colorNode = mote.color;
+    const motes = new THREE.Mesh(mg, moteMat);
+    motes.name = 'portal-motes';
     motes.frustumCulled = false;
     motes.renderOrder = 4;
     obj.add(motes);
   }
+
   const title = spec.name ? buildTitle(spec.name, spec.color ?? 0x888890, open, spec.hint ?? 'Sealed') : null;
   if (title) facing.add(title);
   let bob = 0;

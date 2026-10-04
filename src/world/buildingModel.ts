@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ModelKit, PAL } from '../render/kit';
+import { Discard, If, positionWorld } from 'three/tsl';
 import { addPatch } from '../render/surface';
 import { hash01, octagon, prism, taper, wedge } from '../render/blocks';
 import {
@@ -125,15 +126,14 @@ export type CastleSpec = BuildingSpec & { look?: CastleLook };
 
 /** Clean horizontal cut: fragments above the world height `u` are cut away (it sweeps down as the building opens). */
 function cutPatch(mat: THREE.Material, u: { value: number }) {
-  addPatch(mat, { key: 'cut', apply: (shader) => {
-    shader.uniforms.uCutY = u;
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vCutY;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvCutY = (modelMatrix * vec4(transformed, 1.0)).y;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uCutY;\nvarying float vCutY;')
-      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vCutY > uCutY) discard;');
-  } });
+  addPatch(mat, { key: 'cut', uniforms: { uCutY: u }, nodes: (r) => ({
+    discard() {
+      If(positionWorld.y.greaterThan(r.f('uCutY')), () => {
+        Discard();
+      });
+    },
+  }) });
+
 }
 
 type Obj = THREE.Object3D;

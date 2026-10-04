@@ -1,4 +1,4 @@
-import { Game } from './game';
+import { Game, GraphicsError } from './game';
 import { preloadTreeTextures } from './render/foliage';
 import { MODEL_FILES, preloadModels } from './render/registry';
 import { preloadSky } from './render/sky';
@@ -22,9 +22,11 @@ async function boot() {
 boot().catch((error) => {
   console.error(error);
   const splash = document.getElementById('splash');
-  const message = error instanceof Error && error.message.includes('newer Dragonbound')
-    ? 'This progress was saved by a newer Dragonbound. Update the game to continue.'
-    : 'Dragonbound could not load your progress. Close and reopen the game to try again.';
+  const message = error instanceof GraphicsError
+    ? "Dragonbound could not start this computer's graphics. Updating the graphics driver may help."
+    : error instanceof Error && error.message.includes('newer Dragonbound')
+      ? 'This progress was saved by a newer Dragonbound. Update the game to continue.'
+      : 'Dragonbound could not load your progress. Close and reopen the game to try again.';
   const note = splash?.querySelector('p');
   if (note) note.textContent = message;
   else if (splash) splash.textContent = message;

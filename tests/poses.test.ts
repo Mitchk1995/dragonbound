@@ -168,6 +168,56 @@ describe('pose audit: arms bend at the elbow', () => {
   });
 });
 
+describe('pose audit: the hips', () => {
+  // The owner never wants a leg showing through a skirt. Like a LEGO minifigure's, the legs hinge under the hips, at the
+  // tunic's hem, the top of each thigh rounded about the hinge; everything hanging from the hips (sock_hips: the tunic's
+  // skirt, every armour's skirt, flaps and tabard) stays level with the legs however the body leans, and the whole hero
+  // turns into a sword swing. tools/blender/skirtcheck.py checks every outfit against the legs in every pose.
+  it('the legs hinge at the hem, the tops of the thighs rounded about the hinge', () => {
+    const root = makeModel('hero').root;
+    root.updateMatrixWorld(true);
+    const v = new THREE.Vector3();
+    for (const name of ['legL', 'legR']) {
+      const leg = root.getObjectByName(name)!;
+      expect(leg.getWorldPosition(v).y, `${name} hinge height`).toBeCloseTo(0.725, 3);
+      let above = 0;
+      leg.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const pos = o.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          leg.worldToLocal(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld));
+          if (v.y <= 1e-4) continue;
+          above++;
+          expect(Math.hypot(v.y, v.z), `${name} top at ${v.toArray().map((c) => c.toFixed(3))}`).toBeLessThan(0.175);
+        }
+      });
+      expect(above, `${name}: a rounded top above the hinge`).toBeGreaterThan(4);
+    }
+  });
+  it('what hangs from the hips stays level with the legs: running, running just hit, and in every attack', () => {
+    const h = hero({ weapon: 'bronze_sword', body: 'iron_chainbody' });
+    const hips = h.root.getObjectByName('sock_hips')!;
+    const q = new THREE.Quaternion(), r = new THREE.Quaternion();
+    const frames: [AttackKind, number, Partial<AnimState>][] = [
+      ['swing', -1, { speed: 5.6 }], ['swing', -1, { speed: 5.6, hurt: 1 }], ['swing', 0.3, { speed: 3.4 }],
+      ['swing', IMPACT - 0.05, { speed: 3.4 }], ['slam', 0.3, {}], ['slam', 0.8, {}], ['cast', IMPACT, {}], ['bow', 0.4, {}],
+    ];
+    for (const [kind, a, extra] of frames) {
+      for (let k = 0; k < 6; k++) {
+        h.pose(kind, a, extra, 0.05);
+        const off = hips.getWorldQuaternion(q).angleTo(h.root.getWorldQuaternion(r));
+        expect(off, `${kind}@${a} ${JSON.stringify(extra)}, frame ${k}`).toBeLessThan(1e-4);
+      }
+    }
+  });
+  it('a sword swing turns the whole hero, never the body against its legs', () => {
+    const h = hero({ weapon: 'bronze_sword' });
+    h.pose('swing', IMPACT - 0.15);
+    expect(h.root.rotation.y, 'the wind-up turns the hero').toBeGreaterThan(0.2);
+    expect(h.root.getObjectByName('body')!.rotation.y, 'the body does not twist on the hips').toBe(0);
+  });
+});
+
 describe('pose audit: mining (pickaxe tool override, as Player.dress uses it)', () => {
   it('the pick head never goes below the ground through the whole swing', () => {
     const model = makeModel('hero');

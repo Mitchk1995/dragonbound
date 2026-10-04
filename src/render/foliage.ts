@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { shareResource } from './resources';
 import { clamp, mulberry32, type Rng } from '../core/rng';
-import { addPatch } from './surface';
+import { abs, attribute, atan, cameraPosition, cross, dFdx, dFdy, diffuseColor, dot, faceDirection, float, fwidth, mat3, max, mix, modelWorldMatrix, normalGeometry, normalize, positionGeometry, positionView, saturate, select, sin, smoothstep, texture, varying, vec2, vec3, vec4 } from 'three/tsl';
+import { addPatch, instanceMatrixNode, instanceOrigin, type F, type V2, type V3, type V4 } from './patch';
 
 /**
  * Grown trees' surfaces (treeGrowth.ts): painted leaf atlases, sourced bark, and the bark and leaf
@@ -473,23 +474,18 @@ function barkFor(kind: BarkKind) {
 // ─── Materials ──────────────────────────────────────────────────────────────
 
 /**
- * GLSL: how far the wind carries a point with a sway weight `w` (0 still .. about 1.5 at the
- * twigs). The whole tree leans slowly with the gusts; each bough rocks on its own phase, set by
- * where it is in the crown; every tree has its own phase from where it stands.
+ * How far the wind carries a point `at` with a sway weight `w` (0 still .. about 1.5 at the twigs),
+ * at wind time `t`, for a tree standing at `ip`. The whole tree leans slowly with the gusts; each
+ * bough rocks on its own phase, set by where it is in the crown; every tree has its own phase from
+ * where it stands.
  */
-const SWAY_GLSL = `
-  uniform float uWindT;
-  vec3 treeSway(vec3 at, float w) {
-    vec3 ip = vec3(0.0);
-    #ifdef USE_INSTANCING
-      ip = instanceMatrix[3].xyz;
-    #endif
-    float ph = uWindT * 0.9 + ip.x * 0.31 + ip.z * 0.23;
-    float gust = 0.6 + 0.4 * sin(uWindT * 0.37 + ip.x * 0.05 + ip.z * 0.03);
-    float lean = (sin(ph) * 0.65 + sin(ph * 2.17 + 1.3) * 0.35) * gust;
-    float bough = sin(uWindT * 1.9 + dot(at, vec3(0.61, 0.37, 0.53)) + ip.z * 0.7) * gust;
-    return vec3(lean * 0.07 + bough * 0.05, bough * 0.03, lean * 0.04 + bough * 0.045) * w;
-  }`;
+function treeSway(at: V3, w: F, t: F, ip: V3): V3 {
+  const ph = t.mul(0.9).add(ip.x.mul(0.31)).add(ip.z.mul(0.23)).toVar();
+  const gust = sin(t.mul(0.37).add(ip.x.mul(0.05)).add(ip.z.mul(0.03))).mul(0.4).add(0.6).toVar();
+  const lean = sin(ph).mul(0.65).add(sin(ph.mul(2.17).add(1.3)).mul(0.35)).mul(gust).toVar();
+  const bough = sin(t.mul(1.9).add(dot(at, vec3(0.61, 0.37, 0.53))).add(ip.z.mul(0.7))).mul(gust).toVar();
+  return vec3(lean.mul(0.07).add(bough.mul(0.05)), bough.mul(0.03), lean.mul(0.04).add(bough.mul(0.045))).mul(w);
+}
 
 /** A grown tree's bark: its sourced maps, how they are laid on the wood, and how it is toned. */
 export interface BarkLook {
@@ -521,10 +517,8 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
   mat.vertexColors = true;
   mat.roughness = 0.95;
   mat.color.setRGB(1, 1, 1);
-  // (The maps are looked up when the material is first drawn, so a world can be built without them.)
   const uniforms = {
-    uBarkMap: { value: null as THREE.Texture | null },
-    uBarkNormal: { value: null as THREE.Texture | null },
+    uWindT: wind.uWindT,
     uBarkTile: { value: look.tile },
     uBarkRelief: { value: look.relief },
     uBarkGain: { value: look.gain },
@@ -532,98 +526,55 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
     uBarkGlow: { value: look.glow ?? 0 },
   };
   addPatch(mat, {
-    key: 'grown-bark',
-    apply(shader) {
+    // (The maps are looked up when the material is first drawn, so a world can be built without them.)
+    key: `grown-bark:${look.kind}`,
+    uniforms,
+    nodes(u, b) {
       const maps = barkFor(look.kind);
-      uniforms.uBarkMap.value = maps.map;
-      uniforms.uBarkNormal.value = maps.normal;
-      Object.assign(shader.uniforms, uniforms, wind);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>
-          attribute vec4 aBarkA;
-          attribute vec4 aBarkB;
-          attribute vec4 aWood;
-          varying vec4 vBarkA;
-          varying vec4 vBarkB;
-          varying vec2 vBarkRV;
-          flat varying float vBarkCollar;
-          flat varying float vBarkFoot;
-          varying float vBarkOut;
-          varying vec3 vBarkP;
-          varying vec3 vBarkUp;
-          ${SWAY_GLSL}`)
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
-          vBarkA = aBarkA;
-          vBarkB = aBarkB;
-          vBarkRV = aWood.yz;
-          vBarkCollar = aWood.w;
-          vBarkFoot = aBarkA.w;
-          vBarkOut = aWood.w;
-          vBarkP = position;
-          vBarkUp = objectNormal;
-          transformed += treeSway(position, aWood.x);`);
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>
-          uniform sampler2D uBarkMap;
-          uniform sampler2D uBarkNormal;
-          uniform float uBarkTile;
-          uniform float uBarkRelief;
-          uniform float uBarkGain;
-          uniform vec3 uBarkMoss;
-          uniform float uBarkGlow;
-          varying vec4 vBarkA;
-          varying vec4 vBarkB;
-          varying vec2 vBarkRV;
-          flat varying float vBarkCollar;
-          flat varying float vBarkFoot;
-          varying float vBarkOut;
-          varying vec3 vBarkP;
-          varying vec3 vBarkUp;`)
-        .replace('#include <color_fragment>', `#include <color_fragment>
+      const barkA = attribute('aBarkA', 'vec4') as V4, barkB = attribute('aBarkB', 'vec4') as V4, wood = attribute('aWood', 'vec4') as V4;
+      let uv: V2 = vec2(0), nl: V3 = vec3(0), detail: F = float(0);
+      return {
+        position: (p) => p.add(treeSway(positionGeometry, wood.x, u.f('uWindT'), instanceOrigin(b))),
+        color(c) {
           // Round the limb: its angle counted in whole tiles (taken from whichever of two seams lies
           // elsewhere, so the mip level never jumps) plus the wrap's offset; up it, its bark
           // coordinate. A collar takes its branch's wrap, turned toward the parent's bark at the rim
           // (the turn eased in and out, so the furrows bend smoothly from one into the other).
-          bool barkCollar = vBarkCollar > 0.5;
-          vec4 barkW = barkCollar ? vBarkB : vBarkA;
-          float barkOff = barkW.w;
-          if (barkCollar) {
-            float rim = 1.0 - vBarkOut;
-            barkOff = vBarkFoot + (rim > 1e-4 ? barkW.w / rim : 0.0) * rim * rim * (3.0 - 2.0 * rim);
-          }
-          float barkAng = atan(barkW.y, barkW.x) * 0.15915494;
-          float barkS1 = barkAng * barkW.z, barkS2 = fract(barkAng + 1.0) * barkW.z;
-          vec2 barkUv = vec2((fwidth(barkS1) <= fwidth(barkS2) ? barkS1 : barkS2) + barkOff, vBarkRV.y / uBarkTile);
-          vec3 barkCol = texture2D(uBarkMap, barkUv).rgb;
-          vec3 barkNl = texture2D(uBarkNormal, barkUv).xyz * 2.0 - 1.0;
+          const collar = (varying(wood.w).setInterpolation('flat') as F).greaterThan(0.5);
+          const foot = varying(barkA.w).setInterpolation('flat') as F;
+          const w = select(collar, barkB, barkA).toVar();
+          const rim = float(1).sub(wood.w).toVar();
+          const off = select(collar, foot.add(select(rim.greaterThan(1e-4), w.w.div(rim), float(0)).mul(rim).mul(rim).mul(float(3).sub(rim.mul(2)))), w.w);
+          const ang = atan(w.y, w.x).mul(0.15915494).toVar();
+          const s1 = ang.mul(w.z).toVar(), s2 = ang.add(1).fract().mul(w.z).toVar();
+          uv = vec2(select(fwidth(s1).lessThanEqual(fwidth(s2)), s1, s2).add(off), wood.z.div(u.f('uBarkTile'))).toVar();
+          const col = texture(maps.map).sample(uv).rgb.toVar();
+          nl = texture(maps.normal).sample(uv).xyz.mul(2).sub(1).toVar();
           // Young branches' relief is gentler.
-          float barkDetail = 0.35 + 0.65 * smoothstep(0.02, 0.12, vBarkRV.x);
-          {
-            float lum = dot(barkCol, vec3(0.2126, 0.7152, 0.0722));
-            float up = smoothstep(0.3, 0.9, normalize(vBarkUp).y), foot = 1.0 - smoothstep(0.1, 1.2, vBarkP.y);
-            float moss = clamp(up * 0.7 + foot * 0.6, 0.0, 1.0) * (1.0 - smoothstep(0.04, 0.12, lum));
-            barkCol = mix(barkCol, uBarkMoss, moss * 0.55);
-            diffuseColor.rgb *= barkCol * uBarkGain;
-          }`)
-        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-          {
-            // A glowing bark's veins: where it runs bluer than its grey.
-            vec3 barkRaw = texture2D(uBarkMap, barkUv).rgb;
-            float vein = smoothstep(0.03, 0.12, barkRaw.b - max(barkRaw.r, barkRaw.g));
-            totalEmissiveRadiance += vec3(0.35, 0.8, 1.0) * vein * uBarkGlow;
-          }`)
-        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-          {
-            // The relief along the wrap's own directions on the surface: round the limb (u) and up it (v).
-            vec3 q0 = dFdx(-vViewPosition), q1 = dFdy(-vViewPosition);
-            vec2 st0 = dFdx(barkUv), st1 = dFdy(barkUv);
-            vec3 q1n = cross(q1, normal), q0n = cross(normal, q0);
-            vec3 bu = q1n * st0.x + q0n * st1.x, bv = q1n * st0.y + q0n * st1.y;
-            bu = dot(bu, bu) > 0.0 ? normalize(bu) : vec3(0.0);
-            bv = dot(bv, bv) > 0.0 ? normalize(bv) : vec3(0.0);
-            vec3 tilt = (bu * barkNl.x + bv * barkNl.y) * uBarkRelief * barkDetail;
-            normal = normalize(normal + tilt - normal * dot(tilt, normal));
-          }`);
+          detail = smoothstep(0.02, 0.12, wood.y).mul(0.65).add(0.35).toVar();
+          const lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          const up = smoothstep(0.3, 0.9, normalize(normalGeometry).y), base = float(1).sub(smoothstep(0.1, 1.2, positionGeometry.y));
+          const moss = saturate(up.mul(0.7).add(base.mul(0.6))).mul(float(1).sub(smoothstep(0.04, 0.12, lum)));
+          return c.mul(mix(col, u.v3('uBarkMoss'), moss.mul(0.55)).mul(u.f('uBarkGain')));
+        },
+        emissive(e) {
+          // A glowing bark's veins: where it runs bluer than its grey.
+          const raw = texture(maps.map).sample(uv).rgb;
+          const vein = smoothstep(0.03, 0.12, raw.b.sub(max(raw.r, raw.g)));
+          return e.add(vec3(0.35, 0.8, 1.0).mul(vein.mul(u.f('uBarkGlow'))));
+        },
+        normal(n) {
+          // The relief along the wrap's own directions on the surface: round the limb (u) and up it (v).
+          const q0 = dFdx(positionView), q1 = dFdy(positionView);
+          const st0 = dFdx(uv), st1 = dFdy(uv);
+          const q1n = cross(q1, n), q0n = cross(n, q0);
+          const bu0 = q1n.mul(st0.x).add(q0n.mul(st1.x)).toVar(), bv0 = q1n.mul(st0.y).add(q0n.mul(st1.y)).toVar();
+          const bu = select(dot(bu0, bu0).greaterThan(0), normalize(bu0), vec3(0));
+          const bv = select(dot(bv0, bv0).greaterThan(0), normalize(bv0), vec3(0));
+          const tilt = bu.mul(nl.x).add(bv.mul(nl.y)).mul(u.f('uBarkRelief').mul(detail)).toVar();
+          return normalize(n.add(tilt).sub(n.mul(dot(tilt, n))));
+        },
+      };
     },
   });
 }
@@ -648,40 +599,26 @@ export function grownLeaves(mat: THREE.MeshStandardMaterial, wind: WindClock, ki
   mat.color.setScalar(LEAF_GAIN);
   addPatch(mat, {
     key: 'grown-leaves',
-    apply(shader) {
-      Object.assign(shader.uniforms, wind, { uLeafGlow: { value: glow } });
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>
-          attribute vec4 aWind;
-          attribute float aFlutter;
-          attribute vec3 aCard;
-          attribute vec3 aSpine;
-          ${SWAY_GLSL}`)
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
-          {
-            vec3 cn = aCard;
-            vec4 wp = vec4(transformed, 1.0);
-            #ifdef USE_INSTANCING
-              cn = mat3(instanceMatrix) * cn;
-              wp = instanceMatrix * wp;
-            #endif
-            wp = modelMatrix * wp;
-            cn = normalize(mat3(modelMatrix) * cn);
-            float facing = abs(dot(cn, normalize(cameraPosition - wp.xyz)));
-            transformed = aSpine + (transformed - aSpine) * smoothstep(0.06, 0.3, facing);
-          }
-          transformed += treeSway(aWind.xyz, aWind.w);
-          transformed += objectNormal * sin(uWindT * 6.3 + dot(aWind.xyz, vec3(12.9, 7.3, 9.1))) * 0.05 * aFlutter * aWind.w;`);
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>
-          uniform float uLeafGlow;`)
-        .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
-          #ifdef DOUBLE_SIDED
-            normal *= faceDirection;
-          #endif`)
+    uniforms: { uWindT: wind.uWindT, uLeafGlow: { value: glow } },
+    nodes(u, b) {
+      return {
+        position(p) {
+          const t = u.f('uWindT');
+          const windA = attribute('aWind', 'vec4') as V4, spine = attribute('aSpine', 'vec3') as V3;
+          const inst = instanceMatrixNode(b);
+          const card = attribute('aCard', 'vec3') as V3;
+          const cn = normalize(mat3(modelWorldMatrix).mul(inst ? mat3(inst).mul(card) : card));
+          const wp = modelWorldMatrix.mul(inst ? inst.mul(vec4(p, 1)) : vec4(p, 1)).xyz;
+          const facing = abs(dot(cn, normalize(cameraPosition.sub(wp))));
+          const narrowed = spine.add(p.sub(spine).mul(smoothstep(0.06, 0.3, facing)));
+          const flutter = sin(t.mul(6.3).add(dot(windA.xyz, vec3(12.9, 7.3, 9.1)))).mul(0.05).mul(attribute('aFlutter', 'float') as F).mul(windA.w);
+          return narrowed.add(treeSway(windA.xyz, windA.w, t, instanceOrigin(b))).add(normalGeometry.mul(flutter));
+        },
+        // (Both faces take the crown's normal: the back face's flip is undone.)
+        normal: (n) => n.mul(faceDirection),
         // A glowing kind's leaves give off their own colour (the magic tree's teal).
-        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-          totalEmissiveRadiance += diffuseColor.rgb * uLeafGlow;`);
+        emissive: (e) => e.add(diffuseColor.rgb.mul(u.f('uLeafGlow'))),
+      };
     },
   });
 }

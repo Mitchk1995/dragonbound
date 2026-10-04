@@ -105,14 +105,13 @@ export async function lightingSuite(g: Game, shot: (name: string) => Promise<voi
     // The same switches where the size does not change (a display at 100% scale): is the scene's
     // target multisampled exactly when the setting asks for it?
     {
-      const game = g as any, setRatio = g.renderer.setPixelRatio;
+      const setRatio = g.renderer.setPixelRatio;
       g.renderer.setPixelRatio = () => {};
       const msaa: string[] = [];
       for (const q of ['high', 'low', 'high', 'low'] as const) {
         g.applyGraphics(q);
         g.draw();
-        const rt = game.composer.renderTarget1;
-        msaa.push(`${q}:${rt.samples}:${!!(g.renderer.properties.get(rt) as any).__webglMultisampledFramebuffer}`);
+        msaa.push(`${q}:${g.post.samples}`);
       }
       g.renderer.setPixelRatio = setRatio;
       out['msaa-same-size'] = msaa;
@@ -158,15 +157,16 @@ export async function lightingSuite(g: Game, shot: (name: string) => Promise<voi
     // What each part of the light costs, at the two heaviest views: the frame with each switched off in turn.
     const game = g as any;
     const toggles: [string, () => () => void][] = [
-      ['no occlusion', () => { game.shade.occlusion = false; return () => (game.shade.occlusion = true); }],
-      ['shadow map 2048', () => { g.sun.shadow.mapSize.set(2048, 2048); g.sun.shadow.map?.dispose(); g.sun.shadow.map = null; return () => { g.sun.shadow.mapSize.set(4096, 4096); g.sun.shadow.map?.dispose(); g.sun.shadow.map = null; }; }],
+      ['no occlusion', () => { g.post.setQuality({ msaa: 4, shade: true, bloom: true, occlusion: false }); return () => g.post.setQuality({ msaa: 4, shade: true, bloom: true }); }],
+      ['shadow map 2048', () => { g.sun.shadow.mapSize.set(2048, 2048); return () => g.sun.shadow.mapSize.set(4096, 4096); }],
       ['buildings take no shadow', () => {
         const l: THREE.Mesh[] = [];
         for (const b of g.zone.view.buildings) b.obj.traverse((o) => { if (o instanceof THREE.Mesh && o.receiveShadow) { l.push(o); o.receiveShadow = false; } });
         return () => l.forEach((o) => (o.receiveShadow = true));
       }],
-      ['no shadows', () => { g.sun.castShadow = false; return () => (g.sun.castShadow = true); }],
-      ['no occlusion or grade', () => { game.shade.enabled = false; return () => (game.shade.enabled = true); }],
+      // (The shadow map stops being drawn; switching castShadow off would leave built programs holding a disposed map.)
+      ['no shadow pass', () => { g.sun.shadow.autoUpdate = false; return () => (g.sun.shadow.autoUpdate = true); }],
+      ['no occlusion or grade', () => { g.post.setQuality({ msaa: 4, shade: false, bloom: true }); return () => g.post.setQuality({ msaa: 4, shade: true, bloom: true }); }],
       ['fixed 56 m shadow box', () => {
         const light = game.light;
         game.light = () => {

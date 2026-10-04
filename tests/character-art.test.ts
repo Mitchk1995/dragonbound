@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { BASES, TIER_ORDER, UNIQUES } from '../src/data/items';
+import { GroundItem, HIPS_BELOW_CHEST } from '../src/entities/groundItem';
 import { makeItem } from '../src/loot/itemGen';
 import { HeroDresser, MODEL_FILES, makeModel, registerModelScene, roleOf } from '../src/render/registry';
 import type { Item, Slot } from '../src/types';
@@ -225,6 +226,30 @@ describe('the starting outfit and the gear on the redesigned hero', () => {
           expect(box.min.x <= p.x && p.x <= box.max.x && p.z <= box.max.z && p.z >= box.min.z, `${id} tunic at ${p.toArray().map((v) => v.toFixed(3))}`).toBe(true);
         }
       }
+    });
+  }
+});
+
+describe('body armour off the hero', () => {
+  // A body armour's skirt is worn on the hips (sock_hips), below its cuirass (sock_chest); dropped on the ground it
+  // comes whole, the skirt hanging from the cuirass where it is worn and the whole resting on the ground.
+  const bodies = ['iron_chainbody', 'leather_body', 'steel_platebody', 'ember_platebody'];
+  it('the hips sit where the ground model hangs them from the chest', () => {
+    const root = makeModel('hero').root;
+    root.updateMatrixWorld(true);
+    const at = (n: string) => root.getObjectByName(n)!.getWorldPosition(new THREE.Vector3());
+    expect(at('sock_chest').y - at('sock_hips').y).toBeCloseTo(HIPS_BELOW_CHEST, 4);
+  });
+  for (const id of [...bodies, 'scaleguard']) {
+    it(`${id} lies on the ground with its skirt`, () => {
+      const item = id === 'scaleguard' ? ({ ...makeItem('steel_chainbody'), unique: id, rarity: 'unique' } as Item) : makeItem(id);
+      const drop = new GroundItem(item, 0, 0, 0, 0, 0);
+      const chest = drop.group.getObjectByName('gear:sock_chest')!;
+      expect(chest.getObjectByName('gear:sock_hips'), `${id}: skirt`).toBeTruthy();
+      drop.group.position.set(0, 0, 0);
+      drop.group.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(chest);
+      expect(box.min.y, `${id}: resting on the ground`).toBeCloseTo(0, 3);
     });
   }
 });
