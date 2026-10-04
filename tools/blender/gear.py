@@ -40,7 +40,7 @@ from mathutils import Vector
 
 PI = math.pi
 WOOD = 0x6B4426
-STRING = 0xE8DDC4
+STRING = (0xE8DDC4, 'plain')
 SLIT = 0x0C0A0A
 
 # Where each socket sits on the base hero (world, three.js coords) -- only used so a gear file
@@ -588,16 +588,17 @@ def arm_lames(g, s, colors=(R.metal, R.metal), edge=R.dark):
 # The arm bends at the elbow (hero.py ELBOW, below the shoulder pivot). Every armour sleeve stops there and goes on as
 # an elbow guard on the forearm socket, its top rounded about the elbow (_common.joint_limb), so the arm bends without
 # opening a gap: the guard turns up inside the sleeve, and no bare forearm shows between the sleeve and the glove.
-ELBOW = 0.28
+ELBOW, GUARD_INSET = 0.28, 0.004
 SLEEVE = (0.32, -0.12)          # a sleeve from under the shoulder cap down to the elbow: (height, centre) in arm space
 
 
 def elbow_guard(S, s, color, depth, out=0.145, bottom=-0.345, band=None):
-    """An armour sleeve's forearm part on the forearm socket: from the elbow, rounded about it, down over the top of
-    the glove's cuff, as wide as the sleeve above (ARM_IN to `out`), with an optional band round its foot."""
+    """An armour sleeve's forearm part on the forearm socket: from the elbow, rounded about it, down over the glove's
+    cuff, as wide as the sleeve above (ARM_IN to `out`) less GUARD_INSET a side (its top, turning up inside the
+    sleeve, never shares a face with it), with an optional band round its foot."""
     cuff = next(c for c, _, side in HAND_SOCKS if side == s)
     pv = pivot(S(cuff), 'elbow_guard', (s * (out + ARM_IN) / 2, PALM - ELBOW, 0))
-    joint_limb(pv, out - ARM_IN, depth, 0.0, bottom + ELBOW, color, round_top=True, bevel=0.03)
+    joint_limb(pv, out - ARM_IN - 2 * GUARD_INSET, depth - 2 * GUARD_INSET, 0.0, bottom + ELBOW, color, round_top=True, bevel=0.03)
     if band:
         sleeve(S(cuff), s, 0.045, bottom + 0.0225, depth + 0.01, band, out=out + 0.005, bevel=0.01)
 
@@ -797,8 +798,7 @@ def body_chain(S):
     mail_sleeve(S)
 
 
-STITCH = 0xD8C8A0
-BRASS = 0xB08A48
+STITCH, BRASS = 0xD8C8A0, (0xB08A48, 'gold')
 
 
 def stitches(f, pts, color=STITCH, pitch=0.045, ln=0.024, t=0.008, z=0.002):

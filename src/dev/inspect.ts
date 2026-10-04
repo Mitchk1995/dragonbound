@@ -24,7 +24,7 @@ import type { Slot } from '../types';
  * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts),
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
  * charactersInspect.ts; skirts: the hero's skirts mid-stride; bow: the bow in his hands, measured; minifig: the shared
- * minifigure body, see minifigInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), lightfx (the
+ * minifigure body, see minifigInspect.ts; chartex: the characters' textures, see textureInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), lightfx (the
  * lighting effects one at a time, see lightFxInspect.ts), dragons (the drakeling and Cinderwing, see dragonInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
@@ -149,9 +149,9 @@ export async function runInspect(g: Game, suites: string) {
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
     // The redesigned characters close up and at the play camera, the hero's skirts mid-stride, the bow in his hands (its
-    // measurements, taken in the running game, go in the report) and the minifigure body (explicit only: `characters`,
-    // `skirts`, `bow`, `minifig` or `minifig:<tag>`).
-    if (/(^|,)(characters|skirts|bow|minifig(:[^,]*)?)(,|$)/.test(suites)) Object.assign(report, await (await import('./charactersInspect')).characterSuites(g, shot, suites));
+    // measurements, taken in the running game, go in the report), the minifigure body and the characters' textures
+    // (explicit only: `characters`, `skirts`, `bow`, `minifig` or `minifig:<tag>`, `chartex`).
+    if (/(^|,)(characters|skirts|bow|chartex|minifig(:[^,]*)?)(,|$)/.test(suites)) Object.assign(report, await (await import('./charactersInspect')).characterSuites(g, shot, suites));
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).

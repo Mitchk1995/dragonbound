@@ -9,8 +9,10 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { makeItem } from '../src/loot/itemGen';
 import { studioEnv, studioRadiance } from '../src/render/env';
 import { ICON_PAINT_GAIN, iconSubject } from '../src/render/icons3d';
-import { HeroDresser, MODEL_FILES, makeModel, registerModelScene } from '../src/render/registry';
+import { HeroDresser, MODEL_FILES, makeModel, registerModelScene, roleOf } from '../src/render/registry';
 import { patchKeys } from '../src/render/surface';
+import type { SurfaceUniforms } from '../src/render/charBake';
+import { SURFACE_KINDS } from '../src/render/charSurfaces';
 
 beforeAll(async () => {
   const loader = new GLTFLoader();
@@ -40,7 +42,7 @@ function dressed(equip: Record<string, string>) {
 }
 
 const glows = (m: THREE.MeshStandardMaterial) => (m.emissive.r * 0.3 + m.emissive.g * 0.59 + m.emissive.b * 0.11) * m.emissiveIntensity > 0.2;
-const recipe = (m: THREE.Material) => m.userData.charPaint as { uPaintW: { value: THREE.Vector4 }; uPaintX: { value: THREE.Vector4 }; uPaintY: { value: THREE.Vector4 } } | undefined;
+const surface = (m: THREE.Material) => m.userData.charSurface as SurfaceUniforms | undefined;
 
 describe('models are hand-painted', () => {
   it('every creature, character, hair and gear material is painted (glows excepted) and graded; no bump', () => {
@@ -51,13 +53,15 @@ describe('models are hand-painted', () => {
         const keys = patchKeys(m);
         expect(keys.some((k) => k.startsWith('surface')), `${root.name} ${m.name}: old bump surface`).toBe(false);
         expect(keys, `${root.name} ${m.name}`).toContain('grade:root');
-        if (!glows(m) && !m.name.startsWith('ROLE_glow')) expect(keys.some((k) => k.startsWith('cpaint:')), `${root.name} ${m.name} painted`).toBe(true);
+        // Models with the bake finish are painted from their maps (csurf), the rest by the projected recipes (cpaint).
+        if (!glows(m) && !m.name.startsWith('ROLE_glow')) expect(keys.some((k) => k.startsWith('cpaint:') || k.startsWith('csurf:')), `${root.name} ${m.name} painted`).toBe(true);
       }
     }
   });
 
   it('merged parts carry one continuous rest frame: a limb\'s pattern lines up with the body at rest', () => {
-    const model = makeModel('goblin');
+    // (A model without the bake finish: those with it are painted on their own UVs.)
+    const model = makeModel('kobold');
     model.root.updateMatrixWorld(true);
     const inv = model.root.matrixWorld.clone().invert();
     let checked = 0;
@@ -93,14 +97,15 @@ describe('models are hand-painted', () => {
     expect(weightsOf('golem').every((w) => w.x > 0.25), 'golem stone').toBe(true);
   });
 
-  it('gear recipes follow the palette: forged tiers paint as metal, leather armour as leather', () => {
-    const metalW = (id: string) => materials(dressed({ body: id }).root).filter((m) => m.name.startsWith('ROLE_metal')).map((m) => recipe(m)!.uPaintW.value);
-    for (const w of metalW('steel_platebody')) expect(w.y, 'brushed').toBeGreaterThan(w.x);
-    for (const w of metalW('leather_body')) expect(w.x, 'mottled').toBeGreaterThan(w.y);
-    // Forged plate carries the forged-metal paint (hammered grain, worn edges, grime); leather does not.
-    const forge = (id: string) => materials(dressed({ body: id }).root).filter((m) => m.name.startsWith('ROLE_metal')).map((m) => recipe(m)!.uPaintY.value.x);
-    for (const f of forge('steel_platebody')) expect(f, 'forged').toBeGreaterThan(0.5);
-    for (const f of forge('leather_body')) expect(f, 'leather is not forged').toBe(0);
+  it('gear surfaces follow the palette: forged tiers are plate (the mail shirt mail), leather armour leather', () => {
+    const kinds = (id: string, role: string) => materials(dressed({ body: id }).root).filter((m) => roleOf(m) === role)
+      .map((m) => SURFACE_KINDS[surface(m)!.uKind.value]);
+    expect(new Set(kinds('steel_platebody', 'metal'))).toEqual(new Set(['plate']));
+    expect(new Set(kinds('iron_chainbody', 'metal'))).toEqual(new Set(['mail']));
+    expect(new Set(kinds('leather_body', 'metal'))).toEqual(new Set(['leather']));
+    expect(new Set(kinds('iron_chainbody', 'trim'))).toEqual(new Set(['gold']));
+    // The tunic dyes stay cloth on armour (the plate's tabard).
+    expect(new Set(kinds('steel_platebody', 'cloth'))).toEqual(new Set(['wool']));
   });
 
   it('item icons paint softer than the game', () => {
@@ -108,10 +113,10 @@ describe('models are hand-painted', () => {
     let n = 0;
     holder.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
-      const u = (o.material as THREE.Material).userData.charPaint;
-      if (!u) return;
-      expect(u.uCharGain.value).toBe(ICON_PAINT_GAIN);
-      n++;
+      const u = (o.material as THREE.Material).userData;
+      if (u.charPaint) expect(u.charPaint.uCharGain.value).toBe(ICON_PAINT_GAIN);
+      if (u.charSurface) expect(u.charSurface.uSurfGain.value).toBe(ICON_PAINT_GAIN);
+      if (u.charPaint || u.charSurface) n++;
     });
     expect(n).toBeGreaterThan(0);
     expect(ICON_PAINT_GAIN).toBeLessThan(1);

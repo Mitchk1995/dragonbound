@@ -39,6 +39,8 @@ export interface PatchHooks {
   /** The shading normal, in view space. */
   normal?(n: V3): V3;
   emissive?(e: V3): V3;
+  /** The ambient occlusion the ambient light is shaded by (1: none). */
+  ao?(a: F): F;
   /** The outgoing light (rgb), after lighting and emission, before the fog. */
   output?(l: V3): V3;
 }
@@ -273,7 +275,7 @@ export function objectPosition(builder: NodeBuilder): V3 {
 // ─── The patched node materials ─────────────────────────────────────────────
 
 type NodeMaterialClass = typeof MeshBasicNodeMaterial;
-type Hook = 'position' | 'color' | 'alpha' | 'roughness' | 'normal' | 'emissive' | 'output';
+type Hook = 'position' | 'color' | 'alpha' | 'roughness' | 'normal' | 'emissive' | 'ao' | 'output';
 
 /** A node material class that runs its plain material's patches (see the hooks above). */
 function patchedClass(Base: NodeMaterialClass) {
@@ -326,6 +328,12 @@ function patchedClass(Base: NodeMaterialClass) {
       // The hooks start from the geometry's normal (flat, or smooth and turned to face the eye on a
       // back face), as the material's own would be without a normal map.
       return this.run('normal', Fn((builder: NodeBuilder) => ((builder as NodeBuilder & { isFlatShading(): boolean }).isFlatShading() ? normalViewGeometry : negateOnBackSide(normalViewGeometry)))().toVar() as V3);
+    }
+
+    override setupAmbientOcclusion(builder: NodeBuilder) {
+      const self = this as unknown as { aoNode: F | null };
+      if (this.has('ao')) self.aoNode = this.run('ao', self.aoNode ?? float(1));
+      return super.setupAmbientOcclusion(builder);
     }
 
     override setupLighting(builder: NodeBuilder) {

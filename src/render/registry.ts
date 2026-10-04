@@ -11,6 +11,9 @@ import type { Model } from './kit';
 import { applyFinish, type Finish } from './env';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
 import { applyCharPaint, applyGrade, CHAR_PAINTS, MODEL_GRADE, packCharAttributes, paintAttributes, prepareCharGeometry, setCharPaint, trackGradeRoot, type CharPaint, type CharPaintKind } from './surface';
+import { applyCharSurface, isBaked, setCharSurface } from './charBake';
+import { gearSurface, kindIndex, loadSurfaceLibrary, namedSurface, paintSurface, roleSurface, type SurfaceKind } from './charSurfaces';
+import { packAttributes } from './patch';
 
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
@@ -68,12 +71,13 @@ const ANON_PART = /^p\d+$/;
  * Merge a model's anonymous rigid leaf meshes under each rig node into as few meshes as possible,
  * in the node's space so they still move with it:
  * - fixed-colour materials are baked into vertex colours and grouped by finish (a goblin's
- *   arm is one mesh, not one per colour);
+ *   arm is one mesh, not one per colour), each colour keeping its painted recipe per vertex (`aPaintW`..., or on a
+ *   model with the bake finish, `finished`, its surface kind, `aKind`);
  * - recolourable ROLE_ materials and glowing (emissive) materials keep their own material.
  * A creature drops from ~30-100 draw calls to a handful, and shadows with it. Named meshes,
  * meshes with children are left alone (and bows: their string is identified by shape).
  */
-export function mergeRigidParts(root: THREE.Object3D, model: string) {
+export function mergeRigidParts(root: THREE.Object3D, model: string, finished = false) {
   // Gear parts are never looked up by name (bows are excluded by the caller), so every leaf merges.
   const anon = (name: string) => model.startsWith('gear_') || ANON_PART.test(name);
   const parents = new Set<THREE.Object3D>();
@@ -114,7 +118,8 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
           g.setAttribute('color', new THREE.BufferAttribute(col, 3));
           // Each baked colour keeps its own painted recipe (a goblin's skin, belt and loincloth).
           const kind = fixedPaint(model, c, mm.metalness > 0.5, mm.side === THREE.DoubleSide);
-          paintAttributes(g, kind ? CHAR_PAINTS[kind] : null);
+          if (finished) g.setAttribute('aKind', new THREE.BufferAttribute(new Float32Array(n).fill(kindIndex(namedSurface(mm) ?? paintSurface(kind))), 1));
+          else paintAttributes(g, kind ? CHAR_PAINTS[kind] : null);
         }
         return g;
       });
@@ -142,8 +147,8 @@ export function mergeRigidParts(root: THREE.Object3D, model: string) {
   return { before, after };
 }
 
-/** Geometry attributes merged parts keep (the painted shader's rest frame and face coordinates). */
-const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace', 'aPart']);
+/** Geometry attributes merged parts keep: the projected paint's rest frame and face coordinates, or the bake finish's UVs and tangents. */
+const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace', 'aPart', 'uv', 'uv1', 'tangent']);
 
 // ─── Painted albedo recipes ──────────────────────────────────────────────────
 
@@ -208,21 +213,37 @@ function paintFor(model: string, mesh: THREE.Mesh, m: THREE.MeshStandardMaterial
   return k ? CHAR_PAINTS[k] : null;
 }
 
+/** A baked model's material's surface (charSurfaces.ts): its role's, its own named kind, or judged by its colour. */
+function surfaceFor(model: string, mesh: THREE.Mesh, m: THREE.MeshStandardMaterial): SurfaceKind | 'vertex' {
+  if (m.vertexColors && mesh.geometry.getAttribute('aKind')) return 'vertex';
+  const role = roleOf(m);
+  if (role) return roleSurface(role);
+  if (glowing(m)) return 'plain';
+  return namedSurface(m) ?? paintSurface(fixedPaint(model, m.color, m.metalness > 0.5, m.side === THREE.DoubleSide));
+}
+
 /** Register a parsed glTF scene under a model name (used by the browser loader and by tests). */
 export function registerModelScene(name: string, scene: THREE.Group) {
   cleanNames(scene);
   normalizeAuthoredFrame(scene);
-  // Rest frame and flat-face coordinates for the painted albedo, before parts are merged.
+  // Baked models (the bake finish's UVs) are painted from their maps; the rest from their rest frame and flat-face
+  // coordinates, worked out before parts are merged.
+  let finished = false;
+  scene.traverse((o) => {
+    if (o instanceof THREE.Mesh && isBaked(o.geometry)) finished = true;
+  });
   scene.updateMatrixWorld(true);
   const inv = scene.matrixWorld.clone().invert(), rest = new THREE.Matrix4();
   scene.traverse((o) => {
-    if (o instanceof THREE.Mesh) o.geometry = prepareCharGeometry(o.geometry, rest.multiplyMatrices(inv, o.matrixWorld));
+    if (o instanceof THREE.Mesh && !finished) o.geometry = prepareCharGeometry(o.geometry, rest.multiplyMatrices(inv, o.matrixWorld));
   });
+  scene.userData.finished = finished;
   // Bows stay unmerged: BowDraw finds the static string by its shape.
-  if (!name.startsWith('gear_bow_') && name !== 'gear_u_emberstring') mergeRigidParts(scene, name);
+  if (!name.startsWith('gear_bow_') && name !== 'gear_u_emberstring') mergeRigidParts(scene, name, finished);
   scene.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
-    packCharAttributes(node.geometry);
+    if (finished) packAttributes(node.geometry, ['uv', 'uv1', 'aKind']);
+    else packCharAttributes(node.geometry);
     shareResource(node.geometry);
     for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
       for (const value of Object.values(material)) if (value instanceof THREE.Texture) shareResource(value);
@@ -244,7 +265,7 @@ async function loadOne(name: string) {
 }
 
 export async function preloadModels(names: string[]) {
-  await Promise.all(names.map(loadOne));
+  await Promise.all([...names.map(loadOne), loadSurfaceLibrary()]);
   return [...loaded.keys()];
 }
 
@@ -265,6 +286,7 @@ function cloneWithMaterials(src: THREE.Object3D, model: string) {
   const root = src.clone(true);
   const cloned = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   const size = PAINT_SIZE[model] ?? 1;
+  const finished = !!src.userData.finished;
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     o.castShadow = true;
@@ -274,8 +296,9 @@ function cloneWithMaterials(src: THREE.Object3D, model: string) {
       m = orig.clone();
       m.userData.baseEmissive = m.emissive.clone();
       m.userData.baseIntensity = m.emissiveIntensity;
-      const paint = paintFor(model, o, m);
-      if (paint) applyCharPaint(m, paint, size);
+      const paint = finished ? null : paintFor(model, o, m);
+      if (finished) applyCharSurface(m, surfaceFor(model, o, m), model);
+      else if (paint) applyCharPaint(m, paint, size);
       applyGrade(m, MODEL_GRADE, 'root');
       cloned.set(orig, m);
     }
@@ -385,7 +408,9 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     }
     else if (!role && m.metalness > 0.5) applyFinish(m, 'metal');
     const paint = gearPaint(model, role, palette);
-    if (paint) setCharPaint(m, CHAR_PAINTS[paint]);
+    if (m.userData.charSurface) {
+      if (role) setCharSurface(m, gearSurface(model, role, palette));
+    } else if (paint) setCharPaint(m, CHAR_PAINTS[paint]);
   }
   const sockets: THREE.Object3D[] = [];
   root.traverse((o) => {

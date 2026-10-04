@@ -381,7 +381,7 @@ def hair_4(h):
 def beard_1(h):  # stubble
     box(h, (0.3, 0.1, 0.025), (0, -0.19, 0.236), H, bevel=0.006)                    # chin
     for s in (-1, 1):
-        box(h, (0.1, 0.07, 0.025), (s * 0.15, -0.14, 0.236), H, rot=(0, 0, s * 0.35), bevel=0.006)
+        box(h, (0.1, 0.07, 0.025), (s * 0.15, -0.14, 0.2345), H, rot=(0, 0, s * 0.35), bevel=0.006)   # (a hair behind the chin)
         box(h, (0.025, 0.16, 0.12), (s * 0.237, -0.12, 0.16), H, bevel=0.006)        # jaw line
     box(h, (0.22, 0.035, 0.025), (0, -0.108, 0.244), H, bevel=0.006)                # moustache shadow
     box(h, (0.34, 0.025, 0.2), (0, -0.237, 0.12), H, bevel=0.006)                   # under chin

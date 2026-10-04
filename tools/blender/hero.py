@@ -35,9 +35,9 @@ HIP = 0.9            # the hip axis: the body's pivot, which it leans about over
 # hinge and turns inside the skirt, so a striding leg never reaches through anything hanging from the hips (hips.py).
 LEG_HINGE = 0.725
 GOLD = 0xD9A640      # buckle, clasp and studs (authored, not recoloured)
-EYE = 0x1E1614
+EYE = (0x1E1614, 'plain')   # (painted plain: no material texture on the eyes)
 TRIM = 0xA9B6C6      # the pale trim down the tunic's front and round its hem
-UNDER = 0xC9CFD6     # the undershirt showing in the collar's V
+UNDER = (0xC9CFD6, 'linen')   # the undershirt showing in the collar's V
 FANG = 0xEDE3CB
 STEEL = 0x808C9C     # the pauldron: painted steel
 SOLE = 0x2E1E14
@@ -88,9 +88,10 @@ def build_hero(scene_name='DB_hero'):
     box(body, (0.2, 0.12, 0.2), (0, 0.8, 0), R.skin, bevel=0.03)                     # neck
     # Standing collar in the tunic's darker shade, open in a V over the pale undershirt; armour hides it.
     col = pivot(body, 'outfit_body_collar')
-    box(col, (0.42, 0.09, 0.08), (0, 0.79, -0.13), R.clothDark, bevel=0.02)          # back
+    # The collar round the back and sides of the neck, one piece: a U seen from above, 0.09 high.
+    prism(col, [(-0.21, -0.17), (0.21, -0.17), (0.21, 0.13), (0.13, 0.13), (0.13, -0.09), (-0.13, -0.09), (-0.13, 0.13),
+                (-0.21, 0.13)], 0.09, (0, 0.79, 0), R.clothDark, rot=(PI / 2, 0, 0), bevel=0.02)
     for s in (-1, 1):
-        box(col, (0.08, 0.09, 0.3), (s * 0.17, 0.79, -0.02), R.clothDark, bevel=0.02)          # sides
         box(col, (0.065, 0.18, 0.025), (s * 0.075, 0.68, 0.226), R.clothDark, rot=(-0.04, 0, -s * 0.666), bevel=0.008)  # lapels
     box(col, (0.18, 0.13, 0.02), (0, 0.685, 0.212), UNDER, taper=(0.15, 1), rot=(-0.04, 0, PI), bevel=0)    # the V
     # Belt with its square gold buckle, and the pouch on the left hip, hanging on the hips (all hidden under armour,
@@ -99,7 +100,7 @@ def build_hero(scene_name='DB_hero'):
     box(kit, (0.72, 0.12, 0.46), (0, 0.07, 0), R.leather, bevel=0.03)
     box(kit, (0.16, 0.14, 0.03), (0, 0.07, 0.235), GOLD, bevel=0.012)               # buckle frame
     box(kit, (0.08, 0.06, 0.03), (0, 0.07, 0.24), R.leather, bevel=0)                # the strap end through it
-    box(kit, (0.018, 0.06, 0.02), (-0.02, 0.07, 0.252), GOLD, bevel=0)                # tongue
+    box(kit, (0.018, 0.056, 0.02), (-0.02, 0.07, 0.253), GOLD, bevel=0)               # tongue (a hair inside the strap end)
     pouch = pivot(hips, 'outfit_body_pouch')
     box(pouch, (0.15, 0.17, 0.09), (0.225, -0.03, 0.2), R.leather, bevel=0.03)       # pouch (left hip)
     box(pouch, (0.16, 0.08, 0.1), (0.225, 0.04, 0.205), R.leather, rot=(0.12, 0, 0), bevel=0.02)   # its flap
@@ -155,7 +156,7 @@ def build_hero(scene_name='DB_hero'):
         # Forearm, its top rounded about the elbow so it turns inside the sleeve without a gap.
         joint_limb(e, 0.18, 0.21, 0.0, ELBOW - WRIST, R.skin, round_top=True)
         br = pivot(e, 'outfit_gloves_' + S)
-        box(br, (0.235, 0.16, 0.25), (0, ELBOW - 0.44, 0), R.leather, bevel=0.025)         # bracer
+        box(br, (0.235, 0.16, 0.25), (0, ELBOW - 0.443, 0), R.leather, bevel=0.025)        # bracer (its foot past the wrist's)
         box(br, (0.245, 0.045, 0.26), (0, ELBOW - 0.445, 0), 0x3E2818, bevel=0.01)          # its dark strap
         box(br, (0.012, 0.045, 0.045), (s * 0.125, ELBOW - 0.445, 0.0), GOLD, bevel=0.005)  # stud
         pivot(e, 'sock_cuff' + S, (0, ELBOW - HOLE, 0))

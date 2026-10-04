@@ -48,9 +48,9 @@ LEATHER_DK = 0x4A2E1A
 VEST = 0x94643A
 IRON = 0x4A4A52
 BONE = 0xEDE0C4
-GOB_EYE = 0xF4EAC4
-MOUTH = 0x4A3020
-CLUB = 0x6E4426
+GOB_EYE = (0xF4EAC4, 'plain')
+MOUTH = (0x4A3020, 'plain')
+CLUB = (0x6E4426, 'wood')
 # The baldric: up the chest from the belt at the right hip to the left shoulder, over it, and down the back to the belt.
 BALDRIC_LOW, BALDRIC_HIGH, BALDRIC_X = (-0.21, 0.04), (0.29, 0.68), 0.3
 
@@ -158,7 +158,7 @@ def goblin():
     box(w, (0.16, 0.05, 0.16), (0, 0.5, 0), LEATHER, bevel=0.012)                                           # bands
     box(w, (0.17, 0.05, 0.17), (0, 0.66, 0), LEATHER, bevel=0.012)
     box(w, (0.32, 0.3, 0.32), (0, 0.86, 0), CLUB, rot=(0, PI / 4, 0), bevel=0.07)                          # octagonal head
-    box(w, (0.3, 0.06, 0.3), (0, 0.72, 0), 0x55341C, rot=(0, PI / 4, 0), bevel=0.02)
+    box(w, (0.3, 0.06, 0.3), (0, 0.72, 0), (0x55341C, 'wood'), rot=(0, PI / 4, 0), bevel=0.02)
     for ang, y in ((0.0, 0.88), (2.1, 0.84), (4.2, 0.9), (1.05, 0.98)):
         d = (math.cos(ang), 0, math.sin(ang))
         tip_y = y + (0.18 if ang == 1.05 else 0.04)
