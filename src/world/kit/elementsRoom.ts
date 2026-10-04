@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { boxClaim, type Box, type Claim } from './claims';
-import { def, footprint, type ElementDef, type Look, type Part } from './elements';
-import { arc, box, cylinder, join, prism, ring, turned, type Mesh3, type Turn, type V2 } from './mesh';
+import { def, type ElementDef, type Look, type Part } from './elements';
+import { arc, box, cylinder, join, prism, ring, turned, type Mesh3, type V2 } from './mesh';
 import { CELL_U, half, PLAY, STEP_U } from './scale';
 import { barrel, candle, cob, flame, longLoaf, rug, sack } from './shapes/furniture';
 import { lampPost, lanternGlass, pot } from './shapes/details';
