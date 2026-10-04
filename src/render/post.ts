@@ -208,9 +208,9 @@ export function attachmentBytes(layout: { type: THREE.TextureDataType; format: T
   return total;
 }
 
-/** The scene pass's buffers for these effects: the frame, and the surface buffers they read. */
-function surfaceBuffers(fx: LightingEffects) {
-  const wanted = SURFACE_BUFFERS.filter((b) => b.wanted(fx));
+/** The scene pass's buffers: the frame, and the surface buffers of a layout (surfaceLayout). */
+function surfaceBuffers(layout: { name: string }[]) {
+  const wanted = SURFACE_BUFFERS.filter((b) => layout.some((l) => l.name === b.name));
   const m = mrt({ output, ...Object.fromEntries(wanted.map((b) => [b.name, b.value()])) });
   for (const b of wanted) if (b.blended) m.setBlendMode(b.name, new BlendMode(THREE.NormalBlending));
   return m;
@@ -321,14 +321,11 @@ export class PostChain {
     const buffers = fx.bounce || fx.contact || fx.reflections || fx.smooth;
     // (Smooth edges replace the multisampling: the two never run together.)
     const samples = fx.smooth ? 0 : q.msaa;
-    const scenePass = (this.scenePass = own(pass(this.scene, this.camera, { samples })));
-    if (buffers) scenePass.setMRT(surfaceBuffers(fx));
+    const scenePass = this.passFor(surfaceLayout(fx), samples);
     setEffectsBuffers(buffers);
     const color = scenePass.getTextureNode('output'), depth = scenePass.getTextureNode('depth');
     let normal: Node | null = null, albedo: TextureNode | null = null;
     if (buffers) {
-      // (Each buffer's texel as the layout gives it: plenty for light, less to read.)
-      for (const b of surfaceLayout(fx)) Object.assign(scenePass.getTexture(b.name), { type: b.type, format: b.format });
       const n = scenePass.getTextureNode('normal');
       normal = sample((at) => unpackRGBToNormal(n.sample(at).rgb));
       if (fx.bounce) albedo = scenePass.getTextureNode('albedo');
@@ -347,7 +344,7 @@ export class PostChain {
         // (With smooth edges its grain turns frame to frame and settles; without, it is smoothed in place.)
         node.useTemporalFiltering = fx.smooth;
         const raw = node.getTextureNode();
-        ao = fx.smooth ? { tex: raw, kernel: 4 } : { tex: own(rtt(denoise(raw, depth, normal!, cam), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode, kernel: 2 };
+        ao = fx.smooth ? { tex: raw, kernel: 4 } : { tex: own(rtt(own(denoise(raw, depth, normal!, cam)), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode, kernel: 2 };
       } else {
         ao = { tex: own(rtt(this.occlusion(depth), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode, kernel: 4 };
       }
@@ -368,7 +365,7 @@ export class PostChain {
       // (Smoothed in place even with smooth edges: the light it gathers is broad, its grain fine, and
       // the smoothing over frames alone leaves a sparkle in the shade.)
       const raw = node.getGINode() as unknown as TextureNode;
-      gi = own(rtt(denoise(raw, depth, normal!, cam), null, null, { type: THREE.HalfFloatType, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode;
+      gi = own(rtt(own(denoise(raw, depth, normal!, cam)), null, null, { type: THREE.HalfFloatType, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode;
     }
     let reflection: TextureNode | null = null;
     if (fx.reflections) {
@@ -386,16 +383,20 @@ export class PostChain {
     if (fx.smooth) {
       // (The composited frame drawn once, the history blended over it.)
       const frame = own(rtt(out, null, null, { type: THREE.HalfFloatType, depthBuffer: false }));
-      const node = (this.fx.traa = own(traa(frame, depth, scenePass.getTextureNode('velocity'), cam)));
+      const node = (this.fx.traa = own(traa(frame, depth, scenePass.getTextureNode('velocity'), cam))) as TRAANode & { getTextureNode(): TextureNode; _previousDepthNode: TextureNode };
+      // (The node's first stand-in for last frame's depth, which it never frees itself.)
+      const firstDepth = node._previousDepthNode.value;
+      own({ dispose: () => firstDepth.dispose() });
       // (Blending frames softens the picture a little: a contrast-adaptive sharpen gives the painted
-      // edges and textures back their crispness, as FSR does after its own temporal pass.)
-      out = own(sharpen(node, EFFECT_TUNING.sharpness)) as unknown as V4;
+      // edges and textures back their crispness, as FSR does after its own temporal pass. Each pass
+      // hands the next its own picture, so none is copied into a picture of its own.)
+      out = own(sharpen(node.getTextureNode(), EFFECT_TUNING.sharpness)).getTextureNode() as unknown as V4;
     }
     const shown = this.debugView(this.show, { ao, gi, reflection, normal, albedo, motion: fx.smooth ? scenePass.getTextureNode('velocity') : null });
     if (shown) out = shown;
     if (q.bloom) {
       // (The graded frame drawn once, read by the bloom and the output alike.)
-      const graded = q.shade && !fx.smooth ? own(rtt(out, null, null, { type: THREE.HalfFloatType, depthBuffer: false })) : out;
+      const graded = (out as { isTextureNode?: boolean }).isTextureNode ? out : own(rtt(out, null, null, { type: THREE.HalfFloatType, depthBuffer: false }));
       // (Picked up at half size: any smaller and thin bright lines, such as rune inlays, slip between
       // its samples and lose their glow.)
       const glow = own(bloom(graded, 0.55, 0.5, 0.95));
@@ -409,6 +410,34 @@ export class PostChain {
   get samples() {
     return this.scenePass.renderTarget.samples;
   }
+
+  /**
+   * The scene pass for a set of surface buffers, drawing with `samples`. One pass is kept for each
+   * set (the frame alone, the frame and facing, …), so switching back and forth reuses every
+   * material's programs (a new pass would build them all again and keep the old ones). The pass
+   * left behind frees its buffers until it draws again.
+   */
+  private passFor(layout: ReturnType<typeof surfaceLayout>, samples: number) {
+    const key = layout.map((b) => b.name).join('+');
+    let p = this.passes.get(key);
+    if (!p) {
+      p = pass(this.scene, this.camera, { samples });
+      if (layout.length) p.setMRT(surfaceBuffers(layout));
+      // (Each buffer's texel as the layout gives it: plenty for light, less to read.)
+      for (const b of layout) Object.assign(p.getTexture(b.name), { type: b.type, format: b.format });
+      this.passes.set(key, p);
+    }
+    if (this.scenePass && this.scenePass !== p) this.scenePass.renderTarget.dispose();
+    this.scenePass = p;
+    const rt = p.renderTarget;
+    p.options.samples = samples;
+    if (rt.samples !== samples) {
+      rt.samples = samples;
+      rt.dispose();
+    }
+    return p;
+  }
+  private readonly passes = new Map<string, PassNode>();
 
   /** Draw the frame through the chain. */
   render() {
@@ -452,6 +481,8 @@ export class PostChain {
 
   dispose() {
     this.freeOwned();
+    for (const p of this.passes.values()) p.dispose();
+    this.passes.clear();
     this.pipeline.dispose();
     setEffectsBuffers(false);
   }

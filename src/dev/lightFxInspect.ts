@@ -135,8 +135,9 @@ const BUFFERS: [string, Partial<LightingEffects>][] = [
  * for some configs too): every view with the lighting effects off, each alone and all four together,
  * captured (`lfx-<view>-<config>`) after the smoothing has settled, with each one's frame cost (CPU and
  * GPU milliseconds, medians). `lightfx:buffers` captures the effects' own buffers instead
- * (`lfxbuf-<view>-<buffer>`), and `lightfx:cost` measures each config's cost in interleaved rounds (the
- * machine's other work falls on all alike), with no pictures.
+ * (`lfxbuf-<view>-<buffer>`), `lightfx:cost` measures each config's cost in interleaved rounds (the
+ * machine's other work falls on all alike), with no pictures, and `lightfx:churn` switches through
+ * them all over and over, failing if that leaves textures, targets or programs behind.
  */
 export async function lightFxSuite(g: Game, shot: Shot, only: string[], views: FxView[] = FX_VIEWS) {
   const out: Record<string, Record<string, unknown>> = {};
@@ -145,7 +146,7 @@ export async function lightFxSuite(g: Game, shot: Shot, only: string[], views: F
   const buffers = only.includes('buffers'), cost = only.includes('cost');
   const picked = FX_CONFIGS.filter(([n]) => only.includes(n));
   const configs = picked.length ? picked : FX_CONFIGS;
-  const names = only.filter((n) => n !== 'buffers' && n !== 'cost' && !FX_CONFIGS.some(([c]) => c === n));
+  const names = only.filter((n) => n !== 'buffers' && n !== 'cost' && n !== 'churn' && !FX_CONFIGS.some(([c]) => c === n));
   document.body.classList.add('inspect-clean');
   try {
     for (const view of views.filter((v) => !names.length || names.includes(v.name))) {
@@ -173,6 +174,29 @@ export async function lightFxSuite(g: Game, shot: Shot, only: string[], views: F
             await shot(`lfxbuf-${view.name}-${name}`);
           }
           g.post.showBuffer(null);
+        } else if (only.includes('churn')) {
+          // Switching the effects over and over must not leave textures, targets or programs behind.
+          const sample = () => {
+            const m = g.renderer.info.memory as unknown as Record<string, number>;
+            return { textures: m.textures, geometries: m.geometries, programs: m.programs, renderTargets: m.renderTargets };
+          };
+          const cycle = async () => {
+            for (const [, fx] of FX_CONFIGS) {
+              g.setLighting(fx);
+              await settle(4);
+            }
+          };
+          await cycle();
+          await cycle();
+          const baseline = sample();
+          const rounds = [];
+          for (let i = 0; i < 3; i++) {
+            await cycle();
+            rounds.push(sample());
+          }
+          const stable = rounds.every((r) => JSON.stringify(r) === JSON.stringify(baseline));
+          if (!stable) console.error(`Switching the lighting effects left resources behind: ${JSON.stringify({ baseline, rounds })}`);
+          row.churn = { baseline, rounds, stable };
         } else if (cost) {
           // Medians of five interleaved rounds of 30 frames each, every config built once first.
           const runs: Record<string, { cpu: number[]; gpu: number[] }> = {};
