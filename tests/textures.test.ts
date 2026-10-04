@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { applyCharPaint, applyGrade, applyGround, applySurface, CHAR_PAINTS, type CharPaint, gradeRow, MODEL_GRADE, patchKeys, prepareCharGeometry, propSurface, setCharPaint, setPaintGain } from '../src/render/surface';
 import { charTexture, forgeTexture, groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
 import { makeOccludable } from '../src/world/worldView';
+import { packAttributes } from '../src/render/patch';
 import { patchGraph } from './patchGraph';
 
 const px = (t: THREE.Texture) => t.image as { data: Uint8Array; width: number; height: number };
@@ -250,5 +251,33 @@ describe('shader patches compose', () => {
     applyGround(sharp, 0, 1, 0x7a6a5a, undefined, false, null, undefined, false, true, true);
     expect(patchGraph(sharp).attributes).toContain('aCol3');
     expect(sharp.customProgramCacheKey()).not.toBe(mat.customProgramCacheKey());
+  });
+});
+
+describe('packing vertex attributes', () => {
+  it('interleaves the named attributes into one buffer, values unchanged', () => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    geo.setAttribute('aA', new THREE.Float32BufferAttribute([1, 2, 3], 1));
+    geo.setAttribute('aB', new THREE.Float32BufferAttribute([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 4));
+    packAttributes(geo, ['aA', 'aB', 'aMissing']);
+    const a = geo.getAttribute('aA') as THREE.InterleavedBufferAttribute, b = geo.getAttribute('aB') as THREE.InterleavedBufferAttribute;
+    expect(a.isInterleavedBufferAttribute && b.isInterleavedBufferAttribute).toBe(true);
+    expect(a.data).toBe(b.data);
+    expect(a.data.stride).toBe(5);
+    expect([a.offset, b.offset]).toEqual([0, 1]);
+    expect([0, 1, 2].map((i) => a.getX(i))).toEqual([1, 2, 3]);
+    expect([b.getX(1), b.getY(1), b.getZ(1), b.getW(1)]).toEqual([8, 9, 10, 11]);
+    // (Untouched: what was not named.)
+    expect((geo.getAttribute('position') as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute).toBeFalsy();
+    // Packing again, or a single attribute, changes nothing.
+    const data = a.data;
+    packAttributes(geo, ['aA', 'aB']);
+    expect((geo.getAttribute('aA') as THREE.InterleavedBufferAttribute).data).toBe(data);
+    const lone = new THREE.BufferGeometry();
+    const only = new THREE.Float32BufferAttribute([1, 2], 1);
+    lone.setAttribute('aA', only);
+    packAttributes(lone, ['aA', 'aB']);
+    expect(lone.getAttribute('aA')).toBe(only);
   });
 });

@@ -39,6 +39,13 @@ import { ZoneRuntime } from './world/zone';
 
 export type Mode = 'title' | 'create' | 'play';
 
+/** Neither WebGPU nor its WebGL 2 fallback could start on this machine. */
+export class GraphicsError extends Error {
+  constructor(cause: unknown) {
+    super('The graphics could not start', { cause });
+  }
+}
+
 export class Game {
   /** WebGPU where the machine has it, else WebGL 2 (the renderer falls back by itself). */
   readonly renderer: WebGPURenderer;
@@ -173,7 +180,9 @@ export class Game {
   }
 
   async start() {
-    await Promise.all([this.renderer.init(), initIcons()]);
+    await Promise.all([this.renderer.init(), initIcons()]).catch((cause: unknown) => {
+      throw new GraphicsError(cause);
+    });
     this.claimSave();
     const loaded = await loadSave(this.backend);
     this.hasSave = !!loaded?.character;

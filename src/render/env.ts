@@ -172,7 +172,10 @@ export const steadyShadows = Fn(({ depthTexture, shadowCoord, shadow }: { depthT
  * key every frame (about 5 ms a frame in the keep). Each caster's draw is built once with its own
  * alpha test either way, so the shared material takes the value without counting a new version.
  */
+let shadowPassSteady = false;
 export function steadyShadowPass() {
+  if (shadowPassSteady) return;
+  shadowPassSteady = true;
   const proto = ShadowNode.prototype as unknown as { getShadowMaterial(): THREE.Material };
   const get = proto.getShadowMaterial;
   proto.getShadowMaterial = function (this: unknown) {

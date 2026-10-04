@@ -47,6 +47,8 @@ export class PostChain {
   /** Where the haze covers the occlusion of far things (from the fog). */
   private readonly fade = uniform(new THREE.Vector2(60, 160));
   private quality: PostQuality | null = null;
+  /** The passes the current chain owns (its own render targets), freed when it is rebuilt. */
+  private owned: { dispose(): void }[] = [];
   private readonly size = new THREE.Vector2();
 
   constructor(private renderer: Renderer, scene: THREE.Scene, private camera: THREE.PerspectiveCamera, private fog: () => THREE.Fog | null) {
@@ -65,18 +67,20 @@ export class PostChain {
       rt.samples = q.msaa;
       rt.dispose();
     }
+    this.freeOwned();
+    const own = <T extends { dispose(): void }>(n: T) => (this.owned.push(n), n);
     const color = this.scenePass.getTextureNode('output'), depth = this.scenePass.getTextureNode('depth');
     let out: V4 = color as unknown as V4;
     if (q.shade) {
-      const ao = q.occlusion === false ? null : rtt(this.occlusion(depth), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: 0.5 });
+      const ao = q.occlusion === false ? null : own(rtt(this.occlusion(depth), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: 0.5 }));
       out = this.composite(color, depth, ao as unknown as TextureNode | null);
     }
     if (q.bloom) {
       // (The graded frame drawn once, read by the bloom and the output alike.)
-      const graded = q.shade ? rtt(out, null, null, { type: THREE.HalfFloatType, depthBuffer: false }) : out;
+      const graded = q.shade ? own(rtt(out, null, null, { type: THREE.HalfFloatType, depthBuffer: false })) : out;
       // (Picked up at half size: any smaller and thin bright lines, such as rune inlays, slip between
       // its samples and lose their glow.)
-      const glow = bloom(graded, 0.55, 0.5, 0.95);
+      const glow = own(bloom(graded, 0.55, 0.5, 0.95));
       out = (graded as V4).add(glow as unknown as V4);
     }
     this.pipeline.outputNode = out;
@@ -105,8 +109,14 @@ export class PostChain {
   }
 
   dispose() {
+    this.freeOwned();
     this.pipeline.dispose();
     this.scenePass.dispose();
+  }
+
+  private freeOwned() {
+    for (const n of this.owned) n.dispose();
+    this.owned = [];
   }
 
   /** The occlusion (1 open .. 0 closed in), for the half-size pass. */

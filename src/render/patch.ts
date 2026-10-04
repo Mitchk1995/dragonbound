@@ -178,6 +178,9 @@ export function instanceOrigin(builder: NodeBuilder): V3 {
 function instanceColumns(builder: NodeBuilder): V4[] | null {
   const obj = builder.object as THREE.InstancedMesh;
   if (!obj?.isInstancedMesh) return null;
+  // (One set per program build, however many hooks ask for it.)
+  const built = builtColumns.get(builder);
+  if (built) return built;
   const m = obj.instanceMatrix;
   let ib = matrixBuffers.get(m);
   if (!ib) matrixBuffers.set(m, (ib = new THREE.InstancedInterleavedBuffer(m.array, 16, 1)));
@@ -186,8 +189,11 @@ function instanceColumns(builder: NodeBuilder): V4[] | null {
   OnBeforeFrameUpdate(() => {
     if (buf.version !== m.version) buf.version = m.version;
   });
-  return [0, 1, 2, 3].map((k) => instancedBufferAttribute(buf, 'vec4', 16, k * 4) as V4);
+  const columns = [0, 1, 2, 3].map((k) => instancedBufferAttribute(buf, 'vec4', 16, k * 4) as V4);
+  builtColumns.set(builder, columns);
+  return columns;
 }
+const builtColumns = new WeakMap<NodeBuilder, V4[]>();
 
 /**
  * Pack a geometry's named attributes (those it has, not yet packed) into one interleaved vertex

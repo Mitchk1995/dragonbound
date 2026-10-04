@@ -160,7 +160,10 @@ export function hazeFog(scene: THREE.Scene, sun: THREE.DirectionalLight) {
     const v = positionView;
     const t = max(length(v).sub(near.mul(0.8)), 0).div(max(far.sub(near.mul(0.8)), 1));
     const factor = float(1).sub(exp(t.mul(t).mul(-3)));
-    if (!(builder.material as { lights?: boolean } | null)?.lights) return fog(color, factor);
+    // (Lit materials only, as the haze always had it: the builder holds the plain material, so its kind decides.)
+    const m = builder.material as (THREE.Material & { isMeshStandardMaterial?: boolean; isMeshLambertMaterial?: boolean; isMeshPhongMaterial?: boolean; isMeshToonMaterial?: boolean }) | null;
+    const lit = !!m && (m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial) && !(m as { isNodeMaterial?: boolean }).isNodeMaterial;
+    if (!lit) return fog(color, factor);
     const glow = pow(max(dot(normalize(v), mat3(cameraViewMatrix).mul(sunDir)), 0), 4);
     const sc = sunCol as unknown as V3;
     const tint = sc.div(max(max(sc.r, sc.g), max(sc.b, 1e-3))).mul(0.5).add(0.75);
