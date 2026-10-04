@@ -4,12 +4,13 @@ Part of the design plan; the index and the current direction are in [DESIGN_DECI
 
 ## Where the trees stand
 
-- **Trees:** the grown oak and the common tree are built and approved with their bark (Mitchell, "looks good", October 3; see "Trees (October 3)" below); the willow, maple, yew and magic tree are built and every zone's woods and lawns now grow the ladder, waiting on Mitchell's verdict from pictures. The bushes are grown the same way and approved (October 4, below). The dead ash is grown the same way too; Mitchell rejected its bark and colours, then rejected its second bark pass for textures twisting on the branches. Its corrected branch mapping waits on a new picture verdict.
+- **Trees:** the grown oak and the common tree are built and approved with their bark (Mitchell, "looks good", October 3; see "Trees (October 3)" below); the willow, maple, yew and magic tree are built and every zone's woods and lawns now grow the ladder, waiting on Mitchell's verdict from pictures. The bushes are grown the same way and approved (October 4, below). The dead ash is grown the same way too; Mitchell rejected its bark and colours, then rejected its second bark pass for textures twisting on the branches. Its corrected, aligned branch grain is approved (October 4, below) and in the game; its shapes stay unchanged.
 
 ## Bushes and dead ash (October 4)
 
 - **Bushes grown like the trees: approved** ("yes, good"). **Dead ash grown then broken: rejected** for its bark and colour only: "texture is completely off on the dead trees doesnt look anything close to right with the bark and colors". The shapes stay; the bark and colours are redone from real dead-ash reference (below), waiting on his verdict.
-- **Dead ash, second bark pass: rejected** (Mitchell, shared review item `dead-ash-2`, October 4): "textures still twisted on branches not quite right". No owner pins accompanied this verdict. The correction covers the branch bark and exposed-wood texture orientation; the tree shapes and other species keep their existing look. The corrected ash needs its own new picture verdict.
+- **Dead ash, second bark pass: rejected** (Mitchell, shared review item `dead-ash-2`, October 4): "textures still twisted on branches not quite right". No owner pins accompanied this verdict. The correction covers the branch bark and exposed-wood texture orientation; the tree shapes and other species keep their existing look. The corrected ash was shown as its own new picture item, below.
+- **Dead ash, aligned branch grain: approved** (Mitchell, shared review item `dead-ash-oct4-grain`, revision 2, October 4). Saved verdict **yes**, with an empty reason and no owner pins. Approval covers the corrected branch bark and exposed-wood grain alignment shown in that item; the original tree shapes are unchanged. The correction is in the game through PR #145. It does not approve other tree species or any unrelated subject.
 
 ## The pick (October 3)
 
