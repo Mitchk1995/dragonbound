@@ -55,7 +55,7 @@ function shapesOf(e: ElementDef): Shape[] {
   return out;
 }
 
-/** Each shape's vertex data, built once for the session; views draw it through geometries of their own (own). */
+/** Each shape's vertex data, built once for the session; views draw it through geometries of their own, made by own(). */
 const geoCache = new Map<string, THREE.BufferGeometry>();
 function geometry(s: Shape): THREE.BufferGeometry {
   let g = geoCache.get(s.key);
@@ -84,8 +84,8 @@ function own(shared: THREE.BufferGeometry, count: number, tint: boolean) {
   };
   for (const [name, a] of Object.entries(shared.attributes)) g.setAttribute(name, copy(a));
   g.setIndex(copy(shared.index!) as THREE.BufferAttribute);
-  g.boundingBox = shared.boundingBox;
-  g.boundingSphere = shared.boundingSphere;
+  g.boundingBox = shared.boundingBox!.clone();
+  g.boundingSphere = shared.boundingSphere!.clone();
   if (tint) g.setAttribute('aTint', new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
   return g;
 }

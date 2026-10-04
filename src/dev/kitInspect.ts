@@ -15,9 +15,10 @@ type Free = (n: string, eye: THREE.Vector3, look: THREE.Vector3, fov?: number) =
 
 /**
  * The building kit's first house in the hub town's ground below the castle (explicit suite: `kit`;
- * `kit:gallery` adds every piece of the kit laid out; `kit:cycles` instead draws and frees streets over
- * and over, checking nothing is freed while drawn and nothing leaks, kitCycles.ts). The house stands on a clear, level plot of the
- * home island's meadow south of the castle rock, the hero beside it: the play camera outside, a wide
+ * `kit:gallery` adds every piece of the kit laid out; `kit:cycles` instead draws and frees streets
+ * over and over, checking nothing is freed while drawn and nothing leaks, kitCycles.ts). The house
+ * stands on a clear, level plot of the home island's meadow south of the castle rock, the hero beside
+ * it: the play camera outside, a wide
  * view and two more angles, at the door at his eye height (in plate armour), inside both floors
  * through the play camera with the cut-away the game's buildings use, the stair, the oven's mouth,
  * close-ups of the stone, the timber and plaster, the roof and the chimney, and a street of sixteen

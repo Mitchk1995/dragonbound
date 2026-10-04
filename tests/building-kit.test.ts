@@ -5,7 +5,7 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { KitBuild, type Placed } from '../src/world/kit/build';
 import { overlap, placeClaim, turn, inside, type Claim, type Hull, type P3 } from '../src/world/kit/claims';
-import { ELEMENTS, stoneEl } from '../src/world/kit/elements';
+import { ELEMENTS, stoneEl, windowEl } from '../src/world/kit/elements';
 import { buildBakery, DOOR, H, HOUSE, STAIR, standsIn, type Cut } from '../src/world/kit/house';
 import { OVEN, RISE, treadTop } from '../src/world/kit/houseInside';
 import { APEX, CHIMNEY_TOP, plane } from '../src/world/kit/houseRoof';
@@ -466,12 +466,17 @@ describe('drawing the kit', () => {
       mesh.geometry.addEventListener('dispose', () => buffersOf(mesh.geometry).forEach((b) => destroyed.add(b)));
       return buffersOf(mesh.geometry);
     });
-    const a = new KitView(build, copies), b = new KitView(build), mine = watch(a), theirs = watch(b);
+    // (The stones' textured batches and a window's glass, drawn apart.)
+    const street = new KitBuild();
+    for (const p of build.items) street.place(p.el, p.x, p.y, p.z, p.color);
+    street.place(windowEl(2, 6, 2, 2, 0x333333), 10, 0, 0, 0x6b4a33);
+    expect(street.items.at(-1)!.el.parts.some((p) => p.look === 'glass')).toBe(true);
+    const a = new KitView(street, copies), b = new KitView(street), mine = watch(a), theirs = watch(b);
     a.dispose();
     expect(mine.every((x) => destroyed.has(x))).toBe(true);
     expect(theirs.filter((x) => destroyed.has(x))).toEqual([]);
     // A view drawn after the first is freed draws from none of its buffers either.
-    const c = new KitView(build, copies), next = watch(c);
+    const c = new KitView(street, copies), next = watch(c);
     expect(next.filter((x) => destroyed.has(x))).toEqual([]);
     // (Each view's buffers hold the shapes' one copy of their vertices, not copies of their own.)
     const pos = (v: KitView) => batchOf(v, stoneEl(2).id).geometry.getAttribute('position') as THREE.InterleavedBufferAttribute;

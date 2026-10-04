@@ -23,6 +23,7 @@ export async function kitCycles(g: Game) {
   g.travel('keep', true);
   await new Promise((r) => setTimeout(r, 400));
   await loadKitSurfaces();
+  const timeScale = g.debug.timeScale;
   g.debug.timeScale = 0;
   const build = buildBakery(), { corner, copies, paving, middle } = testLot(g, g.player.pos.clone());
   const look = corner.clone().add(middle), errors: string[] = [];
@@ -60,22 +61,27 @@ export async function kitCycles(g: Game) {
     for (const s of live.values()) bytes += s;
     return { gpuBuffers: live.size, gpuKB: Math.round(bytes / 1024), geometries: m.geometries, textures: m.textures, programs: m.programs };
   };
+  // (The views still drawn, freed at the end whatever happens.)
+  const drawn = new Set<KitView>();
+  const draw = (v: KitView, shadows = true) => {
+    if (!shadows) v.group.traverse((o) => (o.castShadow = false));
+    v.group.position.copy(corner);
+    g.scene.add(v.group);
+    drawn.add(v);
+    return v;
+  };
+  const free = (...views: KitView[]) => views.forEach((v) => (v.dispose(), drawn.delete(v)));
   const cycle = async (shadows: boolean) => {
     const rounds: ReturnType<typeof sample>[] = [];
     for (let round = 0; round < 6; round++) {
       const views = [new KitView(paving), new KitView(build, copies.slice(1)), new KitView(build, copies.slice(8))];
       views[1].recolor((p, k) => houseColour(p.color, k + round));
-      for (const v of views) {
-        if (!shadows) v.group.traverse((o) => (o.castShadow = false));
-        v.group.position.copy(corner);
-        g.scene.add(v.group);
-      }
+      for (const v of views) draw(v, shadows);
       await frames(4);
       // One street freed while the other, the paving and the kept house go on being drawn.
-      views[1].dispose();
+      free(views[1]);
       await frames(3);
-      views[0].dispose();
-      views[2].dispose();
+      free(views[0], views[2]);
       await frames(4);
       rounds.push(sample());
     }
@@ -85,20 +91,19 @@ export async function kitCycles(g: Game) {
   };
   let out;
   try {
-    const keep = new KitView(build, [copies[0]]);
-    keep.group.position.copy(corner);
-    g.scene.add(keep.group);
+    const keep = draw(new KitView(build, [copies[0]]));
     const noShadows = await cycle(false), shadows = await cycle(true);
-    keep.dispose();
+    free(keep);
     await frames(4);
     await device?.queue.onSubmittedWorkDone();
     await frames(2);
     out = { gpuErrors: errors.length, firstError: errors[0] ?? null, noShadows, shadows, after: sample() };
   } finally {
+    free(...drawn);
     g.debug.hold = null;
     g.renderer.onError = onError;
     if (device && create) device.createBuffer = create;
-    g.debug.timeScale = 1;
+    g.debug.timeScale = timeScale;
   }
   if (errors.length) console.error(`kit cycles: the GPU reported ${errors.length} errors, first: ${errors[0]}`);
   if (!out.noShadows.flat) console.error(`kit cycles: what the views own grew from round to round: ${JSON.stringify(out.noShadows.rounds)}`);
