@@ -115,7 +115,7 @@ export async function charactersSuite(g: Game, shot: Shot) {
  * (bowInspect.ts, its measurements, taken in the running game, returned for the report); `minifig` or
  * `minifig:<tag>`, the goblin and the cultist on the minifigure body every humanoid shares (minifigInspect.ts; the tag
  * names the captures of a run on other models, e.g. the ones they replace); and `chartex`, the characters' textures
- * (textureInspect.ts).
+ * (textureInspect.ts, then metalInspect.ts); `chartex:metal` captures the metal alone.
  */
 export async function characterSuites(g: Game, shot: Shot, suites: string): Promise<Record<string, unknown>> {
   const list = suites.split(',');
@@ -126,6 +126,7 @@ export async function characterSuites(g: Game, shot: Shot, suites: string): Prom
   const minifig = list.find((s) => s === 'minifig' || s.startsWith('minifig:'));
   if (minifig) await (await import('./minifigInspect')).minifigSuite(g, shot, minifig.slice('minifig:'.length));
   if (list.includes('chartex')) await (await import('./textureInspect')).textureSuite(g, shot);
+  if (list.includes('chartex') || list.includes('chartex:metal')) await (await import('./metalInspect')).metalSuite(g, shot);
   return report;
 }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { applyCharPaint, applyGrade, applyGround, applySurface, CHAR_PAINTS, type CharPaint, gradeRow, MODEL_GRADE, patchKeys, prepareCharGeometry, propSurface, setCharPaint, setPaintGain } from '../src/render/surface';
-import { charTexture, forgeTexture, groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
+import { applyCharPaint, applyGrade, applyGround, applySurface, CHAR_PAINTS, gradeRow, MODEL_GRADE, patchKeys, prepareCharGeometry, propSurface, setCharPaint, setPaintGain } from '../src/render/surface';
+import { charTexture, groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
 import { makeOccludable } from '../src/world/worldView';
 import { packAttributes } from '../src/render/patch';
 import { patchGraph } from './patchGraph';
@@ -94,14 +94,13 @@ describe('procedural textures', () => {
 });
 
 describe('character painting', () => {
-  it('the character atlas (and the forge atlas for forged metal), colour only, composes with the grade', () => {
+  it('the character atlas, colour only, composes with the grade', () => {
     const mat = new THREE.MeshStandardMaterial();
     applyCharPaint(mat, CHAR_PAINTS.metal);
     applyGrade(mat, MODEL_GRADE, 'root');
     expect(patchKeys(mat)).toEqual(['cpaint:uniform', 'grade:root']);
     const g = patchGraph(mat);
-    // (The forge atlas is fetched only by forged metal, in its own branch.)
-    expect(g.textures).toEqual(new Set([charTexture(), forgeTexture()]));
+    expect(g.textures).toEqual(new Set([charTexture()]));
     expect(g.hooks.has('normal')).toBe(false);
     // Per-vertex recipes are a separate program.
     const vc = new THREE.MeshStandardMaterial();
@@ -130,8 +129,9 @@ describe('character painting', () => {
       expect(Math.max(...p.w), k).toBeLessThanOrEqual(0.36);
       expect(Math.abs(p.edge), k).toBeLessThanOrEqual(0.3);
       expect(Math.abs(p.grad), k).toBeLessThanOrEqual(0.25);
-      expect((p as CharPaint).forge ?? 0, k).toBeLessThanOrEqual(1);
     }
+    // Metal is smooth (owner, October 4: never a bumpy texture on any metal): no pattern at all.
+    for (const k of ['metal', 'darkMetal', 'gilt'] as const) expect(CHAR_PAINTS[k].w, k).toEqual([0, 0, 0, 0]);
     // Faces stay clean.
     expect(Math.max(...CHAR_PAINTS.skin.w)).toBeLessThanOrEqual(0.06);
     expect(CHAR_PAINTS.skin.edge).toBe(0);

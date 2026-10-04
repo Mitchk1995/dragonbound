@@ -7,12 +7,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeItem } from '../src/loot/itemGen';
-import { studioEnv, studioRadiance } from '../src/render/env';
+import { studioRadiance } from '../src/render/env';
+import { skyEnv } from '../src/render/polish';
 import { ICON_PAINT_GAIN, iconSubject } from '../src/render/icons3d';
 import { HeroDresser, MODEL_FILES, makeModel, registerModelScene, roleOf } from '../src/render/registry';
 import { patchKeys } from '../src/render/surface';
 import type { SurfaceUniforms } from '../src/render/charBake';
-import { SURFACE_KINDS } from '../src/render/charSurfaces';
+import { SURFACE_KINDS, SURFACES } from '../src/render/charSurfaces';
 
 beforeAll(async () => {
   const loader = new GLTFLoader();
@@ -144,13 +145,16 @@ describe('models are hand-painted', () => {
 });
 
 describe('metal reads as metal', () => {
-  it('forged tiers reflect the studio environment; leather does not', () => {
-    const plate = materials(dressed({ body: 'steel_platebody' }).root).filter((m) => m.name.startsWith('ROLE_metal'));
-    expect(plate.length).toBeGreaterThan(0);
-    for (const m of plate) {
-      expect(m.envMap).toBe(studioEnv());
-      expect(m.metalness).toBeGreaterThan(0.7);
-      expect(m.roughness).toBeGreaterThan(0.25); // rough enough not to sparkle under bloom
+  // Owner, October 4: "the weird lumpy stuff has to go completely and just be shiny metal" (any metal at all, ever).
+  it('forged tiers are polished and mirror the sky; leather does not', () => {
+    for (const body of ['iron_platebody', 'steel_platebody', 'ember_platebody', 'bronze_platebody']) {
+      const plate = materials(dressed({ body }).root).filter((m) => m.name.startsWith('ROLE_metal'));
+      expect(plate.length, body).toBeGreaterThan(0);
+      for (const m of plate) {
+        expect(m.envMap, body).toBe(skyEnv());
+        expect(m.metalness, body).toBeGreaterThan(0.8);
+        expect(m.roughness, body).toBeLessThanOrEqual(0.3);
+      }
     }
     for (const m of materials(dressed({ body: 'leather_body' }).root)) {
       expect(m.envMap, m.name).toBeNull();
@@ -158,7 +162,53 @@ describe('metal reads as metal', () => {
     }
   });
 
-  it('unique gear authored as metal reflects too; its other parts stay matte', () => {
+  it('metal takes no painted grain or relief: plate and gold have no layer, nothing bumps their shading', () => {
+    for (const k of ['plate', 'darkPlate', 'gold'] as const) {
+      expect(SURFACES[k].layer, k).toBeNull();
+      expect(SURFACES[k].detail, k).toBe(0);
+      expect(SURFACES[k].relief, k).toBe(0);
+    }
+  });
+
+  it("the metal among merged parts shines in the same draw: the goblin's iron, the hero's buckles and pauldron", () => {
+    for (const name of ['goblin', 'hero']) {
+      let polishedVerts = 0, plain = 0;
+      makeModel(name).root.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !(o.material as THREE.Material).vertexColors) return;
+        const a = o.geometry.getAttribute('aPolish'), m = o.material as THREE.Material;
+        // (Only meshes with metal among their colours carry the polish, and pay for it.)
+        expect(!!a, `${name} ${o.name}`).toBe(patchKeys(m).includes('polish:vertex'));
+        if (a) for (let i = 0; i < a.count; i++) (a.getX(i) > 0 ? polishedVerts++ : plain++);
+      });
+      expect(polishedVerts, name).toBeGreaterThan(0);
+      expect(plain, name).toBeGreaterThan(0);
+    }
+  });
+
+  it("the cultist's iron mask and gold fittings shine; the gold cloth of her robe stays as it was painted", () => {
+    const gold = new THREE.Color(0xe2b04a), iron = new THREE.Color(0x4a4652);
+    const near = (c: THREE.Color, d: THREE.Color) => Math.abs(c.r - d.r) + Math.abs(c.g - d.g) + Math.abs(c.b - d.b) < 0.004;
+    let mask = 0, fittings = 0, cloth = 0;
+    makeModel('cultist').root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || !(o.material as THREE.Material).vertexColors) return;
+      const col = o.geometry.getAttribute('color'), p = o.geometry.getAttribute('aPolish');
+      for (let i = 0; i < col.count; i++) {
+        const c = new THREE.Color(col.getX(i), col.getY(i), col.getZ(i));
+        const shine = p ? p.getX(i) : 0;
+        if (near(c, iron)) {
+          expect(shine).toBeGreaterThan(0.8);
+          mask++;
+        }
+        // Her gold is cloth (the robe's bands, the stoles, the collar's binding) unless cult.py marks it metal.
+        if (near(c, gold)) (shine > 0.8 ? fittings++ : cloth++);
+      }
+    });
+    expect(mask).toBeGreaterThan(0);
+    expect(fittings).toBeGreaterThan(0);
+    expect(cloth).toBeGreaterThan(0);
+  });
+
+  it('unique gear authored as metal is polished too; its other parts stay matte', () => {
     const model = makeModel('hero');
     const crown = { ...makeItem('iron_fullhelm'), unique: 'ashen_crown', rarity: 'unique' } as ReturnType<typeof makeItem>;
     new HeroDresser(model).dress(null, { helm: crown });
@@ -166,10 +216,9 @@ describe('metal reads as metal', () => {
     model.root.getObjectByName('gear:sock_head')!.traverse((o) => {
       if (o instanceof THREE.Mesh) gear.add(o.material as THREE.MeshStandardMaterial);
     });
-    const shiny = [...gear].filter((m) => m.envMap === studioEnv());
+    const shiny = [...gear].filter((m) => m.envMap === skyEnv() || patchKeys(m).includes('polish:vertex'));
     expect(shiny.length).toBeGreaterThan(0);
-    for (const m of shiny) expect(m.metalness).toBeGreaterThan(0.7);
-    expect([...gear].some((m) => m.envMap === null && m.emissiveIntensity > 0), 'ember glow stays unlit by the studio').toBe(true);
+    expect([...gear].some((m) => m.envMap === null && m.emissiveIntensity > 0), 'ember glow stays unlit by the sky').toBe(true);
   });
 
   it('studio environment: warm bright top, dark ground, bounded softbox highlights', () => {

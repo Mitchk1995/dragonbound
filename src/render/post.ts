@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BlendMode, RenderPipeline, type Node, type NodeBuilder, type PassNode, type Renderer, type TextureNode } from 'three/webgpu';
-import { abs, cameraViewMatrix, clamp, cross, diffuseColor, dot, exp, float, Fn, getViewPosition, If, interleavedGradientNoise, mat3, max, mix, mrt, normalize, normalView, output, packNormalToRGB, pass, perspectiveDepthToViewZ, roughness, rtt, sample, screenCoordinate, select, smoothstep, uniform, unpackRGBToNormal, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
+import { abs, cameraViewMatrix, clamp, cross, diffuseColor, dot, exp, float, Fn, getViewPosition, If, interleavedGradientNoise, mat3, max, metalness, mix, mrt, normalize, normalView, output, packNormalToRGB, pass, perspectiveDepthToViewZ, roughness, rtt, sample, screenCoordinate, select, smoothstep, step, uniform, unpackRGBToNormal, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js';
 import { ao as gtao, type default as GTAONode } from 'three/examples/jsm/tsl/display/GTAONode.js';
@@ -141,7 +141,7 @@ const surfaceValue = (value: (builder: NodeBuilder) => V3) => Fn((builder: NodeB
 /**
  * Gloss, for the reflections: how much the surface reflects (x) and how rough it is (y). The water
  * reflects; dry surfaces only when polished or wet (smooth: wet rock, obsidian, coal), never metal
- * (its studio sheen already shows) and never the matt paint everything else wears. (Two channels,
+ * (it mirrors its own sky or studio already) and never the matt paint everything else wears. (Two channels,
  * which three.js writes with no alpha to blend by, and four would pass the bytes a pixel allows: a
  * see-through thing in front, a spark or a pane, writes none, so a reflection breaks off where one
  * stands.)
@@ -152,7 +152,9 @@ const gloss = Fn((builder: NodeBuilder): V2 => {
   // (The water's reflection is softened like its mirrors': a soft, coherent picture, never a torn one.)
   if (isEffectsWater(m)) return vec2(EFFECT_TUNING.waterShine * waterShine(m), EFFECT_TUNING.waterBlur);
   if (!solid(builder) || (m.metalness ?? 0) > 0.5) return vec2(0, 1);
-  return vec2(float(1).sub(smoothstep(0.12, 0.42, roughness)).mul(EFFECT_TUNING.glossShine), max(roughness, 0.3));
+  // (Nor the metal among a merged mesh's vertices, polished per vertex: polish.ts.)
+  const notMetal = float(1).sub(step(0.5, metalness));
+  return vec2(float(1).sub(smoothstep(0.12, 0.42, roughness)).mul(EFFECT_TUNING.glossShine).mul(notMetal), max(roughness, 0.3));
 });
 
 /**

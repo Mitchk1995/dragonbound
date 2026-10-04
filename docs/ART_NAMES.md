@@ -65,7 +65,11 @@ arm pivot), so they ride the upper arm exactly, never fan away from it and stay 
 `block_pauldron`, `arm_box`); anything on the forearm (vambraces) hangs on `sock_cuffL` / `sock_cuffR`.
 Keep shoulder caps only a little wider than the arm.
 
-Surfaces are textured, not modelled: UVs, baked maps and the painted materials are the finish
+**Metal is smooth, shiny metal** (owner, October 4: "idk why you would put a bumpy texture on steel and any metal at all
+ever... the weird lumpy stuff has to go completely and just be shiny metal"). Every metal surface of every character,
+piece of gear and weapon is polished: no hammer marks, dents, grain, noise or draw-marks, in its paint, its texture, a
+normal or bump map or its bake. It mirrors a bright sky and catches a clean highlight where a bevel meets the light
+(`polish.ts`); each tier keeps its colour, with a little tone plate to plate. Other surfaces are textured, not modelled
 ([ART_FINISH.md](ART_FINISH.md)). Keep plate shapes plain; never add ridges or rivet rows to make metal read as metal.
 
 Tier plate (full helm, platebody, gauntlets, boots) comes from `tools/blender/plate_variants.py` as

@@ -11,7 +11,8 @@ Large-scale light and stains are evened out first, so no patch repeats across a 
 tile by a minimum-error cut through an overlap, both ways (as tools/bark_textures.py does for bark).
 
 The mail layer is not painted: it is a patch of modelled rings baked in Blender (tools/blender/mail_tile.py), so its
-rows meet exactly across the tile's edges.
+rows meet exactly across the tile's edges. Plate and gold take no layer: metal is smooth and polished (owner, October 4:
+never a bumpy texture on any metal; src/render/polish.ts).
 
 Run with Python 3 (Pillow and NumPy) after putting the sources in CODEX (and baking the mail tile):
     python tools/char_textures.py
@@ -38,11 +39,6 @@ LAYERS = {
     'linen': dict(src=CODEX / 'char-linen.png', contrast=1.0, depth=4.0, fine=1.2, overlap=64),
     'leather': dict(src=CODEX / 'char-leather.png', contrast=1.0, depth=3.5, fine=1.5, overlap=96),
     'padded': dict(src=CODEX / 'char-cloth-dark.png', contrast=1.0, depth=5.0, fine=2.0, overlap=96),
-    # Plate: the smooth painting's soft sheen as its value, the hammered painting's dents as its relief (forged, not
-    # brushed: brushed streaks on bronze read as wood grain).
-    'plate': dict(src=CODEX / 'char-plate-smooth.png', relief_src=CODEX / 'char-plate-hammered.png', contrast=0.7, depth=2.0,
-                  fine=4.0, overlap=96),
-    'gold': dict(src=CODEX / 'char-gold.png', contrast=0.9, depth=2.0, fine=1.5, overlap=96),
     'wood': dict(src=CODEX / 'char-wood.png', contrast=1.0, depth=3.0, fine=1.5, overlap=96),
     'hair': dict(src=CODEX / 'char-hair.png', contrast=1.0, depth=5.0, fine=2.0, overlap=96),
     'goblin': dict(src=CODEX / 'char-goblin.png', contrast=1.0, depth=5.0, fine=2.5, overlap=96),
@@ -94,12 +90,7 @@ def main():
             src = make_tile(src, b['overlap'])
             lin = to_linear(src)
             val = value_layer(lin, b['contrast'])
-            if 'relief_src' in b:   # the relief from a second painting of the same material, made to tile the same way
-                rsrc = np.asarray(Image.open(b['relief_src']).convert('RGB')).astype(np.float64) / 255.0
-                rlin = to_linear(make_tile(rsrc, b['overlap']))
-                nrm = resize(relief(rlin, b['depth'], b['fine']), val.shape[0])
-            else:
-                nrm = relief(lin, b['depth'], b['fine'])
+            nrm = relief(lin, b['depth'], b['fine'])
             out = resize(np.dstack([val, nrm[..., 0], nrm[..., 1]]), SIZE)
         img = Image.fromarray((np.clip(out, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGB')
         img.save(OUT / f'{name}.png', optimize=True)

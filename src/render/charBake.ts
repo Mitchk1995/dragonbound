@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { attribute, clamp, dot, float, materialReference, max, min, mix, normalize, smoothstep, sqrt, TBNViewMatrix, uv, vec3 } from 'three/tsl';
-import { addPatch, type F, type V3, type V4 } from './patch';
+import type { TextureNode } from 'three/webgpu';
+import { attribute, clamp, dFdx, dFdy, dot, float, int, length, log2, materialReference, max, min, mix, normalize, smoothstep, sqrt, step, TBNViewMatrix, texture, textureBicubicLevel, uv, vec2, vec3 } from 'three/tsl';
+import { addPatch, type F, type V2, type V3, type V4 } from './patch';
 import { kindIndex, SURFACE_TABLE, surfaceLibrary, type SurfaceKind } from './charSurfaces';
 import { shareResource } from './resources';
 
@@ -10,7 +11,8 @@ import { shareResource } from './resources';
  * library, charSurfaces.ts, on the `tile` UVs) and by the model's baked map (`<model>.bake.webp` on the `bake` UVs):
  * - the high-poly's normal (its rounded edges, baked-on stitching) under the material's own relief;
  * - its occlusion, painted into the colour (deeper in creases and under belts) and shading the ambient light;
- * - its convex edges, where the paint wears (lighter and, on metal, polished), broken up by the material's grain;
+ * - its convex edges, where the paint wears (lighter and, on metal, polished), broken up by the material's grain (metal
+ *   has none: its edges are clean);
  * - its baked-on detail cover, drawn in thread colour (the leather's stitching).
  * One program for every baked model (the baked map is read off each material, not bound into its program). Both
  * normals are OpenGL convention (green up), as Blender bakes them and as the exported tangents frame them (checked on
@@ -87,6 +89,24 @@ export async function bakesSettled() {
   while (pending.size) await new Promise((r) => setTimeout(r, 16));
 }
 
+/**
+ * The material's baked map on the bake UVs. Polished metal mirrors its sky, so it would show the map's texels: the
+ * staircase of a bevel running across them, the speckle of the baked occlusion and edges. There the map is read
+ * through a smooth (bicubic) filter at the texels' own size or larger; everything else reads it as baked.
+ */
+function bakedMap(polish: F): V4 {
+  const ref = materialReference('charBake', 'texture') as unknown as { node: TextureNode | null };
+  // (Its texture node given now, so the smooth read can sample the same map: the reference keeps it current.)
+  const node = (ref.node = texture(neutralBake()) as unknown as TextureNode);
+  const sharp = (ref as unknown as V4).toVar();
+  const map = node.sample(uv(1));
+  // How many texels one pixel spans (the mip level the hardware would pick), never finer than the map itself.
+  const t = uv(1).mul(vec2(map.size(int(0)) as unknown as V2));
+  const lod = max(log2(max(length(dFdx(t)), length(dFdy(t)))), 0).add(1);
+  const smooth = textureBicubicLevel(map, lod) as unknown as V4;
+  return mix(sharp, smooth, polish).toVar() as unknown as V4;
+}
+
 export interface SurfaceUniforms {
   uKind: { value: number };
   uSurfGain: { value: number };
@@ -114,21 +134,25 @@ export function applyCharSurface(mat: THREE.Material, kind: SurfaceKind | 'verte
       const row = (i: number) => SURFACE_TABLE[i].element(k) as unknown as V4;
       const r0 = row(0), r1 = row(1), r2 = row(2);
       const gain = u.f('uSurfGain');
+      // Polished metal has no layer (-1): no grain at all, and its baked map is read smoothly (bake()).
+      const polish = float(1).sub(step(0, r0.x));
       // (Sampled once, by whichever hook the builder reaches first.)
-      let libN: V4 | null = null, bakeN: V4 | null = null, wear: F = float(0);
-      const lib = () => (libN ??= u.tex('uSurfLib').sample(uv(0).mul(r0.y)).depth(r0.x.add(0.5).toInt()).toVar() as unknown as V4);
-      const bake = () => (bakeN ??= (materialReference('charBake', 'texture') as unknown as V4).toVar());
+      let libN: V4 | null = null, bakeN: V4 | null = null, grainN: F | null = null, wear: F = float(0);
+      const lib = () => (libN ??= u.tex('uSurfLib').sample(uv(0).mul(r0.y)).depth(max(r0.x, 0).add(0.5).toInt()).toVar() as unknown as V4);
+      const bake = () => (bakeN ??= bakedMap(polish));
+      // The layer's painted value round its mean (none on polished metal).
+      const grain = () => (grainN ??= lib().x.sub(0.5).mul(float(1).sub(polish)).toVar());
       return {
         color(c0) {
           const c = c0.toVar();
-          const l = lib(), b = bake();
+          const b = bake();
           // The painted value round the part's colour, warm in its lights and cool in its darks.
-          const v = l.x.sub(0.5).mul(2).mul(r0.z).mul(gain).toVar();
+          const v = grain().mul(2).mul(r0.z).mul(gain).toVar();
           c.mulAssign(clamp(v.add(1), 0.3, 1.9));
           c.mulAssign(vec3(1).add(vec3(1, 0.35, -0.6).mul(v.mul(r2.x))));
           // Worn convex edges: lighter (bare metal, scuffed leather), first where the grain stands proud.
           const edge = clamp(b.w.sub(EDGE_BASE).mul(4), 0, 1);
-          wear = smoothstep(0.05, 0.85, edge.mul(l.x.mul(0.9).add(0.55))).mul(r1.x).mul(gain).toVar();
+          wear = smoothstep(0.05, 0.85, edge.mul(grain().mul(0.9).add(1))).mul(r1.x).mul(gain).toVar();
           c.assign(mix(c, c.mul(r1.y.mul(2.2).add(1)).add(r1.y.mul(0.06)), wear));
           // The baked painted value (occlusion, the island's tone, the painted light), painted in.
           c.mulAssign(mix(float(1), painted(b), r1.z.mul(gain)));
@@ -137,10 +161,10 @@ export function applyCharSurface(mat: THREE.Material, kind: SurfaceKind | 'verte
           c.assign(mix(c, vec3(THREAD.r, THREAD.g, THREAD.b).mul(min(painted(b), 1).sqrt()), smoothstep(0.15, 0.6, thread)));
           return c;
         },
-        roughness: (r) => clamp(r.add(r1.w).sub(wear.mul(0.18)).add(lib().x.sub(0.5).mul(-0.12)), 0.05, 1),
+        roughness: (r) => clamp(r.add(r1.w).sub(wear.mul(0.18)).sub(grain().mul(0.12)), 0.05, 1),
         normal() {
           // The baked normal, with the material's relief laid over it (both in the model's one tangent frame).
-          const bxy = bake().xy.mul(2).sub(1);
+          const bxy = bake().xy.mul(2).sub(1).mul(float(1).sub(polish));
           const bz = sqrt(max(float(1).sub(dot(bxy, bxy)), 0));
           const dxy = lib().yz.mul(2).sub(1).mul(r0.w).mul(gain);
           const ts = normalize(vec3(bxy.add(dxy), bz));

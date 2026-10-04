@@ -63,7 +63,7 @@ def warden():
         box(body, (0.04, 0.26, 0.04), (s * 0.1, -0.1, 0.25), 0xB89A5A, rot=(0, 0, s * 0.1), bevel=0.01)
     box(body, (0.86, 0.2, 0.56), (0, 0.66, 0), robe_dk, taper=(0.82, 0.86), bevel=0.05)       # mantle
     box(body, (0.88, 0.04, 0.58), (0, 0.57, 0), GOLD, bevel=0.01)
-    box(body, (0.12, 0.12, 0.04), (0, 0.62, 0.285), GOLD, rot=(0, 0, PI / 4), bevel=0.012)   # clasp setting
+    box(body, (0.12, 0.12, 0.04), (0, 0.62, 0.285), metallic(GOLD), rot=(0, 0, PI / 4), bevel=0.012)  # clasp setting
     facet_gem(body, 0.05, (0, 0.62, 0.31), gem_c, emissive=gem_c, strength=3)
 
     head = pivot(body, 'head', (0, 0.78, 0))
@@ -103,9 +103,10 @@ def warden():
             # The tall staff runs up through the hand; the game carries it upright, the forearm forward ('staffbody').
             w = pivot(pivot(h, 'sock_handR', (0, -NPC_HAND['outer'], 0), (PI / 2, 0, 0)), 'staffbody', (0, -0.31, 0))
             box(w, (0.11, 2.2, 0.11), (0, 0.35, 0), wood, taper=(0.85, 0.85), bevel=0.02)  # tall staff
+            # (Its bands and cup are metal, polished by the game; the robe's gold trims are cloth.)
             for y in (-0.2, 1.2):
-                box(w, (0.13, 0.05, 0.13), (0, y, 0), GOLD, bevel=0.012)
-            box(w, (0.12, 0.1, 0.12), (0, 1.48, 0), GOLD, taper=(1.35, 1.35), bevel=0.015)
+                box(w, (0.13, 0.05, 0.13), (0, y, 0), metallic(GOLD), bevel=0.012)
+            box(w, (0.12, 0.1, 0.12), (0, 1.48, 0), metallic(GOLD), taper=(1.35, 1.35), bevel=0.015)
             for i in range(3):
                 ang = i * 2 * PI / 3
                 cx, cz = math.cos(ang), math.sin(ang)

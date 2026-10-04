@@ -153,9 +153,9 @@ describe('the painted library', () => {
     }
   });
 
-  it('every surface paints with a layer the library has, at a sensible scale', () => {
+  it('every surface paints with a layer the library has (metal with none), at a sensible scale', () => {
     for (const [kind, s] of Object.entries(SURFACES)) {
-      expect(LAYERS, kind).toContain(s.layer);
+      if (s.layer !== null) expect(LAYERS, kind).toContain(s.layer);
       expect(s.tile, kind).toBeGreaterThan(0.05);
       expect(s.detail, kind).toBeLessThanOrEqual(1);
     }

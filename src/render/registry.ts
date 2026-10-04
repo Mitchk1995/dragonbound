@@ -8,12 +8,16 @@ import type { Appearance } from '../save/save';
 import type { Item, Slot } from '../types';
 import type { Hold } from './anim';
 import type { Model } from './kit';
-import { applyFinish, type Finish } from './env';
+import type { Finish } from './env';
+import { applyPolish, applyVertexPolish, polishAttribute } from './polish';
 import { MODEL_BUILDERS, PLACEHOLDER_GEAR } from './models';
 import { applyCharPaint, applyGrade, CHAR_PAINTS, MODEL_GRADE, packCharAttributes, paintAttributes, prepareCharGeometry, setCharPaint, trackGradeRoot, type CharPaint, type CharPaintKind } from './surface';
 import { applyCharSurface, isBaked, setCharSurface } from './charBake';
-import { gearSurface, kindIndex, loadSurfaceLibrary, namedSurface, paintSurface, roleSurface, type SurfaceKind } from './charSurfaces';
+import { gearSurface, kindIndex, loadSurfaceLibrary, metalFinish, namedSurface, paintSurface, roleSurface, type SurfaceKind } from './charSurfaces';
 import { packAttributes } from './patch';
+import { fixedPaint } from './charPalette';
+
+export { fixedPaint } from './charPalette';
 
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
@@ -70,9 +74,10 @@ const ANON_PART = /^p\d+$/;
 /**
  * Merge a model's anonymous rigid leaf meshes under each rig node into as few meshes as possible,
  * in the node's space so they still move with it:
- * - fixed-colour materials are baked into vertex colours and grouped by finish (a goblin's
+ * - fixed-colour materials are baked into vertex colours and grouped by side (a goblin's
  *   arm is one mesh, not one per colour), each colour keeping its painted recipe per vertex (`aPaintW`..., or on a
- *   model with the bake finish, `finished`, its surface kind, `aKind`);
+ *   model with the bake finish, `finished`, its surface kind, `aKind`) and its metal's polish (`aPolish`: a goblin's
+ *   iron studs shine in the same draw);
  * - recolourable ROLE_ materials and glowing (emissive) materials keep their own material.
  * A creature drops from ~30-100 draw calls to a handful, and shadows with it. Named meshes,
  * meshes with children are left alone (and bows: their string is identified by shape).
@@ -87,7 +92,7 @@ export function mergeRigidParts(root: THREE.Object3D, model: string, finished = 
   const vcMats = new Map<string, THREE.MeshStandardMaterial>();
   const keyOf = (m: THREE.Material): string | THREE.Material => {
     if (!(m instanceof THREE.MeshStandardMaterial) || roleOf(m) || (m.emissive.getHex() !== 0 && m.emissiveIntensity > 0) || m.transparent || m.map) return m;
-    return `vc|${m.roughness.toFixed(2)}|${m.metalness.toFixed(2)}|${m.side}`;
+    return `vc|${m.side}`;
   };
   let before = 0, after = 0;
   for (const parent of parents) {
@@ -104,6 +109,7 @@ export function mergeRigidParts(root: THREE.Object3D, model: string, finished = 
       after++;
       const baked = typeof key === 'string';
       if (meshes.length < 2 && !baked) continue;
+      let metal = false;
       const geos = meshes.map((m) => {
         m.updateMatrix();
         let g = m.geometry.clone().applyMatrix4(m.matrix);
@@ -120,20 +126,31 @@ export function mergeRigidParts(root: THREE.Object3D, model: string, finished = 
           const kind = fixedPaint(model, c, mm.metalness > 0.5, mm.side === THREE.DoubleSide);
           if (finished) g.setAttribute('aKind', new THREE.BufferAttribute(new Float32Array(n).fill(kindIndex(namedSurface(mm) ?? paintSurface(kind))), 1));
           else paintAttributes(g, kind ? CHAR_PAINTS[kind] : null);
+          const finish = fixedFinish(model, mm, finished);
+          polishAttribute(g, finish);
+          metal ||= !!finish;
         }
         return g;
       });
+      if (!metal) for (const g of geos) g.deleteAttribute('aPolish');
       const merged = geos.length > 1 ? mergeGeometries(geos) : geos[0];
       if (!merged) continue;
       let mat = meshes[0].material as THREE.Material;
       if (baked) {
-        let vc = vcMats.get(key);
+        // (Meshes with metal among their colours share a material of their own, which cloneWithMaterials polishes:
+        // the rest never pay for the sky it mirrors.)
+        const vcKey = `${key}${metal ? '|polish' : ''}`;
+        let vc = vcMats.get(vcKey);
         if (!vc) {
           vc = (mat as THREE.MeshStandardMaterial).clone();
           vc.color.set(0xffffff);
           vc.vertexColors = true;
-          vc.name = `VC_${key}`;
-          vcMats.set(key, vc);
+          // (Matt, as every fixed colour is authored: its metal shines per vertex, aPolish.)
+          vc.metalness = 0;
+          vc.roughness = 0.75;
+          vc.name = `VC_${vcKey}`;
+          vc.userData.polish = metal;
+          vcMats.set(vcKey, vc);
         }
         mat = vc;
       }
@@ -148,7 +165,7 @@ export function mergeRigidParts(root: THREE.Object3D, model: string, finished = 
 }
 
 /** Geometry attributes merged parts keep: the projected paint's rest frame and face coordinates, or the bake finish's UVs and tangents. */
-const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace', 'aPart', 'uv', 'uv1', 'tangent']);
+const KEEP_ATTRS = new Set(['position', 'normal', 'aRest', 'aRestN', 'aFace', 'uv', 'uv1', 'tangent']);
 
 // ─── Painted albedo recipes ──────────────────────────────────────────────────
 
@@ -157,44 +174,11 @@ const ROLE_PAINT: Record<string, CharPaintKind | null> = {
   metal: 'metal', trim: 'trim', dark: 'darkMetal', glow: null,
 };
 
-const SCALY = new Set(['drakeling', 'cinderwing', 'kobold', 'whelp']);
-const HARNESSED = new Set(['drakeling', 'cinderwing']);
-
 /**
  * Pattern size per model (1 = hero-sized): scales and blotches stay readable on a boss and
  * small and soft on the whelp.
  */
 const PAINT_SIZE: Record<string, number> = { goblin: 0.8, kobold: 0.75, drakeling: 1.3, cinderwing: 4.5, whelp: 0.5, golem: 0.55 };
-
-/**
- * The recipe for a fixed (authored) colour, from the model it belongs to and the colour itself:
- * dragons are scaled with bone horns and claws, the golem is mossy stone, NPC and unique parts
- * are judged by colour (bone, gold trim, skin, dark browns as leather, the rest cloth).
- */
-export function fixedPaint(model: string, c: THREE.Color, metallic: boolean, double = false): CharPaintKind | null {
-  const { h, s, l } = c.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
-  const hue = h * 360;
-  if (metallic) return 'metal';
-  if (l < 0.09) return null; // eyes, pupils, visor slits stay clean
-  if (model === 'golem') return 'stone';
-  if (SCALY.has(model)) {
-    if (double) return 'membrane';
-    if (l > 0.72) return model === 'whelp' ? 'soft' : 'bone';
-    // The drakeling's and Cinderwing's harness: gilt fittings and brown leather straps, not scales.
-    if (HARNESSED.has(model) && hue >= 34 && hue <= 56 && s > 0.5 && l > 0.4) return 'trim';
-    if (HARNESSED.has(model) && hue >= 18 && hue <= 40 && s < 0.6 && l < 0.4) return 'leather';
-    return model === 'whelp' ? 'softScales' : 'scales';
-  }
-  // The uniques are cut from dragon bone (light and shaded), painted as big bone plates.
-  if (model.startsWith('gear_u_') && l > 0.5 && s < 0.6 && hue >= 25 && hue <= 60) return 'wyrmbone';
-  if (l > 0.75 && s < 0.6) return model.startsWith('gear_') ? 'bone' : 'soft';
-  if (hue >= 34 && hue <= 56 && s > 0.5 && l > 0.4 && l < 0.78) return 'trim';
-  if (s < 0.14) return 'metal';
-  if (model === 'goblin' && hue > 70 && hue < 160) return 'hide';
-  if (hue >= 14 && hue <= 40 && s > 0.4 && l > 0.58 && l < 0.86) return 'skin';
-  if (hue >= 10 && hue <= 45 && l < 0.42) return 'leather';
-  return 'cloth';
-}
 
 const glowing = (m: THREE.MeshStandardMaterial) =>
   m.transparent || (m.emissive.r * 0.3 + m.emissive.g * 0.59 + m.emissive.b * 0.11) * m.emissiveIntensity > 0.2;
@@ -222,6 +206,25 @@ function surfaceFor(model: string, mesh: THREE.Mesh, m: THREE.MeshStandardMateri
   return namedSurface(m) ?? paintSurface(fixedPaint(model, m.color, m.metalness > 0.5, m.side === THREE.DoubleSide));
 }
 
+/** The metal finish a fixed-colour part takes, from its painted kind (none: it is not metal). */
+function fixedFinish(model: string, m: THREE.MeshStandardMaterial, finished: boolean): Finish | null {
+  const kind = fixedPaint(model, m.color, m.metalness > 0.5, m.side === THREE.DoubleSide);
+  return metalFinish(finished ? namedSurface(m) ?? paintSurface(kind) : kind);
+}
+
+/**
+ * Polish an authored part's metal (polish.ts): merged parts' per vertex, a fixed-colour part's in its own material.
+ * Gear's role parts learn theirs from the palette (buildGear); glows take none.
+ */
+function polishPart(model: string, m: THREE.MeshStandardMaterial, finished: boolean) {
+  if (m.vertexColors) {
+    if (m.userData.polish) applyVertexPolish(m);
+    return;
+  }
+  const finish = roleOf(m) || glowing(m) ? null : fixedFinish(model, m, finished);
+  if (finish) applyPolish(m, finish);
+}
+
 /** Register a parsed glTF scene under a model name (used by the browser loader and by tests). */
 export function registerModelScene(name: string, scene: THREE.Group) {
   cleanNames(scene);
@@ -242,7 +245,7 @@ export function registerModelScene(name: string, scene: THREE.Group) {
   if (!name.startsWith('gear_bow_') && name !== 'gear_u_emberstring') mergeRigidParts(scene, name, finished);
   scene.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
-    if (finished) packAttributes(node.geometry, ['uv', 'uv1', 'aKind']);
+    if (finished) packAttributes(node.geometry, ['uv', 'uv1', 'aKind', 'aPolish']);
     else packCharAttributes(node.geometry);
     shareResource(node.geometry);
     for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
@@ -299,6 +302,8 @@ function cloneWithMaterials(src: THREE.Object3D, model: string) {
       const paint = finished ? null : paintFor(model, o, m);
       if (finished) applyCharSurface(m, surfaceFor(model, o, m), model);
       else if (paint) applyCharPaint(m, paint, size);
+      // Metal is polished and shines (owner, October 4).
+      polishPart(model, m, finished);
       applyGrade(m, MODEL_GRADE, 'root');
       cloned.set(orig, m);
     }
@@ -397,20 +402,19 @@ export function buildGear(model: string, palette: Palette): Map<string, THREE.Ob
     if (o instanceof THREE.Mesh && roleOf(o.material as THREE.Material) === 'glow') ownGlow = true;
   });
   applyRoles(root, paletteRoles(palette), !!palette.glow && !ownGlow);
-  // Forged palettes shine: their role parts reflect the studio environment. So do fixed-colour parts
-  // authored as metal (unique gear: _common.metallic in the Blender scripts).
+  // The palette decides what each role part is made of; its metal ones shine (fixed-colour metal shone already).
   for (const m of mats) {
     const role = roleOf(m);
-    if (palette.metal && (role === 'metal' || role === 'trim' || role === 'dark')) {
-      applyFinish(m, role as Finish);
-      // Tier finish: iron is forged dull, steel polished (the dark underlayer keeps its own finish).
-      if (palette.rough !== undefined && role !== 'dark') m.roughness = palette.rough;
+    if (!role) continue;
+    const kind = gearSurface(model, role, palette), finish = metalFinish(kind);
+    if (finish) {
+      applyPolish(m, finish);
+      // Tier polish: steel the brightest (the dark underlayer keeps its own).
+      if (palette.rough !== undefined && finish !== 'dark') m.roughness = palette.rough;
     }
-    else if (!role && m.metalness > 0.5) applyFinish(m, 'metal');
     const paint = gearPaint(model, role, palette);
-    if (m.userData.charSurface) {
-      if (role) setCharSurface(m, gearSurface(model, role, palette));
-    } else if (paint) setCharPaint(m, CHAR_PAINTS[paint]);
+    if (m.userData.charSurface) setCharSurface(m, kind);
+    else if (paint) setCharPaint(m, CHAR_PAINTS[paint]);
   }
   const sockets: THREE.Object3D[] = [];
   root.traverse((o) => {
