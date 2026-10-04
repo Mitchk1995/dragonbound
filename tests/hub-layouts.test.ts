@@ -15,10 +15,8 @@ const PLANS: [string, () => HubPlan][] = [['A', planA], ['B', planB], ['C', plan
 describe.each(PLANS)('hub layout %s', (_, make) => {
   const plan = make();
 
-  it('reaches every station, exit and the castle stair from the heart, and times the busiest walks', () => {
-    const timed = walks(plan);
-    for (const w of timed) expect(w.seconds, `${w.from} to ${w.to}`).toBeGreaterThan(0);
-    console.log(`${plan.name}: ${timed.map((w) => `${w.from}-${w.to} ${w.seconds} s (${w.metres} m)`).join(', ')}`);
+  it('has a way between every pair of places it times (the busiest stations, the castle stair, the road out)', () => {
+    for (const w of walks(plan)) expect(w.seconds, `${w.from} to ${w.to}`).toBeGreaterThan(0);
   });
 
   it('stands every building on the kit grid, clear of the others', () => {

@@ -17,13 +17,13 @@ import { CELL } from '../../world/kit/scale';
  */
 
 /** The lot: wide enough that the view straight down sees only ground. */
-export const LOT = { w: 380, h: 250 } as const;
+const LOT = { w: 380, h: 250 } as const;
 /** The town's north–south axis (the castle's gate lines up on it). */
 export const CX = 190;
 /** The hero's run speed (m/s) before movement-speed gear. */
 export const RUN = COMBAT_TUNING.hero.moveSpeed;
 /** The castle rock's height over the ground at its foot, and the stair's rise per step and going per tread. */
-export const ROCK = 11;
+const ROCK = 11;
 export const RISER = 0.27, TREAD = 0.45;
 /** Risers from the foot of the castle stair to the top of the rock (41 × 0.27 m = 11.07 m). */
 export const RISERS = 41;
@@ -107,7 +107,7 @@ export const door = (b: Box, f: Face, out = 1.6): Vec2 => {
  * and eaves included (its own grid runs from cell -1, -1 of this box; `mid` is the box's middle there).
  */
 export const HOUSE_CELLS = { w: 29, d: 22, mid: { x: 13.5, z: 10 } } as const;
-export const houseBox = (x0: number, z0: number, f: Face) => (f === 'S' || f === 'N' ? cells(x0, z0, HOUSE_CELLS.w, HOUSE_CELLS.d) : cells(x0, z0, HOUSE_CELLS.d, HOUSE_CELLS.w));
+const houseBox = (x0: number, z0: number, f: Face) => (f === 'S' || f === 'N' ? cells(x0, z0, HOUSE_CELLS.w, HOUSE_CELLS.d) : cells(x0, z0, HOUSE_CELLS.d, HOUSE_CELLS.w));
 
 /** The castle (a plain volume on the rock): its curtain wall's box; the gate is in its south wall on CX. */
 export const CASTLE: Box = { x0: 166, z0: 6, x1: 214, z1: 34 };
@@ -144,7 +144,7 @@ export class Town {
     for (const [x, z, r] of [[CX, 18, 31], [CX - 25, 16, 23], [CX + 25, 16, 23], [CX - 44, 10, 16], [CX + 44, 10, 16]]) G.plateau(x, z, r, ROCK, 1.6);
   }
 
-  /** A street (paved in town, a dirt road beyond); `hw` its half width. */
+  /** A street (paved in town, a dirt road beyond), `width` metres across. */
   street(pts: Vec2[], width: number, ground = Ground.Stone) {
     return this.G.road(pts, width, ground, 0.15);
   }
@@ -198,7 +198,7 @@ export class Town {
     this.bakery = this.houses.length - 1;
   }
 
-  /** Houses along a line, each `step` metres on from the last, their fronts to `f`: as many as fit. */
+  /** `n` houses along a line, `gap` metres apart, their fronts to `f`: as many as fit. */
   row(x0: number, z0: number, f: Face, n: number, gap = 0.9) {
     const along = f === 'S' || f === 'N' ? { x: HOUSE_CELLS.w * CELL + gap, z: 0 } : { x: 0, z: HOUSE_CELLS.w * CELL + gap };
     for (let k = 0; k < n; k++) this.house(x0 + along.x * k, z0 + along.z * k, f);
@@ -352,5 +352,3 @@ export function gateTowers(w: WallPlan) {
   return out;
 }
 
-/** The foot of the castle's gate on the rock (the walk up ends here). */
-export const castleGate = (): Vec2 => ({ x: CX, z: CASTLE.z1 + 1 });

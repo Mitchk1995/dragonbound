@@ -17,6 +17,8 @@ import { houseColour } from './kitStreet';
 
 type Shot = (name: string) => Promise<void>;
 const PLANS: Record<string, () => HubPlan> = { a: planA, b: planB, c: planC };
+/** What the options leave drawn, freed once the last is captured. */
+interface Done { overlays: THREE.Object3D[]; houses: KitView[] }
 
 /**
  * The hub town's three layout options (explicit suite: `hub`, or `hub:a+c` for some), each on a lot
@@ -32,9 +34,12 @@ export async function hubSuite(g: Game, shot: Shot, suites: string) {
   g.debug.timeScale = 0;
   g.player.stop();
   const bakery = buildBakery(), out: Record<string, unknown> = {};
-  // (Each option's drawings are taken out of the scene when it is done but freed only at the end: a
-  // street of kit houses freed before the next one is drawn leaves the renderer holding freed buffers.)
-  const done: { overlays: THREE.Object3D[]; houses: KitView[] } = { overlays: [], houses: [] };
+  // (Each option's drawings are taken out of the scene when it is done but freed only at the end: every
+  // option's street of kit houses shares the kit's attribute buffers, and freeing one view destroys the
+  // buffers the next option's view draws from.)
+  const done: Done = { overlays: [], houses: [] };
+  const unknown = only.filter((id) => !PLANS[id]);
+  if (unknown.length) throw new Error(`hub suite: no layout option ${unknown.join(', ')} (there are ${Object.keys(PLANS).join(', ')})`);
   try {
     for (const id of only.length ? only : Object.keys(PLANS)) out[id] = await option(g, shot, PLANS[id](), bakery, done);
   } finally {
@@ -47,7 +52,7 @@ export async function hubSuite(g: Game, shot: Shot, suites: string) {
   return out;
 }
 
-async function option(g: Game, shot: Shot, plan: HubPlan, bakery: ReturnType<typeof buildBakery>, done: { overlays: THREE.Object3D[]; houses: KitView[] }) {
+async function option(g: Game, shot: Shot, plan: HubPlan, bakery: ReturnType<typeof buildBakery>, done: Done) {
   const zone: ZoneDef = { id: `hub-${plan.id}`, name: plan.name, kind: 'hub', arch: 0xffffff, build: () => plan.layout, theme: { ...ZONES.keep.theme } };
   ZONES[zone.id] = zone;
   const added: THREE.Object3D[] = [];
@@ -80,7 +85,9 @@ async function option(g: Game, shot: Shot, plan: HubPlan, bakery: ReturnType<typ
 
     // Straight down, north up: every name and the busiest runs (the loop, the castle stair, the road out).
     const names = add(labels(plan, floor, 3.8, 4, rockTop));
-    const runs = add(routes(timed.filter((_, i) => i < 4 || i >= 6), plan, floor, 4.6, { x: CX + 112, y: 40, z: 40 }));
+    // (The loop round the four busiest stations, listed first, then the runs to the castle stair and out of town.)
+    const drawn = timed.filter((w, i) => i < 4 || plan.spots.find((s) => s.id === w.to)!.kind !== 'station');
+    const runs = add(routes(drawn, plan, floor, 4.6, { x: CX + 112, y: 40, z: 40 }));
     await free(g, shot, `hub-${plan.id}-1-top`, new THREE.Vector3(CX, 384, 105), new THREE.Vector3(CX, 0, 105), 30, true);
     runs.visible = names.visible = false;
     // Three-quarters from the south-east, smaller names.
@@ -131,6 +138,7 @@ async function free(g: Game, shot: Shot, name: string, eye: THREE.Vector3, look:
 
 /** The play camera on the hero at `at`, zoomed by `zoom`. */
 async function play(g: Game, shot: Shot, name: string, at: THREE.Vector3, zoom: number) {
+  const keep = g.camZoom;
   g.camZoom = zoom;
   g.debug.hold = () => {
     g.camera.position.set(at.x, at.y + 21 * zoom, at.z + 14 * zoom);
@@ -143,6 +151,6 @@ async function play(g: Game, shot: Shot, name: string, at: THREE.Vector3, zoom: 
     await shot(name);
   } finally {
     g.debug.hold = null;
-    g.camZoom = 1;
+    g.camZoom = keep;
   }
 }

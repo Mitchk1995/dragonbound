@@ -13,10 +13,10 @@ export interface Walk {
 }
 
 /** The game's walk grid for a layout (a fresh one: its own copy of the cells). */
-export const navOf = (l: ZoneLayout) => new NavGrid(l.w, l.h, l.cells);
+const navOf = (l: ZoneLayout) => new NavGrid(l.w, l.h, l.cells);
 
 /** The hero's run between two spots of a plan, timed at his run speed; null if there is no way. */
-export function walk(plan: HubPlan, a: string, b: string, nav = navOf(plan.layout)): Walk | null {
+function walk(plan: HubPlan, a: string, b: string, nav = navOf(plan.layout)): Walk | null {
   const s = plan.spots.find((p) => p.id === a), t = plan.spots.find((p) => p.id === b);
   if (!s || !t) throw new Error(`hub layout ${plan.id}: no spot ${s ? b : a}`);
   const start = nav.nearestWalkable(s.at.x, s.at.z);

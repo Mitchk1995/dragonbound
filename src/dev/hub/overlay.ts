@@ -79,8 +79,8 @@ export function routes(walks: Walk[], plan: HubPlan, floor: Floor, h: number, ke
     const line = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: colour(w), side: THREE.DoubleSide, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
     line.renderOrder = 10;
     g.add(line);
-    // The time at the run's halfway point.
-    // (Set off to one side of it, so a time never sits on a name or on another run.)
+    // The time 30 % along the run, 11 % further for each run after the first, set 3 m to one side, so
+    // runs sharing a street keep their times apart and off the names.
     let half = w.metres * (0.3 + 0.11 * k), at = w.path[0];
     for (let i = 1; i < w.path.length; i++) {
       const a = w.path[i - 1], b = w.path[i], len = Math.hypot(b.x - a.x, b.z - a.z);
