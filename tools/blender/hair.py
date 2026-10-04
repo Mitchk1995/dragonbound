@@ -1,11 +1,12 @@
 """Hair (hair_1..4) and beards (beard_1..3) for the hero, each ONE moulded piece made as a LEGO hair piece is modelled
 (hair_cage.py): a low-poly cage laid over the head, its locks parted by creased grooves, subdivided once and
 shrinkwrapped onto the head, then finished by the bake (bake.py) like the hero, so the grooves are shaded into its map
-under the painted hair texture.
+under the painted hair texture. The tied style's tail is a second piece on a joint of its own at the tie (PONYTAIL),
+which the game swings.
 
 Each file is one `sock_head` empty whose children are the piece (ROLE_hair; a tie, beads or a mouth may take faces of
-the same mesh in their own colour), authored relative to the head centre (the hero's head is a 0.46 cube centred on
-sock_head; face at +Z, ears at +-0.245 X).
+the same mesh in their own colour) and the tail's pivot, authored relative to the head centre (the hero's head is a
+0.46 cube centred on sock_head; face at +Z, ears at +-0.245 X).
 """
 import math
 import os
@@ -139,14 +140,20 @@ TAIL = [((0, -0.0127, -0.4066), 0.062), ((0, -0.15, -0.44), 0.09), ((0, -0.26, -
 TAIL_TIP = (0, -0.44, -0.37)
 
 
+def band_frame(cap):
+    """The band's foot (the tail's pivot), its axis out of the head and the frame its columns turn in (the cap's,
+    turned onto that axis)."""
+    foot, top = Vector(BAND_RINGS[1][0]), Vector(BAND_RINGS[0][0])
+    out = (foot - top).normalized()
+    turn = cap.a.rotation_difference(out)
+    return foot, out, turn @ cap.e1, turn @ cap.e2
+
+
 def ponytail(h, head, cap, psis):
     """The tail on its pivot at the band's foot: a ball top turning in the dome inside the band's end, then the tail
     down the back, its locks running on from the cap's (the same columns round it)."""
-    foot, top = Vector(BAND_RINGS[1][0]), Vector(BAND_RINGS[0][0])
+    foot, out, f1, f2 = band_frame(cap)
     pv = pivot(h, PONYTAIL, tuple(foot))
-    out = (foot - top).normalized()                                     # the band's axis, out of the head
-    turn = cap.a.rotation_difference(out)
-    f1, f2 = turn @ cap.e1, turn @ cap.e2
     cage = Cage()
     ring = lambda c, r: [cage.v(c + (f1 * math.cos(p) + f2 * math.sin(p)) * r) for p in psis]
     rel = lambda p: Vector(p) - foot                                     # (the part is built about its pivot)
@@ -200,14 +207,10 @@ def hair_3(h, head):
     # (its columns evenly spaced) and turns in at its rim and back into a dome round the pivot, the socket the tail's
     # ball turns in: however the tail swings, nothing shows through the band's mouth but the hair inside the tie.
     rings = tube(cage, vs[-1], cap.a, cap.e1, cap.e2, psis, [BAND_RINGS[0][0]], [BAND_RINGS[0][1]])
-    foot, top = Vector(BAND_RINGS[1][0]), Vector(BAND_RINGS[0][0])
-    out = (foot - top).normalized()
-    turn = cap.a.rotation_difference(out)
-    f1, f2 = turn @ cap.e1, turn @ cap.e2
+    foot, out, f1, f2 = band_frame(cap)
     even = [psis[0] + 2 * math.pi * i / n for i in range(n)]
     ring = lambda back, r: [cage.v(foot - out * back + (f1 * math.cos(p) + f2 * math.sin(p)) * r) for p in even]
-    radius = BAND_RINGS[1][1]
-    rings.append(ring(0.0, radius))
+    rings.append(ring(0.0, BAND_RINGS[1][1]))
     cage.ring_faces(rings[-2], rings[-1], 1)
     rings.append(ring(*DOME))                                             # the dome, well clear of the ball
     cage.ring_faces(rings[-2], rings[-1])

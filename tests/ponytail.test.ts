@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Rig, newAnimState, type AnimState } from '../src/render/anim';
-import { PONYTAIL, PONYTAIL_BACK, ponytailHang } from '../src/render/ponytail';
+import { PONYTAIL, PONYTAIL_BACK, PONYTAIL_OUT, ponytailHang } from '../src/render/ponytail';
 import { HeroDresser, makeModel, registerModelScene } from '../src/render/registry';
 
 beforeAll(async () => {
@@ -51,6 +51,14 @@ function tied() {
 }
 
 describe('the tied hair\'s tail', () => {
+  it('leans as far as the Blender audit\'s copy of it does (tools/blender/animpose.py ponytail)', () => {
+    const m = /PONYTAIL_BACK, PONYTAIL_OUT = math\.radians\(([\d.]+)\), math\.radians\(([\d.]+)\)/.exec(
+      readFileSync('tools/blender/animpose.py', 'utf8'));
+    expect(m, 'animpose.py names both leans').toBeTruthy();
+    expect(Number(m![1])).toBeCloseTo(deg(PONYTAIL_BACK), 6);
+    expect(Number(m![2])).toBeCloseTo(deg(PONYTAIL_OUT), 6);
+  });
+
   it('hangs at the tie as modelled when the hero stands at rest', () => {
     const h = tied();
     expect(h.tail.parent, 'the tail rides the head').toBeTruthy();

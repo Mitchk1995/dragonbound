@@ -16,8 +16,8 @@ export const PONYTAIL = 'ponytail';
 export const PONYTAIL_BACK = THREE.MathUtils.degToRad(55);
 export const PONYTAIL_OUT = THREE.MathUtils.degToRad(10);
 /** The spring: its natural frequency (radians a second) and damping ratio (under 1, so it overshoots a little). */
-export const PONYTAIL_FREQ = 9;
-export const PONYTAIL_DAMP = 0.4;
+const PONYTAIL_FREQ = 9;
+const PONYTAIL_DAMP = 0.4;
 
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 const S = {
@@ -39,7 +39,8 @@ export function ponytailHang(turn: number, out = new THREE.Quaternion()) {
 
 /** The tail under a head's socket, if the hair worn there has one (attached hair hangs in a group on the socket). */
 function find(sock: THREE.Object3D | undefined) {
-  for (const group of sock?.children ?? []) for (const c of group.children) if (c.name === PONYTAIL) return c;
+  if (!sock) return null;
+  for (const group of sock.children) for (const c of group.children) if (c.name === PONYTAIL) return c;
   return null;
 }
 
@@ -47,7 +48,8 @@ function find(sock: THREE.Object3D | undefined) {
 const inRoot = (part: THREE.Object3D, axis: THREE.Vector3, inv: THREE.Quaternion) =>
   S.v.copy(axis).applyQuaternion(S.q.copy(inv).multiply(part.getWorldQuaternion(S.part)));
 
-/** Swings a character's ponytail each frame (anim.ts Rig.update, after the pose). */
+/** Swings a character's ponytail each frame (anim.ts Rig.update, after the pose; not while the rig plays a death, when
+ * the tail keeps its last hang and lies down with the body). */
 export class Ponytail {
   private tail: THREE.Object3D | null = null;
   /** Where the tail's hang axis points (world) and how fast it is swinging. */
