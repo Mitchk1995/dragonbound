@@ -29,7 +29,7 @@ export async function preloadSky() {
 /** Where the panorama's own bright horizon patch lies (its +x, the middle of the picture). */
 const PANORAMA_SUN = 0;
 
-/** The light the sky is graded to; set for each zone (Game.enterZone). */
+/** The light the sky is graded to; set for each zone (enterZone in src/game/travel.ts). */
 export const SKY_LIGHT = {
   uSunDir: uniform(new THREE.Vector3(0.5, 0.7, 0.5).normalize()).setGroup(renderGroup),
   uSunCol: uniform(new THREE.Color(1, 0.85, 0.7)).setGroup(renderGroup),

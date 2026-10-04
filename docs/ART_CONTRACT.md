@@ -221,7 +221,7 @@ arm pivot), so they ride the upper arm exactly, never fan away from it and stay 
 Keep shoulder caps only a little wider than the arm.
 
 Forged metal is textured by the game, not by extra geometry: `ROLE_metal` / `ROLE_dark` of forged palettes (and
-`metallic()` unique parts) get the painted forge recipe (`surface.ts` `forge`, `textures.ts` `forgeTexture`): soft
+`metallic()` unique parts) get the painted forge recipe (`charPaint.ts` `forge`, `textures.ts` `forgeTexture`): soft
 hammer marks and draw-marks, a lighter worn lip on every edge and bevel, grime along each plate's foot and a tone of
 its own per plate. Keep plate shapes plain; never add ridges or rivet rows to make metal read as metal.
 
