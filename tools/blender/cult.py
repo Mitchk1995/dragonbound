@@ -1,11 +1,15 @@
 """The Ember Cultist and the Cinder Priest, from their approved concept sheets (October 3): the cult's colours, hoods,
 horns, staffs and robes. The cultist is built on the minifigure body every humanoid shares (minifig.py, owner,
 October 4). minions.py exports them with the goblin and the kobold. Faces +Z; right-side parts at -X."""
+import importlib
 import math
+import os
 
 from _common import *
 from _common import _mesh_obj
-from minifig import HIP, figure, finish, ribbon, torso_surface
+import cloth
+importlib.reload(cloth)
+from minifig import HIP, cut, figure, finish, ribbon, torso_surface
 
 PI = math.pi
 
@@ -130,72 +134,82 @@ def tube(p, pts, radii, color, sides=6):
     return _mesh_obj(bm, p, (0, 0, 0), (0, 0, 0), color)
 
 
-def shell(p, fn, nu, nv, thick, color, inside, lining=None, bevel=0.008, walls=(0, 1)):
-    """A cloth shell: its outer skin and edges in `color`; with `lining`, its inside lined in that colour (a thin
-    closed skin, seen through the openings, a little coarser than the outside it lies under), else in `color`. `walls`
-    as surf(): leave out the edge another shell carries on from, so the two join without a seam."""
-    surf(p, fn, nu, nv, thick, color, inside=inside, bevel=bevel, inner=lining is None, walls=walls)
-    if lining is not None:
-        surf(p, grow(fn, -thick, inside), max(8, nu - 6), nv, 0.003, lining, inside=inside)
-
-
 # ─── Ember Cultist ───────────────────────────────────────────────────────────
-# On the minifigure body (minifig.py), a robe standing in for her legs, from her approved sheet (October 3): a tall hood
-# rising well above her head, its peak tipping forward over a deep dark face opening where her eyes glow, dark horns
-# out of its sides in gold collars; a mantle over her shoulders closing in a V on the chest, a gold amulet at its foot;
-# gold-rimmed pauldrons with ember stones; a gold belt and buckle with pouches; the robe flaring to the ground in two
-# gold-banded tiers, a gold-bordered stole down the front with an ember gem and another behind; sleeves with gold
-# cuffs; a strap across her back; the cult staff through her right hand.
-FACE = 0x120A0C          # the face in the hood's shadow, and the hood's lining round it
+# On the minifigure body (minifig.py), a robe standing in for her legs, from her approved sheet (October 3): gold-rimmed
+# pauldrons with ember stones; a gold belt and buckle with pouches; the robe flaring to the ground in two gold-banded
+# tiers, a gold-bordered stole down the front with an ember gem and another behind; sleeves with gold cuffs; a strap
+# across her back; the cult staff through her right hand. Her head is one of two options (October 4, after four hoods
+# built as shells were turned down), picked by HEAD.
+FACE = 0x120A0C          # the face in the hood's shadow
 EYE_GLOW = 0xFFD65A
-# The hood (head space, y up from the head's centre; the head is the hero's 0.46 cube): (y, half width, half depth,
-# z offset, half-angle of the face opening), from the chin up. It rises well above the head, 0.44 over its top; its
-# back climbs in one long curve to a peak at the very front, which tips forward past the face opening's rim, so the
-# hood hangs over a deep, dark face. Its outline narrows to a point.
-CULT_HOOD = ((-0.2, 0.365, 0.343, -0.017, 22), (-0.05, 0.395, 0.3435, 0.0085, 23), (0.1, 0.395, 0.336, 0.031, 23),
-             (0.24, 0.38, 0.324, 0.059, 21), (0.36, 0.35, 0.3025, 0.1025, 17), (0.46, 0.3, 0.271, 0.151, 10),
-             (0.54, 0.23, 0.235, 0.205, 0), (0.6, 0.155, 0.1875, 0.2575, 0), (0.645, 0.075, 0.12, 0.32, 0),
-             (0.67, 0.0, 0.0, 0.41, 0))
-HOOD_ARCH = 6            # the row where the face opening closes (its pointed top)
-# Below the chin the hood spreads into a mantle over the shoulders: its hem low over the chest and back, high at the
-# sides (above the arms), open in front in a V down to the chest.
-MANTLE_HEM = (-0.54, 0.24, 0.4, 0.245)   # (front and back hem height, rise at the sides, half width, half depth)
+LINING = 0x24101A        # the inside of the hood, in its own shadow
+# Which head an export builds: 'hood' (option A) or 'mask' (option B); DB_CULT_HEAD=mask picks the other.
+HEAD = os.environ.get('DB_CULT_HEAD') or 'hood'
+
+# Option A: the hood, made as cloth (cloth.py): a cage pinned along the seam over the crown and the face opening's rim,
+# draped by a cloth simulation over her head and shoulders. It sits close over the head, its rounded crown about 0.15
+# over it and coming forward over the face; below the jaw it falls onto the shoulders, chest and back, open in front in
+# a V down to a gold clasp. Half the cage (x >= 0; the figure's frame, the ground at y = 0) is a ring for each row, from
+# the mantle's hem up: its height at the front, the side and the back, its half width, how far it reaches in front and
+# behind, the face opening's rim on it (the lapels, then the opening up to its pointed top) and how much its folds
+# stand out. Every ring runs from the rim round past the side (under the horn and the pauldron) to the back's centre
+# line; the seam over the crown closes the top. The two lowest rings flare out wider than the shoulders, so the
+# simulation drops them onto the body in folds; the folds pressed into them only set where the folds fall.
+HOOD_RINGS = [
+    (1.52, 1.62, 1.50, 0.56, 0.48, -0.48, (0.05, 1.45, 0.255), 0.03),
+    (1.66, 1.72, 1.66, 0.50, 0.40, -0.40, (0.11, 1.61, 0.32), 0.015),
+    (1.79, 1.81, 1.79, 0.44, 0.37, -0.37, (0.165, 1.76, 0.37), 0.0),
+    (1.96, 1.97, 1.96, 0.41, 0.38, -0.38, (0.20, 1.95, 0.38), 0.0),
+    (2.12, 2.14, 2.12, 0.35, 0.36, -0.34, (0.155, 2.11, 0.38), 0.0),
+    (2.22, 2.25, 2.22, 0.24, 0.32, -0.27, (0.075, 2.21, 0.38), 0.0),
+]
+HOOD_AROUND = (20, 45, 70, 90, 110, 135, 160, 180)   # each ring's points past the rim, degrees round from the front
+HOOD_FOLDS = (0, 1, 0, -0.6, 1, -1, 1, -1)           # where their folds fall: + a ridge, - a valley
+# The seam over the crown, from the face opening's pointed top to the back.
+HOOD_SEAM = [(0.0, 2.245, 0.38), (0.0, 2.275, 0.30), (0.0, 2.295, 0.21), (0.0, 2.305, 0.11), (0.0, 2.31, 0.01),
+             (0.0, 2.305, -0.09), (0.0, 2.29, -0.18), (0.0, 2.265, -0.25), (0.0, 2.235, -0.31)]
 
 
-def mantle_fn(chin, e_hem=5.0, e_chin=3.0):
-    """The mantle from its hem up to the hood's chin row, which it shares (so the two are one cloth): nearly square in
-    section at the hem, so it lies close on the torso, rounding to the hood's section at the chin. The V's edges run
-    straight up from its foot to the face opening's."""
-    y_c, a_c, b_c, dz_c, op_c = chin
-    y0, rise, a_h, b_h = MANTLE_HEM
-    x_c = a_c * ssin(math.radians(op_c), e_chin)
+def ring_cage(rings, seam=None):
+    """Half a cloth cage (x >= 0) from rings (see HOOD_RINGS), each run from its rim round HOOD_AROUND (or, for a ring
+    whose rim lies further round, its own angles after them) to the back's centre line with HOOD_FOLDS pressed into
+    it; `seam`, if given, closes the top."""
+    rows = []
+    for ring in rings:
+        yf, ys, yb, a, zf, zb, rim, fold = ring[:8]
+        row = [rim]
+        for deg, f in zip(ring[8] if len(ring) > 8 else HOOD_AROUND, HOOD_FOLDS):
+            t = math.radians(deg)
+            x, z = a * ssin(t, 3.0), (zf if deg <= 90 else -zb) * scos(t, 3.0)
+            y = yf + (ys - yf) * math.sin(t) ** 2 if deg <= 90 else ys + (yb - ys) * math.sin(t - PI / 2) ** 2
+            out = Vector((x, 0, z)).normalized() if deg < 180 else Vector((0, 0, -1))
+            row.append((x + out.x * fold * f, y, z + out.z * fold * f))
+        rows.append(row)
+    return rows + ([seam] if seam else [])
 
-    def fn(u, v):
-        e = e_hem + (e_chin - e_hem) * v
-        a, b, dz = a_h + (a_c - a_h) * v, b_h + (b_c - b_h) * v, dz_c * v
-        op = math.asin(min(1.0, (x_c * v / a) ** (e / 2)))
-        t = op + (2 * PI - 2 * op) * u
-        y_hem = y0 + rise * abs(math.sin(t))
-        return (a * ssin(t, e), y_hem + (y_c - y_hem) * v, dz + b * scos(t, e))
-    return fn
 
-
-def cult_hood(sock):
-    """The hood and its mantle as one cloth on the head, a lighter lip all down the opening, the horns."""
-    inside = (0, 0.0, 0)
-    hood, mantle = hood_fn(CULT_HOOD), mantle_fn(CULT_HOOD[0])
-    nv = len(CULT_HOOD) - 1
-    shell(sock, hood, 14, nv, 0.035, ROBE, inside, lining=FACE, walls=(1,))
-    shell(sock, mantle, 14, 4, 0.035, ROBE, (0, -0.4, 0), walls=(0,))
-    for u0, u1 in ((0.0, 0.04), (0.96, 1.0)):
-        surf(sock, grow(sub(hood, u0, u1, 0.0, HOOD_ARCH / nv), 0.004, inside), 1, HOOD_ARCH, 0.03, HOOD_EDGE, inside=inside)
-        surf(sock, grow(sub(mantle, u0, u1, 0.0, 1.0), 0.004, (0, -0.4, 0)), 1, 4, 0.03, HOOD_EDGE, inside=(0, -0.4, 0))
-    box(sock, (0.12, 0.12, 0.03), (0, MANTLE_HEM[0] + 0.01, MANTLE_HEM[3] + 0.012), GOLD, rot=(0, 0, PI / 4), bevel=0.012)
-    for s in (-1, 1):   # dark horns out of the hood's sides, curling up, gold collars round their roots
-        curve = ((0.3, 0.3, 0.02), (0.4, 0.33, 0.02), (0.46, 0.4, 0.0), (0.485, 0.5, -0.02), (0.47, 0.6, -0.04),
-                 (0.43, 0.68, -0.06))
-        tube(sock, [(s * x, y, z) for x, y, z in curve], (0.065, 0.06, 0.05, 0.038, 0.022, 0.0), HORN)
-        box(sock, (0.11, 0.15, 0.16), (s * 0.35, 0.31, 0.02), GOLD, rot=(0, 0, -s * 0.3), bevel=0.025)
+HOOD_CAGE = ring_cage(HOOD_RINGS, HOOD_SEAM)
+# How firmly each cage point is held: the seam over the crown and the face opening's rim (its stiff hem); the rest
+# falls free onto the head and shoulders.
+HOOD_PINS = [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0.5, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0.3, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0.3, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0.3, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0.3, 0, 0, 0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+# What it lies on: a rounded crown over her head, clear of the head cube by 5 cm all round (a cloth over the bare cube
+# drapes like a cloth over a box, and her head turns a little inside the hood), her neck, torso and upper arms at rest.
+HOOD_STAND = dict(
+    boxes=[((0.22, 0.2, 0.22), (0, 1.70, 0), None), ((0.69, 0.66, 0.43), (0, 1.32, 0), (1.03, 1.04)),
+           ((0.26, 0.33, 0.28), (0.47, 1.39, 0), None), ((0.26, 0.33, 0.28), (-0.47, 1.39, 0), None)],
+    blobs=[((0, 1.90, 0.01), (0.346, 0.363, 0.346), 2.6)])
+# Heavy wool: soft enough to settle onto the shoulders and fold, stiff enough to fold broadly.
+HOOD_FACES = 280         # the reduced cloth's triangles: few enough for broad facets, enough to keep its folds
+HOOD_CLOTH = dict(bending_stiffness=4, tension_stiffness=35, compression_stiffness=35, shear_stiffness=10, mass=0.5,
+                  air_damping=0.5)
 
 
 def robe_front(y, side=1):
@@ -229,14 +243,113 @@ def stole(skirt, side, bottom, gem):
         facet_gem(skirt, 0.045, (0, bottom + 0.08, z + side * 0.035), EMBER, emissive=EMBER, strength=4)
 
 
-def cultist():
-    fig = figure('DB_cultist', dict(torso=ROBE, belt=GOLD, neck=ROBE_DK, head=FACE, upper=ROBE, forearm=ROBE, hand=SKIN),
-                 legs='robe')
-    # The face: dark in the hood's shadow, two eyes glowing.
+# The horns: from inside the hood (clear of her head, which turns a little inside it) out through its sides, curling up
+# (figure frame, the left one; the right mirrors it).
+HORN_CURVE = ((0.27, 2.045, 0.02), (0.33, 2.07, 0.02), (0.42, 2.13, 0.0), (0.47, 2.22, -0.02), (0.48, 2.31, -0.04),
+              (0.45, 2.40, -0.06))
+HORN_R = (0.07, 0.066, 0.056, 0.043, 0.027, 0.0)
+
+
+def cloth_hood(fig):
+    """Option A: the hood as cloth, draped over her head and shoulders (HOOD_CAGE), riding the body so her head turns
+    a little inside it; a lighter rolled lip bound over its face opening and down the lapels to a gold clasp; the horns
+    out through its sides in gold collars; her eyes glowing in its shadow."""
+    body = fig.body
+    hood = cloth.drape('cultist_hood', HOOD_CAGE, HOOD_PINS, cloth=HOOD_CLOTH, faces=HOOD_FACES, **HOOD_STAND)
+    cloth.place(body, hood['shell'], (ROBE, LINING, ROBE_DK))
+    for kind, path in hood['edges']:
+        if kind == 'front':
+            cloth.binding(body, path, hood['sim'], HOOD_EDGE)
+            clasp = (Vector(path[0]) + Vector(path[-1])) / 2
+    box(body, (0.12, 0.12, 0.035), tuple(clasp + Vector((0, 0.0, 0.02))), GOLD, rot=(0, 0, PI / 4), bevel=0.012)
+    tree = cloth.surface_tree(hood['surface'])
+    for s in (-1, 1):
+        curve = [Vector((s * x, y, z)) for x, y, z in HORN_CURVE]
+        tube(body, curve, HORN_R, HORN)
+        out = (curve[2] - curve[0]).normalized()
+        hit, nrm, _, _ = tree.ray_cast(curve[0], out, 1.0)
+        if hit is not None:
+            ring(body, 0.09, 0.045, 0.08, tuple(hit), GOLD, rot=rot_to(out), seg=8)
     for s in (-1, 1):
         box(fig['head'], (0.075, 0.065, 0.02), (s * 0.09, 0.25, 0.235), EYE_GLOW, emissive=EYE_GLOW, strength=5, bevel=0)
-    # The hood and its mantle (headgear: they turn with the head), the amulet at the foot of the mantle's V.
-    cult_hood(fig['sock_head'])
+
+
+# Option B: no hood. Her head a dark iron casque, on its front a demon's mask standing proud, framed in gold: a heavy brow in a V over two slanted slits glowing with embers, a ridge down the nose, a pointed chin; dark horns
+# curl up out of the casque's temples in gold collars. On her shoulders a short mantle of cloth, made as the hood is
+# (cloth.py), closed at the chest by the gold clasp and rising behind her neck into a stiff high collar edged in gold.
+IRON = 0x4A4652
+IRON_DK = 0x34303A
+EMBER_EYE = 0xFF4A12
+# The mask's right half (head space, the face at z = 0.23; the left mirrors it): its brow dips in a V to the nose, its
+# chin comes to a point.
+MASK_HALF = [(0.0, 0.095), (0.265, 0.17), (0.275, 0.0), (0.225, -0.16), (0.1, -0.265), (0.0, -0.31)]
+MASK_HORN = ((0.15, 0.16, 0.02), (0.25, 0.19, 0.02), (0.33, 0.24, 0.0), (0.38, 0.32, -0.03), (0.39, 0.40, -0.06),
+             (0.36, 0.47, -0.09))
+# The mantle's cage: the hood's two lowest rings (the same drape over the shoulders), then the foot of the collar
+# round the neck and its top, low beside the jaw and high behind the head, standing clear of it.
+MANTLE_RINGS = [
+    (1.52, 1.62, 1.50, 0.56, 0.48, -0.48, (0.05, 1.45, 0.255), 0.03),
+    (1.66, 1.72, 1.66, 0.50, 0.40, -0.40, (0.11, 1.61, 0.30), 0.015),
+    (1.71, 1.75, 1.72, 0.37, 0.30, -0.31, (0.17, 1.68, 0.265), 0.0, (42, 56, 72, 90, 110, 135, 160, 180)),
+    (1.84, 1.92, 2.0, 0.41, 0.2, -0.41, (0.31, 1.84, 0.11), 0.0, (80, 92, 105, 118, 132, 148, 164, 180)),
+]
+MANTLE_PINS = [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+
+
+def iron_mask(fig):
+    """Option B: the masked casque and its horns on her head, the mantle and its collar on her shoulders."""
+    h = fig['sock_head']
+    iron, dark = IRON, IRON_DK
+    box(h, (0.48, 0.47, 0.48), (0, 0.005, -0.01), iron, taper=(0.8, 0.8), bevel=0.11)          # the casque
+    # The mask in two halves meeting in a ridge down its middle, each turned back a little, framed in gold.
+    for s in (-1, 1):
+        half = MASK_HALF if s > 0 else [(-x, y) for x, y in reversed(MASK_HALF)]
+        side = pivot(h, 'mask', (0, 0, 0.27), (0, s * 0.24, 0))
+        prism(side, [(x * 1.07, y * 1.05 + 0.004) for x, y in half], 0.035, (0, 0, -0.012), GOLD, bevel=0.008)
+        m = prism(side, half, 0.05, (0, 0, 0.0), dark, bevel=0.01)
+        cut(m, box(side, (0.15, 0.05, 0.12), (s * 0.125, 0.04, 0.0), dark, rot=(0, 0, s * 0.36), bevel=0))
+        box(side, (0.16, 0.06, 0.024), (s * 0.125, 0.04, 0.0), EMBER_EYE, emissive=EMBER_EYE, strength=2.2,
+            rot=(0, 0, s * 0.36), bevel=0)                                        # embers in the slit, before the gold
+        beam(side, (s * 0.25, 0.16, 0.03), (s * 0.02, 0.095, 0.035), 0.07, dark, d=0.05, w1=0.05)       # the brow
+        beam(side, (s * 0.24, -0.04, 0.025), (s * 0.08, -0.15, 0.03), 0.045, dark, d=0.035, w1=0.03)    # the cheekbone
+    beam(h, (0, 0.1, 0.305), (0, -0.08, 0.315), 0.06, dark, d=0.045, w1=0.035, d1=0.03)             # the nose ridge
+    for x in (-0.06, 0.0, 0.06):   # a grille of dark slots over the mouth
+        box(h, (0.028, 0.07, 0.02), (x, -0.165, 0.297 - abs(x) * 0.25), 0x141216, bevel=0)
+    for s in (-1, 1):   # dark horns out of the casque's temples, gold collars round their roots
+        curve = [Vector((s * x, y, z)) for x, y, z in MASK_HORN]
+        tube(h, curve, HORN_R, HORN)
+        ring(h, 0.085, 0.045, 0.07, (s * 0.205, 0.185, 0.02), GOLD, rot=rot_to(curve[2] - curve[0]), seg=8)
+    body = fig.body
+    mantle = cloth.drape('cultist_mantle', ring_cage(MANTLE_RINGS), MANTLE_PINS, cloth=HOOD_CLOTH, open_top=True,
+                         faces=220, **HOOD_STAND)
+    cloth.place(body, mantle['shell'], (ROBE, LINING, ROBE_DK))
+    # One gold edge, unbroken: up one front edge from the clasp, round the collar's top and down the other.
+    runs = mantle['edges']
+    hem = next(i for i, (kind, _) in enumerate(runs) if kind == 'hem')
+    edge = []
+    for kind, path in runs[hem + 1:] + runs[:hem]:
+        edge += [p for p in path if not edge or (Vector(p) - Vector(edge[-1])).length > 1e-4]
+    cloth.binding(body, edge, mantle['sim'], GOLD, width=0.05, proud=0.018, smooth=5)
+    # The clasp where the two front edges meet at the foot of the V.
+    low = min((Vector(edge[0]), Vector(edge[-1])), key=lambda v: v.y)
+    box(body, (0.12, 0.12, 0.035), (0, low.y, low.z + 0.02), GOLD, rot=(0, 0, PI / 4), bevel=0.012)
+
+
+HEADS = {'hood': cloth_hood, 'mask': iron_mask}
+
+
+def cultist(head=None):
+    """The Ember Cultist with `head` (HEADS; HEAD by default). Under the mask her head is the iron casque itself, so
+    the body's head cube is left out there."""
+    head = head or HEAD
+    fig = figure('DB_cultist', dict(torso=ROBE, belt=GOLD, neck=ROBE_DK, head=FACE, upper=ROBE, forearm=ROBE, hand=SKIN),
+                 legs='robe', head=head != 'mask')
+    HEADS[head](fig)
     # Pauldrons: a crimson block framed in gold over each shoulder (they follow the arms by 3/4), a gold-rimmed plate
     # with an ember stone down the outside of each upper arm.
     for S, s in (('L', 1), ('R', -1)):
