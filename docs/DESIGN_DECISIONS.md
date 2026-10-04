@@ -48,7 +48,7 @@ One line per area; the area's file holds the decisions themselves, in Mitchell's
 3. The castle as the king's seat, the same way.
 4. The very large levels 1–10 areas, then the long-term world.
 5. Characters, one area at a time, each judged by Mitchell from pictures before moving on (October 2).
-6. Combat feel pass (mechanics work goes to Codex on GPT 6.1 Sol; Claude keeps design and look).
+6. Combat feel pass (Claude does the mechanics too; Codex access is ending, October 4).
 
 Later: the Ashen Crown redesign, reinforcement, slower levelling (after the region and classes are designed), small fixes.
 

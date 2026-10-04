@@ -29,7 +29,7 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
   - Launch each job as its agent type: the shared brief (rules, style, captures, landing, report) is built into `.claude/agents/`, so the prompt carries only the task and its notes.
   - A job checks each fix from several camera angles, not only the review view, and extends the geometry audit where it can.
 - **Every visual builder starts from the style:** "The look" in [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md) and the owner's picks in its area's plan file. Nothing reaches the owner as finished until the geometry checks pass and the builder has zoomed into every capture it shows; work-in-progress pictures can go sooner, labelled as unfinished.
-- **Mechanics and non-visual systems go to Codex** (GPT 6.1 Sol, max effort, run headless with the Codex app's newest bundled `codex.exe`); Claude does design, planning, look and feel.
+- **Claude does everything, mechanics included (owner, October 4).** Codex access is ending, so mechanics and non-visual systems are Claude's work, run as `builder` jobs. Codex's last use is generating the texture and image library (`D:\dragonbound-archive\codex\CATALOGUE.md`). Once access ends, new textures come from that library or from CC0 sources.
 
 ## Where things are
 
