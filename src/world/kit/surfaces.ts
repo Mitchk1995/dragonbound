@@ -104,7 +104,12 @@ async function plantAtlas(): Promise<THREE.Texture> {
 /** Loads the kit's surfaces (once; before any building is drawn). */
 export function loadKitSurfaces(): Promise<Maps> {
   loading ??= Promise.all([strip('./textures/kit/surfaces.jpg', true), strip('./textures/kit/surfaces-normal.jpg', false), plantAtlas()])
-    .then(([color, normal, plants]) => (maps = { color, normal, plants }));
+    .then(([color, normal, plants]) => (maps = { color, normal, plants }))
+    .catch((err) => {
+      // (Not kept: the next building to be drawn tries again.)
+      loading = null;
+      throw err;
+    });
   return loading;
 }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { KitBuild, type Placed } from '../src/world/kit/build';
 import { overlap, placeClaim, turn, inside, type Claim, type Hull, type P3 } from '../src/world/kit/claims';
 import { ELEMENTS, stoneEl } from '../src/world/kit/elements';
@@ -9,9 +9,18 @@ import { buildBakery, DOOR, H, HOUSE, STAIR, standsIn, type Cut } from '../src/w
 import { OVEN, RISE, treadTop } from '../src/world/kit/houseInside';
 import { APEX, CHIMNEY_TOP, plane } from '../src/world/kit/houseRoof';
 import { CELL, CELL_U, COURSE, HERO_H, STEP, STEP_U, U, type Rot } from '../src/world/kit/scale';
+import { texturedGeometry } from '../src/world/kit/geometry';
+import { box } from '../src/world/kit/mesh';
 import { lightOf } from '../src/world/kit/shapes/openings';
-import { LAYERS } from '../src/world/kit/surfaces';
+import { FIXED, LAYERS } from '../src/world/kit/surfaces';
+import { KitView } from '../src/world/kit/view';
 import { course, joints, type Line } from '../src/world/kit/walls';
+
+// (The kit's material needs its textures loaded in a browser; drawing is checked here with a plain one.)
+vi.mock('../src/world/kit/surfaces', async (actual) => {
+  const { MeshStandardMaterial } = await import('three');
+  return { ...(await actual<typeof import('../src/world/kit/surfaces')>()), kitMaterial: () => new MeshStandardMaterial() };
+});
 
 /** The hero across in plate armour, arms at his sides (as measured in the game by the `kit` inspect suite). */
 const HERO_W_PLATE = 1.42;
@@ -157,7 +166,7 @@ describe('the bakery', () => {
   const b = buildBakery();
   const hulls = b.items.map((p) => b.claimed(p));
 
-  it('is all on the grid and nothing in it passes through anything else', () => {
+  it('is all on the grid and nothing in it passes through anything else (every pair checked again, apart from placing)', () => {
     expect(b.items.length).toBeGreaterThan(600);
     const cells = new Map<string, number[]>();
     hulls.forEach((hs, i) => {
@@ -325,6 +334,74 @@ function jpegSize(file: string): [number, number] {
   }
   throw new Error(`no frame in ${file}`);
 }
+
+describe('drawing the kit', () => {
+  it('gives every vertex its surface, its stone or board (marked where the part has its own colour) and where it lies in that stone', () => {
+    const geo = texturedGeometry([{ mesh: stoneEl(2).parts[0].mesh(), layer: 'stone' }, { mesh: box(0, 0, 0, 6, 4, 2, 0.5).tag(3), layer: 'iron', color: 0x333333 }]);
+    const pos = geo.getAttribute('position'), kit = geo.getAttribute('aKit'), rel = geo.getAttribute('aRel'), half = geo.getAttribute('aHalf');
+    for (const a of [kit, rel, half, geo.getAttribute('normal'), geo.getAttribute('color')]) expect(a.count).toBe(pos.count);
+    const stone = LAYERS.indexOf('stone'), iron = LAYERS.indexOf('iron');
+    let irons = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const layer = kit.getZ(i), mark = kit.getW(i);
+      expect([stone, iron]).toContain(layer);
+      if (layer === iron) {
+        irons++;
+        expect(mark).toBe(3 + FIXED);
+      } else expect(mark).toBeLessThan(FIXED);
+      expect(Math.abs(rel.getX(i))).toBeLessThanOrEqual(half.getX(i) + 1e-6);
+      expect(Math.abs(rel.getY(i))).toBeLessThanOrEqual(half.getY(i) + 1e-6);
+      expect(Math.abs(rel.getZ(i))).toBeLessThanOrEqual(half.getZ(i) + 1e-6);
+    }
+    expect(irons).toBeGreaterThan(0);
+  });
+
+  const build = new KitBuild();
+  build.place(stoneEl(2), 0, 0, 0, 0xdcc9a1);
+  build.place(stoneEl(2), 2, 0, 0, 0xa99e88);
+  build.place(stoneEl(3), 0, 3, 0, 0xdcc9a1);
+  const copies = [new THREE.Matrix4(), new THREE.Matrix4().makeTranslation(20, 0, 0)];
+  const batchOf = (v: KitView, id: string) => (v.group.children as THREE.InstancedMesh[]).find((m) => m.name === `${id}|`)!;
+
+  it('draws every placement once in each copy, each copy in the colours it is given, and hides a piece by shrinking it where it stands', () => {
+    const v = new KitView(build, copies);
+    expect((v.group.children as THREE.InstancedMesh[]).reduce((n, m) => n + m.count, 0)).toBe(build.items.length * copies.length);
+    const twos = batchOf(v, stoneEl(2).id), tint = twos.geometry.getAttribute('aTint');
+    v.recolor((p, k) => (k === 0 ? p.color : 0x112233));
+    const near = (i: number, c: THREE.Color) => [tint.getX(i) - c.r, tint.getY(i) - c.g, tint.getZ(i) - c.b].forEach((d) => expect(Math.abs(d)).toBeLessThan(1e-6));
+    near(1, new THREE.Color(0xa99e88));
+    near(3, new THREE.Color(0x112233));
+    v.setVisible((p) => p.i !== 0);
+    const m = new THREE.Matrix4(), scale = new THREE.Vector3();
+    for (const k of [0, 1]) {
+      twos.getMatrixAt(k * 2, m);
+      expect(scale.setFromMatrixScale(m).length()).toBe(0);
+      const at = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().multiplyMatrices(copies[k], build.matrix(build.items[0])));
+      expect(new THREE.Vector3().setFromMatrixPosition(m).distanceTo(at)).toBeLessThan(1e-5);
+      twos.getMatrixAt(k * 2 + 1, m);
+      expect(scale.setFromMatrixScale(m).length()).toBeCloseTo(Math.sqrt(3), 5);
+    }
+    v.dispose();
+  });
+
+  it('frees each batch\'s own colours when a view goes, never the shapes\' shared buffers another view still draws', () => {
+    const a = new KitView(build, copies), b = new KitView(build);
+    const gone = new Set<THREE.BufferGeometry>();
+    const watch = (v: KitView) => (v.group.children as THREE.InstancedMesh[]).map((mesh) => {
+      mesh.geometry.addEventListener('dispose', () => gone.add(mesh.geometry));
+      return mesh.geometry;
+    });
+    const mine = watch(a), theirs = watch(b);
+    // (Both draw the same shapes' buffers, each with colours of its own.)
+    expect(batchOf(a, stoneEl(2).id).geometry.getAttribute('position')).toBe(batchOf(b, stoneEl(2).id).geometry.getAttribute('position'));
+    expect(batchOf(a, stoneEl(2).id).geometry.getAttribute('aTint')).not.toBe(batchOf(b, stoneEl(2).id).geometry.getAttribute('aTint'));
+    a.dispose();
+    expect(mine.every((g) => gone.has(g))).toBe(true);
+    expect(theirs.some((g) => gone.has(g))).toBe(false);
+    expect(batchOf(b, stoneEl(2).id).geometry.getAttribute('position').count).toBeGreaterThan(0);
+    b.dispose();
+  });
+});
 
 describe('the kit\'s surfaces', () => {
   const dir = path.join(__dirname, '..', 'public', 'textures', 'kit');

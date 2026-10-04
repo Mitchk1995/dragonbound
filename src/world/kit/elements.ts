@@ -159,7 +159,7 @@ export function rakedEl(w: number, t0: number, t1: number, timberPiece: boolean,
  * A bargeboard under a verge: one cell of the roof's run, falling toward +z, against the outer edge of
  * the overhang: at −x in its cell (`side` −1) or at +x (1).
  */
-export const BARGE = { thick: 4.4, deep: 13 } as const;
+const BARGE = { thick: 4.4, deep: 13 } as const;
 export const bargeEl = (side: 1 | -1) => {
   const x0 = side < 0 ? -half(1) : half(1) - BARGE.thick;
   return def({
@@ -201,7 +201,7 @@ export const ridgeEl = (w: number) => {
 
 /** A window `w` cells wide and `h` steps tall: an oak frame in the wall's middle, glazing bars and glass. */
 export const windowEl = (w: number, h: number, cols: number, rows: number, bars: number) => def({
-  id: `window${w}x${h}_${cols}x${rows}`, name: `Window ${w} × ${h}`, w, d: 1, h, kind: 'frame',
+  id: `window${w}x${h}_${cols}x${rows}_${bars}`, name: `Window ${w} × ${h}`, w, d: 1, h, kind: 'frame',
   claims: [boxClaim(-half(w), 0, -FRAME_D, half(w), h * STEP_U, FRAME_D)],
   parts: [
     part(() => frame(w, h * STEP_U), 'oak', { grain: 'box' }),
@@ -222,7 +222,7 @@ export const doorFrameEl = (w: number, h: number) => {
 
 /** A pair of doors for that frame, shut or swung in (the space they sweep is theirs). */
 export const doorsEl = (w: number, h: number, iron: number) => def({
-  id: `doors${w}x${h}`, name: `Pair of doors ${w} × ${h}`, w, d: 1, h, kind: 'door',
+  id: `doors${w}x${h}_${iron}`, name: `Pair of doors ${w} × ${h}`, w, d: 1, h, kind: 'door',
   claims: doorSpace(w, h * STEP_U).map(claimBox),
   parts: (['shut', 'open'] as const).flatMap((state): Part[] => [
     part(() => doubleDoor(w, h * STEP_U, state === 'open')[0], 'oak', { state, grain: 'y' }),

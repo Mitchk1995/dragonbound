@@ -14,11 +14,11 @@ import { STEP_U, type Rot } from './scale';
  */
 
 /** Courses each side: from the eaves cell to the ridge. */
-export const COURSES = (HOUSE.z1 - HOUSE.z0 + 2) / 2;
+const COURSES = (HOUSE.z1 - HOUSE.z0 + 2) / 2;
 /** The roof's plane at the ridge (steps): the batten line, under the tiles. */
 export const APEX = H.eaves + (COURSES - 1) * (ROOF_RISE / STEP_U);
 /** The collar across each gable (its foot, steps). */
-export const COLLAR = H.eaves + 8;
+const COLLAR = H.eaves + 8;
 /** The chimney's top (steps), over its cap and under its pots. */
 export const CHIMNEY_TOP = 69;
 
@@ -26,7 +26,7 @@ export const CHIMNEY_TOP = 69;
 export const plane = (z: number) => H.eaves + (ROOF_RISE / STEP_U) * Math.min(z - HOUSE.z0, HOUSE.z1 - z);
 
 /** Is cell (x, z) taken by the chimney stack? */
-export const inStack = (x: number, z: number) => x >= STACK.x && x < STACK.x + 2 && z >= STACK.z && z < STACK.z + 2;
+const inStack = (x: number, z: number) => x >= STACK.x && x < STACK.x + 2 && z >= STACK.z && z < STACK.z + 2;
 
 export function roof(b: KitBuild) {
   chimney(b);

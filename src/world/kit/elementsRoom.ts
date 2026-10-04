@@ -178,7 +178,7 @@ export function ovenMouthEl(brick: number): ElementDef {
   const bands: [number, number][] = [[-r0, -13], [-13, -7], [-7, 7], [7, 13], [13, r0]];
   const back: V2[] = [[-r0, 0], [r0, 0], ...arc(0, spring, r0, r0, 0, Math.PI, 14)];
   return def({
-    id: `ovenMouth${w}x${h}`, name: 'Oven mouth', w, d: 1, h, kind: 'detail',
+    id: `ovenMouth${w}x${h}_${brick}`, name: 'Oven mouth', w, d: 1, h, kind: 'detail',
     claims: [boxClaim(-W, 0, -hd, -r0, H, hd), boxClaim(r0, 0, -hd, W, H, hd), ...bands.map(([a, b]) => boxClaim(a, intrados(Math.max(Math.abs(a), Math.abs(b))), -hd, b, H, hd)),
       boxClaim(-r0, 0, -hd, r0, spring + r0, -hd + 1.4)],
     parts: [
@@ -190,7 +190,7 @@ export function ovenMouthEl(brick: number): ElementDef {
 }
 
 /** The oven's dome over its chamber, `w` × `d` cells and `hU` tall, and the flue from its back to the wall at its +x end. */
-export const OVEN_DOME = { w: 6, d: 3, hU: 52, flue: [30, -10] as const, flueTop: 80, r: 6.5 } as const;
+const OVEN_DOME = { w: 6, d: 3, hU: 52, flue: [30, -10] as const, flueTop: 80, r: 6.5 } as const;
 
 /**
  * The bread oven's dome: a low dome of clay daubed over the baking chamber, standing on the oven's
@@ -201,7 +201,7 @@ export function ovenDomeEl(flue: number): ElementDef {
   const prof: Turn[] = [{ r: 0, y: 0 }, { r: 1, y: 0 }, { r: 0.99, y: 0.15, smooth: true }, { r: 0.94, y: 0.36, smooth: true }, { r: 0.82, y: 0.58, smooth: true }, { r: 0.62, y: 0.78, smooth: true }, { r: 0.34, y: 0.93, smooth: true }, { r: 0, y: 1 }];
   const pipeY = flueTop - r;
   return def({
-    id: `ovenDome${w}x${d}`, name: 'Oven dome', w, d, h: flueTop / STEP_U, kind: 'detail',
+    id: `ovenDome${w}x${d}_${flue}`, name: 'Oven dome', w, d, h: flueTop / STEP_U, kind: 'detail',
     claims: [boxClaim(-X, 0, -Z, X, hU, Z), boxClaim(fx - r - 0.1, hU * 0.6, fz - r - 0.1, fx + r + 0.1, flueTop, fz + r + 0.1), boxClaim(fx, pipeY - r - 0.1, fz - r - 0.1, X, flueTop, fz + r + 0.1)],
     parts: [
       part(() => turned(prof.map((p) => ({ ...p, r: p.r * X, y: p.y * hU })), 22, [0, 0, 0], [1, Z / X]), 'clay'),
@@ -232,7 +232,8 @@ const tongues = (y: number, list: number[][]) =>
 export const fireEl = (w: number, d: number, hU: number) => def({
   id: `fire${w}x${d}x${hU}`, name: 'Fire', w, d, h: hU / STEP_U, kind: 'detail', claims: [boxClaim(-half(w) + 7, 0, -half(d) + 2.5, half(w) - 7, hU, half(d) - 2.5)],
   parts: [
-    part(() => join(...[[-2, 2.6, -1.5, 0.3], [2, 2.6, 1.5, -0.35], [0, 6.8, 0, 1.3]].map(([x, y, z, a], i) => log(x, y, z, i === 2 ? 11 : 19, 2.5, a).tag(i + 1))), 'oak', { color: FURNISH.charred, grain: 'box' }),
+    // (The top log lies end-on to the room, set back so the flames' yellow heart burns in front of it.)
+    part(() => join(...[[-2, 2.6, -1.5, 0.3], [2, 2.6, 1.5, -0.35], [0, 6.8, -2.6, 1.3]].map(([x, y, z, a], i) => log(x, y, z, i === 2 ? 7.5 : 19, 2.5, a).tag(i + 1))), 'oak', { color: FURNISH.charred, grain: 'box' }),
     part(() => join(
       box(-half(w) + 9, 0, -half(d) + 4, half(w) - 9, 0.7, half(d) - 4, 0.3),
       ...[[-9, -2.5, 2, 1.1], [-5.5, 3, 1.7, 1.4], [-1.5, -3.6, 2.1, 1], [3, 3.2, 2.3, 1.3], [7, -2.4, 1.8, 1.2], [9.2, 2.6, 1.5, 0.9], [0.5, 0.4, 2.4, 1.5], [-7.5, 0.4, 1.6, 1.2]]
@@ -246,7 +247,7 @@ export const fireEl = (w: number, d: number, hU: number) => def({
 
 // ─── The street ─────────────────────────────────────────────────────────────
 
-export const LAMP_H = 160;
+const LAMP_H = 160;
 export const lampEl = () => def({
   id: 'lamp', name: 'Street lamp', w: 1, d: 1, h: (LAMP_H + 33) / STEP_U, kind: 'detail', claims: [round(9.2, LAMP_H + 33)],
   parts: [

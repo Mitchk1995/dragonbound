@@ -12,10 +12,10 @@ import { CELL_U, half, PLAY } from '../scale';
 export const ROOF_RISE = 16;
 /** A tile's thickness (U), and its width: half a cell. */
 export const TILE_T = 2.4;
-export const TILE_W = CELL_U / 2;
+const TILE_W = CELL_U / 2;
 
 /** The underside of a course's tiles at z (its butt lifted one tile's thickness off the batten plane). */
-export const tileUnder = (z: number) => TILE_T + ((ROOF_RISE - TILE_T) * (CELL_U / 2 - z)) / CELL_U;
+const tileUnder = (z: number) => TILE_T + ((ROOF_RISE - TILE_T) * (CELL_U / 2 - z)) / CELL_U;
 
 /**
  * A course of tiles `w` cells long. `shift` sets the bond: the tiles of alternate courses are offset

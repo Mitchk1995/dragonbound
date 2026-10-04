@@ -85,7 +85,7 @@ interface Batch {
  */
 const casts = (e: ElementDef) => e.kind !== 'floor' && e.kind !== 'fill' && !(e.kind === 'detail' && e.h < 3 && e.w * e.d <= 4);
 
-const tmp = new THREE.Matrix4(), gone = new THREE.Matrix4(), col = new THREE.Color();
+const tmp = new THREE.Matrix4(), gone = new THREE.Matrix4(), at = new THREE.Matrix4(), col = new THREE.Color();
 
 /** `m` shrunk to nothing where it stands (a hidden instance: its batch's bounds stay round the building). */
 const shrunk = (m: THREE.Matrix4) => gone.makeScale(0, 0, 0).copyPosition(m);
@@ -129,11 +129,10 @@ export class KitView {
   /** Shows the placements `show` accepts and hides the rest. */
   setVisible(show: (p: Placed) => boolean) {
     this.shown = show;
-    const m = new THREE.Matrix4();
     for (const b of this.batches) {
       this.copies.forEach((c, k) => b.items.forEach((p, i) => {
-        const at = this.build.matrix(p, tmp);
-        b.mesh.setMatrixAt(k * b.items.length + i, m.multiplyMatrices(c, show(p) ? at : shrunk(at)));
+        const m = this.build.matrix(p, tmp);
+        b.mesh.setMatrixAt(k * b.items.length + i, at.multiplyMatrices(c, show(p) ? m : shrunk(m)));
       }));
       b.mesh.instanceMatrix.needsUpdate = true;
       b.mesh.computeBoundingSphere();
@@ -179,8 +178,12 @@ export class KitView {
 
   dispose() {
     this.group.removeFromParent();
-    // (A batch's own geometry is never disposed: that would free the shape's shared buffers with it.
-    // Only its colours are its own, and they go with it.)
-    for (const b of this.batches) b.mesh.dispose();
+    for (const b of this.batches) {
+      b.mesh.dispose();
+      // A textured batch's geometry is its own (its colours), over the shape's shared buffers: disposing
+      // it frees its colours and lets the renderer drop the shared buffers too, which it uploads again
+      // when another view next draws them. A plain batch draws the shared geometry itself, kept.
+      if (b.tint) b.mesh.geometry.dispose();
+    }
   }
 }

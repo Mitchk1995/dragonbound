@@ -8,7 +8,7 @@ import { COURSE_U, half, PLAY } from '../scale';
  */
 
 /** The chamfer on a dressed stone's edges (U): 3.6 cm; a plinth stone's broad chamfer (7 cm). */
-export const STONE_EDGE = 1.6, PLINTH_EDGE = 3.2;
+const STONE_EDGE = 1.6, PLINTH_EDGE = 3.2;
 /** How far a sill stands proud of the wall under it (U). */
 export const SILL_OUT = 2.6;
 

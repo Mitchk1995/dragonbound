@@ -260,15 +260,15 @@ export function prism(outer: Ring, holes: Ring[], depth: number, bevelAsked: num
   for (const r of rings) {
     const n = r.pts.length;
     const en = r.pts.map((p, i) => edgeNormal(p, r.pts[(i + 1) % n]));
-    const at = (i: number) => en[(i + n) % n];
+    const nrm = (i: number) => en[(i + n) % n];
     const avg = (a: V2, b: V2) => norm([a[0] + b[0], a[1] + b[1]]);
-    const startN = (i: number): V2 => (r.round[i] ? at(i - 1) : r.smooth[i] ? avg(at(i - 1), at(i)) : at(i));
-    const endN = (i: number): V2 => (r.round[i] ? at(i + 1) : r.smooth[(i + 1) % n] ? avg(at(i), at(i + 1)) : at(i));
+    const startN = (i: number): V2 => (r.round[i] ? nrm(i - 1) : r.smooth[i] ? avg(nrm(i - 1), nrm(i)) : nrm(i));
+    const endN = (i: number): V2 => (r.round[i] ? nrm(i + 1) : r.smooth[(i + 1) % n] ? avg(nrm(i), nrm(i + 1)) : nrm(i));
     // The cap's outline: each point moved in so every edge stands `bevel` inside its side.
     const q = r.pts.map((p, i): V2 => {
       if (bevel <= 0) return p;
-      const m = avg(at(i - 1), at(i));
-      const k = bevel / Math.max(0.35, m[0] * at(i)[0] + m[1] * at(i)[1]);
+      const m = avg(nrm(i - 1), nrm(i));
+      const k = bevel / Math.max(0.35, m[0] * nrm(i)[0] + m[1] * nrm(i)[1]);
       return [p[0] - m[0] * k, p[1] - m[1] * k];
     });
     insetPts.push(q);

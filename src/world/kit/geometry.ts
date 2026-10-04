@@ -23,8 +23,6 @@ export type Grain = 'box' | 'auto' | 'x' | 'y' | 'z';
 /** The end grain's shade. */
 const END_GRAIN = 0.72;
 
-
-
 const AX: Record<'x' | 'y' | 'z', number> = { x: 0, y: 1, z: 2 };
 
 /**

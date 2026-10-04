@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { inside, overlap, placeClaim, turn, type Box, type Hull, type P3 } from './claims';
+import { inside, overlap, placeClaim, type Box, type Hull, type P3 } from './claims';
 import { el, type ElementDef } from './elements';
 import { CELL_U, STEP_U, U, type Rot } from './scale';
 
@@ -31,9 +31,7 @@ export interface PlaceOpts {
 const key = (x: number, z: number) => (x + 4096) * 8192 + (z + 4096);
 
 /** The footprint of `e` turned by `rot`: [along x, along z]. */
-export const turnedSize = (e: ElementDef, rot: Rot): [number, number] => (rot % 2 ? [e.d, e.w] : [e.w, e.d]);
-
-export { turn };
+const turnedSize = (e: ElementDef, rot: Rot): [number, number] => (rot % 2 ? [e.d, e.w] : [e.w, e.d]);
 
 export class KitBuild {
   readonly items: Placed[] = [];

@@ -40,7 +40,7 @@ export interface Course {
 }
 
 /** The cell of a line at position `pos`: [x, z] (also the footprint corner of a piece laid along the line from there). */
-export const cellOf = (l: Line, pos: number): [number, number] => (l.axis === 'x' ? [pos, l.at] : [l.at, pos]);
+const cellOf = (l: Line, pos: number): [number, number] => (l.axis === 'x' ? [pos, l.at] : [l.at, pos]);
 
 /** The pieces courses are laid from. */
 const COURSED = new Set<Kind>(['stone', 'beam', 'floor', 'panel']);

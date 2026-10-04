@@ -67,7 +67,7 @@ export function sideLine(s: Side, x0: number, z0: number, x1: number, z1: number
 }
 
 /** The cell on side s at position `pos` along it (x on the fronts, z on the ends). */
-export function cellOn(s: Side, pos: number): [number, number] {
+function cellOn(s: Side, pos: number): [number, number] {
   const { x0, z0, x1, z1 } = HOUSE;
   return s === 'S' ? [pos, z1 - 1] : s === 'N' ? [pos, z0] : s === 'E' ? [x1 - 1, pos] : [x0, pos];
 }

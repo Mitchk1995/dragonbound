@@ -9,9 +9,9 @@ import { half } from '../scale';
  */
 
 /** The chamfer on a timber's edges (U). */
-export const TIMBER_EDGE = 0.9;
+const TIMBER_EDGE = 0.9;
 /** How far the plaster lies back from the timber's face, each side (U). */
-export const PLASTER_BACK = 2.6;
+const PLASTER_BACK = 2.6;
 
 const hd = half(1), pd = hd - PLASTER_BACK;
 
