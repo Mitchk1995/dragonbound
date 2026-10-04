@@ -312,6 +312,58 @@ describe('LEGO hands and elbows', () => {
   });
 });
 
+describe('the minifigure body', () => {
+  // The owner (October 4): every humanoid matches the hero the way LEGO does it, on one minifigure body (minifig.py),
+  // so every gear piece made for the hero fits any humanoid built on it. Their gear sockets, arm joints and hands sit
+  // exactly where the hero's do, whatever their legs, head and robes.
+  const FIGURES = ['goblin', 'cultist'];
+  const SHARED = ['sock_head', 'sock_chest', 'sock_shoulderL', 'sock_shoulderR', 'sock_upperL', 'sock_upperR', 'sock_cuffL',
+    'sock_cuffR', 'sock_handL', 'sock_gloveR', 'sock_handR', 'armL', 'armR', 'elbowL', 'elbowR', 'handL', 'handR', 'head'];
+  /** A part's place and turn at rest, measured from the torso's centre. */
+  const pose = (root: THREE.Object3D, part: string) => {
+    root.updateMatrixWorld(true);
+    const o = root.getObjectByName(part), chest = root.getObjectByName('sock_chest');
+    expect(o && chest, part).toBeTruthy();
+    return { at: o!.getWorldPosition(new THREE.Vector3()).sub(chest!.getWorldPosition(new THREE.Vector3())), turn: o!.getWorldQuaternion(new THREE.Quaternion()) };
+  };
+  for (const name of FIGURES) {
+    it(`${name}: the hero's gear sockets and arm joints, where the hero's are`, () => {
+      const hero = makeModel('hero').root, fig = makeModel(name).root;
+      for (const part of SHARED) {
+        const a = pose(fig, part), b = pose(hero, part);
+        expect(a.at.distanceTo(b.at), `${name} ${part} place`).toBeLessThan(1e-3);
+        expect(a.turn.angleTo(b.turn), `${name} ${part} turn`).toBeLessThan(1e-3);
+      }
+    });
+    it(`${name}: the hero's hands, so gloves and gauntlets fit`, () => {
+      const size = (root: THREE.Object3D, side: string) => {
+        const hand = root.getObjectByName(`hand${side}`)!;
+        const piece = hand.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh)!;
+        return new THREE.Box3().setFromBufferAttribute(piece.geometry.getAttribute('position') as THREE.BufferAttribute).applyMatrix4(piece.matrix).getSize(new THREE.Vector3());
+      };
+      const hero = makeModel('hero').root, fig = makeModel(name).root;
+      for (const side of ['L', 'R']) expect(size(fig, side).distanceTo(size(hero, side)), `${name} hand${side}`).toBeLessThan(1e-3);
+    });
+  }
+  // The body's own attachment points, from the torso's centre (minifig.py BODY_SOCKETS): the hero has none of them but
+  // the hips. A figure with legs (the goblin's short ones) hangs its hips on sock_hips, level with them; a robe hangs on
+  // sock_skirt.
+  const POINTS: Record<string, [number, number, number]> = { sock_neck: [0, 0.31, 0], sock_back: [0, -0.02, -0.21], sock_belt: [0, -0.37, 0] };
+  const HIPS: Record<string, string> = { goblin: 'sock_hips', cultist: 'sock_skirt' };
+  for (const name of FIGURES) {
+    it(`${name}: the body's attachment points for necks, backs, belts and hips, where the body puts them`, () => {
+      const fig = makeModel(name).root;
+      const points: Record<string, [number, number, number]> = { ...POINTS, [HIPS[name]]: [0, -0.44, 0] };
+      for (const [part, at] of Object.entries(points)) expect(pose(fig, part).at.distanceTo(new THREE.Vector3(...at)), `${name} ${part}`).toBeLessThan(1e-3);
+    });
+    it(`${name}: stands on the ground, its feet or robe's hem at ground level`, () => {
+      const root = makeModel(name).root;
+      root.updateMatrixWorld(true);
+      expect(Math.abs(new THREE.Box3().setFromObject(root).min.y), `${name} lowest point`).toBeLessThan(0.01);
+    });
+  }
+});
+
 describe('creatures', () => {
   it('the Cinder Priest has his own model, a head taller than his cultists', () => {
     expect(makeModel('priest').height).toBeGreaterThan(makeModel('cultist').height * 1.15);
