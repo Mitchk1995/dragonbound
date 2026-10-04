@@ -4,6 +4,8 @@ import { mulberry32 } from '../src/core/rng';
 import { SPRAY_CELLS, sprayCell } from '../src/render/foliage';
 import { growTree, leafGeometry, OAK, woodGeometry } from '../src/world/treeGrowth';
 import { DEAD_ASH, killTree } from '../src/world/treeGrowth/deadwood';
+import { along, arcAtHeight, normalOn, pointOn, sidesAt, tangentOn } from '../src/world/treeGrowth/skeleton';
+import { branchAlignedWoodGeometry } from '../src/world/treeGrowth/wood';
 import { BUSH, growShrub } from '../src/world/treeGrowth/shrub';
 import { clearOfStones, thinWood, treeSet } from '../src/world/trees';
 import { BUSHES, DEAD_ASHES, grownStandIns } from '../src/world/treeStandIns';
@@ -15,16 +17,27 @@ const box = (g: THREE.BufferGeometry) => new THREE.Box3().setFromBufferAttribute
 const ashes = DEAD_ASHES.map(({ seed, form, death }) => {
   const alive = growTree({ ...DEAD_ASH, ...form }, seed);
   const sk = killTree(growTree({ ...DEAD_ASH, ...form }, seed), seed, death);
-  return { alive, sk, wood: woodGeometry(sk) };
+  return { alive, sk, wood: branchAlignedWoodGeometry(sk) };
 });
 const bushes = BUSHES.map(({ seed, form }) => {
   const sk = growShrub({ ...BUSH, ...form }, seed);
   return { sk, wood: woodGeometry(sk), leaves: leafGeometry(sk, seed) };
 });
 
-/** How many triangles share each edge of an indexed mesh. */
+/** A UV seam has coincident copies of a surface vertex; audit their exact positions as one vertex. */
+function surfaceIndices(g: THREE.BufferGeometry) {
+  const pos = g.getAttribute('position'), unique = new Map<string, number>(), remap: number[] = [];
+  for (let i = 0; i < pos.count; i++) {
+    const key = `${pos.getX(i)},${pos.getY(i)},${pos.getZ(i)}`;
+    if (!unique.has(key)) unique.set(key, i);
+    remap.push(unique.get(key)!);
+  }
+  return Array.from(g.index!.array, (i) => remap[i]);
+}
+
+/** How many triangles share each geometric edge, including edges cut only for UV seams. */
 function edgeUse(g: THREE.BufferGeometry) {
-  const idx = g.index!.array, use = new Map<string, number>();
+  const idx = surfaceIndices(g), use = new Map<string, number>();
   for (let t = 0; t < idx.length; t += 3) {
     for (let k = 0; k < 3; k++) {
       const a = idx[t + k], b = idx[t + ((k + 1) % 3)], key = a < b ? `${a},${b}` : `${b},${a}`;
@@ -36,7 +49,7 @@ function edgeUse(g: THREE.BufferGeometry) {
 
 /** Connected pieces of an indexed mesh, and vertices no triangle uses. */
 function pieces(g: THREE.BufferGeometry) {
-  const n = g.getAttribute('position').count, idx = g.index!.array;
+  const n = g.getAttribute('position').count, idx = surfaceIndices(g);
   const up = Array.from({ length: n }, (_, i) => i);
   const find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i])));
   const used = new Set<number>();
@@ -46,7 +59,7 @@ function pieces(g: THREE.BufferGeometry) {
     up[find(idx[t + 2])] = a;
     for (let k = 0; k < 3; k++) used.add(idx[t + k]);
   }
-  return { pieces: new Set([...used].map(find)).size, unused: n - used.size };
+  return { pieces: new Set([...used].map(find)).size, unused: n - new Set(g.index!.array).size };
 }
 
 /** One connected surface, no edge carrying more than two faces, open only round its foot under the ground (on a slope of 1 in 2.5 too). */
@@ -67,7 +80,7 @@ function expectOneClosedPiece(wood: THREE.BufferGeometry, at: string) {
 describe('the dead ash', () => {
   it('grows the same from the same seed, and each shape differs', () => {
     const again = killTree(growTree({ ...DEAD_ASH, ...DEAD_ASHES[0].form }, DEAD_ASHES[0].seed), DEAD_ASHES[0].seed, DEAD_ASHES[0].death);
-    expect(Array.from(woodGeometry(again).getAttribute('position').array)).toEqual(Array.from(ashes[0].wood.getAttribute('position').array));
+    expect(Array.from(branchAlignedWoodGeometry(again).getAttribute('position').array)).toEqual(Array.from(ashes[0].wood.getAttribute('position').array));
     expect(new Set(ashes.map((a) => tris(a.wood))).size).toBe(ashes.length);
   });
 
@@ -119,6 +132,109 @@ describe('the dead ash', () => {
 
   it('stays within its triangle budget', () => {
     for (const { wood } of ashes) expect(tris(wood)).toBeLessThanOrEqual(4000);
+  });
+
+  it('keeps each ash collar in its branch frame without winding the grain, with length measured along the branch', () => {
+    for (const { sk, wood } of ashes) {
+      const pos = wood.getAttribute('position'), A = wood.getAttribute('aBarkA'), B = wood.getAttribute('aBarkB');
+      const w = wood.getAttribute('aWood'), uv = wood.getAttribute('aBarkUV'), idx = wood.index!.array;
+      for (const L of sk.limbs.filter((l) => l.parent >= 0)) {
+        const start = L.joint!.ring, p = pointOn(L, start), t = tangentOn(L, start), n = normalOn(L, start, t);
+        const b = new THREE.Vector3().crossVectors(t, n), r = along(L.radius, L, start);
+        const first = new Set<number>();
+        for (let j = 0; j < sidesAt(L, start); j++) {
+          const a = j / sidesAt(L, start) * Math.PI * 2;
+          const at = p.clone().addScaledVector(n, Math.cos(a) * r).addScaledVector(b, Math.sin(a) * r);
+          for (let i = 0; i < pos.count; i++) if (w.getW(i) === 1 && at.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)) < 1e-5) first.add(i);
+        }
+        const firstPositions = new Set([...first].map((i) => `${pos.getX(i)},${pos.getY(i)},${pos.getZ(i)}`));
+        expect(firstPositions.size).toBe(sidesAt(L, start));
+        const foot = [...first][0], k = Math.max(0.75, Math.min(4, sk.species.bark * A.getZ(foot) / (Math.PI * 2 * L.radius[0])));
+        const rim = new Set<number>(), collarFirst = new Set<number>();
+        for (let i = 0; i < idx.length; i += 3) {
+          if (!first.has(idx[i + 2])) continue;
+          for (let j = i; j < i + 3; j++) {
+            if (first.has(idx[j])) collarFirst.add(idx[j]);
+            else rim.add(idx[j]);
+          }
+        }
+        expect(rim.size).toBeGreaterThanOrEqual(4);
+        for (const i of rim) {
+          const delta = new THREE.Vector3().fromBufferAttribute(pos, i).sub(p), a = Math.atan2(delta.dot(b), delta.dot(n));
+          expect(B.getX(i)).toBeCloseTo(Math.cos(a), 5);
+          expect(B.getY(i)).toBeCloseTo(Math.sin(a), 5);
+          expect(B.getW(i)).toBe(0);
+          expect(uv.getY(i)).toBeCloseTo(w.getZ(foot) + delta.dot(t) * k, 5);
+          expect(uv.getW(i)).toBe(w.getZ(i));
+          const turn = uv.getX(i) - (a / (Math.PI * 2) * A.getZ(foot) + A.getW(foot));
+          expect(turn).toBeCloseTo(Math.round(turn), 4);
+        }
+        const parent = sk.limbs[L.parent], pc = pointOn(parent, L.joint!.s), pt = tangentOn(parent, L.joint!.s);
+        const pn = normalOn(parent, L.joint!.s, pt), pb = new THREE.Vector3().crossVectors(pt, pn);
+        const parentRim = [...rim][0], parentTiles = A.getZ(parentRim), parentOffset = A.getW(parentRim);
+        const pk = parentTiles * sk.species.bark / (Math.PI * 2 * (parent.order ? parent.radius[0] : along(parent.radius, parent, arcAtHeight(parent, 1.3))));
+        const parentScale = Math.max(0.75, Math.min(4, pk)), parentFoot = [...collarFirst][0];
+        const anchor = new THREE.Vector3().fromBufferAttribute(pos, parentFoot);
+        for (const i of collarFirst) {
+          expect(uv.getY(i)).toBe(w.getZ(i));
+          const at = new THREE.Vector3().fromBufferAttribute(pos, i), delta = at.clone().sub(pc), a = Math.atan2(delta.dot(pb), delta.dot(pn));
+          const turn = uv.getZ(i) - (a / (Math.PI * 2) * parentTiles + parentOffset);
+          expect(turn).toBeCloseTo(Math.round(turn), 4);
+          expect(uv.getW(i) - uv.getW(parentFoot)).toBeCloseTo(at.sub(anchor).dot(pt) * parentScale, 4);
+        }
+      }
+    }
+  });
+
+  it('changes ash mapping only: its grown surface and shade stay identical, and living wood keeps its approved chart', () => {
+    for (const { sk, wood } of ashes) {
+      const before = woodGeometry(sk);
+      expect(wood.index!.count).toBe(before.index!.count);
+      for (const name of ['position', 'normal', 'color', 'aWood', 'aBarkA', 'aDead']) {
+        const a = wood.getAttribute(name), b = before.getAttribute(name);
+        for (let i = 0; i < wood.index!.count; i++) for (let j = 0; j < a.itemSize; j++) {
+          expect(a.getComponent(wood.index!.getX(i), j)).toBe(b.getComponent(before.index!.getX(i), j));
+        }
+      }
+    }
+    expect(woodGeometry(growTree(OAK, 1)).getAttribute('aBarkUV')).toBeUndefined();
+    for (const { wood } of bushes) expect(wood.getAttribute('aBarkUV')).toBeUndefined();
+  });
+
+  it('cuts linear UV charts without changing the grain where neighbouring faces meet', () => {
+    for (const { wood } of ashes) {
+      const uv = wood.getAttribute('aBarkUV'), w = wood.getAttribute('aWood'), idx = wood.index!.array, welded = surfaceIndices(wood);
+      const edges = new Map<string, { primary: number[][]; parent: number[][]; collar: boolean }>();
+      const sameGrain = (a: number[][], b: number[][], at: string) => {
+        const turns = a.map((p, i) => p[0] - b[i][0]);
+        for (const turn of turns) expect(turn, at).toBeCloseTo(Math.round(turn), 4);
+        expect(turns[0], at).toBeCloseTo(turns[1], 4);
+        a.forEach((p, i) => expect(p[1], at).toBeCloseTo(b[i][1], 5));
+      };
+      for (let t = 0; t < idx.length; t += 3) {
+        const collar = w.getW(idx[t + 2]) === 1, cap = [idx[t], idx[t + 1], idx[t + 2]].some((i) => w.getY(i) <= 0.00101);
+        for (let k = 0; k < 3; k++) {
+          const a = t + k, b = t + ((k + 1) % 3);
+          const ids = [a, b].sort((x, y) => welded[x] - welded[y]);
+          const primary = ids.map((j) => [uv.getX(idx[j]), uv.getY(idx[j])]);
+          const parent = ids.map((j) => [uv.getZ(idx[j]), uv.getW(idx[j])]);
+          [...primary, ...parent].flat().forEach((c) => expect(Number.isFinite(c)).toBe(true));
+          // The broken face has its own planar chart; its edge is an intentional cut from the side.
+          const key = `${cap ? 'cap' : 'side'}:${ids.map((j) => welded[j]).join(',')}`;
+          const previous = edges.get(key);
+          if (previous) {
+            if (collar && previous.collar) {
+              sameGrain(primary, previous.primary, `${key} branch chart`);
+              sameGrain(parent, previous.parent, `${key} parent chart`);
+            } else if (!collar && !previous.collar) sameGrain(primary, previous.primary, key);
+            else {
+              const rim = ids.every((j) => w.getW(idx[j]) === 0);
+              sameGrain(collar && rim ? parent : primary, previous.collar && rim ? previous.parent : previous.primary, key);
+            }
+          } else edges.set(key, { primary, parent, collar });
+        }
+      }
+    }
   });
 
   it('carries, for where its bark has gone, the direction of the limb under each point and how far back from its break that lies', () => {
