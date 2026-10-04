@@ -71,6 +71,12 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
   - UV unwrapping and texture baking from a high-detail version;
   - armature rigs with weight painting.
   The script stays deterministic, so exports are reproducible.
+- **One object, one shape (owner, October 4: "without using random shapes mashed together").** Something meant to read as one solid thing, like an anvil, a barrel, a table, a chest or a statue, is modelled as one continuous mesh, never as primitives pushed into each other. The professional ways:
+  - box modelling: start from one block, then extrude, inset, loop-cut and bevel it into shape (anvil, chest, table top);
+  - lathe or spin a profile for round things (barrel, bottle, pot, column);
+  - loft or sweep a profile along a path (rails, hoops, handles, trim);
+  - sculpting and remeshing for organic things.
+  If a draft starts from blocks, join them by boolean union, then voxel-remesh, decimate and bevel them into one watertight mesh. Rebuild the detail through the bake. Only genuinely separate parts stay separate pieces, such as a hammer's head and haft or a cart's wheels, and they meet cleanly without passing through each other.
 - Always build on the newest stable version of every tool, library, engine feature and model, and use its newest way of doing things, not the legacy path (owner, October 3). At the start of a job, check the versions and current features it touches. Fall back to an older path only when the newest is broken or missing something, and then tell the owner plainly.
 - **Leave it tidier (owner, October 3).** Every job leaves its area tidier than it found it: no new plan or status docs, no placeholder text, TODO stubs or dead code, and a file is split before it passes the size limit (600 lines of code, 25 KB of Markdown, checked by `npm run check`; the allowlist in `tools/check-size.cjs` only shrinks). Reviewers check for all of this.
 - Files are UTF-8 without a BOM; CI rejects BOMs and mojibake.
