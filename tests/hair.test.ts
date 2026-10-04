@@ -165,10 +165,10 @@ describe('hair and beards: one moulded piece each', () => {
 
     it(`${name} comes out of the head: its edge set on the skin, nothing of it inside the head`, () => {
       const head = pieces.get(name)!.parts.find((p) => p.joint === 'sock_head')!;
-      // The edge along the hairline (the tied style's tie has a second open end, round the tail's top: below).
-      const [edge, ...rest] = rims(head.tris).sort((a, b) => Math.min(...a.map((v) => headDistance(head.pos[v]))) - Math.min(...b.map((v) => headDistance(head.pos[v]))));
+      // Its one open edge runs along the hairline (the tied style's band is closed at its end: below).
+      const [edge, ...rest] = rims(head.tris);
       expect(edge.length, name).toBeGreaterThan(20);
-      expect(rest.length, name).toBe(name === 'hair_3' ? 1 : 0);
+      expect(rest.length, name).toBe(0);
       for (const v of edge) expect(headDistance(head.pos[v]), `${name} edge at ${at(head.pos[v])}`).toBeCloseTo(EDGE[name as keyof typeof EDGE], 3);
       for (const { joint, pos } of pieces.get(name)!.parts) {
         for (const p of pos) expect(headDistance(p), `${name} ${joint} at ${at(p)}`).toBeGreaterThan(-TUCK - 0.0005);
@@ -190,7 +190,7 @@ describe('hair and beards: one moulded piece each', () => {
     }
   }
 
-  it('the tied style\'s tail turns at the tie on a pivot of its own, a ball inside the band\'s open end', () => {
+  it('the tied style\'s tail turns at the tie on a pivot of its own, a ball in a socket inside the band', () => {
     const { parts, pivot } = pieces.get('hair_3')!;
     // hair.py BAND_RINGS: the leather band round the tie, from its top into its foot, where the pivot is.
     const top = new THREE.Vector3(0, 0, -0.34), foot = new THREE.Vector3(0, -0.008, -0.382), BALL = 0.068;
@@ -199,15 +199,16 @@ describe('hair and beards: one moulded piece each', () => {
     // The tail is closed all round and hangs well clear of the head.
     expect(rims(tail.tris)).toEqual([]);
     for (const p of tail.pos) expect(headDistance(p), at(p)).toBeGreaterThan(0.05);
-    // Inside the band the tail is a ball round its pivot (hair.py TAIL_BALL), so however it turns it stays inside the
-    // band's open end, which rings it a few millimetres out: no gap shows round it.
+    // Inside the band the tail is a ball round its pivot (hair.py TAIL_BALL), and the band turns in at its rim and back
+    // into a dome round the ball: however the tail turns, the ball turns inside it without touching it, and nothing
+    // shows through the band's mouth but the hair inside.
     const out = foot.clone().sub(top).normalize();
-    const ball = tail.pos.filter((p) => p.clone().sub(foot).dot(out) < 0).map((p) => p.distanceTo(foot));
-    const mouth = rims(cap.tris).find((loop) => loop.every((v) => headDistance(cap.pos[v]) > 0.1))!.map((v) => cap.pos[v].distanceTo(foot));
+    const back = (p: THREE.Vector3) => p.clone().sub(foot).dot(out) < 0;
+    const ball = tail.pos.filter(back).map((p) => p.distanceTo(foot));
+    const socket = cap.pos.filter((p) => back(p) && p.distanceTo(foot) < 0.11).map((p) => p.distanceTo(foot));
     expect(ball.length).toBeGreaterThan(20);
-    expect(Math.max(...ball)).toBeGreaterThan(BALL - 0.002);
-    expect(Math.max(...ball)).toBeLessThan(Math.min(...mouth));
-    expect(Math.max(...mouth) - Math.max(...ball)).toBeLessThan(0.008);
+    expect(Math.max(...ball)).toBeLessThan(BALL);
+    expect(Math.min(...socket) - Math.max(...ball)).toBeGreaterThan(0.005);
   });
 
   // The flow lines a style's locks run along (hair.py Cap): from the hairline to a pole, the crown's whorl or the tie,
