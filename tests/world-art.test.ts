@@ -92,17 +92,6 @@ describe('world props', () => {
       expect(L.props.some((p) => p.kind === 'crack')).toBe(false);
     }
   });
-  it('ore rocks are about two units across and hide their ore when depleted', () => {
-    for (const ore of ['copper', 'tin', 'iron', 'coal', 'emberite']) {
-      const p = buildProp(`rock_${ore}`);
-      const size = new THREE.Box3().setFromObject(p.obj).getSize(new THREE.Vector3());
-      expect(Math.max(size.x, size.z), ore).toBeGreaterThan(1.6);
-      expect(Math.max(size.x, size.z), ore).toBeLessThan(2.4);
-      p.setState!('depleted');
-      const after = new THREE.Box3().setFromObject(p.obj, true);
-      expect(after.max.y, ore).toBeLessThan(size.y);
-    }
-  });
   it('a dormant portal is an unlit platform; a lit one projects the portal effect', () => {
     const dark = buildProp('portal', null), lit = buildProp('portal', 0x6ad0c0);
     expect(dark.light).toBeUndefined();

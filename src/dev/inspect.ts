@@ -25,7 +25,7 @@ import type { Slot } from '../types';
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
  * charactersInspect.ts; skirts: the hero's skirts mid-stride; bow: the bow in his hands, measured; minifig: the shared
  * minifigure body, see minifigInspect.ts; chartex: the characters' textures, see textureInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), lightfx (the
- * lighting effects one at a time, see lightFxInspect.ts), dragons (the drakeling and Cinderwing, see dragonInspect.ts).
+ * lighting effects one at a time, see lightFxInspect.ts), dragons (the drakeling and Cinderwing, see dragonInspect.ts), rocks (the rock kit, see rockInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
  * orbits round each: bailey-angles:hall-door+landing).
@@ -144,6 +144,8 @@ export async function runInspect(g: Game, suites: string) {
     // kind's progress pictures, or `trees:scout` to pick the forest patch).
     const treeArg = suites.split(',').find((s) => s === 'trees' || s.startsWith('trees:'));
     if (treeArg) report.trees = await (await import('./treeLineup')).treesSuite(g, shot, treeArg.split(':').slice(1));
+    // The rock kit lined up, the ore rocks, and each zone's rock old and new (explicit only: `rocks`, `rocks:kit+ore+zones`; rockInspect.ts).
+    if (suites.split(',').some((s) => s === 'rocks' || s.startsWith('rocks:'))) report.rocks = await (await import('./rockInspect')).rocksSuite(g, shot, suites);
     // Approved artwork in every consumer, and the Steel Platebody's fit (explicit only: `approved`; `approved:ui` or
     // `approved:fit` runs one half).
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));

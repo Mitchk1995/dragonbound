@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Cell, Ground, Lawn } from '../layout';
 import { MOSS_TALL, ROCK_MASSES, rockMass, rockMassMoss } from '../../render/blocks';
+import { kitMass, kitMassPool, usesKit } from './kitRocks';
 import type { Scatter, Scene } from './scene';
 
 /** What the outdoor rock is set with: the ground kept round props, the cliff's tones and how one rock mass is seated against a face. */
@@ -8,6 +9,8 @@ export function rockKit(scene: Scene, sets: Scatter) {
   const { rng, layout, theme, w, h, heightAt, floorAt, m, q, s, p, e, walkable, addTree } = scene;
   const { rockMasses, rockMassCols, mossMats, mossCols, ferns, fernCols, cushions, cushionCols } = sets;
   const propNear = new Uint8Array(w * h), massAt = new Uint8Array(w * h);
+  /** The kit's rock masses (kitRocks.ts), or round the castle its block masses with their moss. */
+  const kit = usesKit(theme);
   /** Round every prop, the height it stands at: no rock mass may rise over it there. */
   const propFoot = new Float32Array(w * h).fill(-Infinity);
   /** Where a prop stands: its middle, and all along the plan points a wall is laid on (kinds whose `opt.pts` are plan offsets). */
@@ -69,7 +72,7 @@ export function rockKit(scene: Scene, sets: Scatter) {
    * walks, kept lawns and the cells a building or prop stands on by a hair, over a meadow by its turf.
    */
   const fitUnder = (v: number, W: number, T: number, dr: number, reach: (R: number) => number) => {
-    fitMesh.geometry = rockMassMoss(v);
+    fitMesh.geometry = kit ? kitMass(v) : rockMassMoss(v);
     const R = reach((W * Math.max(1, dr)) / 2);
     for (let pass = 0; pass < 3; pass++) {
       fitMesh.matrix.compose(p, q, s.set(W, T, W * dr));
@@ -131,26 +134,38 @@ export function rockKit(scene: Scene, sets: Scatter) {
     }
     if (!ok) return;
     W /= 0.72;
-    const v = Math.floor(rng() * ROCK_MASSES);
+    // (A kit mass is one of the shapes standing about as tall for its width as the place wants.)
+    const pool = kit ? kitMassPool(T / (W * Math.sqrt(dr))) : [], first = Math.floor(rng() * (kit ? pool.length : ROCK_MASSES));
+    let v = kit ? pool[first] : first;
     p.set(px, base, pz);
-    q.setFromEuler(e.set((rng() - 0.5) * 0.14, yaw, (rng() - 0.5) * 0.14));
+    const tipX = (rng() - 0.5) * 0.14, tipZ = (rng() - 0.5) * 0.14, fit = T, least = low ? 1.1 : 1.6;
+    q.setFromEuler(e.set(tipX, yaw, tipZ));
     // The mass as it will stand (its moss included), tested where it reaches over the ground round
     // it: wherever it would rise through a walk, paving, a lawn or a building's foot, it is lowered
     // until it stays under them (a meadow's turf may still roll over its crown), or left out.
-    T = fitUnder(v, W, T, dr, (R) => R * 1.15 + 0.5);
-    if (T < (low ? 1.1 : 1.6)) return;
+    T = fitUnder(v, W, fit, dr, (R) => R * 1.15 + 0.5);
+    // (A kit mass too tall to keep tries the other shapes near its height, each turned a quarter further, twice round.)
+    for (let k = 1; kit && k < pool.length * 2 && T < least; k++) {
+      v = pool[(first + k) % pool.length];
+      q.setFromEuler(e.set(tipX, yaw + (k * Math.PI) / 2, tipZ));
+      T = fitUnder(v, W, fit, dr, (R) => R * 1.15 + 0.5);
+    }
+    if (T < least) return;
     const mm = m.compose(p, q, s.set(W, T, W * dr)).clone(), tall = T / (W * Math.sqrt(dr));
     rockMasses[v].push(mm);
-    const tb = MOSS_TALL.reduce((a, t, i) => (Math.abs(Math.log(t / tall)) < Math.abs(Math.log(MOSS_TALL[a] / tall)) ? i : a), 0);
-    mossMats[v][tb].push(mm);
     rockMassCols[v].push(cliffA.clone().lerp(cliffB, rng() * 0.6).offsetHSL((rng() - 0.5) * 0.02, 0, (rng() - 0.45) * 0.07));
-    mossCols[v][tb].push(mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.06));
+    if (!kit) {
+      // (Kit rocks carry their moss in their paint.)
+      const tb = MOSS_TALL.reduce((a, t, i) => (Math.abs(Math.log(t / tall)) < Math.abs(Math.log(MOSS_TALL[a] / tall)) ? i : a), 0);
+      mossMats[v][tb].push(mm);
+      mossCols[v][tb].push(mossA.clone().lerp(mossB, rng()).offsetHSL((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.06));
+    }
     if (!grassy || T < 2.2) return;
     // What grows on its shoulder roots in the stone it stands on: the rock under the plant's
     // whole foot is found (straight down onto this mass, at its middle and all round its foot),
     // and it is left out unless rock lies under every point of it and the shoulder there is near
     // level, so no trunk hangs out past a ledge and no fern or cushion stands off a slope.
-    fitMesh.geometry = rockMass(v);
+    fitMesh.geometry = kit ? kitMass(v) : rockMass(v);
     fitMesh.matrix.compose(p, q, s.set(W, T, W * dr));
     fitMesh.matrixWorld.copy(fitMesh.matrix);
     const rockUnder = (x: number, z: number, R: number, spread: number) => {

@@ -1,15 +1,14 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { applyHeightShade } from '../../render/surface';
-import { hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock } from '../../render/blocks';
-import { useStrataRock } from '../../render/rock';
+import { hash01 } from '../../render/blocks';
 import { grownTrees, GROWN, GROWN_KINDS, thinWood, type TreeKind } from '../trees';
 import { grownArgs, treeArgs, withVertexShade } from './materials';
+import { drawRocks } from './kitRocks';
 import type { Scatter, Scene } from './scene';
 
 /** Everything scattered over the land, made into instanced meshes (the woods thinned first). */
 export function drawScatter(scene: Scene, sets: Scatter) {
-  const { theme, inst, ts, woods } = scene;
+  const { inst, ts, woods } = scene;
   const { trees, grown, rocks, rockCols, rims, rimCols, walls, wallCols, bushes, bushCols, flowers, flowerCols, reeds, strata, strataCols, crevices, debris, debrisCols, mass, massCols, rockMasses, rockMassCols, mossMats, mossCols, ferns, fernCols, cushions, cushionCols } = sets;
   // Grown trees need far more room than one to a cell: their woods are thinned (trees.ts thinWood),
   // and no bush is left in the shade of their crowns.
@@ -53,29 +52,9 @@ export function drawScatter(scene: Scene, sets: Scatter) {
     const made = set.canopy.flatMap((geo, v) => [...(inst(set.trunk[v], pick(at, v), null, ...trunk) ?? []), ...(inst(geo, pick(at, v), pick(cols, v), ...crown) ?? [])]);
     for (const mesh of made) mesh.name = 'tree';
   }
-  // Rocks are chunky faceted blocks (two shapes, alternating) sunk into the ground.
-  const half = <T>(list: T[], odd: number) => list.filter((_, i) => i % 2 === odd);
-  /** Rock lying on the land (the geometry audit checks none of it rises through a walk or the masonry). */
-  const rocky = (made: THREE.InstancedMesh[] | undefined) => made?.forEach((m) => (m.userData.rock = true));
-  rocky(inst(rockBlock(7, 1.25, 1.0, 1.1), half(rocks, 0), half(rockCols, 0), 0, true, 'rock'));
-  rocky(inst(rockBlock(8, 1.1, 1.05, 1.2), half(rocks, 1), half(rockCols, 1), 0, true, 'rock'));
-  inst(rockBlock(9, 1.1, 1.0, 1.0), rims, rimCols, 0, false, 'rock');
-  // Cave slabs fade into the dark with height exactly like the rock mass behind them.
-  const caveShade = (mat: THREE.MeshStandardMaterial) => {
-    if (!theme.wallRise) return;
-    applyHeightShade(mat, theme.topShade ?? 1, ...(theme.topRange ?? [2.5, 12]));
-    useStrataRock(mat);
-  };
-  inst(slabBlock(31), half(strata, 0), half(strataCols, 0), 0, true, 'rock', true, undefined, caveShade);
-  inst(slabBlock(32), half(strata, 1), half(strataCols, 1), 0, true, 'rock', true, undefined, caveShade);
-  inst(slabBlock(34), half(mass, 0), half(massCols, 0), 0, true, 'rock', false, undefined, caveShade);
-  inst(slabBlock(35), half(mass, 1), half(massCols, 1), 0, true, 'rock', false, undefined, caveShade);
+  // Rock: the rock kit's, or round the castle the block rocks it stands on (kitRocks.ts).
+  drawRocks(scene, sets);
   inst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), crevices, null, 0x120e0b, true, undefined, false);
-  rocky(inst(rockBlock(33, 1, 0.8, 1), debris, debrisCols, 0, false, 'rock', false));
-  for (let v = 0; v < ROCK_MASSES; v++) {
-    rocky(inst(rockMass(v), rockMasses[v], rockMassCols[v], 0, true, 'rock'));
-    MOSS_TALL.forEach((tall, tb) => rocky(inst(rockMassMoss(v, tall), mossMats[v][tb], mossCols[v][tb], 0, true, ts.paint.grove, false)));
-  }
   if (ferns.length) {
     // A fern: a ring of fronds arching up and out from the root and nodding over at their tips,
     // each a slender stalk set with pairs of blocky leaflets that shorten toward the tip, so it reads
