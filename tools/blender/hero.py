@@ -1,4 +1,4 @@
-"""Hero BASE: the starting outfit, big hands, sockets for gear/hair (see docs/ART_CONTRACT.md).
+"""Hero BASE: the starting outfit, big hands, sockets for gear/hair (see docs/ART_NAMES.md).
 
 Built from the approved concept sheet (October 3): a blue tunic with a dark standing collar and sleeve bands, a pale
 trim down the split front of its skirt, a belt with a square gold buckle and a pouch, a strap over the right shoulder
