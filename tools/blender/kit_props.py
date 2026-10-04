@@ -55,8 +55,9 @@ def counter():
 
 
 def turned_leg(name, x, z, h, r=1.9):
+    # (Its top, turned narrower than the square block it runs up into, meets that block's foot in a clean ring.)
     prof = [(0, 0), (r * 0.9, 0), (r, 1.2), (r * 0.78, 3.2), (r * 0.66, 8), (r * 0.84, 13), (r * 0.66, 16.5), (r * 0.56, h - 6),
-            (r * 0.8, h - 2.5), (r * 0.92, h - 1), (r * 0.92, h), (0, h)]
+            (r * 0.76, h - 2.5), (r * 0.8, h - 1), (r * 0.8, h), (0, h)]
     return lathe(name, prof, 16, 'oak.y', at=(x, 0, z))
 
 
@@ -176,7 +177,7 @@ def bed():
     union(ob, post('post', -px, pz, 34), post('post', px, -pz, 22), post('post', px, pz, 22),
           block('head', -px - 1.4, 9.5, -pz, -px + 1.4, 30, pz, 'oak.z'), block('foot', px - 1.4, 9.5, -pz, px + 1.4, 19, pz, 'oak.z'),
           *[block('rail', -px, 5, s * pz - 1.2, px, 11, s * pz + 1.2, 'oak.x') for s in (-1, 1)],
-          block('slats', -px + 1.2, 7.5, -pz + 1.0, px - 1.2, 9.0, pz - 1.0, 'oak.x'))
+          block('slats', -px + 0.6, 7.5, -pz + 0.4, px - 0.6, 9.0, pz - 0.4, 'oak.x'))
     panelled(ob, 'x', 1, -px + 1.4, [(-pz + 4, 13, -2, 27), (2, 13, pz - 4, 27)], depth=1.2, proud=0.8)
     panelled(ob, 'x', 1, px + 1.4, [(-pz + 4, 11.5, pz - 4, 17)], depth=1.0, inset=1.6, proud=0.7)
     finish(ob, 0.3)
@@ -196,8 +197,8 @@ def window_box(w):
     W, z0 = half(w), half(1)
     ob = block(f'windowBox{w}', -W, 2.2, z0 + 0.4, W, 7.5, z0 + 9, 'oak.x')
     cut(ob, block('hollow', -W + 1.2, 6.3, z0 + 1.6, W - 1.2, 9, z0 + 7.8, 'oak.x'), block('joint', -W - 1, 4.5, z0 + 8.5, W + 1, 5.2, z0 + 10, 'oak.x'))
-    # (A quarter round from the wall's foot out under the box, ending in a square shoulder the box sits on.)
-    knee = [(z0, 2.4), (z0, -5)] + [(z0 + 3.6 - 3.6 * math.cos(t), -5 + 6.0 * math.sin(t)) for t in (math.pi / 2 * k / 6 for k in range(1, 7))] + [(z0 + 3.6, 2.4)]
+    # (Square at its foot on the wall, a quarter round out under the box, a square shoulder the box sits on.)
+    knee = [(z0, 2.4), (z0, -5)] + [(z0 + 3.6 - 2.8 * math.cos(t), -5 + 6.0 * math.sin(t)) for t in (math.pi / 2 * k / 6 for k in range(7))] + [(z0 + 3.6, 2.4)]
     union(ob, *[prism('knee', knee, 'x', x - 1, x + 1, 'oak.y') for x in (-W + 6, W - 6)])
     recolour(ob, 'earth', lambda c, n: n[1] > 0.9 and abs(c[1] - 6.3) < 0.05)
     return finish(ob, 0.25)

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { box, cylinder, join, Mesh3, prism, rect, ring, type V2 } from '../mesh';
+import { box, join, Mesh3, prism, rect, ring, turned, type V2 } from '../mesh';
 import { half, U } from '../scale';
 
 /**
@@ -22,7 +22,8 @@ export function frame(w: number, hU: number, door = false): Mesh3 {
     const W = half(w), prof: V2[] = [[-W, 0], [x0, 0], [x0, y1], [x1, y1], [x1, 0], [W, 0], [W, hU], [-W, hU]];
     return prism(ring(prof, 0.7), [], FRAME_D * 2, 0.7)[0];
   }
-  const hole = ring(rect(x0, y0, x1, y1).reverse(), 0.5);
+  // (Its light square-cornered, so the glazing and the glass fit it exactly.)
+  const hole = ring(rect(x0, y0, x1, y1).reverse(), 0);
   return prism(ring(rect(-half(w), 0, half(w), hU), 0.7), [hole], FRAME_D * 2, 0.7)[0];
 }
 
@@ -59,6 +60,26 @@ export function pane(w: number, hU: number, cols = 1, rows = 1): Mesh3 {
 const BOARD_T = 3.2, LEDGE_T = 2.6;
 
 /**
+ * A strap hinge's outline on a leaf's face (U): a bar `hw` each side of the line y from x0 out to x1,
+ * ending in a round terminal `r` across, one shape.
+ */
+function strap(x0: number, x1: number, y: number, hw: number, r: number): V2[] {
+  const a = Math.asin(hw / r), pts: V2[] = [[x0, y - hw]];
+  for (let k = 0; k <= 12; k++) {
+    const t = -(Math.PI - a) + ((2 * (Math.PI - a)) * k) / 12;
+    pts.push([x1 + r * Math.cos(t), y + r * Math.sin(t)]);
+  }
+  pts.push([x0, y + hw]);
+  return pts;
+}
+
+/** A door's pull: its round back plate and its knob turned as one, standing out from the leaf's face (+z). */
+const pull = () => turned([
+  { r: 0, y: 0 }, { r: 2.6, y: 0 }, { r: 2.6, y: 0.5, round: true }, { r: 2.1, y: 0.8 }, { r: 1, y: 0.8 }, { r: 0.9, y: 1.6, smooth: true },
+  { r: 1.4, y: 3, smooth: true }, { r: 1.3, y: 3.8, smooth: true }, { r: 0, y: 4 },
+], 14);
+
+/**
  * A pair of planked doors hung behind a frame `w` cells wide and `hU` tall, closing against its back
  * and opening inward (toward −z), each leaf a quarter turn about its hinge on the frame's back
  * corner. The ledges and brace on their backs start clear of the hinge, so an opened leaf stands
@@ -79,9 +100,9 @@ export function doubleDoor(w: number, hU: number, open: boolean): [Mesh3, Mesh3]
     for (const y of ledges) b.push(box(8, y - 3, -BOARD_T - LEDGE_T, leafW - 2.5, y + 3, -BOARD_T, 0.6).tag(first + 5));
     const bh = ledges[1] - ledges[0] - 6;
     b.push(prism(ring([[8, 0], [14, 0], [leafW - 2.5, bh], [leafW - 8.5, bh]], 0.6), [], LEDGE_T, 0.6, 'z', [0, ledges[0] + 3, -BOARD_T - LEDGE_T / 2])[0].tag(first + 6));
-    // Strap hinges across the front from the hinge side, and a ring-pull handle near the meeting edge.
-    for (const y of ledges) fe.push(box(0.6, y - 1.6, 0, leafW * 0.7, y + 1.6, 0.8, 0.3), cylinder(2, 0.9, 0.3, 10).moved(across(leafW * 0.7, y, 0)));
-    fe.push(cylinder(2.6, 0.8, 0.2, 14).moved(across(leafW - 6, hand, 0)), cylinder(1.4, 3.4, 0.5, 12).moved(across(leafW - 6, hand, 0.6)));
+    // Strap hinges across the front from the hinge side, and a pull near the meeting edge.
+    for (const y of ledges) fe.push(prism(ring(strap(0.6, leafW * 0.7, y, 1.6, 2), 0.2), [], 0.8, 0.3, 'z', [0, 0, 0.4])[0]);
+    fe.push(pull().moved(across(leafW - 6, hand, 0)));
     // The left leaf hinged at the left jamb's back corner, the right mirrored onto the right; open, each turned in.
     const m = new THREE.Matrix4().makeTranslation(s < 0 ? x0 + 0.3 : x1 - 0.3, 0, -FRAME_D);
     if (open) m.multiply(new THREE.Matrix4().makeRotationY(s < 0 ? Math.PI / 2 : -Math.PI / 2));

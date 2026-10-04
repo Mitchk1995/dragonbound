@@ -205,34 +205,47 @@ def recolour(ob, mat, test):
 
 
 def finish(ob, width=0.35, segments=2, angle=35):
-    """Cleaned (coplanar faces merged, within a material) and bevelled where faces meet at more than `angle` degrees."""
+    """
+    Welded, its outside edges (where faces turn away from each other by more than `angle` degrees)
+    bevelled as a joiner rounds them, its inside corners left as they meet; then made watertight (below).
+    """
     bm = bmesh.new()
     bm.from_mesh(ob.data)
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
-    bmesh.ops.dissolve_limit(bm, angle_limit=math.radians(0.5), verts=bm.verts, edges=bm.edges, delimit={'MATERIAL'})
+    weight = bm.edges.layers.float.get('bevel_weight_edge') or bm.edges.layers.float.new('bevel_weight_edge')
+    for e in bm.edges:
+        turn = e.calc_face_angle_signed(0.0) if len(e.link_faces) == 2 else 0.0
+        e[weight] = 1.0 if turn > math.radians(angle) else 0.0
+        # (An inside corner stays a crisp line in the shading too.)
+        e.smooth = abs(turn) <= math.radians(angle)
     bm.to_mesh(ob.data)
     bm.free()
     b = ob.modifiers.new('bevel', 'BEVEL')
     b.width = width * U
     b.segments = segments
-    b.limit_method = 'ANGLE'
-    b.angle_limit = math.radians(angle)
+    b.limit_method = 'WEIGHT'
     b.use_clamp_overlap = True
-    b.harden_normals = True
     smooth(ob)
     apply_all(ob)
-    return watertight(ob)
+    watertight(ob)
+    # Shaded by the faces' areas: each broad face reads flat, its rounded edges blend into it.
+    wn = ob.modifiers.new('normals', 'WEIGHTED_NORMAL')
+    wn.mode = 'FACE_AREA'
+    wn.weight = 100
+    wn.keep_sharp = True
+    return apply_all(ob)
 
 
 def watertight(ob):
     """
-    Welds what the modelling left a hair apart (under 0.01 mm), drops the slivers that leaves, splits
-    every face into well-shaped triangles, and refuses a shape that is not closed all round.
+    Welds what the modelling left in one place twice, collapses the edges it left shorter than 0.2 mm
+    (the model check, tools/one-piece-geometry.cjs, welds within 0.1 mm along each axis), splits every
+    face into well-shaped triangles, and refuses a shape that is not closed all round.
     """
     bm = bmesh.new()
     bm.from_mesh(ob.data)
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
-    bmesh.ops.dissolve_degenerate(bm, dist=1e-5, edges=bm.edges)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    bmesh.ops.dissolve_degenerate(bm, dist=2e-4, edges=bm.edges)
     bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
     bad = [(e.verts[0].co + e.verts[1].co) / 2 for e in bm.edges if not e.is_manifold]
     bm.to_mesh(ob.data)
@@ -287,7 +300,7 @@ def drape(name, x0, x1, z0, z1, y, colliders, mat, cuts=(28, 20), frames=60, thi
     ob = _object(name, bm, mat)
     for c in colliders:
         c.modifiers.new('collision', 'COLLISION')
-        c.collision.thickness_outer = 0.004
+        c.collision.thickness_outer = 0.006
         c.collision.cloth_friction = 8
     cl = ob.modifiers.new('cloth', 'CLOTH')
     s = cl.settings
@@ -297,7 +310,7 @@ def drape(name, x0, x1, z0, z1, y, colliders, mat, cuts=(28, 20), frames=60, thi
     s.shear_stiffness = 6
     s.bending_stiffness = 0.4
     s.air_damping = 2
-    cl.collision_settings.distance_min = 0.004
+    cl.collision_settings.distance_min = 0.006
     cl.collision_settings.collision_quality = 4
     scene = bpy.context.scene
     scene.frame_start, scene.frame_end = 1, frames
@@ -305,8 +318,15 @@ def drape(name, x0, x1, z0, z1, y, colliders, mat, cuts=(28, 20), frames=60, thi
     for f in range(1, frames + 1):
         scene.frame_set(f)
     apply_all(ob)
+    # (Wherever the simulation let the cloth sink a little into what it lies on, it is lifted back out over it.)
     for c in colliders:
         c.modifiers.remove(c.modifiers['collision'])
+        sw = ob.modifiers.new('lift', 'SHRINKWRAP')
+        sw.target = c
+        sw.wrap_method = 'NEAREST_SURFACEPOINT'
+        sw.wrap_mode = 'OUTSIDE'
+        sw.offset = 0.002
+        apply_all(ob)
     so = ob.modifiers.new('thickness', 'SOLIDIFY')
     so.thickness = thickness * U
     so.offset = 1.0

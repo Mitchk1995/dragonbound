@@ -98,13 +98,13 @@ export const rugEl = (w: number, d: number) => def({
 export const shelvesEl = () => def({
   id: 'shelves4', name: 'Shelves of bread', w: 4, d: 1, h: 11, kind: 'detail',
   parts: [...modelled('shelves4', ['oak.x', 'oak.y']), part(() => {
-    const out: Mesh3[] = [], count = 7;
+    const out: Mesh3[] = [], count = 5;
     for (let k = 0; k < 3; k++) {
       // (On each board's top: the boards stand 4 U up and every 27⅓ U above, 2 U thick.)
       const y = 4 + (82 * k) / 3 + 2;
       for (let i = 0; i < count; i++) {
         const x = -half(4) + 10 + ((2 * half(4) - 20) * i) / (count - 1), s = (k * 7 + i * 3) % 4;
-        out.push((s === 1 ? longLoaf(12, 4.4).moved(new THREE.Matrix4().makeRotationY(1.35).setPosition(x, y, -1)) : cob(6.2 + s * 0.4).moved(new THREE.Matrix4().makeTranslation(x, y, (s % 2) * 2 - 1))).tag(k * 20 + i + 1));
+        out.push((s === 1 ? longLoaf(12, 4.4).moved(new THREE.Matrix4().makeRotationY(1.35).setPosition(x, y, -1)) : cob(6 + s * 0.25).moved(new THREE.Matrix4().makeTranslation(x, y, (s % 2) * 2 - 1))).tag(k * 20 + i + 1));
       }
     }
     return join(...out);

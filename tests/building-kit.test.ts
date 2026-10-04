@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { KitBuild, type Placed } from '../src/world/kit/build';
@@ -10,7 +11,7 @@ import { OVEN, RISE, treadTop } from '../src/world/kit/houseInside';
 import { APEX, CHIMNEY_TOP, plane } from '../src/world/kit/houseRoof';
 import { CELL, CELL_U, COURSE, HERO_H, STEP, STEP_U, U, type Rot } from '../src/world/kit/scale';
 import { texturedGeometry } from '../src/world/kit/geometry';
-import { box } from '../src/world/kit/mesh';
+import { box, type Mesh3 } from '../src/world/kit/mesh';
 import { parseKitProps, propNames, propShape } from '../src/world/kit/props';
 import { lightOf } from '../src/world/kit/shapes/openings';
 import { FIXED, LAYERS } from '../src/world/kit/surfaces';
@@ -28,6 +29,13 @@ vi.mock('../src/world/kit/surfaces', async (actual) => {
   const { MeshStandardMaterial } = await import('three');
   return { ...(await actual<typeof import('../src/world/kit/surfaces')>()), kitMaterial: () => new MeshStandardMaterial() };
 });
+
+/** The model check's geometry (tools/check-one-piece.cjs): pieces welded from triangles (metres), and how deep one runs inside another. */
+type Piece = { names: string[] };
+const onePiece = createRequire(import.meta.url)('../tools/one-piece-geometry.cjs') as {
+  pieces: (meshes: { name: string; tris: Float64Array }[]) => Piece[];
+  depthInside: (a: Piece, b: Piece) => number;
+};
 
 /** The hero across in plate armour, arms at his sides (as measured in the game by the `kit` inspect suite). */
 const HERO_W_PLATE = 1.42;
@@ -73,14 +81,16 @@ describe('claims', () => {
 const allParts = () => {
   buildBakery();
   // (A plant's cards are seen from both sides: they have no outside.)
-  return Object.values(ELEMENTS).flatMap((e) => e.parts.filter((p) => p.look !== 'card').map((p, k) => ({ e, k, mesh: p.mesh(), look: p.look })));
+  return Object.values(ELEMENTS).flatMap((e) => e.parts.filter((p) => p.look !== 'card').map((p, k) => ({ e, k, mesh: p.mesh(), look: p.look, whole: p.whole })));
 };
 
 describe('the pieces', () => {
-  it('turn every face outward: each triangle\'s winding agrees with its shading normals', () => {
+  it('turn every face outward: each triangle\'s winding agrees with its shading normals (the modelled props: below)', () => {
     const bad: string[] = [];
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
-    for (const { e, k, mesh } of allParts()) {
+    for (const { e, k, mesh, whole } of allParts()) {
+      // (A modelled prop's small faces take their shading from the broad faces beside them; its winding is checked whole.)
+      if (whole) continue;
       const P = mesh.pos, N = mesh.nor;
       for (let t = 0; t < mesh.idx.length; t += 3) {
         const [i, j, l] = [mesh.idx[t], mesh.idx[t + 1], mesh.idx[t + 2]];
@@ -117,6 +127,22 @@ describe('the pieces', () => {
       }
     }
     expect([...new Set(out)].slice(0, 12)).toEqual([]);
+  });
+
+  it('keep to the model check\'s rule too, when built in code: no part of a piece passes inside another part of it', () => {
+    buildBakery();
+    const bad: string[] = [];
+    const tris = (m: Mesh3) => Float64Array.from(m.idx.flatMap((i) => [m.pos[i * 3] * U, m.pos[i * 3 + 1] * U, m.pos[i * 3 + 2] * U]));
+    for (const e of Object.values(ELEMENTS)) for (const state of e.parts.some((p) => p.state) ? ['shut', 'open'] : ['']) {
+      // (Flames lick round the logs and a plant's cards cross one another: neither is solid. A modelled prop is checked as its file.)
+      const parts = e.parts.filter((p) => !p.whole && p.look !== 'glow' && p.look !== 'card' && (!p.state || p.state === state));
+      const list = onePiece.pieces(parts.map((p, k) => ({ name: `${p.look}#${k}`, tris: tris(p.mesh()) })));
+      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+        const depth = Math.max(onePiece.depthInside(list[i], list[j]), onePiece.depthInside(list[j], list[i]));
+        if (depth > 0) bad.push(`${e.id}${state && ` (${state})`}: ${list[i].names} / ${list[j].names}, ${(depth * 1000).toFixed(0)} mm`);
+      }
+    }
+    expect([...new Set(bad.map((b) => b.replace(/, \d+ mm$/, '')))].slice(0, 40)).toEqual([]);
   });
 
   it('stand within their footprint unless they hang outside it on purpose', () => {
@@ -343,7 +369,7 @@ function jpegSize(file: string): [number, number] {
 }
 
 describe('the furniture and props', () => {
-  it('are each one continuous, watertight shape, never parts pushed into one another (things really apart, like bedding or iron bands, apart)', () => {
+  it('are each one continuous, watertight shape turned outward, never parts pushed into one another (things really apart, like bedding or iron bands, apart)', () => {
     const bad: string[] = [];
     expect(propNames().length).toBeGreaterThan(10);
     for (const name of propNames()) {
@@ -362,17 +388,21 @@ describe('the furniture and props', () => {
         return v;
       };
       const root = (v: number): number => (up[v] === v ? v : (up[v] = root(up[v])));
+      // Each edge between two faces, run once each way round (the faces wound alike), and the whole turned outward.
       const edges = new Map<string, number>();
+      let volume = 0;
       for (let t = 0; t < m.idx.length; t += 3) {
         const [a, b, c] = [at(m.idx[t]), at(m.idx[t + 1]), at(m.idx[t + 2])];
         for (const [p, q] of [[a, b], [b, c], [c, a]]) {
           const e = p < q ? `${p}-${q}` : `${q}-${p}`;
-          edges.set(e, (edges.get(e) ?? 0) + 1);
+          edges.set(e, (edges.get(e) ?? 0) + (p < q ? 1 : 1000));
           up[root(p)] = root(q);
         }
+        const [A, B, C] = [a, b, c].map((v) => new THREE.Vector3(...pts[v]));
+        volume += A.dot(B.cross(C)) / 6;
       }
-      const open = [...edges.values()].filter((n) => n !== 2).length, pieces = new Set(up.map((_, v) => root(v))).size;
-      if (open || pieces !== 1) bad.push(`${name}: ${pieces} pieces, ${open} edges not between two faces`);
+      const open = [...edges.values()].filter((n) => n !== 1001).length, pieces = new Set(up.map((_, v) => root(v))).size;
+      if (open || pieces !== 1 || volume <= 0) bad.push(`${name}: ${pieces} pieces, ${open} edges not between two faces wound alike, volume ${volume.toFixed(0)}`);
     }
     expect(bad).toEqual([]);
   });
