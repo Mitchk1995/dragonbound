@@ -26,9 +26,11 @@ export interface QuestState {
 /** Render quality preset (see Game.applyGraphics). */
 export type Graphics = 'high' | 'medium' | 'low';
 
-/** The screen-space lighting effects switched on (see render/post.ts; each off unless set). */
+/** The screen-space lighting effects switched on or off (see render/post.ts). */
 export type Lighting = Partial<LightingEffects>;
 const LIGHTING_KEYS = ['bounce', 'contact', 'reflections', 'smooth'] as const;
+/** Each effect's switch unless the player sets it (October 4: contact shading and reflections approved on). */
+export const DEFAULT_LIGHTING: LightingEffects = { bounce: false, contact: true, reflections: true, smooth: false };
 
 export interface SaveData {
   version: number;
@@ -90,7 +92,7 @@ export function newSave(): SaveData {
     portals: {},
     tutorial: 0,
     stats: { deaths: 0, kills: 0, playtime: 0, bestBossTime: null },
-    settings: { volume: 0.6, graphics: 'high', lighting: {} },
+    settings: { volume: 0.6, graphics: 'high', lighting: { ...DEFAULT_LIGHTING } },
   };
 }
 
@@ -107,10 +109,11 @@ export function migrate(raw: any): SaveData {
     settings: { ...fresh.settings, ...(raw.settings ?? {}) },
   };
   if (!['high', 'medium', 'low'].includes(data.settings.graphics as string)) data.settings.graphics = 'high';
-  // Only the effects switched on stay, each strictly true; anything else is off.
+  // Each effect keeps the player's switch when it is strictly true or false, else takes its default.
   const lit = raw.settings?.lighting;
+  const own = lit && typeof lit === 'object' && !Array.isArray(lit) ? lit : {};
   data.settings.lighting = {};
-  if (lit && typeof lit === 'object' && !Array.isArray(lit)) for (const k of LIGHTING_KEYS) if (Object.hasOwn(lit, k) && lit[k] === true) data.settings.lighting[k] = true;
+  for (const k of LIGHTING_KEYS) data.settings.lighting[k] = Object.hasOwn(own, k) && typeof own[k] === 'boolean' ? own[k] : DEFAULT_LIGHTING[k];
   for (const key of ['collection', 'kc', 'counters', 'keep', 'quests', 'diary', 'diaryClaimed', 'portals'] as const) {
     (data as any)[key] = raw[key] && typeof raw[key] === 'object' ? raw[key] : {};
   }

@@ -5,6 +5,7 @@ Part of the design plan; the index and the current direction are in [DESIGN_DECI
 ## October 4
 
 - **Lighting effects to choose from** (October 4, phase 2 of the WebGPU move): four switches, each off until Mitchell picks from pictures on the review page, and each in the debug panel (F1) to try in play: bounce light (screen-space global illumination), soft contact shading (ground-truth ambient occlusion, in place of the old occlusion), reflections in water and on wet stone (screen-space reflections) and smooth edges (temporal antialiasing, in place of multisampling). Screen-space bounce lights only from what is on screen, so a room seen from outside gets little of it; light that fills rooms needs light probes baked per building (three.js's light probe grid), a later step. Voxel GI (new in three.js r186) was set aside: it voxelises the scene on the CPU, and at our world's size its voxels are coarser than a brick wall, so light leaks into rooms. Cascaded sun shadows were not needed: the sun's shadow map is fitted to the screen, so distant shadows stay sharp and steady.
+- **Soft contact shading and reflections on (October 4, review page: "yes, good" to both).** They are on by default for every player, new saves and old; each can still be switched off in the debug panel (F1). Bounce light and smooth edges wait for his pick.
 
 ## October 3
 

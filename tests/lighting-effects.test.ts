@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { attachmentBytes, NO_EFFECTS, surfaceLayout, type LightingEffects } from '../src/render/post';
 import { effectsWater, isEffectsWater, setEffectsBuffers, waterShine } from '../src/render/surfaces';
-import { loadSave, newSave } from '../src/save/save';
+import { DEFAULT_LIGHTING, loadSave, newSave } from '../src/save/save';
 
 /** Every combination of the four lighting effects. */
 const combos: LightingEffects[] = Array.from({ length: 16 }, (_, i) => ({ bounce: !!(i & 1), contact: !!(i & 2), reflections: !!(i & 4), smooth: !!(i & 8) }));
@@ -52,13 +52,18 @@ describe('water for the effects', () => {
 describe('saved lighting settings', () => {
   const load = (lighting: unknown) => loadSave({ read: async () => JSON.stringify({ ...newSave(), settings: { volume: 0.4, graphics: 'high', lighting } }), write: async () => {}, describe: () => 'test storage' });
 
-  it('are all off in a new save and in one from before they existed', async () => {
-    expect(newSave().settings.lighting ?? {}).toEqual({});
-    expect((await load(undefined))!.settings.lighting).toEqual({});
+  it('start with contact shading and reflections on, in a new save and in one from before they existed', async () => {
+    expect(newSave().settings.lighting).toEqual(DEFAULT_LIGHTING);
+    expect((await load(undefined))!.settings.lighting).toEqual(DEFAULT_LIGHTING);
+    expect(DEFAULT_LIGHTING).toEqual({ bounce: false, contact: true, reflections: true, smooth: false });
   });
 
-  it('keep the effects switched on, and nothing else', async () => {
-    expect((await load({ bounce: true, smooth: true }))!.settings.lighting).toEqual({ bounce: true, smooth: true });
+  it("keep the player's switches, and defaults for anything else", async () => {
+    expect((await load({ bounce: true, smooth: true }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, bounce: true, smooth: true });
+    expect((await load({ contact: false, reflections: false }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, contact: false, reflections: false });
+    expect((await load({ bounce: 'yes', contact: 1, reflections: false, smooth: false, glow: true }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, reflections: false });
+    for (const junk of [null, 'all', 3, ['bounce']]) expect((await load(junk))!.settings.lighting).toEqual(DEFAULT_LIGHTING);
+  });
     expect((await load({ bounce: 'yes', contact: 1, reflections: true, smooth: false, glow: true }))!.settings.lighting).toEqual({ reflections: true });
     for (const junk of [null, 'all', 3, ['bounce']]) expect((await load(junk))!.settings.lighting).toEqual({});
   });
