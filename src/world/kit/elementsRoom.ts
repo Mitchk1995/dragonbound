@@ -81,7 +81,7 @@ export const candleEl = () => def({
 export const bedEl = () => def({ id: 'bed6', name: 'Bed', w: 6, d: 4, h: 4.5, kind: 'detail', parts: modelled('bed6', ['oak.x', 'oak.y', 'oak.z', 'linen', 'blanket']) });
 
 export const chestEl = () => def({
-  id: 'chest3', name: 'Chest', w: 3, d: 1, h: 3, kind: 'detail', claims: [boxClaim(-half(3) + 1, 0, -8.3, half(3) - 1, 24, 8.3)], parts: modelled('chest3', ['oak.x', 'iron']),
+  id: 'chest3', name: 'Chest', w: 3, d: 1, h: 3, kind: 'detail', claims: [boxClaim(-29.2, 0, -8.9, 29.2, 24, 8.9)], parts: modelled('chest3', ['oak.x', 'iron']),
 });
 
 export const wardrobeEl = () => def({

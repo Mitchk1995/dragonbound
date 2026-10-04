@@ -1,6 +1,7 @@
 """
-Shape-making for the building kit's props (kit_props.py): blocks, extruded outlines, lathed and swept
-shapes, booleans, soft furnishings, cloth draping and the bevelled finish, all in the kit's units.
+Shape-making for the building kit's props (kit_props.py): blocks and extruded outlines with their
+outside edges eased round, lathed and swept shapes, booleans, soft furnishings, cloth draping and the
+finish (welded, checked closed, shaded), all in the kit's units.
 
 Sizes are in kit units (U = 2.25 cm: a cell 20 U, a step 8 U) on three.js axes (x right, y up, z
 toward the front), as in src/world/kit/. Blender is z up with the front toward -y; P() converts, so
@@ -66,18 +67,48 @@ def smooth(ob):
     return ob
 
 
-def block(name, x0, y0, z0, x1, y1, z1, mat):
-    """A box from (x0, y0, z0) to (x1, y1, z1)."""
+def ease(ob, r, segments=2, angle=35):
+    """
+    Rounds a part's outside edges (where its faces turn away from each other by more than `angle`
+    degrees) `r` U across, as a joiner eases each piece before the pieces are joined; its inside
+    corners stay as they meet. A part on its own has room for the full round on every edge.
+    """
+    if r <= 0:
+        return ob
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    weight = bm.edges.layers.float.get('bevel_weight_edge') or bm.edges.layers.float.new('bevel_weight_edge')
+    for e in bm.edges:
+        turn = e.calc_face_angle_signed(0.0) if len(e.link_faces) == 2 else 0.0
+        e[weight] = 1.0 if turn > math.radians(angle) else 0.0
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
+    b = ob.modifiers.new('ease', 'BEVEL')
+    b.width = r * U
+    b.segments = segments
+    b.limit_method = 'WEIGHT'
+    b.use_clamp_overlap = True
+    apply_all(ob)
+    ob.data.attributes.remove(ob.data.attributes['bevel_weight_edge'])
+    return smooth(ob)
+
+
+def block(name, x0, y0, z0, x1, y1, z1, mat, r=0.0):
+    """A box from (x0, y0, z0) to (x1, y1, z1), its edges eased `r` U round."""
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=1.0)
     lo, hi = P(x0, y0, z1), P(x1, y1, z0)
     for v in bm.verts:
         v.co = Vector(tuple(lo[k] + (v.co[k] + 0.5) * (hi[k] - lo[k]) for k in range(3)))
-    return _object(name, bm, mat)
+    return ease(_object(name, bm, mat), r)
 
 
-def prism(name, pts, axis, a0, a1, mat):
-    """An outline `pts` extruded from a0 to a1 along `axis`: 'x' (the outline in z, y), 'z' (in x, y) or 'y' (in x, z)."""
+def prism(name, pts, axis, a0, a1, mat, r=0.0):
+    """
+    An outline `pts` extruded from a0 to a1 along `axis`: 'x' (the outline in z, y), 'z' (in x, y) or
+    'y' (in x, z); its edges eased `r` U round.
+    """
     def at(u, v, a):
         return P(u, v, a) if axis == 'z' else P(a, v, u) if axis == 'x' else P(u, a, v)
     bm = bmesh.new()
@@ -89,7 +120,7 @@ def prism(name, pts, axis, a0, a1, mat):
         j = (i + 1) % len(pts)
         bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return _object(name, bm, mat)
+    return ease(_object(name, bm, mat), r)
 
 
 def lathe(name, prof, seg, mat, at=(0, 0, 0), squash=(1, 1)):
@@ -120,17 +151,19 @@ def lathe(name, prof, seg, mat, at=(0, 0, 0), squash=(1, 1)):
 
 
 def rod(name, a, b, r, mat, seg=12, r1=None):
-    """A round bar from a to b (kit units), its ends cut square: `r` thick (tapering to `r1` at b)."""
+    """A round bar from a to b (kit units), `r` thick (tapering to `r1` at b), the rims of its ends eased."""
     d = P(*b) - P(*a)
-    ob = lathe(name, [(0, 0), (r, 0), (r if r1 is None else r1, d.length / U), (0, d.length / U)], seg, mat)
+    n, r1 = d.length / U, r if r1 is None else r1
+    c = min(0.3, 0.3 * min(r, r1), 0.2 * n)
+    ob = lathe(name, [(0, 0), (r - c, 0), (r, c), (r1, n - c), (r1 - c, n), (0, n)], seg, mat)
     q = Vector((0, 0, 1)).rotation_difference(d.normalized())
     return transform(ob, Matrix.Translation(P(*a)) @ q.to_matrix().to_4x4())
 
 
-def band(name, path, x0, x1, t, mat):
+def band(name, path, x0, x1, t, mat, r=0.0):
     """
     A flat band from x0 to x1 laid on a surface: `path` [(z, y)] runs over the surface's outline with
-    the solid on its right, and the band stands `t` out from it to the left.
+    the solid on its right, and the band stands `t` out from it to the left, its edges eased `r` U.
     """
     n = len(path)
     out = []
@@ -148,10 +181,10 @@ def band(name, path, x0, x1, t, mat):
     for a, b in zip(rows, rows[1:]):
         for (i, j) in ((0, 1), (1, 3), (3, 2), (2, 0)):
             bm.faces.new((a[i], a[j], b[j], b[i]))
-    for r in (rows[0], rows[-1]):
-        bm.faces.new((r[0], r[1], r[3], r[2]))
+    for end in (rows[0], rows[-1]):
+        bm.faces.new((end[0], end[1], end[3], end[2]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return _object(name, bm, mat)
+    return ease(_object(name, bm, mat), r)
 
 
 def apply_all(ob):
@@ -204,39 +237,16 @@ def recolour(ob, mat, test):
     return ob
 
 
-def finish(ob, width=0.35, segments=2, angle=35):
-    """
-    Welded, its outside edges (where faces turn away from each other by more than `angle` degrees)
-    bevelled as a joiner rounds them, its inside corners left as they meet; then made watertight and
-    shaded (below).
-    """
-    bm = bmesh.new()
-    bm.from_mesh(ob.data)
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
-    weight = bm.edges.layers.float.get('bevel_weight_edge') or bm.edges.layers.float.new('bevel_weight_edge')
-    for e in bm.edges:
-        turn = e.calc_face_angle_signed(0.0) if len(e.link_faces) == 2 else 0.0
-        e[weight] = 1.0 if turn > math.radians(angle) else 0.0
-    bm.to_mesh(ob.data)
-    bm.free()
-    # (Tagged as changed, so what is evaluated next sees it.)
-    ob.data.update()
-    b = ob.modifiers.new('bevel', 'BEVEL')
-    b.width = width * U
-    b.segments = segments
-    b.limit_method = 'WEIGHT'
-    b.use_clamp_overlap = True
-    apply_all(ob)
-    watertight(ob)
-    return shade(ob)
+def finish(ob):
+    """A joined shape made watertight and shaded (below): its parts were eased before they were joined."""
+    return shade(watertight(ob))
 
 
 def shade(ob, sharp=50):
     """
-    Shaded as made: every edge where the faces turn by more than `sharp` degrees (an inside corner,
-    an edge the bevel had no room to round) kept a crisp line, the rest smooth, and each corner's
-    normal taken mostly from the broadest face there, so broad faces read flat and their rounded
-    edges blend into them.
+    Shaded as made: every edge where the faces turn by more than `sharp` degrees (an inside corner, a
+    joint, the rim of a cut) kept a crisp line, the rest smooth, and each corner's normal taken mostly
+    from the broadest face there, so broad faces read flat and their eased edges round off into them.
     """
     bm = bmesh.new()
     bm.from_mesh(ob.data)
