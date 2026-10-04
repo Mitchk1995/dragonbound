@@ -6,13 +6,14 @@ import math
 import re
 
 import bpy
-from mathutils import Matrix, Quaternion, Vector
+from mathutils import Euler, Matrix, Quaternion, Vector
 
 _strip = lambda n: re.sub(r'\.\d{3}$', '', n)
 
 IMPACT = 0.55                                  # src/data/tuning.ts COMBAT_TUNING.impact
 FOLLOW = 0.75                                  # SHOULDER_FOLLOW
 SPLAY = 0.1                                    # ARM_SPLAY
+LEG_SWING, LEG_REACH = 0.7, 0.9
 ELBOW_REST, HOLD_BEND, HOLD_WRIST, SIDE_WRIST = -0.25, -1.57, 0.17, 0.5
 BOW_OUT, BOW_CARRY, BOW_PLUMB = 0.2, -0.5, -0.2
 WIND_ARM, WIND_ELBOW, SWING_WRIST, STRIKE_ELBOW = 2.6, -1.0, 1.3, -0.15
@@ -46,17 +47,18 @@ def hold_of(weapon):
     return 'upright' if weapon.startswith('staff_') or weapon == 'u_kindled_ash' else 'side'
 
 
-def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty'):
-    """anim.ts Rig.update for a humanoid: rotation offsets {part: (x, y, z)} for the walk phase sw (sin of the stride,
-    at full speed) and attack `kind` at progress a (-1: none), the right hand carrying in `hold`, and 'lift', how far
-    the body (arms, torso and head; the legs hang from the root) rises in the stride. The bow shot's arms are placed
-    by pose_scene (anim.ts bowPose), which this marks with 'bow': a."""
-    move = 1.0 if sw else 0.0
+def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty', move=None, hurt=0.0):
+    """anim.ts Rig.update for a humanoid: rotation offsets {part: (x, y, z)} for the walk phase sw (sin of the stride)
+    at `move` of full speed (by default full speed whenever sw is not 0), `hurt` (0..1, just hit) and attack `kind` at
+    progress a (-1: none), the right hand carrying in `hold`, and 'lift', how far the body (arms, torso and head; the
+    legs hang from the root) rises in the stride. The bow shot's arms are placed by pose_scene (anim.ts bowPose),
+    which this marks with 'bow': a."""
+    move = (1.0 if sw else 0.0) if move is None else move
     fore, bow = hold in ('upright', 'bow'), hold == 'bow'     # the forearm level and forward; a bow out from the body
     swl, swr = -sw * 0.5 * move, sw * (0.15 if fore else 0.3) * move
-    p = {'body': (0.08 * move, 0, 0), 'lift': abs(sw) * 0.06 * move, 'head': (-0.05 * move, 0, 0),
+    p = {'body': (-hurt * 0.3 + 0.08 * move, 0, 0), 'lift': abs(sw) * 0.06 * move, 'head': (-0.05 * move, 0, 0),
          'armL': (swl, 0, SPLAY), 'armR': (swr, 0, -SPLAY - (BOW_OUT if bow else 0)),
-         'legL': (sw * 0.7 * move, 0, 0), 'legR': (-sw * 0.7 * move, 0, 0),
+         'legL': (sw * LEG_SWING * move, 0, 0), 'legR': (-sw * LEG_SWING * move, 0, 0),
          'elbowL': (ELBOW_REST + min(0, swl) * 0.5, 0, 0),
          'elbowR': (HOLD_BEND - swr if fore else ELBOW_REST + min(0, swr) * 0.5, BOW_CARRY if bow else 0, 0),
          'handL': (0, 0, 0),
@@ -78,7 +80,10 @@ def anim_pose(kind=None, a=-1.0, sw=0.0, hold='empty'):
             x, e = _lerp(-0.35, x0, k), _lerp(STRIKE_ELBOW, e0, k)
         w = _lerp(w0, SWING_WRIST, _ease(min(1, a / up))) if a < IMPACT else _lerp(SWING_WRIST, w0, _ease((a - IMPACT) / (1 - IMPACT)))
         p['armR'], p['elbowR'], p['handR'] = (x, 0, -SPLAY), (e, 0, 0), (w, 0, 0)
-        p['body'] = (-0.1, 0.3 * _ease(a / up), 0) if a < up else (0.15, -0.3 * (1 - a), 0)
+        p['body'] = (-0.1 if a < up else 0.15, 0, 0)
+        # The whole character turns into the swing (anim.ts: the root, legs and all), so its hips never twist against
+        # its legs. A turn of the whole moves nothing against anything else: pose_scene leaves it out.
+        p['root'] = (0, 0.3 * _ease(a / up) if a < up else -0.3 * (1 - a), 0)
     elif kind == 'slam':
         lift = _ease(a / IMPACT) if a < IMPACT else 1 - _ease((a - IMPACT) / (1 - IMPACT))
         k = _ease(a / IMPACT) if a < IMPACT else _ease((a - IMPACT) / (1 - IMPACT))
@@ -111,6 +116,29 @@ ATTACK_FRAMES = {'swing': (0.36, 0.45, 0.55, 0.67), 'slam': (0.45, 0.6), 'cast':
 
 def pose_list(kinds, hold='empty'):
     out = [('idle', anim_pose(hold=hold)), ('walk+', anim_pose(sw=1.0, hold=hold)), ('walk-', anim_pose(sw=-1.0, hold=hold))]
+    for k in kinds:
+        out += [(f'{k}@{a}', anim_pose(k, a, hold=hold)) for a in ATTACK_FRAMES[k]]
+    return out
+
+
+# The whole stride, step by step, at every lean the body takes while the legs swing (anim.ts update and attackPose):
+# walking (and so running and the dodge roll, which only stride faster), walking just hit (leaning back), and the
+# sword's wind-up and strike, in which the hero steps after a target backing out of reach (tuning.ts meleeTrack);
+# then standing, hurt and in every attack's frames. skirtcheck.py skirt_clip_all checks the legs against everything
+# hanging from the hips in all of them.
+STRIDE_STEPS = 8
+TRACK_FRAMES = (0.2, 0.4, 0.46, 0.54)
+
+
+def stride_poses(kinds=(), hold='empty', steps=STRIDE_STEPS):
+    out = []
+    for k in range(-steps, steps + 1):
+        sw = k / steps
+        out.append((f'walk {sw:+.2f}', anim_pose(sw=sw, hold=hold, move=1.0)))
+        out.append((f'walk hurt {sw:+.2f}', anim_pose(sw=sw, hold=hold, move=1.0, hurt=1.0)))
+        if 'swing' in kinds:
+            out += [(f'swing@{a} {sw:+.2f}', anim_pose('swing', a, sw=sw, hold=hold, move=1.0)) for a in TRACK_FRAMES]
+    out.append(('stand hurt', anim_pose(hold=hold, hurt=1.0)))
     for k in kinds:
         out += [(f'{k}@{a}', anim_pose(k, a, hold=hold)) for a in ATTACK_FRAMES[k]]
     return out
@@ -198,17 +226,22 @@ def bow_pose(parts, a):
 
 def pose_scene(scene, offsets):
     """Rest rotation + offsets on every rig part present, the bow shot's arms (anim.ts bowPose), then the shoulder
-    sockets follow their arms (anim.ts followShoulders)."""
+    sockets follow their arms (anim.ts followShoulders) and the hips stay level with the legs (anim.ts levelHips)."""
     parts = {_strip(o.name): o for o in scene.objects}
     for name in ('armL', 'armR', 'body'):
         if name in parts and parts[name].get('rest_loc') is None:
             parts[name]['rest_loc'] = tuple(parts[name].location)
     if 'body' in parts:
         parts['body'].location = Vector(parts['body']['rest_loc']) + Vector((0, offsets.get('lift', 0.0), 0))
+    # Legs hinged low under level hips swing further (anim.ts Rig: swing).
+    leg = parts.get('legL')
+    k = math.sqrt(LEG_REACH / leg.location.y) if 'sock_hips' in parts and leg and leg.location.y > 0 else 1.0
     for name, r in offsets.items():
         o = parts.get(name)
-        if o is None or name in ('bow', 'lift'):
+        if o is None or name in ('bow', 'lift', 'root'):
             continue
+        if name in ('legL', 'legR'):
+            r = (r[0] * k, r[1], r[2])
         base = o.get('rest_rot')
         if base is None:
             o['rest_rot'] = base = tuple(o.rotation_euler)
@@ -227,4 +260,10 @@ def pose_scene(scene, offsets):
         rest = Vector(arm['rest_loc'])
         sock.location = rest + turn @ (Vector(sock['rest_loc']) - rest)
         _set_quat(sock, turn)
+    hips, body = parts.get('sock_hips'), parts.get('body')
+    if hips and body and hips.parent is body:
+        if hips.get('rest_rot') is None:
+            hips['rest_rot'] = tuple(hips.rotation_euler)
+        rest = lambda o: Euler(o.get('rest_rot', (0, 0, 0)), 'ZYX').to_quaternion()
+        _set_quat(hips, _quat(body).inverted() @ rest(body) @ rest(hips))
     bpy.context.view_layer.update()

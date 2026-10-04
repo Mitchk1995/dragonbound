@@ -510,9 +510,9 @@ def ember_seams(S):
 
 
 def E_body(S):
-    c = S('sock_chest')
-    plate_torso(c)
-    plate_accent(c, tabard=CRIMSON, under=SLIT_E)
+    c, hips = S('sock_chest'), S('sock_hips')
+    plate_torso(c, hips)
+    plate_accent(hips, tabard=CRIMSON, under=SLIT_E)
     for s in (1, -1):
         block_pauldron(S, s, top=None, edge=None, rivets=None)
     upper_arm_plate(S, lames=False)
