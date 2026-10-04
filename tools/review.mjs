@@ -29,6 +29,7 @@ const AREAS = {
   bow: { suite: 'bow', about: 'the hero\'s bow drawn and carried from every side and at the play camera, and the goblin\'s and kobold\'s hips' },
   dragons: { suite: 'dragons', about: 'the drakeling and Cinderwing' },
   'building-kit': { suite: 'kit', about: 'the building kit\'s first hub-town house, outside, at the door, inside, close up and a street of sixteen' },
+  vfx: { suite: 'vfx:hits+spells+boss+fires+travel+angles', about: 'the visual effects mid-effect: hits, spells, Cinderwing\'s fire, the fires, travel, and the hits from other sides' },
   text: { suite: 'font,uitext', about: 'the painted alphabets and the menus\' lettering' },
   digits: { suite: 'digits', about: 'the painted damage numbers' },
   lighting: { suite: 'lighting:keep', about: 'the light round the home island' },

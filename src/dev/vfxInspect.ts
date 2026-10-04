@@ -10,10 +10,10 @@ import type { Slot } from '../types';
 /**
  * The visual effects at the play camera, mid-effect, one family at a time (dev only): weapon hits and kills, spells,
  * melee and bow skills, the potion, a level-up, loot drops, mining and the anvil, the fires, portal arrival and
- * recall. Plus frame strips of a hit and a spell (a still cannot show motion) and the frame cost of a busy fight.
+ * recall, Cinderwing's fire, and the hits again from other sides and zooms. Plus frame strips (a still cannot show
+ * motion) and the frame cost of a busy fight (vfxMotion.ts).
  *
- * Run it in the development build from the console, `shot` saving one capture under a name (in Electron, the inspect
- * API's capture): `(await import('/src/dev/vfxInspect.ts')).vfxSuite(__game, shot, ['hits'])`.
+ * `npm run inspect -- vfx` runs every family, `npm run inspect -- vfx:hits+boss` some of them.
  * It drives only the game's own actions (attacks, skills, the potion, drops, mining), never the effects directly, so
  * the same suite captures any version of them. The simulation is stepped by hand (the frame loop only draws): each
  * capture is timed from the moment its blow lands or its spell goes off, so it is mid-effect in any version.
@@ -22,19 +22,11 @@ import type { Slot } from '../types';
 export type Shot = (name: string) => Promise<void>;
 
 /** Every family, in the order they run. */
-export const VFX_FAMILIES = ['hits', 'spells', 'skills', 'potion', 'levelup', 'loot', 'mining', 'fires', 'travel', 'boss', 'strips', 'lightfx', 'perf'] as const;
+export const VFX_FAMILIES = ['hits', 'spells', 'skills', 'potion', 'levelup', 'loot', 'mining', 'fires', 'travel', 'boss', 'angles', 'strips', 'lightfx', 'perf'] as const;
 export type VfxFamily = (typeof VFX_FAMILIES)[number];
 
-const raf = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
-
-/**
- * The busy fight's frame cost: CPU (update and draw submitted) and GPU (the whole render), medians and the GPU's 95th
- * percentile, and what the effects alone cost of it on the GPU.
- */
-interface Cost { cpuMs: number; gpuMs: number; gpuP95: number; fxMs: number }
-
 /** Stepping the game by hand and capturing at times after a moment. */
-interface Clock {
+export interface Clock {
   step(secs: number): void;
   /** Step until `cond` holds (at most `max` seconds). */
   until(cond: () => boolean, max?: number): void;
@@ -99,13 +91,15 @@ export async function vfxSuite(g: Game, shot: Shot, only: readonly string[] = []
       const p = arena(g, 'steel_sword', 0);
       p.stop();
       g.recall();
-      await c.at('recall', [0.6, 1.4]);
+      await c.at('recall', [0.5, 1.5, 2.5]);
       g.recallT = -1;
     }
     if (want('boss')) await boss(g, c);
-    if (want('strips')) await strips(g, c);
+    if (want('angles')) await angles(g, c);
+    const motion = want('strips') || want('perf') ? await import('./vfxMotion') : null;
+    if (motion && want('strips')) await motion.strips(g, c);
     if (want('lightfx')) await withLightFx(g, c);
-    if (want('perf')) report.perf = await busyFight(g);
+    if (motion && want('perf')) report.perf = await motion.busyFight(g);
   } finally {
     g.debug.hold = held;
     style.remove();
@@ -168,11 +162,11 @@ function openGround(g: Game) {
 }
 
 /**
- * The open clearing (openGround) with the hero `dz` south of its middle and `targets` goblins ahead of him: emptied
- * of other enemies and drops, the hero holding `weapon` with full mana and no cooldowns, the camera on him, the
- * first goblin hovered and aimed at.
+ * The open clearing (openGround) with the hero `dz` south of its middle and `targets` goblins ahead of him (the first
+ * at `first` from him, if given): emptied of other enemies and drops, the hero holding `weapon` with full mana and no
+ * cooldowns, the camera on him, the first goblin hovered and aimed at.
  */
-function arena(g: Game, weapon: string, targets: number, dz = 2) {
+export function arena(g: Game, weapon: string, targets: number, dz = 2, first?: [number, number]) {
   if (g.zone.def.id !== 'foothills') g.travel('foothills', true);
   const mid = openGround(g);
   for (const e of g.zone.enemies) {
@@ -194,7 +188,7 @@ function arena(g: Game, weapon: string, targets: number, dz = 2) {
   g.combat.mana = Infinity;
   g.debug.oneShot = false;
   g.camPos.copy(p.pos);
-  const spots: [number, number][] = [[0, -3.2], [-1.6, -4.2], [1.7, -4.4]];
+  const spots: [number, number][] = [first ?? [0, -3.2], [-1.6, -4.2], [1.7, -4.4]];
   const list = spots.slice(0, targets).map(([dx, dz2]) => g.combat.spawnEnemy('goblin', p.x + dx, p.z + dz2, null));
   pins.length = 0;
   for (const t of list) {
@@ -215,7 +209,7 @@ function aim(g: Game, t: Enemy) {
 }
 
 /** Until the goblin is struck (or dies). */
-const struck = (t: Enemy) => () => t.dead || t.hp < t.maxHp;
+export const struck = (t: Enemy) => () => t.dead || t.hp < t.maxHp;
 /** Until the hero's current action lands its blow. */
 const landed = (g: Game) => () => !g.player.action || g.player.action.done;
 /** Until a missile of the hero's has flown `d`. */
@@ -223,9 +217,9 @@ const flying = (g: Game, d: number) => () => g.zone.projectiles.some((p) => p.o.
 
 // ─── Families ───────────────────────────────────────────────────────────────
 
-/** A basic attack on one goblin (`crit`: every blow a critical). */
-function swing(g: Game, weapon: string, crit = false) {
-  arena(g, weapon, 1);
+/** A basic attack on one goblin (`crit`: every blow a critical), standing at `at` from the hero if given. */
+export function swing(g: Game, weapon: string, crit = false, at?: [number, number]) {
+  arena(g, weapon, 1, 2, at);
   const t = g.zone.enemies[0];
   if (crit) g.stats.critChance = 1;
   g.combat.startBasicAttack(t);
@@ -334,7 +328,7 @@ async function mining(g: Game, c: Clock) {
  * Where the zone's fires burn: every flame of its props (torches, braziers, campfires, hearths), one spot per fire
  * (a fire's tongues gathered), west to east.
  */
-function fireSpots(g: Game) {
+export function fireSpots(g: Game) {
   const spots: THREE.Vector3[] = [];
   const at = new THREE.Vector3();
   g.zone.group.updateMatrixWorld(true);
@@ -363,20 +357,22 @@ async function fires(g: Game, c: Clock) {
   }
 }
 
-/** Cinderwing's fire: its breath mid-burn, the meteors it rains in flight, its tail slam's dust. */
-async function boss(g: Game, c: Clock) {
+/**
+ * Cinderwing's lair at the play camera's farthest zoom, the hero south of the dragon: `reset` puts them back and
+ * clears what is in the air, `act` starts one of its attacks (in its second phase for its flight); `done` ends it.
+ */
+export function lair(g: Game, c: Clock) {
   g.travel('lair', true);
   const L = g.zone.layout, p = g.player;
   const e = g.zone.enemies.find((x) => x.def.behavior === 'boss');
-  if (!e?.boss || !L.boss) return;
-  const b = e.boss;
-  const zoom = g.camZoom;
+  if (!e?.boss || !L.boss) return null;
+  const b = e.boss, home = L.boss, zoom = g.camZoom;
   g.camZoom = 1.35;
   const reset = () => {
-    p.pos.set(L.boss!.x, g.zone.groundY(L.boss!.x, L.boss!.z + 6), L.boss!.z + 6);
+    p.pos.set(home.x, g.zone.groundY(home.x, home.z + 6), home.z + 6);
     p.stop();
     g.camPos.copy(p.pos);
-    e.pos.set(L.boss!.x, e.pos.y, L.boss!.z);
+    e.pos.set(home.x, e.pos.y, home.z);
     e.faceTo(p.x, p.z, true);
     for (const t of g.zone.telegraphs) t.done = true;
     g.zone.hazards = [];
@@ -384,65 +380,60 @@ async function boss(g: Game, c: Clock) {
   };
   reset();
   c.step(0.5); // engage
-  const cases: [ActionKind, number[]][] = [['breath', [1.7, 2.3]], ['tail', [1.6]], ['flight', [4, 6.5]]];
+  return {
+    reset,
+    act(kind: ActionKind) {
+      reset();
+      b.action = null;
+      b.actionCd = 99;
+      if (kind === 'flight') b.phase = 2;
+      startAction(e, b, kind, g);
+    },
+    done() {
+      b.action = null;
+      g.camZoom = zoom;
+    },
+  };
+}
+
+/** Cinderwing's fire: its breath mid-burn, the meteors it rains in flight, its tail slam's dust. */
+async function boss(g: Game, c: Clock) {
+  const den = lair(g, c);
+  if (!den) return;
+  const cases: [ActionKind, number[]][] = [['breath', [1.7, 2.3]], ['tail', [1.6]], ['flight', [3, 4, 6.5]]];
   for (const [kind, times] of cases) {
-    reset();
-    b.action = null;
-    b.actionCd = 99;
-    if (kind === 'flight') b.phase = 2;
-    startAction(e, b, kind, g);
+    den.act(kind);
     await c.at(`boss-${kind}`, times);
     c.step(2);
   }
-  b.action = null;
-  g.camZoom = zoom;
+  den.done();
 }
 
 /**
- * Frame strips (a still cannot show motion): a sword hit and a fireball, a capture every 1/30 s through each, from
- * just before the blow lands, with where the effect stands on screen written beside them for cropping. Each is played
- * once to time its blow, then again to capture.
+ * The hits from other sides and zooms: a blow, a critical, an arrow and a kill on a goblin east of the hero and on
+ * one between him and the camera, and at the nearest and the farthest zoom.
  */
-async function strips(g: Game, c: Clock) {
-  const boxes: Record<string, number[]> = {};
-  const box = (name: string, x: number, y: number, z: number, r: number) => {
-    const v = new THREE.Vector3(x, y, z).project(g.camera);
-    const cv = g.renderer.domElement, w = cv.clientWidth, h = cv.clientHeight;
-    const px = (r / (2 * Math.tan(THREE.MathUtils.degToRad(g.camera.fov / 2)) * g.camera.position.distanceTo(new THREE.Vector3(x, y, z)))) * h;
-    boxes[name] = [((v.x + 1) / 2) * w - px, ((1 - v.y) / 2) * h - px, px * 2, px * 2];
-  };
-  const timed = (start: () => Enemy, done: (t: Enemy) => () => boolean) => {
-    const t = start();
-    let n = 0;
-    c.until(() => (n++, done(t)()));
-    c.step(1.5);
-    return n / 60;
-  };
-  const sword = () => swing(g, 'steel_sword');
-  const blow = timed(sword, struck);
-  const t = sword();
-  c.step(Math.max(0, blow - 0.08));
-  box('strip-hit', t.x, 1, t.z, 2.2);
-  for (let i = 0; i < 10; i++) {
-    await c.shot(`vfx-strip-hit-${String(i).padStart(2, '0')}`);
-    c.step(1 / 30);
+async function angles(g: Game, c: Clock) {
+  const views: [string, [number, number], number][] = [['east', [3, 0], 1], ['south', [0, 2.6], 1], ['near', [0, -3.2], 0.65], ['far', [0, -3.2], 1.35]];
+  try {
+    for (const [view, at, zoom] of views) {
+      g.camZoom = zoom;
+      for (const [name, weapon, crit] of [['hit', 'steel_sword', false], ['crit', 'steel_sword', true], ['arrow', 'worn_bow', false]] as const) {
+        const t = swing(g, weapon, crit, at);
+        c.until(struck(t));
+        await c.at(`${view}-${name}`, [0.05]);
+        c.step(1);
+      }
+      const t = swing(g, 'steel_sword', false, at);
+      g.debug.oneShot = true;
+      c.until(() => t.dead);
+      await c.at(`${view}-kill`, [0.15]);
+      g.debug.oneShot = false;
+      c.step(1);
+    }
+  } finally {
+    g.camZoom = 1;
   }
-  c.step(1.5);
-  const fireball = () => {
-    arena(g, 'apprentice_staff', 3);
-    g.combat.useAbility('Q');
-    return g.zone.enemies[0];
-  };
-  const boom = timed(fireball, struck);
-  const f = fireball();
-  c.step(Math.max(0, boom - 0.2));
-  box('strip-spell', f.x, 1, f.z + 0.6, 3.6);
-  for (let i = 0; i < 12; i++) {
-    await c.shot(`vfx-strip-spell-${String(i).padStart(2, '0')}`);
-    c.step(1 / 20);
-  }
-  c.step(1.5);
-  await window.electronAPI?.inspect?.write('vfx-strips.json', JSON.stringify(boxes));
 }
 
 /**
@@ -462,63 +453,4 @@ async function withLightFx(g: Game, c: Clock) {
   } finally {
     g.setLighting(was);
   }
-}
-
-/**
- * The frame cost of a busy fight at the play camera: a dozen goblins round the hero while he fights with each weapon
- * style, every skill fired as soon as it is ready. Each frame advances the game 1/60 s and is drawn and timed on the
- * GPU (the renderer's timestamps, the whole render; the frame loop held off meanwhile). Every other run of 50 frames
- * is drawn with the effects hidden (the particle pools, and every effect the scene holds by name), so their own cost
- * is the difference, measured under the same load (the first frames of each run are dropped: the timestamps arrive
- * late).
- */
-async function busyFight(g: Game) {
-  const out: Record<string, Cost> = {};
-  const r = g.renderer;
-  const med = (x: number[]) => (x.length ? x.slice().sort((a, b) => a - b)[Math.floor(x.length / 2)] : NaN);
-  const p95 = (x: number[]) => (x.length ? x.slice().sort((a, b) => a - b)[Math.floor(x.length * 0.95)] : NaN);
-  const effects = () => [g.glow.mesh, g.particles.mesh, ...g.scene.children.filter((o) => o.name.startsWith('fx-'))];
-  const held = g.debug.hold;
-  g.debug.hold = () => true;
-  try {
-    for (const weapon of ['steel_sword', 'apprentice_staff', 'worn_bow']) {
-      const p = arena(g, weapon, 0);
-      const foes = Array.from({ length: 12 }, (_, i) => {
-        const a = (i / 12) * Math.PI * 2, rr = 2.2 + (i % 3) * 0.9;
-        return g.combat.spawnEnemy('goblin', p.x + Math.cos(a) * rr, p.z - 1.5 + Math.sin(a) * rr, null, true);
-      });
-      for (let i = 0; i < 30; i++) g.update(1 / 60);
-      const cpu: number[] = [], gpu: number[] = [], bare: number[] = [];
-      await r.resolveTimestampsAsync('render');
-      for (let i = 0; i < 300; i++) {
-        for (const e of foes) if (e.dead) e.hp = e.maxHp; // keep the crowd alive
-        g.combat.mana = Infinity;
-        p.hp = g.stats.maxHp;
-        const live = foes.filter((e) => !e.dead);
-        const target = live[i % Math.max(1, live.length)] ?? null;
-        if (target) {
-          g.hovered = target;
-          g.ground.set(target.x, 0, target.z);
-        }
-        // Every skill as soon as it is ready (a skill on cooldown does nothing), else a basic attack.
-        for (const key of ['Q', 'W', 'E'] as const) if (!p.action && !p.dash) g.combat.useAbility(key, true);
-        if (!p.action && !p.dash && p.attackCd <= 0) g.combat.startBasicAttack(target);
-        const t0 = performance.now();
-        g.update(1 / 60);
-        const hide = Math.floor(i / 50) % 2 === 1, fx = effects(), shown = fx.map((o) => o.visible);
-        if (hide) for (const o of fx) o.visible = false;
-        g.draw();
-        if (hide) fx.forEach((o, k) => (o.visible = shown[k]));
-        const settled = i % 50 >= 4;
-        if (settled && !hide) cpu.push(performance.now() - t0);
-        const ms = await r.resolveTimestampsAsync('render');
-        if (ms && settled) (hide ? bare : gpu).push(ms);
-        await raf();
-      }
-      out[weapon] = { cpuMs: +med(cpu).toFixed(2), gpuMs: +med(gpu).toFixed(2), gpuP95: +p95(gpu).toFixed(2), fxMs: +(med(gpu) - med(bare)).toFixed(2) };
-    }
-  } finally {
-    g.debug.hold = held;
-  }
-  return out;
 }
