@@ -75,16 +75,18 @@ fixed-colour ember seams glowing in the gaps between the cuirass slabs and under
 visor slit). `export_variant('<set>')` writes them straight into `public/models`.
 
 ## Hair & beards: `hair_<1..4>.glb`, `beard_<1..3>.glb`
-One `sock_head` empty; meshes use `ROLE_hair`. Every hairstyle is ONE sculpted hair mesh (`hair.py` `Mass`), never a base
-cap with wigs or locks stacked on top: a grid of flow lines over the scalp from the hairline to a pole (crown whorl or
-nape), shaped only by moving its points (volume, lock ridges, tips, spikes; the tied style's tail carries on from the
-pole in the same surface; only its leather tie is a separate part). The head is a cube, so the scalp is a rounded box
-that wraps its corners; `check_cover` refuses a mass that would let the head show through above the hairline (bald
-patches), and `tests/character-art.test.ts` checks the exported hair from outside and that each style is one mesh.
-The edge of the hair sits on the skin (`hug`: the closer a point is to the hairline, the more it is pulled onto the
-head), so no shell floats off the head with a dark gap under it, and `even_rim` spaces the flow lines evenly along
-the hairline. Every hairline point must be reachable from the pole without crossing bare skin: with a pole low behind
-the head the side lines run level, so the temples cannot come lower than the hair over the ear.
+One `sock_head` empty; `ROLE_hair` (a tie, mouth or beads are faces of the same mesh). Every style and beard is ONE
+moulded piece, as LEGO hair is, never locks stacked on a cap and never hair curves; only the tied style's tail is a
+second piece, on a joint of its own at the tie (below). Each is a low-poly cage over a head proxy, its locks parted by
+pressed-in, creased grooves, under Subdivision Surface at one level (chunky) and Shrinkwrap, applied (`hair_cage.py`). A
+hair cage runs from the hairline to one pole (a crown whorl, or the tie); a beard's runs round the jaw. Its edge is set
+on the skin (tucked just under it where it has no wall), so no gap shows under it, and the rest kept clear of the head;
+every hairline point must be reachable from the pole without crossing bare skin. The grooves are geometry, so the bake
+shades them. The tied style's tail hangs from a `ponytail` empty at the foot of the tie, its top a ball turning in a
+socket inside the band, and `ponytail.ts` swings it: it hangs with gravity and leans back over the shoulder as the head
+turns. Hair at the Ashen Crown's band runs in under it; beards hang in front of every collar and stop at the chest.
+`hair.py` refuses bald patches, `tests/hair.test.ts` checks the exports, and `haircheck.py` audits every style under
+each headgear and in every pose and armour.
 
 ## The minifigure body: `minifig.py`
 Every humanoid shares one minifigure body, the way LEGO does it (owner, October 4): the hero's own torso, hips, legs,

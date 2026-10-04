@@ -350,3 +350,31 @@ def pose_scene(scene, offsets):
         rest = lambda o: Euler(o.get('rest_rot', (0, 0, 0)), 'ZYX').to_quaternion()
         _set_quat(hips, _quat(body).inverted() @ rest(body) @ rest(hips))
     bpy.context.view_layer.update()
+    ponytail(scene, parts)
+
+
+# The tied hair's tail (src/render/ponytail.ts, the same names and values), settled: no follow-through in a still pose.
+PONYTAIL = 'ponytail'
+PONYTAIL_BACK, PONYTAIL_OUT = math.radians(55), math.radians(10)
+
+
+def ponytail(scene, parts):
+    """ponytail.ts Ponytail.update, settled: the tail (hair.py hair_3, on its pivot at the foot of the tie) turns with
+    the head but hangs from the tie in the root's frame, leaning back and out over the shoulder as far as the tie has
+    come round to it (ponytailHang), and resting on the back as the body leans forward."""
+    tail, head = parts.get(PONYTAIL), parts.get('head')
+    if tail is None or head is None:
+        return
+    root = next(o for o in scene.objects if o.parent is None and _strip(o.name).endswith('_root'))
+    bpy.context.view_layer.update()
+    q_root = root.matrix_world.to_quaternion()
+    front = (q_root.inverted() @ head.matrix_world.to_quaternion()) @ Vector((0, 0, 1))
+    turn = math.atan2(front.x, front.z)
+    s = math.sin(turn)
+    hang = (Quaternion((0, 0, 1), -PONYTAIL_OUT * s) @ Quaternion((1, 0, 0), PONYTAIL_BACK * abs(s))
+            @ Quaternion((0, 1, 0), turn))
+    body = parts.get('body')
+    up = (q_root.inverted() @ body.matrix_world.to_quaternion()) @ Vector((0, 1, 0)) if body else Vector((0, 1, 0))
+    lean = Quaternion((1, 0, 0), max(0.0, math.atan2(up.z, up.y)))
+    _set_quat(tail, tail.parent.matrix_world.to_quaternion().inverted() @ q_root @ lean @ hang)
+    bpy.context.view_layer.update()

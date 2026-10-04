@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { COMBAT_TUNING } from '../data/tuning';
 import { bowDrawAmount } from './bowDraw';
+import { Ponytail } from './ponytail';
 
 export type AttackKind = 'swing' | 'bow' | 'cast' | 'bite' | 'slam' | 'throw';
 
@@ -150,6 +151,8 @@ export class Rig {
   private basePos = new Map<THREE.Object3D, THREE.Vector3>();
   private phase = 0;
   private time = Math.random() * 10;
+  /** The tied hair's tail, swung after the pose (ponytail.ts). */
+  private readonly ponytail = new Ponytail();
   readonly quadruped: boolean;
   /** How far the legs swing either way at a run (see LEG_SWING). */
   private readonly swing: number = LEG_SWING;
@@ -315,6 +318,7 @@ export class Rig {
     else if (bow && this.stance > 0) this.bowPose(1);
     this.followShoulders();
     this.levelHips();
+    this.ponytail.update(this.root, this.parts.get('head'), this.parts.get('body'), this.parts.get('sock_head'), dt);
   }
 
   /** How far the string of the bow in the hand lies from its grip (BowDraw measures it; BOW_DEPTH before it has). */
