@@ -18,7 +18,6 @@ const IGNORED = new Set(['node_modules', 'previews', '__pycache__']);
 const ALLOWED = {
   'docs/CASTLE_DESIGN.md': 29410,
   'src/data/zoneMaps.ts': 1779,
-  'src/dev/approvedInspect.ts': 823,
   'src/dev/inspect.ts': 1181,
   'src/dev/treeLineup.ts': 1042,
   'src/game.ts': 966,
@@ -35,7 +34,6 @@ const ALLOWED = {
   'src/world/terrain.ts': 1241,
   'src/world/treeGrowth.ts': 1438,
   'src/world/worldView.ts': 1319,
-  'tests/balance/sim.ts': 608,
   'tests/castle-geometry.test.ts': 879,
   'tools/blender/_common.py': 728,
   'tools/blender/gear.py': 1079,
