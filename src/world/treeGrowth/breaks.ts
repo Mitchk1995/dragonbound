@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clamp, mulberry32 } from '../../core/rng';
 import { along, normalOn, pointOn, tangentOn, type Limb } from './skeleton';
 
-/** A snapped limb's end (Limb.broken, a dead tree's: deadwood.ts), as the wood mesh builds it (wood.ts). */
+// A snapped limb's end (Limb.broken, a dead tree's: deadwood.ts), as the wood mesh builds it (wood.ts).
 
 /** How far a snapped limb's splinters stand past its last ring (m): about two of its radii, never more than a quarter of it. */
 export const breakLength = (L: Limb, len: number) => Math.min(len * 0.25, Math.max(0.05, L.radius[L.radius.length - 1] * 2));

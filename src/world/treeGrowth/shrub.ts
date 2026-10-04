@@ -17,8 +17,8 @@ import { TRUNK_FOOT } from './trunkFoot';
 
 /**
  * A broadleaf bush about 1.6 m tall and 2.1 m across at its own size (the woods set them at half to
- * full size): five to seven stems leaving its root crown under the ground, a dome of leaf sprays
- * reaching down to the grass.
+ * full size, and a quarter lower): five to seven stems leaving its root crown under the ground, a
+ * dome of leaf sprays reaching down to the grass.
  */
 export const BUSH: Species = {
   height: [1.45, 1.7],

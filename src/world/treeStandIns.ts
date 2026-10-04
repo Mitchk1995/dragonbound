@@ -44,7 +44,10 @@ export const DEAD_ASH_LOOK: GrownLook = {
   palette: [0x9a958c],
 };
 
-/** The bushes: summer greens. */
+/**
+ * The bushes. The woods' undergrowth pass sets each bush's size and tint (the zone's own greens);
+ * its size, spacing and palette here are what a bush staged on its own takes (the inspect lineup).
+ */
 export const BUSH_LOOK: GrownLook = {
   trunk: (m, w) => grownBark(m, w, BUSH_BARK),
   canopy: (m, w) => grownLeaves(m, w, 'bush'),

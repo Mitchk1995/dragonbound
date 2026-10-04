@@ -29,12 +29,12 @@ function plant(g: Game, stage: THREE.Group, part: GrownStandIn, v: number, x: nu
 
 /** Where a zone's grown dead ash, bushes and grown trees stand (their instances; a tree's `r` the reach of its crown). */
 function standing(g: Game) {
-  const ts = treeSet(), ash = new Set(ts.grown!.ash.trunk), crowns = new Map(GROWN_KINDS.flatMap((k) => grownTrees(k).canopy.map((c) => [c, GROWN[k].species.spread[1] / 2] as const)));
+  const ts = treeSet(), ash = new Set(ts.grown!.ash.trunk), bush = new Set(ts.grown!.bush.canopy), crowns = new Map(GROWN_KINDS.flatMap((k) => grownTrees(k).canopy.map((c) => [c, GROWN[k].species.spread[1] / 2] as const)));
   const out = { ash: [] as THREE.Vector3[], bush: [] as THREE.Vector3[], tree: [] as (THREE.Vector3 & { r?: number })[] };
   const m = new THREE.Matrix4(), sc = new THREE.Vector3();
   g.zone.group.traverse((o) => {
     if (!(o instanceof THREE.InstancedMesh)) return;
-    const list = ash.has(o.geometry) ? out.ash : o.name === 'bush' && o.material instanceof THREE.MeshStandardMaterial && o.material.alphaTest > 0 ? out.bush : crowns.has(o.geometry) ? out.tree : null;
+    const list = ash.has(o.geometry) ? out.ash : bush.has(o.geometry) ? out.bush : crowns.has(o.geometry) ? out.tree : null;
     for (let i = 0; list && i < o.count; i++) {
       o.getMatrixAt(i, m);
       list.push(Object.assign(new THREE.Vector3().setFromMatrixPosition(m), list === out.tree ? { r: crowns.get(o.geometry)! * sc.setFromMatrixScale(m).x } : {}));
@@ -135,16 +135,20 @@ export async function bushesSuite(g: Game, shot: Shot, opts: string[] = []) {
       return false;
     };
     await frames(3);
+    // (Labels large enough to read on a review sheet, centred under what they name.)
     const ov = overlay();
     const label = (text: string, p: THREE.Vector3, dz: number) => {
-      const q = p.clone().add(new THREE.Vector3(0, 0, dz)).project(g.camera);
-      ov.label(text, ((q.x + 1) / 2) * innerWidth - 30, ((1 - q.y) / 2) * innerHeight);
+      const q = p.clone().add(new THREE.Vector3(0, 0, dz)).project(g.camera), l = document.createElement('div');
+      l.className = 'lbl';
+      l.textContent = text;
+      Object.assign(l.style, { left: `${((q.x + 1) / 2) * innerWidth}px`, top: `${((1 - q.y) / 2) * innerHeight}px`, transform: 'translateX(-50%)', font: "700 22px 'Alegreya Sans', sans-serif" });
+      ov.el.appendChild(l);
     };
-    label('oak', oak, 6);
-    label('common tree', tree, 3.5);
+    label('oak', oak, 2.5);
+    label('common tree', tree, 2);
     ashes.forEach((p, v) => label(`dead ash ${v + 1}`, p, 3));
-    bushes.forEach((p, v) => label(`bush ${v + 1}`, p, 1.8));
-    label('bushes at half size', small[1], 1.4);
+    bushes.forEach((p, v) => label(`bush ${v + 1}`, p, 1.9));
+    label('bushes at half size', small[1], 1.5);
     await shot('bushes-lineup');
     ov.el.remove();
     out.lineup = await measure(g);
