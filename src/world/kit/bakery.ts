@@ -103,7 +103,7 @@ export const TRIMMER_Z = STAIR.z1;
 export const inWell = (x: number, z: number) => x >= STAIR.well[0] && x < STAIR.well[1] && z >= STAIR.well[2] && z < STAIR.well[3];
 
 /** A bay of an upper wall between two posts: a window, a braced panel, or two panels on a middle rail. */
-export interface Bay {
+interface Bay {
   from: number;
   to: number;
   kind: 'window' | 'braced' | 'railed';

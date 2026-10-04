@@ -11,7 +11,7 @@ import type { Rot } from './scale';
 export type Box = [number, number, number, number, number, number];
 
 /** A sloping face: its height at the low end of `axis` and at the high end. */
-export interface Slope {
+interface Slope {
   axis: 'x' | 'z';
   at0: number;
   at1: number;

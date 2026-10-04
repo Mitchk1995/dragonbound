@@ -4,13 +4,16 @@ maker or a smith would shape it: one continuous, watertight shape, never parts p
 another. Carcasses are box-modelled: blocks boolean-unioned into one, then cut (panels recessed with
 raised fields, doors and lids jointed, feet notched). Round things are lathed, iron bars swept, soft
 furnishings rounded by subdivision, and the bed's blanket is draped over the bedding by cloth
-simulation. Each shape is cleaned (coplanar faces merged) and bevelled. Things that really are
-separate stay separate shapes, resting on each other: a chest's iron bands, the bedding on a bed.
+simulation. Each shape is welded, its outside edges bevelled, and refused unless it is closed all
+round. Things that really are separate stay separate shapes, resting on each other: a chest's iron
+bands, the bedding on a bed.
 
 A face's material names its surface and the way the wood's grain runs on it (`oak.x`: oak, the grain
 along x); the game maps them to its textures. Sizes are in kit units on three.js axes (kit_shapes.py).
 
-Run from the checkout (deterministic; re-export whenever a prop changes), into public/models/kit_props.glb:
+Run from the checkout with Blender 5.2 (reproducible on the same Blender build: booleans, bevels and the cloth
+simulation may come out a little differently on another), re-exporting whenever a prop changes, into
+public/models/kit_props.glb:
     set DRAGONBOUND_ROOT=<checkout>
     blender -b --factory-startup --python tools/blender/kit_props.py
 """
@@ -22,6 +25,9 @@ import bpy
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kit_shapes import U, M, attach, band, block, cut, drape, elbow, finish, half, lathe, prism, recolour, remove, rod, seat, soft, transform, union, watertight  # noqa: E402
+
+if bpy.app.version[:2] != (5, 2):
+    raise RuntimeError(f'kit_props.py is made with Blender 5.2 (D:/pokemon/tools/blender-5.2.2); this is {bpy.app.version_string}')
 
 ROOT = os.environ.get('DRAGONBOUND_ROOT') or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, 'public', 'models', 'kit_props.glb')
@@ -146,9 +152,10 @@ def chest():
     finish(ob, 0.3)
     # (Up the back, over the lid and down the front, the chest on the band's right.)
     path = [(-D, 0.6), (-D, 19), *arch[:1:-1], (D, 19), (D, 0.6)]
-    iron = band('chest3 iron', path, -18.2, -15.8, 0.4, 'iron')
-    union(iron, band('band', path, 15.8, 18.2, 0.4, 'iron'), block('lock', -2.2, 13.5, D, 2.2, 18.6, D + 0.5, 'iron'))
-    attach(finish(iron, 0.12, 1), ob)
+    # (Each band and the lock plate a shape of its own, lying on the chest.)
+    for x in (-17, 17):
+        attach(finish(band('chest3 band', path, x - 1.2, x + 1.2, 0.4, 'iron'), 0.12, 1), ob)
+    attach(finish(block('chest3 lock', -2.2, 13.5, D, 2.2, 18.6, D + 0.5, 'iron'), 0.12, 1), ob)
     return ob
 
 

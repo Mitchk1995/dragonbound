@@ -23,7 +23,7 @@ export interface Placed {
   part: string;
 }
 
-export interface PlaceOpts {
+interface PlaceOpts {
   rot?: Rot;
   part?: string;
 }

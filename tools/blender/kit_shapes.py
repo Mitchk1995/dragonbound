@@ -207,7 +207,8 @@ def recolour(ob, mat, test):
 def finish(ob, width=0.35, segments=2, angle=35):
     """
     Welded, its outside edges (where faces turn away from each other by more than `angle` degrees)
-    bevelled as a joiner rounds them, its inside corners left as they meet; then made watertight (below).
+    bevelled as a joiner rounds them, its inside corners left as they meet; then made watertight and
+    shaded (below).
     """
     bm = bmesh.new()
     bm.from_mesh(ob.data)
@@ -216,19 +217,36 @@ def finish(ob, width=0.35, segments=2, angle=35):
     for e in bm.edges:
         turn = e.calc_face_angle_signed(0.0) if len(e.link_faces) == 2 else 0.0
         e[weight] = 1.0 if turn > math.radians(angle) else 0.0
-        # (An inside corner stays a crisp line in the shading too.)
-        e.smooth = abs(turn) <= math.radians(angle)
     bm.to_mesh(ob.data)
     bm.free()
+    # (Tagged as changed, so what is evaluated next sees it.)
+    ob.data.update()
     b = ob.modifiers.new('bevel', 'BEVEL')
     b.width = width * U
     b.segments = segments
     b.limit_method = 'WEIGHT'
     b.use_clamp_overlap = True
-    smooth(ob)
     apply_all(ob)
     watertight(ob)
-    # Shaded by the faces' areas: each broad face reads flat, its rounded edges blend into it.
+    return shade(ob)
+
+
+def shade(ob, sharp=50):
+    """
+    Shaded as made: every edge where the faces turn by more than `sharp` degrees (an inside corner,
+    an edge the bevel had no room to round) kept a crisp line, the rest smooth, and each corner's
+    normal taken mostly from the broadest face there, so broad faces read flat and their rounded
+    edges blend into them.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    for e in bm.edges:
+        e.smooth = len(e.link_faces) == 2 and e.calc_face_angle(0.0) <= math.radians(sharp)
+    for f in bm.faces:
+        f.smooth = True
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
     wn = ob.modifiers.new('normals', 'WEIGHTED_NORMAL')
     wn.mode = 'FACE_AREA'
     wn.weight = 100
@@ -250,6 +268,7 @@ def watertight(ob):
     bad = [(e.verts[0].co + e.verts[1].co) / 2 for e in bm.edges if not e.is_manifold]
     bm.to_mesh(ob.data)
     bm.free()
+    ob.data.update()
     if bad:
         c = bad[0]
         raise RuntimeError(f'{ob.name} is not watertight: {len(bad)} open or shared edges, one at ({c.x / U:.1f}, {c.z / U:.1f}, {-c.y / U:.1f})')

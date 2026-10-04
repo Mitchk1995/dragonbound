@@ -5,7 +5,7 @@ import * as THREE from 'three';
  * pushed straight through it, every edge chamfered) and bevelled turned shapes. A chamfer is shaded
  * from one face's normal to the next, so each edge catches the light like a dressed or planed edge,
  * while the faces themselves stay flat. Every vertex also carries the stone, tile or board it
- * belongs to within its piece (`sub`, so each shows its own face of the texture) and a shade.
+ * belongs to within its piece (`sub`, so each shows its own face of the texture).
  */
 
 export type V2 = readonly [number, number];
@@ -31,8 +31,6 @@ export class Mesh3 {
   readonly idx: number[] = [];
   /** Which stone, tile or board of its piece each vertex belongs to. */
   readonly sub: number[] = [];
-  /** A shade on each vertex (1 lit as is; less where the face sits in a recess). */
-  readonly shade: number[] = [];
   /** Texture coordinates, where a shape carries its own (a plant's cards). */
   readonly uv: number[] = [];
 
@@ -48,7 +46,6 @@ export class Mesh3 {
     this.pos.push(x, y, z);
     this.nor.push(nx, ny, nz);
     this.sub.push(0);
-    this.shade.push(1);
     return this.pos.length / 3 - 1;
   }
 
@@ -87,7 +84,6 @@ export class Mesh3 {
       this.nor.push(w3.x, w3.y, w3.z);
     }
     this.sub.push(...o.sub);
-    this.shade.push(...o.shade);
     this.uv.push(...o.uv);
     for (const i of o.idx) this.idx.push(base + i);
     return this;
@@ -101,17 +97,6 @@ export class Mesh3 {
   /** Marks every vertex as stone, tile or board `k` of its piece. */
   tag(k: number) {
     this.sub.fill(k);
-    return this;
-  }
-
-  /** Multiplies the shade of the vertices `which` picks (by position and normal) by `f`. */
-  darken(f: number, which: (p: THREE.Vector3, n: THREE.Vector3) => boolean = () => true) {
-    const p = new THREE.Vector3(), n = new THREE.Vector3();
-    for (let i = 0; i < this.shade.length; i++) {
-      p.fromArray(this.pos, i * 3);
-      n.fromArray(this.nor, i * 3);
-      if (which(p, n)) this.shade[i] *= f;
-    }
     return this;
   }
 
@@ -232,7 +217,7 @@ export function arc(cx: number, cy: number, rx: number, ry: number, a0: number, 
 // ─── Prisms ─────────────────────────────────────────────────────────────────
 
 /** How a prism's profile plane and its depth lie in the piece: the profile in x–y, in z–y, or flat in x–z. */
-export type Axis = 'z' | 'x' | 'y';
+type Axis = 'z' | 'x' | 'y';
 
 const AXES: Record<Axis, THREE.Matrix4> = {
   // (u, v, w) → (x, y, z): the profile in x–y, pushed along z.

@@ -38,7 +38,7 @@ function axesFor(n: number, grain: number): { u: number; v: number; end: boolean
 }
 
 /** One textured part: its mesh, surface, grain, (when it has one) its own colour, and whether it is a whole modelled shape (no stones or boards of its own to wear). */
-export interface TexturedPart {
+interface TexturedPart {
   mesh: Mesh3;
   layer: Layer;
   grain?: Grain;
@@ -103,7 +103,7 @@ function addPart(out: Arrays, { mesh, layer, grain = SURFACE[layer].grain ? 'aut
         made.set(key, j);
         out.pos.push(P[i * 3] * U, P[i * 3 + 1] * U, P[i * 3 + 2] * U);
         out.nor.push(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]);
-        const s = mesh.shade[i] * (end ? END_GRAIN : 1);
+        const s = end ? END_GRAIN : 1;
         if (color === undefined) out.col.push(s, s, s);
         else out.col.push(own.r * s, own.g * s, own.b * s);
         out.kit.push((P[i * 3 + u] * U) / tile, (P[i * 3 + v] * U) / tile, li, mesh.sub[i] + (color === undefined ? 0 : FIXED));

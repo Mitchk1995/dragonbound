@@ -204,13 +204,13 @@ export const ridgeEl = (w: number) => {
 
 // ─── Windows, doors, shutters ───────────────────────────────────────────────
 
-/** A window `w` cells wide and `h` steps tall: an oak frame in the wall's middle, glazing bars and glass. */
+/** A window `w` cells wide and `h` steps tall: an oak frame in the wall's middle, glazing bars (if it has more than one pane) and glass. */
 export const windowEl = (w: number, h: number, cols: number, rows: number, bars: number) => def({
   id: `window${w}x${h}_${cols}x${rows}_${bars}`, name: `Window ${w} × ${h}`, w, d: 1, h, kind: 'frame',
   claims: [boxClaim(-half(w), 0, -FRAME_D, half(w), h * STEP_U, FRAME_D)],
   parts: [
     part(() => frame(w, h * STEP_U), 'oak', { grain: 'box' }),
-    part(() => glazingBars(w, h * STEP_U, cols, rows), 'oak', { color: bars, grain: 'box' }),
+    ...(cols * rows > 1 ? [part(() => glazingBars(w, h * STEP_U, cols, rows), 'oak', { color: bars, grain: 'box' })] : []),
     part(() => pane(w, h * STEP_U, cols, rows), 'glass'),
   ],
 });

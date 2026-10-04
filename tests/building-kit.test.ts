@@ -12,7 +12,7 @@ import { APEX, CHIMNEY_TOP, plane } from '../src/world/kit/houseRoof';
 import { CELL, CELL_U, COURSE, HERO_H, STEP, STEP_U, U, type Rot } from '../src/world/kit/scale';
 import { texturedGeometry } from '../src/world/kit/geometry';
 import { box, type Mesh3 } from '../src/world/kit/mesh';
-import { parseKitProps, propNames, propShape } from '../src/world/kit/props';
+import { parseKitProps, propNames, propShapes } from '../src/world/kit/props';
 import { lightOf } from '../src/world/kit/shapes/openings';
 import { FIXED, LAYERS } from '../src/world/kit/surfaces';
 import { KitView } from '../src/world/kit/view';
@@ -81,16 +81,14 @@ describe('claims', () => {
 const allParts = () => {
   buildBakery();
   // (A plant's cards are seen from both sides: they have no outside.)
-  return Object.values(ELEMENTS).flatMap((e) => e.parts.filter((p) => p.look !== 'card').map((p, k) => ({ e, k, mesh: p.mesh(), look: p.look, whole: p.whole })));
+  return Object.values(ELEMENTS).flatMap((e) => e.parts.filter((p) => p.look !== 'card').map((p, k) => ({ e, k, mesh: p.mesh(), look: p.look })));
 };
 
 describe('the pieces', () => {
-  it('turn every face outward: each triangle\'s winding agrees with its shading normals (the modelled props: below)', () => {
+  it('turn every face outward: each triangle\'s winding agrees with its shading normals', () => {
     const bad: string[] = [];
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
-    for (const { e, k, mesh, whole } of allParts()) {
-      // (A modelled prop's small faces take their shading from the broad faces beside them; its winding is checked whole.)
-      if (whole) continue;
+    for (const { e, k, mesh } of allParts()) {
       const P = mesh.pos, N = mesh.nor;
       for (let t = 0; t < mesh.idx.length; t += 3) {
         const [i, j, l] = [mesh.idx[t], mesh.idx[t + 1], mesh.idx[t + 2]];
@@ -369,11 +367,12 @@ function jpegSize(file: string): [number, number] {
 }
 
 describe('the furniture and props', () => {
-  it('are each one continuous, watertight shape turned outward, never parts pushed into one another (things really apart, like bedding or iron bands, apart)', () => {
+  it('are each one continuous, watertight shape turned outward, never parts pushed into one another; so is each thing resting on one (a chest\'s bands, the bedding)', () => {
     const bad: string[] = [];
     expect(propNames().length).toBeGreaterThan(10);
-    for (const name of propNames()) {
-      const m = propShape(name);
+    const shapes = propNames().flatMap((p) => propShapes(p));
+    expect(shapes.map((s) => s.name)).toEqual(expect.arrayContaining(['chest3_band', 'chest3_band001', 'chest3_lock', 'bed6_mattress', 'bed6_blanket', 'pillow', 'pillow001']));
+    for (const { name, mesh: m } of shapes) {
       // (One place, one vertex: an edge modelled sharp is two vertices there, one for each face's normal.)
       const cells = new Map<string, number[]>(), up: number[] = [], pts: number[][] = [];
       const at = (i: number) => {

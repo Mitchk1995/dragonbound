@@ -142,7 +142,7 @@ let material: THREE.MeshStandardMaterial | null = null;
 
 /**
  * The one material every kit piece is drawn with (its textures must be loaded: loadKitSurfaces).
- * Matte and dielectric; the vertex colour carries the shade of recesses and end grain.
+ * Matte and dielectric; the vertex colour carries a part's own colour and the shade of end grain.
  */
 export function kitMaterial(): THREE.MeshStandardMaterial {
   if (material) return material;

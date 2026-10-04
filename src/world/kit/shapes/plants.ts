@@ -8,7 +8,7 @@ import { Mesh3 } from '../mesh';
  */
 
 /** The atlas's sprays, in its order: a 3 × 2 grid, the first row on top. */
-export const PLANTS = ['bush', 'poppies', 'buttercups', 'cornflowers', 'fern', 'grass'] as const;
+const PLANTS = ['bush', 'poppies', 'buttercups', 'cornflowers', 'fern', 'grass'] as const;
 export type Plant = (typeof PLANTS)[number];
 
 /**

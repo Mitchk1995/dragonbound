@@ -42,7 +42,7 @@ function panes(w: number, hU: number, cols: number, rows: number) {
  * panes (a hair of it left along the frame, which it touches), standing a little proud of the glass.
  */
 export function glazingBars(w: number, hU: number, cols: number, rows: number): Mesh3 {
-  if (cols * rows === 1) return new Mesh3();
+  if (cols * rows === 1) throw new Error('a window of one pane has no glazing bars');
   const [x0, y0, x1, y1] = lightOf(w, hU), e = 0.05;
   const holes = panes(w, hU, cols, rows).map(([a, b, c, d]) => ring(rect(a === x0 ? a + e : a, b === y0 ? b + e : b, c === x1 ? c - e : c, d === y1 ? d - e : d).reverse(), 0));
   return prism(ring(rect(x0, y0, x1, y1), 0), holes, 3, 0)[0];

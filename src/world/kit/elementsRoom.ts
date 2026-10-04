@@ -19,7 +19,7 @@ const part = (mesh: () => Mesh3, look: Look, extra: Partial<Part> = {}): Part =>
 const round = (r: number, hU: number, y0 = 0): Claim => boxClaim(-r, y0, -r, r, hU, r);
 
 /** Fixed colours of furnishings' own materials. */
-export const FURNISH = {
+const FURNISH = {
   iron: 0x34322f, bread: 0xc58a46, crust: 0x9c5c2c, linen: 0xe9e1cd, blanket: 0x56677e, wool: 0x8e4436, border: 0xab8a55,
   sack: 0xd5c49c, earth: 0x4a3626, wax: 0xf0e6c8, soot: 0x2c2420, lampGlow: 0xffd27a,
   flameGlow: 0xff6c1e, flameCore: 0xffbf4a, ember: 0xd2400e, charred: 0x2b1d14,
