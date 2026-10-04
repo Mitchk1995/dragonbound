@@ -2,7 +2,8 @@ import type { Vec2 } from '../../types';
 import { Gen } from '../../world/gen';
 import { Site } from '../../world/castle/site';
 
-/** The keep's plan: the portal arches, the hero's stage, the forge yard, the inspect views and the island's outline and levels. */
+// The keep's plan: the portal arches, the hero's stage, the forge yard, the inspect views and the
+// island's outline and levels.
 
 export const KEEP_ARCHES: { id: string; angle: number; dormant?: string }[] = [
   { id: 'mine', angle: -150 },

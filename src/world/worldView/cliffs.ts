@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Ground } from '../layout';
 import { smoothNoise } from '../terrain';
 import type { Scatter, Scene } from './scene';
-import { rockKit } from './rockMasses';
+import { rockKit } from './rockKit';
 
 /**
  * Natural rock outdoors. Along every outdoor cliff: great weathered masses of rock standing out of

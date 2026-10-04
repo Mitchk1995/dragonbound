@@ -24,6 +24,7 @@ export function buildKeep(seed: number): ZoneLayout {
   dressDistricts(k, look, stream);
   growWilds(k, outline);
   // ─── Lawns and the meadow ──────────────────────────────────────────────────
+  // (The castle's parts of this, its lawns, gardens and kerbs, are its own modules' calls.)
   G.connect();
   // The meadow at the foot of the castle rock (round the fields and the pool) rolls a little: a slow
   // swell of a few tenths over a dozen cells, easing out to dead level three cells short of anything

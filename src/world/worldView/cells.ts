@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { Cell, Fluid, Ground, Lawn } from '../layout';
 import { isRelief, smoothNoise, WATER_Y } from '../terrain';
-import type { Scatter, Scene } from './scene';
+import { underTones, type Scatter, type Scene } from './scene';
 import type { CaveKit } from './caves';
-import { underTones } from './veil';
 
 /**
  * One pass over every cell: trees, boulders, walls, lava rims, the island's underside, reeds, bushes

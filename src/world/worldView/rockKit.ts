@@ -61,15 +61,6 @@ export function rockKit(scene: Scene, sets: Scatter) {
     return !layout.lawn || layout.lawn[j] === Lawn.None || layout.lawn[j] === Lawn.Meadow;
   };
   const treeP = (i: number) => (layout.canopy ? layout.canopy[i] / 100 : theme.reliefTrees ?? 0);
-  /**
-   * Seat one rock mass against a face looking out along (ox, oz) from the cell centre (cx, cz):
-   * standing on `base`, its crown `H` above the face's foot level, `W` across, slid `along` the face
-   * and standing `front` proud of the cell centre. It is fitted to the ground round it (shrunk until
-   * it never stands out over a road, paving or a lawn at the foot, and lowered until it never rises
-   * through the ground on top; a meadow's turf may roll over its crown) and dropped if too little is
-   * left. Its crown takes moss, and its front shoulder, where it stands clear of the face, may root
-   * a pine, ferns or a moss cushion.
-   */
   const fitRay = new THREE.Raycaster(), fitDown = new THREE.Vector3(0, -1, 0), fitMesh = new THREE.Mesh();
   fitMesh.matrixAutoUpdate = false;
   /**
@@ -102,6 +93,15 @@ export function rockKit(scene: Scene, sets: Scatter) {
     }
     return 0;
   };
+  /**
+   * Seat one rock mass against a face looking out along (ox, oz) from the cell centre (cx, cz):
+   * standing on `base`, its crown `H` above the face's foot level, `W` across, slid `along` the face
+   * and standing `front` proud of the cell centre. It is fitted to the ground round it (shrunk until
+   * it never stands out over a road, paving or a lawn at the foot, and lowered until it never rises
+   * through the ground on top; a meadow's turf may roll over its crown) and dropped if too little is
+   * left. Its crown takes moss, and its front shoulder, where it stands clear of the face, may root
+   * a pine, ferns or a moss cushion.
+   */
   const seatMass = (cx: number, cz: number, ox: number, oz: number, foot: number, base: number, H: number, W: number, along: number, front: number, low: boolean) => {
     const dr = 0.75 + rng() * 0.3, yaw = rng() * 6.3, tx = -oz, tz = ox, T0 = foot + H - base;
     let T = T0, ok = false, px = 0, pz = 0;

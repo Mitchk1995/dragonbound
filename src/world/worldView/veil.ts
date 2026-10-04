@@ -1,23 +1,17 @@
 import * as THREE from 'three';
-import type { ZoneTheme } from '../../data/zones';
 import { Cell, Ground } from '../layout';
 import { applyPaint } from '../../render/paint';
 import { smoothNoise } from '../terrain';
 import { hash01, ROCK_MASSES, rockMass } from '../../render/blocks';
 import { skyDome } from '../../render/sky';
-import type { Scatter, Scene } from './scene';
-
-/** The island's underside in its own rock (the cliff's darker tone), never a dead brown-black. */
-export function underTones(theme: ZoneTheme) {
-  return [new THREE.Color(theme.cliff?.[1] ?? 0x5e544a).multiplyScalar(0.85), new THREE.Color(theme.cliff?.[0] ?? 0x7a6e62).multiplyScalar(0.8)];
-}
+import { underTones, type Scatter, type Scene } from './scene';
 
 /** The masses hanging under the island's rim and the solid core under it all. */
 export function hangUnderside(scene: Scene, sets: Scatter) {
   const { theme, seed, w, h, group, inst } = scene;
   const { under, underCols } = sets;
   const underB = underTones(theme)[1];
-if (under.length) {
+  if (!under.length) return;
   // Hanging masses: the cliffs' rock masses turned upside down (broad at the top, rounding off
   // below), the whole kit so neighbours never repeat.
   for (let v = 0; v < ROCK_MASSES; v++) {
@@ -46,7 +40,6 @@ if (under.length) {
   // Top at y = -1.2: below the deepest pond bed, or it would cap the water.
   core.position.set(w / 2, -1.2 - CH / 2, h / 2);
   group.add(core);
-}
 }
 
 /** The Veil's sky and the islets drifting in it; returns their bobbing (or null outside the Veil). */

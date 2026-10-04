@@ -19,7 +19,7 @@ const CHUNK = 24;
  * The material every instanced scenery set uses: flat shaded, painted albedo (or an old surface),
  * an optional shade toward the foot, cut away around the hero when `occlude`.
  */
-export function sceneryMaterial(instanceColors: boolean, color: number, occlude: boolean, surface?: SurfaceKind | PaintKind, grade?: Grade, setup?: (m: THREE.MeshStandardMaterial) => void) {
+function sceneryMaterial(instanceColors: boolean, color: number, occlude: boolean, surface?: SurfaceKind | PaintKind, grade?: Grade, setup?: (m: THREE.MeshStandardMaterial) => void) {
   const mat = new THREE.MeshStandardMaterial({ color: instanceColors ? 0xffffff : color, flatShading: true, roughness: 0.9 });
   // Painted albedo (hand-painted look) wherever a paint exists; the old surfaces otherwise.
   if (surface && isPaintKind(surface)) applyPaint(mat, surface, 'world');
@@ -30,7 +30,7 @@ export function sceneryMaterial(instanceColors: boolean, color: number, occlude:
   return mat;
 }
 
-export function instanced(geo: THREE.BufferGeometry, mat: THREE.Material, mats: THREE.Matrix4[], cols: THREE.Color[] | null, shadow: boolean) {
+function instanced(geo: THREE.BufferGeometry, mat: THREE.Material, mats: THREE.Matrix4[], cols: THREE.Color[] | null, shadow: boolean) {
   const mesh = new THREE.InstancedMesh(geo, mat, mats.length);
   mats.forEach((mm, i) => {
     mesh.setMatrixAt(i, mm);

@@ -134,3 +134,8 @@ function scatter(trees: Record<TreeKind, Instances>, grown: Record<GrownKind, In
     cushions: list(), cushionCols: cols(),
   };
 }
+
+/** The island's underside in its own rock (the cliff's darker tone), never a dead brown-black. */
+export function underTones(theme: ZoneTheme) {
+  return [new THREE.Color(theme.cliff?.[1] ?? 0x5e544a).multiplyScalar(0.85), new THREE.Color(theme.cliff?.[0] ?? 0x7a6e62).multiplyScalar(0.8)];
+}

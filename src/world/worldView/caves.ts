@@ -3,9 +3,9 @@ import { Cell } from '../layout';
 import { isRelief, smoothNoise } from '../terrain';
 import type { Scatter, Scene } from './scene';
 
-/** How cellPass lays the cave walls' stacked strata and the loose rock on cave and caldera floors, cell by cell. */
 export type CaveKit = ReturnType<typeof caveKit>;
 
+/** How cellPass lays the cave walls' stacked strata and the loose rock on cave and caldera floors, cell by cell. */
 export function caveKit(scene: Scene, sets: Scatter) {
   const { rng, theme, seed, at, heightAt, m, q, s, p, e } = scene;
   const { strata, strataCols, crevices, debris, debrisCols } = sets;
