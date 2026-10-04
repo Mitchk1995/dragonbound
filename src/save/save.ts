@@ -1,5 +1,6 @@
 import { xpForLevel } from '../progression/skills';
 import { SKILLS, type Item, type SkillId, type Slot } from '../types';
+import type { LightingEffects } from '../render/post';
 import { parseSave, SAVE_VERSION } from '../../electron/save-format.mjs';
 
 /** v3 dropped the combat stance (combat XP now follows the weapon style; see combatXpSplit). */
@@ -24,6 +25,10 @@ export interface QuestState {
 
 /** Render quality preset (see Game.applyGraphics). */
 export type Graphics = 'high' | 'medium' | 'low';
+
+/** The screen-space lighting effects switched on (see render/post.ts; each off unless set). */
+export type Lighting = Partial<LightingEffects>;
+const LIGHTING_KEYS = ['bounce', 'contact', 'reflections', 'smooth'] as const;
 
 export interface SaveData {
   version: number;
@@ -54,7 +59,7 @@ export interface SaveData {
   /** Tutorial step index; -1 when finished or skipped. */
   tutorial: number;
   stats: { deaths: number; kills: number; playtime: number; bestBossTime: number | null };
-  settings: { volume: number; graphics?: Graphics };
+  settings: { volume: number; graphics?: Graphics; lighting?: Lighting };
 }
 
 export const emptyEquipment = (): Record<Slot, Item | null> => ({
@@ -85,7 +90,7 @@ export function newSave(): SaveData {
     portals: {},
     tutorial: 0,
     stats: { deaths: 0, kills: 0, playtime: 0, bestBossTime: null },
-    settings: { volume: 0.6, graphics: 'high' },
+    settings: { volume: 0.6, graphics: 'high', lighting: {} },
   };
 }
 
@@ -102,6 +107,10 @@ export function migrate(raw: any): SaveData {
     settings: { ...fresh.settings, ...(raw.settings ?? {}) },
   };
   if (!['high', 'medium', 'low'].includes(data.settings.graphics as string)) data.settings.graphics = 'high';
+  // Only the effects switched on stay, each strictly true; anything else is off.
+  const lit = raw.settings?.lighting;
+  data.settings.lighting = {};
+  if (lit && typeof lit === 'object' && !Array.isArray(lit)) for (const k of LIGHTING_KEYS) if (Object.hasOwn(lit, k) && lit[k] === true) data.settings.lighting[k] = true;
   for (const key of ['collection', 'kc', 'counters', 'keep', 'quests', 'diary', 'diaryClaimed', 'portals'] as const) {
     (data as any)[key] = raw[key] && typeof raw[key] === 'object' ? raw[key] : {};
   }

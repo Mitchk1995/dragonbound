@@ -21,7 +21,7 @@ import { installPatchedMaterials } from './render/patch';
 import { PostChain } from './render/post';
 import { SKY_LIGHT } from './render/sky';
 import { makeModel } from './render/registry';
-import { getBackend, loadSave, newSave, type Appearance, type Graphics, type SaveBackend, type SaveData } from './save/save';
+import { getBackend, loadSave, newSave, type Appearance, type Graphics, type Lighting, type SaveBackend, type SaveData } from './save/save';
 import { SaveWriter } from './save/writer';
 import { disposeObject } from './render/resources';
 import { Combat } from './systems/combat';
@@ -512,6 +512,8 @@ export class Game {
    * Quality presets. High: up to 2× pixel ratio, 4× MSAA, 4096 shadows, ambient occlusion, bloom.
    * Medium: 1.5×, MSAA, 2048 shadows, occlusion, bloom. Low: 1× (no supersampling on HiDPI), no
    * MSAA, 1024 shadows, no occlusion, no bloom — for integrated GPUs. The lawn draws 8, 6 or 4 shells.
+   * The lighting effects switched on in the settings (none by default) are worked as finely as the
+   * preset allows.
    */
   applyGraphics(level: Graphics) {
     const p = {
@@ -521,11 +523,18 @@ export class Game {
     }[level];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.ratio));
     // (Without occlusion the low preset skips the whole pass and its grade.)
-    this.post.setQuality({ msaa: p.msaa, shade: p.ao, bloom: p.bloom });
+    this.post.setQuality({ msaa: p.msaa, shade: p.ao, bloom: p.bloom, effects: this.save.settings.lighting, level });
     setLawnShells(LAWN_SHELLS[level]);
     // (The renderer resizes the shadow map to match on its next draw.)
     this.sun.shadow.mapSize.set(p.shadow, p.shadow);
     this.resize();
+  }
+
+  /** Switch the lighting effects (saved with the settings) and redraw the chain for them. */
+  setLighting(lighting: Lighting) {
+    this.save.settings.lighting = { ...lighting };
+    this.applyGraphics(this.save.settings.graphics ?? 'high');
+    this.dirty = true;
   }
 
   /** Render the current view through the post chain. */
