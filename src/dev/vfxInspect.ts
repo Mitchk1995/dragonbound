@@ -12,8 +12,8 @@ import type { Slot } from '../types';
  * melee and bow skills, the potion, a level-up, loot drops, mining and the anvil, the fires, portal arrival and
  * recall. Plus frame strips of a hit and a spell (a still cannot show motion) and the frame cost of a busy fight.
  *
- * Run it in the development build with the inspect API (Electron), as an inspect suite or from the console:
- * `(await import('/src/dev/vfxInspect.ts')).vfxSuite(__game, shot, ['hits'])`, `shot` saving one capture under a name.
+ * Run it in the development build from the console, `shot` saving one capture under a name (in Electron, the inspect
+ * API's capture): `(await import('/src/dev/vfxInspect.ts')).vfxSuite(__game, shot, ['hits'])`.
  * It drives only the game's own actions (attacks, skills, the potion, drops, mining), never the effects directly, so
  * the same suite captures any version of them. The simulation is stepped by hand (the frame loop only draws): each
  * capture is timed from the moment its blow lands or its spell goes off, so it is mid-effect in any version.

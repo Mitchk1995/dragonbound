@@ -118,15 +118,21 @@ export class SpriteLayer {
     const t0 = this.time.value;
     const col = this.c.copy(s.color ?? WHITE);
     const d = this.data;
-    d.set([
-      s.x, s.y, s.z, t0,
-      s.vx ?? 0, s.vy ?? 0, s.vz ?? 0, s.drag ?? 0,
-      s.life, s.gravity ?? 0, s.floor ?? -1e4, s.size,
-      s.grow ?? 1, s.rot ?? 0, s.spin ?? 0, s.stretch ?? 0,
-      col.r, col.g, col.b, s.opacity ?? 1,
-      cell.col, cell.row, frames, s.fps ?? 0,
-      s.heat ?? 0, s.anchor ?? 0, s.fadeOut ?? 1, 0,
-    ], i * STRIDE);
+    let o = i * STRIDE;
+    const put = (a: number, b: number, c: number, e: number) => {
+      d[o++] = a;
+      d[o++] = b;
+      d[o++] = c;
+      d[o++] = e;
+    };
+    put(s.x, s.y, s.z, t0);
+    put(s.vx ?? 0, s.vy ?? 0, s.vz ?? 0, s.drag ?? 0);
+    put(s.life, s.gravity ?? 0, s.floor ?? -1e4, s.size);
+    put(s.grow ?? 1, s.rot ?? 0, s.spin ?? 0, s.stretch ?? 0);
+    put(col.r, col.g, col.b, s.opacity ?? 1);
+    put(cell.col, cell.row, frames, s.fps ?? 0);
+    // (The fade's start kept below its end: smoothstep with equal edges is undefined on the graphics card.)
+    put(s.heat ?? 0, s.anchor ?? 0, Math.min(s.fadeOut ?? 1, 0.999), 0);
     this.lastDeath = Math.max(this.lastDeath, t0 + s.life);
     const last = this.dirty[this.dirty.length - 1];
     if (last && last[1] === i - 1) last[1] = i;
@@ -148,6 +154,7 @@ export class SpriteLayer {
     if (this.time.value < REBASE) return;
     this.time.value = 0;
     this.born.value = -1;
+    this.lastDeath = -Infinity;
     for (let i = 0; i < this.used; i++) this.data[i * STRIDE + 3] = -1e6;
     this.dirty = this.used ? [[0, this.used - 1]] : [];
   }
@@ -189,7 +196,8 @@ export class SpriteLayer {
       const acc = vec3(0, L.y.negate(), 0);
       const flown = P.xyz.add(V.xyz.mul(f1)).add(acc.mul(f2)).toVar();
       const p = vec3(flown.x, max(flown.y, L.z), flown.z);
-      const vel = V.xyz.mul(e).add(acc.mul(f1));
+      // (Come to rest on its floor it only slides: no falling speed to streak with.)
+      const vel = select(flown.y.lessThan(L.z), vec3(V.x, 0, V.z).mul(e), V.xyz.mul(e).add(acc.mul(f1)));
       const size = L.w.mul(mix(float(1), S.x, u)).toVar();
       // Turned along its flight on screen when stretched, else by its own turn and spin.
       const mv = cameraViewMatrix.mul(vec4(p, 1)).toVar();

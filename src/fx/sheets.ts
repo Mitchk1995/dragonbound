@@ -70,21 +70,12 @@ export const SHEETS = {
   poof: sheet('c', 0, 4),
   /** Four blood drops and splashes in grey, each creature's blood tinting them. */
   blood: sheet('c', 4, 4, 4),
-  /** Four puffs of smoke. */
-  puff: sheet('c', 4, 6, 4),
 } as const satisfies Record<string, Sheet>;
 
 export type SheetId = keyof typeof SHEETS;
 
-/** The cell of a sheet's frame `i` (frames run four to a row). */
+/** The cell of a sheet's frame `i` (frames run four to a row; past the last, the last). */
 export function frameCell(s: Sheet, i: number): { col: number; row: number } {
   const f = Math.min(Math.max(0, Math.floor(i)), s.frames - 1);
   return { col: s.col + (f % 4), row: s.row + Math.floor(f / 4) };
-}
-
-/** A frame's rectangle on its page as fractions of the page, top left first: [u0, v0, u1, v1] (v down). */
-export function frameRect(s: Sheet, i: number): [number, number, number, number] {
-  const { col, row } = frameCell(s, i);
-  const g = PAGES[s.page].grid;
-  return [col / g, row / g, (col + 1) / g, (row + 1) / g];
 }

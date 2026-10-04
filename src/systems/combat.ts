@@ -259,7 +259,7 @@ export class Combat {
     if (heavy && !o.tick && e.hp > 0 && e.def.behavior !== 'boss') e.stagger(g, T.stagger.secs);
     if (!o.tick) g.hitstop(hit.crit ? T.hitstopCrit : T.hitstop);
     g.text.damage(hit.amount, e.x, e.model.height, e.z, hit.crit ? 'crit' : 'dmg');
-    g.fx.hit(e, hit.crit, o.fromX ?? g.player.x, o.fromZ ?? g.player.z);
+    g.fx.hit(e, hit.crit, o.fromX ?? g.player.x, o.fromZ ?? g.player.z, !!o.tick);
     if (hit.crit) {
       g.sfx.play('crit', 0.9, 0.9 + Math.random() * 0.2);
       g.shake(0.18, 0.15);

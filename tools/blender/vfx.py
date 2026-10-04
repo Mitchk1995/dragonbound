@@ -10,7 +10,7 @@ bottom) for the fire, impacts, bursts, smoke and dust, played on camera-facing c
 greyscale masks (streaks, cloud noise, a ring, a magic circle, a lightning strip) that the mesh effects scroll, erode and
 tint in their shaders. Nothing here is painted in code: every picture is a library painting, cut, cleaned and resampled.
 
-The atlases (the layout src/fx/sheets.ts reads; tests/vfx-assets.test.ts checks the sizes):
+The atlases (the layout src/fx/sheets.ts reads; tests/vfx.test.ts checks the sizes):
 - Pages of 128 px frames, 1024 px square, four 4 x 4 sheets each, one per quarter (top left, top right, bottom left,
   bottom right). `fx-page-a.jpg` and `fx-page-b.jpg` are drawn adding light (RGB on black); `fx-page-c.webp` is drawn
   over what lies behind, its colour premultiplied by its coverage (smoke, dust, blood).
@@ -226,8 +226,8 @@ def shapes():
 
 def bits():
     """
-    The coloured particles drawn over what lies behind (sheets.ts BITS), premultiplied: four blood drops and splashes
-    in grey (cells 0 to 3: the game tints each creature's own) and four puffs of smoke (cells 8 to 11).
+    The blood drawn over what lies behind (sheets.ts `blood`), premultiplied: four drops and splashes in grey in the
+    top row of cells (the game tints each creature's own).
     """
     cells = np.zeros((4 * 128, 4 * 128, 4), np.float32)
     put = lambda i, img: cells.__setitem__((slice((i // 4) * 128, (i // 4 + 1) * 128), slice((i % 4) * 128, (i % 4 + 1) * 128)), img)
@@ -239,11 +239,6 @@ def bits():
     for i, (r, c) in enumerate([(0, 0), (2, 2), (0, 2), (1, 2)]):
         box = (int(c * cell), int(r * cell), int((c + 1) * cell), int((r + 1) * cell))
         put(i, premultiply(fit(blood_grey, box, 128)) * window(128)[..., None])
-    smoke = load('fx-mesh/smoke-puffs-a.png')
-    sw, sh = smoke.shape[1] / 4, smoke.shape[0] / 2
-    for k in range(4):
-        box = (int(k * sw), 0, int((k + 1) * sw), int(sh))
-        put(8 + k, premultiply(fit(smoke, box, 128)) * window(128)[..., None])
     return cells
 
 
@@ -313,7 +308,7 @@ def main():
     heal = flipbook(grey_frames('fx-flipbook/flip-heal-a.png'), 128)
     page([electric, sparkle, arcane, heal], 'fx-page-b.jpg')
 
-    # Page C, drawn over what lies behind: smoke, dust, the death puff, and the coloured bits.
+    # Page C, drawn over what lies behind: smoke, dust, the death puff, and the blood.
     smoke = flipbook([coverage(f, 0.03, 0.5) for f in frames(rgb('fx-flipbook/flip-smoke-a.png'))], 128)
     # (Dust in grey, its own light and shade: the game tints it the colour of the ground it is kicked from.)
     dust = flipbook([coverage(np.repeat(luma(f)[..., None], 3, axis=2) * 1.6, 0.06, 0.6) for f in frames(rgb('fx-flipbook/flip-dust-puff-a.png'))], 128)

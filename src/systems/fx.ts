@@ -40,6 +40,8 @@ const BLOOD: Record<string, number> = { goblin: 0x5a8a2a, cultist: 0x6a1a30, pri
 export class Fx {
   private list: FxMesh[] = [];
   private cards: Record<string, SpriteLayer> | null = null;
+  /** The same pools, as a list (updated every frame). */
+  private cardList: SpriteLayer[] = [];
   private meshes: MeshFx | null = null;
   private readonly v = new THREE.Vector3();
   /**
@@ -58,8 +60,9 @@ export class Fx {
   /** The pools, made on first use (and in the scene from then on). */
   private get layers() {
     if (!this.cards) {
-      this.cards = Object.fromEntries(LAYERS.map(([page, max]) => [page, new SpriteLayer(page, max)]));
-      for (const l of Object.values(this.cards)) this.g.scene.add(l.mesh);
+      this.cardList = LAYERS.map(([page, max]) => new SpriteLayer(page, max));
+      this.cards = Object.fromEntries(this.cardList.map((l) => [l.page, l]));
+      for (const l of this.cardList) this.g.scene.add(l.mesh);
       this.meshes = new MeshFx();
       this.g.scene.add(this.meshes.root);
     }
@@ -84,7 +87,7 @@ export class Fx {
   clear() {
     for (const f of this.list) disposeObject(f.obj);
     this.list = [];
-    if (this.cards) for (const l of Object.values(this.cards)) l.clear();
+    for (const l of this.cardList) l.clear();
     this.meshes?.clear();
   }
 
@@ -97,7 +100,7 @@ export class Fx {
       if (f.life <= 0) disposeObject(f.obj);
       return f.life > 0;
     });
-    if (this.cards) for (const l of Object.values(this.cards)) l.update(dt);
+    for (const l of this.cardList) l.update(dt);
     this.meshes?.update(dt);
   }
 
@@ -139,17 +142,19 @@ export class Fx {
   /**
    * A blow landing on `e`, struck from (fromX, fromZ): a painted impact flash on the struck side (a bigger, redder
    * burst and a shock ring for a crit), sparks streaking away from the blow, and the creature's blood. Steel and
-   * arrows flash white-gold; a magic weapon's blows burst in arcane blue.
+   * arrows flash white-gold; a magic weapon's blows burst in arcane blue. A `light` blow (a tick of damage over
+   * time, such as arrow rain's) shows only a little blood and a few sparks, as does a blow landed by a spell in the
+   * moment of its own burst (the burst is its flash).
    */
-  hit(e: Enemy, crit: boolean, fromX?: number, fromZ?: number) {
+  hit(e: Enemy, crit: boolean, fromX?: number, fromZ?: number, light = false) {
     const g = this.g, gy = e.pos.y, h = e.model.height;
     const away = fromX === undefined || fromZ === undefined ? Math.random() * Math.PI * 2 : Math.atan2(e.z - fromZ, e.x - fromX);
     const y = gy + h * 0.55;
     // On the struck side, in front of the body.
     const sx = e.x - Math.cos(away) * e.radius * 0.5, sz = e.z - Math.sin(away) * e.radius * 0.5;
     const at = this.front(sx, y, sz, e.radius + 0.35);
-    const magic = g.stats?.style === 'magic';
-    if (this.burstAt !== g.time) {
+    const magic = g.stats?.style === 'magic', quiet = light || this.burstAt === g.time;
+    if (!quiet) {
       const rot = Math.random() * 6.3;
       if (magic) this.card('arcane', { x: at.x, y: at.y, z: at.z, life: crit ? 0.42 : 0.32, size: crit ? 2.5 : 1.7, rot, color: lin(0x7aaeff, 1.5), heat: 0.7 });
       else this.card(crit ? 'crit' : 'impact', { x: at.x, y: at.y, z: at.z, life: crit ? 0.38 : 0.28, size: crit ? 2.3 : 1.55, rot, color: lin(0xffffff, 0.95), heat: 0.45 });
@@ -158,12 +163,12 @@ export class Fx {
         this.mesh.decal({ kind: 'ring', x: e.x, y: gy + 0.06, z: e.z, from: 0.8, to: 3.2, life: 0.32, color: 0xffb060, gain: 1.6, fadeIn: 0.01 });
       }
     }
-    this.spray(at.x, at.y, at.z, crit ? 16 : 9, {
+    this.spray(at.x, at.y, at.z, light ? 3 : crit ? 16 : 9, {
       speed: [5, crit ? 13 : 10], up: [0.5, 4], life: [0.22, 0.42], size: [0.05, 0.085], gravity: 14, drag: 2.2,
       colors: magic ? [0xcfe4ff, 0x8ab8ff, 0xffffff] : crit ? [0xffe070, 0xff8a3a, 0xffffff] : [0xffe8a0, 0xffffff], dir: away, spread: 1.1,
     });
     const blood = lin(BLOOD[e.def.model] ?? 0x9a2418);
-    for (let i = 0; i < (crit ? 8 : 5); i++) {
+    for (let i = 0; i < (light ? 2 : crit ? 8 : 5); i++) {
       const a = away + (Math.random() - 0.5) * 2.2, sp = rand(2.5, 5.5);
       this.card('blood', {
         x: at.x, y: at.y - 0.1, z: at.z, vx: Math.cos(a) * sp, vy: rand(1.5, 4), vz: Math.sin(a) * sp, gravity: 13, drag: 1.2,

@@ -7,7 +7,7 @@ import { fireCard } from '../src/fx/fire';
 import { lootBeam, MeshFx } from '../src/fx/meshFx';
 import { missileLook } from '../src/fx/missiles';
 import { Particles } from '../src/fx/particles';
-import { frameCell, frameRect, PAGES, SHEETS, type PageId } from '../src/fx/sheets';
+import { frameCell, PAGES, SHEETS, type PageId } from '../src/fx/sheets';
 import { SpriteLayer } from '../src/fx/sprites';
 import type { Game } from '../src/game';
 import { Fx } from '../src/systems/fx';
@@ -48,11 +48,10 @@ describe('effect sheets', () => {
     }
   });
 
-  it('give each frame its own rectangle of the page', () => {
-    expect(frameRect(SHEETS.impact, 0)).toEqual([0, 0, 0.25, 0.25]);
-    expect(frameRect(SHEETS.impact, 5)).toEqual([0.25, 0.25, 0.5, 0.5]);
-    expect(frameRect(SHEETS.flame, 3)).toEqual([7 / 8, 5 / 8, 1, 6 / 8]);
-    // (Past the last frame it holds the last.)
+  it('give each frame its cell, four to a row, holding the last past the end', () => {
+    expect(frameCell(SHEETS.impact, 0)).toEqual({ col: 0, row: 0 });
+    expect(frameCell(SHEETS.impact, 5)).toEqual({ col: 1, row: 1 });
+    expect(frameCell(SHEETS.flame, 3)).toEqual({ col: 7, row: 5 });
     expect(frameCell(SHEETS.glint, 4)).toEqual(frameCell(SHEETS.glint, 0));
   });
 
@@ -99,11 +98,17 @@ describe('sprite layer', () => {
     const data = (layer.mesh.geometry.getAttribute('aP') as THREE.InterleavedBufferAttribute).data.array;
     layer.update(100);
     expect(data[3]).toBe(0);
-    layer.update(600);
+    // A card that lived past the restart (its death was late on the old clock).
+    layer.spawn({ x: 0, y: 0, z: 0, life: 520, size: 1, sheet: 'impact' });
+    layer.update(700);
     expect(data[3]).toBeLessThan(-1e5);
+    expect(data[28 + 3]).toBeLessThan(-1e5);
+    // (The next card is spawned on the fresh clock, and the layer hides as soon as it is gone.)
     layer.spawn({ x: 0, y: 0, z: 0, life: 0.5, size: 1, sheet: 'impact' });
-    // (The new card is spawned on the fresh clock.)
-    expect(data[28 + 3]).toBe(0);
+    expect(data[56 + 3]).toBe(0);
+    expect(layer.mesh.visible).toBe(true);
+    layer.update(1);
+    expect(layer.mesh.visible).toBe(false);
   });
 
   it('plays a still variant of a sheet as one frame, and refuses a sheet from another page', () => {
@@ -248,13 +253,15 @@ describe('the effects', () => {
     expect(layer('impact').visible).toBe(false);
   });
 
-  it('show no impact flash for a blow landed by a spell in the moment of its own burst', () => {
+  it('show no impact flash for a blow landed by a spell in the moment of its own burst, nor for a tick of damage', () => {
     const g = fakeGame(), fx = new Fx(g);
     fx.frostNova(0, 0, 4.2);
     fx.hit(goblin, false, 0, 3);
     const impact = () => instances(g.scene.getObjectByName('fx-impact') as THREE.Mesh);
     expect(impact()).toBe(0);
     g.time += 1 / 60;
+    fx.hit(goblin, false, 0, 3, true);
+    expect(impact()).toBe(0);
     fx.hit(goblin, false, 0, 3);
     expect(impact()).toBe(1);
   });
