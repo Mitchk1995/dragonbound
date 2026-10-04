@@ -28,6 +28,7 @@ const AREAS = {
   skirts: { suite: 'skirts', about: 'the hero\'s tunic and armour skirts mid-stride, close up and at the play camera' },
   bow: { suite: 'bow', about: 'the hero\'s bow drawn and carried from every side and at the play camera, and the goblin\'s and kobold\'s hips' },
   dragons: { suite: 'dragons', about: 'the drakeling and Cinderwing' },
+  'hub-layouts': { suite: 'hub', about: 'the three hub-town layout options: from above with names and run times, three-quarters, the play camera and the street' },
   'building-kit': { suite: 'kit', about: 'the building kit\'s first hub-town house, outside, at the door, inside, close up and a street of sixteen' },
   text: { suite: 'font,uitext', about: 'the painted alphabets and the menus\' lettering' },
   digits: { suite: 'digits', about: 'the painted damage numbers' },

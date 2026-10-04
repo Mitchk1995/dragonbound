@@ -153,6 +153,7 @@ export async function runInspect(g: Game, suites: string) {
     }
     const kitArg = suites.split(',').find((s) => s === 'kit' || s.startsWith('kit:')); // the building kit's house (kitInspect.ts)
     if (kitArg) report.kit = await (await import('./kitInspect')).kitSuite(g, shot, kitArg.split(':').slice(1).join(':').split('+'));
+    if (suites.split(',').some((s) => s === 'hub' || s.startsWith('hub:'))) report.hub = await (await import('./hubInspect')).hubSuite(g, shot, suites); // hub layouts
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).
