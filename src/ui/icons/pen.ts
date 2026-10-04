@@ -12,7 +12,7 @@ export type Tone =
   | 'leather' | 'stone' | 'violet' | 'cloud' | 'spark' | 'darkIron' | 'redLeather';
 
 /** [lit, mid, shadow] */
-export const TONE: Record<Tone, [string, string, string]> = {
+const TONE: Record<Tone, [string, string, string]> = {
   iron: ['#b9c2cc', '#8d959f', '#5f6670'],
   darkIron: ['#8d959f', '#646b75', '#41464d'],
   gold: ['#f3d98a', '#d8b25a', '#a07a30'],
