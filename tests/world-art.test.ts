@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { chamferBox, octagon, prism, rockBlock, slabBlock, taper, wedge } from '../src/render/blocks';
 import { rockAtlas } from '../src/render/rock';
 import { applyPaint, paintAtlas, PAINTS, type PaintKind } from '../src/render/paint';
 import { patchKeys } from '../src/render/surface';
 import { patchGraph } from './patchGraph';
 import { ZONES } from '../src/data/zones';
-import { Cell, Ground } from '../src/world/layout';
+import { Cell, Ground, type ZoneLayout } from '../src/world/layout';
 import { raisedAt } from '../src/world/building';
 import { ASHLAR, buildProp, propKinds, spread } from '../src/world/props';
 
@@ -17,6 +17,17 @@ const finite = (geo: THREE.BufferGeometry) => {
   }
   return true;
 };
+
+/** Each zone's layout at its standard seed. Generating them takes seconds, and the tests here only read them,
+ *  so each is generated once and shared (rebuilding them per test once ran tests past the 5 s timeout). */
+const ZONE_IDS = ['keep', 'mine', 'foothills', 'ruin', 'lair'];
+const layouts = new Map<string, ZoneLayout>();
+const build = (id: string) => {
+  let L = layouts.get(id);
+  if (!L) layouts.set(id, (L = ZONES[id].build(1000 + id.length * 97)));
+  return L;
+};
+beforeAll(() => ZONE_IDS.forEach(build), 60_000);
 
 describe('block shapes', () => {
   it('every shape is a closed, flat-shaded hull with finite normals', () => {
@@ -76,8 +87,8 @@ describe('world props', () => {
     buildProp('bones', 2).obj.traverse((o) => {
       if (o instanceof THREE.Mesh) expect((o.material as THREE.MeshStandardMaterial).emissiveIntensity * (o.material as THREE.MeshStandardMaterial).emissive.getHex()).toBe(0);
     });
-    for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {
-      const L = ZONES[id].build(1000 + id.length * 97);
+    for (const id of ZONE_IDS) {
+      const L = build(id);
       expect(L.props.some((p) => p.kind === 'crack')).toBe(false);
     }
   });
@@ -210,7 +221,7 @@ describe('zones', () => {
     expect(ZONES.foothills.name).toBe('Wyrmwood Foothills');
   });
   it('the goblin palisades stand on dry ground', () => {
-    const L = ZONES.foothills.build(1000 + 'foothills'.length * 97);
+    const L = build('foothills');
     for (const p of L.props.filter((q) => q.kind === 'palisade')) {
       const half = (p.len ?? 6) / 2, c = Math.cos(p.rot ?? 0), s = Math.sin(p.rot ?? 0);
       for (let t = -half; t <= half; t += 0.5) {
@@ -219,7 +230,6 @@ describe('zones', () => {
       }
     }
   });
-  const build = (id: string) => ZONES[id].build(1000 + id.length * 97);
   const walk = (L: ReturnType<typeof build>, x: number, z: number) => x >= 0 && z >= 0 && x < L.w && z < L.h && L.cells[z * L.w + x] === Cell.Ground;
   it('mine, ruin and lair layouts are not mirror-symmetric', () => {
     for (const id of ['mine', 'ruin', 'lair']) {
@@ -334,7 +344,7 @@ describe('zones', () => {
     return seen;
   };
   it('every pack, ore rock and station can be reached from the entry', () => {
-    for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {
+    for (const id of ZONE_IDS) {
       const L = build(id), seen = reachable(L);
       const near = (t: { x: number; z: number }) => {
         for (let z = Math.floor(t.z - 2.5); z <= t.z + 2.5; z++) for (let x = Math.floor(t.x - 2.5); x <= t.x + 2.5; x++) {
@@ -468,8 +478,8 @@ describe('zones', () => {
     expect(L.level![byId.stables.z * L.w + byId.stables.x]).toBe(11);
   });
   it('no walkable pocket is cut off from the entry (clicks never target one)', () => {
-    for (const id of ['keep', 'mine', 'foothills', 'ruin', 'lair']) {
-      const L = ZONES[id].build(1000 + id.length * 97);
+    for (const id of ZONE_IDS) {
+      const L = build(id);
       const seen = new Uint8Array(L.w * L.h), q = [Math.floor(L.entry.z) * L.w + Math.floor(L.entry.x)];
       seen[q[0]] = 1;
       while (q.length) {

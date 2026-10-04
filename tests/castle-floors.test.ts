@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { KEEP_BUILDINGS } from '../src/data/zoneMaps';
+import { ZONES } from '../src/data/zones';
 import { Player } from '../src/entities/player';
 import { Pet } from '../src/entities/pet';
 import { Game } from '../src/game';
@@ -12,6 +13,18 @@ vi.mock('../src/world/worldView', () => ({
   OCCLUDE: {},
   buildWorldView: () => ({ group: new THREE.Group(), buildings: [], followers: [], props: [], heightAt: () => 0, floorAt: () => 0, tick: () => {} }),
 }));
+
+// Generating the keep island takes seconds, and building a zone per runtime once pushed the portal-trip case
+// (two zones) past the 5 s test timeout on CI. Zone runtimes and floor travel only read their layout, so every
+// runtime here shares one generated island; each is still its own runtime with its own floor and navigation.
+const SEED = 1388;
+beforeAll(() => {
+  const keepLayout = ZONES.keep.build(SEED);
+  vi.spyOn(ZONES.keep, 'build').mockImplementation((seed) => {
+    if (seed !== SEED) throw new Error(`castle-floors builds the keep only at seed ${SEED}`);
+    return keepLayout;
+  });
+}, 60_000);
 
 const keep = KEEP_BUILDINGS.find((b) => b.id === 'keep')!;
 /** A flight's low (foot) or high (head) end row: its first cell there, in local cells. */
@@ -32,7 +45,7 @@ function fixture() {
     skilling: { stop: vi.fn() }, text: { clear: vi.fn() },
     ui: { fade: vi.fn((f: () => void) => { finishFade = f; }), clearZoneState: vi.fn(), zoneTitle: vi.fn() },
   });
-  const zone = new ZoneRuntime(game, 'keep', 1388);
+  const zone = new ZoneRuntime(game, 'keep', SEED);
   Object.assign(game, { zoneOrNull: zone });
   const station = { obj: new THREE.Group(), update: vi.fn(), kind: 'bank' };
   zone.interactables.push(station as any);
@@ -78,7 +91,7 @@ describe('castle floor travel', () => {
   it('a pending old-zone landing cannot put the player upstairs after a portal trip', () => {
     const f = fixture();
     f.step();
-    const fresh = new ZoneRuntime(f.game, 'keep', 1388);
+    const fresh = new ZoneRuntime(f.game, 'keep', SEED);
     Object.assign(f.game, { zoneOrNull: fresh });
     f.game.player.pos.set(fresh.layout.entry.x, 0, fresh.layout.entry.z);
     f.finish();
