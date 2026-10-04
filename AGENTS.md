@@ -63,6 +63,14 @@ This is the only instruction file. Claude reads it through `CLAUDE.md` and Codex
 - Pure logic (XP, drops, recipes, saves, pathing) is unit-tested in `tests/`.
 - Save format changes bump `SAVE_VERSION` and add a tested migration, so players never lose progress.
 - Art is code: every model is a Blender script in `tools/blender/`, and the `.glb` exports are committed. Textures are sourced, not hand-painted in code (owner, October 3): generated with Codex image generation in the game's painted style, or taken from free CC0 libraries (Poly Haven, ambientCG) and toned to match. Each is made tileable, checked repeating in the game, committed small, and listed with its source and licence. See [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
+- **Use the method a professional 3D artist would use (owner, October 4: "it seems dumb not to use the best ideas").** Scripts are how we run Blender, not a reason to build everything from boxes. Before modelling, pick the technique a professional would use for that thing, and name it in the report:
+  - cloth simulation for hoods, capes, robes and banners;
+  - sculpting then remeshing and decimating for organic shapes;
+  - modifier stacks;
+  - geometry nodes for procedural walls, roofs, rocks, trees and scatter;
+  - UV unwrapping and texture baking from a high-detail version;
+  - armature rigs with weight painting.
+  The script stays deterministic, so exports are reproducible.
 - Always build on the newest stable version of every tool, library, engine feature and model, and use its newest way of doing things, not the legacy path (owner, October 3). At the start of a job, check the versions and current features it touches. Fall back to an older path only when the newest is broken or missing something, and then tell the owner plainly.
 - **Leave it tidier (owner, October 3).** Every job leaves its area tidier than it found it: no new plan or status docs, no placeholder text, TODO stubs or dead code, and a file is split before it passes the size limit (600 lines of code, 25 KB of Markdown, checked by `npm run check`; the allowlist in `tools/check-size.cjs` only shrinks). Reviewers check for all of this.
 - Files are UTF-8 without a BOM; CI rejects BOMs and mojibake.
