@@ -418,9 +418,11 @@ describe('grown trees in the world', () => {
     const natural = treeSet('natural'), block = treeSet('block');
     expect(natural.natural).toBe(true);
     expect(block.natural).toBe(false);
-    // (Kinds a zone gives no grown species keep the block models, the very same ones.)
-    expect(natural.canopy.ash).toBe(block.canopy.ash);
-    expect(natural.bush).toBe(block.bush);
+    // (Kinds a zone gives no grown species keep the block models, the very same ones; the dead ash
+    // and the bushes are grown in their place: grown-stand-ins.test.ts.)
+    expect(natural.canopy.grove).toBe(block.canopy.grove);
+    expect(natural.canopy.pine).toBe(block.canopy.pine);
+    expect(natural.grown).toBeDefined();
     for (const kind of GROWN_KINDS) {
       const set = grownTrees(kind);
       expect(set.trunk.length).toBe(GROWN[kind].seeds.length);

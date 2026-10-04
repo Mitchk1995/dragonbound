@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp } from '../../core/rng';
 import { packAttributes } from '../../render/patch';
+import { breakLength, brokenEnd } from './breaks';
 import { crownDepth } from './crown';
 import { along, arcAtHeight, lengthOf, normalOn, pointOn, sidesAt, tangentOn, type Joint, type Limb, type Skeleton } from './skeleton';
 import { buttress, FOOT_YS, footLayout, footRadius, footTop } from './trunkFoot';
@@ -25,11 +26,84 @@ interface Bark {
  * turned from the branch's (0 on the branch's first ring; elsewhere `aBarkB` is a copy of
  * `aBarkA`). `aWood` = the wind's weight, the limb's radius, the bark's coordinate along the limb
  * (bark metres) and 1 on a branch's first ring, whose collar triangles (each drawn last from that
- * ring) take `aBarkB`.
+ * ring) take `aBarkB`. A dead tree's wood (its limbs snapped: deadwood.ts) also carries, for where
+ * its bark has fallen away (foliage.ts), `aDead` = its limb's direction there and how far back
+ * from the limb's break it lies, in the break's own lengths (0 at the break's tip, 1 at its foot,
+ * far more on a limb that never snapped).
  */
 export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
+  return makeWoodGeometry(sk, false);
+}
+
+/** Fixed cylindrical charts for exposed wood: the collar blends parent and branch without turning either chart. */
+export function branchAlignedWoodGeometry(sk: Skeleton): THREE.BufferGeometry {
+  return unwrapBranchCharts(makeWoodGeometry(sk, true), sk.species.bark);
+}
+
+/**
+ * Linear cylindrical UVs, cut at a seam as a modeller unwraps a branch. Interpolating the cosine
+ * and sine before atan can pinch through zero across a broad fork triangle, twisting its grain.
+ * Unwrap each face before interpolation and duplicate only vertices whose UV charts need a cut;
+ * every position, triangle and smooth normal stays exactly as grown.
+ */
+function unwrapBranchCharts(source: THREE.BufferGeometry, barkWidth: number) {
+  const A = source.getAttribute('aBarkA'), B = source.getAttribute('aBarkB'), parent = source.getAttribute('aParentBark');
+  const wood = source.getAttribute('aWood'), branchV = source.getAttribute('aBranchV'), parentV = source.getAttribute('aParentV');
+  const rawCharts = new Set(['aBranchV', 'aParentBark', 'aParentV']);
+  const arrays = Object.fromEntries(Object.keys(source.attributes).filter((name) => !rawCharts.has(name)).map((name) => [name, [] as number[]]));
+  const uv: number[] = [], indices: number[] = [], unique = new Map<string, number>(), tau = Math.PI * 2;
+  /** Cut the circle through the largest gap between this face's corners, away from the face. */
+  const angles = (attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, face: number[]) => {
+    const a = face.map((i) => (Math.atan2(attr.getY(i), attr.getX(i)) + tau) % tau);
+    const ordered = [...a].sort((x, y) => x - y);
+    const gaps = ordered.map((x, i) => (ordered[(i + 1) % 3] + (i === 2 ? tau : 0)) - x);
+    const cut = ordered[(gaps.indexOf(Math.max(...gaps)) + 1) % 3];
+    return a.map((x) => x < cut - 1e-9 ? x + tau : x);
+  };
+  const idx = source.index!.array;
+  for (let t = 0; t < idx.length; t += 3) {
+    const face = [idx[t], idx[t + 1], idx[t + 2]], collar = wood.getW(face[2]) === 1;
+    // A break's face is a planar chart, separate from the cylindrical side, avoiding a UV pole
+    // at the heartwood point. Splinter sides keep the branch's longitudinal chart.
+    const cap = face.some((i) => wood.getY(i) <= 0.00101);
+    const capV = cap ? wood.getZ(face.find((i) => wood.getY(i) <= 0.00101)!) : 0;
+    const chart = collar ? B : A, primary = angles(chart, face), secondary = collar ? angles(parent, face) : primary;
+    face.forEach((vi, k) => {
+      const u = cap ? A.getX(vi) * wood.getY(vi) / barkWidth + A.getW(vi)
+        : primary[k] / tau * chart.getZ(vi) + (collar ? A.getW(face[2]) : A.getW(vi));
+      const v = cap ? A.getY(vi) * wood.getY(vi) + capV : collar ? branchV.getX(vi) : wood.getZ(vi);
+      const pu = collar ? secondary[k] / tau * parent.getZ(vi) + parent.getW(vi) : u;
+      const pv = collar ? parentV.getX(vi) : v;
+      const key = `${vi}:${u},${v},${pu},${pv}`;
+      let out = unique.get(key);
+      if (out === undefined) {
+        out = unique.size;
+        unique.set(key, out);
+        for (const [name, data] of Object.entries(arrays)) {
+          const attr = source.getAttribute(name);
+          for (let c = 0; c < attr.itemSize; c++) data.push(attr.getComponent(vi, c));
+        }
+        uv.push(u, v, pu, pv);
+      }
+      indices.push(out);
+    });
+  }
+  const g = new THREE.BufferGeometry();
+  for (const [name, data] of Object.entries(arrays)) g.setAttribute(name, new THREE.Float32BufferAttribute(data, source.getAttribute(name).itemSize));
+  g.setAttribute('aBarkUV', new THREE.Float32BufferAttribute(uv, 4));
+  packAttributes(g, ['aWood', 'aBarkA', 'aBarkB', 'aDead', 'aBarkUV']);
+  g.setIndex(indices);
+  g.computeBoundingSphere();
+  return g;
+}
+
+function makeWoodGeometry(sk: Skeleton, branchAligned: boolean): THREE.BufferGeometry {
   const { limbs, crown } = sk;
   const pos: number[] = [], col: number[] = [], wood: number[] = [], ba: number[] = [], bb: number[] = [], idx: number[] = [];
+  const dead = limbs.some((L) => L.broken !== undefined), dd: number[] = [], G = new THREE.Vector3();
+  // The exposed grain on an ash keeps each limb's cylindrical chart fixed across its collar.
+  // aBranchV carries that chart's length at the parent's rim; the material blends the two charts.
+  const branchV: number[] = [], parentBark: number[] = [], parentV: number[] = [];
   const kids: number[][] = limbs.map(() => []);
   limbs.forEach((L, i) => L.parent >= 0 && kids[L.parent].push(i));
   /** Each limb's rings (vertex indices) and bark, and each branch's hole rim in its parent with the rim point its bark lines up on. */
@@ -38,8 +112,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   const rims: number[][] = [];
   const rimFoot: number[] = [];
   const P = new THREE.Vector3(), T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), V = new THREE.Vector3();
-  const vertex = (p: THREE.Vector3, a: number, bark: Bark, r: number, s: number, shade: number, w: number) => {
+  const vertex = (p: THREE.Vector3, a: number, bark: Bark, r: number, s: number, shade: number, w: number, L: Limb) => {
     pos.push(p.x, p.y, p.z);
+    if (dead) {
+      const len = lengthOf(L);
+      tangentOn(L, s, G);
+      dd.push(G.x, G.y, G.z, L.broken !== undefined ? (len - s) / breakLength(L, len) : 99);
+    }
     ba.push(Math.cos(a), Math.sin(a), bark.tiles, bark.u);
     bb.push(Math.cos(a), Math.sin(a), bark.tiles, bark.u);
     // The damp foot, and the inner crown in the shade of the leaves.
@@ -47,7 +126,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     const inner = 1 - 0.38 * (1 - THREE.MathUtils.smoothstep(crownDepth(crown, p), 0.35, 0.9)) * THREE.MathUtils.smoothstep(p.y, crown.centre.y - crown.down, crown.centre.y);
     const c = foot * inner * shade;
     col.push(c, c, c);
-    wood.push(w, r, bark.v + (s - bark.s) * bark.k, 0);
+    const v = bark.v + (s - bark.s) * bark.k;
+    wood.push(w, r, v, 0);
+    if (branchAligned) {
+      branchV.push(v);
+      parentBark.push(Math.cos(a), Math.sin(a), bark.tiles, bark.u);
+      parentV.push(v);
+    }
     return pos.length / 3 - 1;
   };
   /** A vertex's place round its limb's bark (tiles). */
@@ -70,7 +155,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       return lay.angles.map((a, j) => {
         const rr = footRadius(sk.roots, rootAngles, a, P.y, r, flute);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
-        return vertex(V.copy(P).addScaledVector(D, rr), lay.bark[j], bark, rr, s, 1, w);
+        return vertex(V.copy(P).addScaledVector(D, rr), lay.bark[j], bark, rr, s, 1, w, L);
       });
     });
     // (A trunk whose tube starts at its very foot, a limb leaving it that low, has no foot rings.)
@@ -90,7 +175,8 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
     const len = lengthOf(L);
     const holes = kids[li].map((k) => limbs[k].joint!);
     // (The trunk's tube starts over its foot, built on to it below: trunkFoot.)
-    const start = L.joint ? L.joint.ring : L.order === 0 ? footTop(L, holes) : 0, tipLen = Math.min(len * 0.2, Math.max(0.06, L.radius[L.radius.length - 1] * 2.5));
+    const start = L.joint ? L.joint.ring : L.order === 0 ? footTop(L, holes) : 0;
+    const tipLen = L.broken !== undefined ? breakLength(L, len) : Math.min(len * 0.2, Math.max(0.06, L.radius[L.radius.length - 1] * 2.5));
     const st = stations(L, holes, start, len - tipLen);
     const sides = st.map((s) => sidesAt(L, s));
     // Bark tiles round the limb: as many as fit its girth at its foot (the trunk's at breast height),
@@ -128,7 +214,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       const iF = (i0 + half) % n, iB = (i0 + half + 1) % n, m = Math.max(1, Math.floor(half / 2));
       const turn = Math.round(off[iB] - off[iF] - (d[iB] - d[iF] - Math.round(d[iB] - d[iF])));
       for (let t = 0; t < 2 * m; t++) off[(iF - m + 1 + t + n) % n] += (turn * (t + 0.5)) / (2 * m) - (t >= m ? turn : 0);
-      rim.forEach((vi, i) => bb.splice(vi * 4, 4, Math.cos(th[i]), Math.sin(th[i]), tiles, off[i] - d[i0]));
+      rim.forEach((vi, i) => {
+        bb.splice(vi * 4, 4, Math.cos(th[i]), Math.sin(th[i]), tiles, branchAligned ? 0 : off[i] - d[i0]);
+        if (branchAligned) {
+          V.set(pos[vi * 3] - P.x, pos[vi * 3 + 1] - P.y, pos[vi * 3 + 2] - P.z);
+          branchV[vi] = bark.v + V.dot(T) * bark.k;
+        }
+      });
       bark.u = d[i0];
     }
     barks[li] = bark;
@@ -144,7 +236,7 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
         const a = (j / S) * Math.PI * 2;
         const rr = r * (L.order === 0 ? buttress(rootAngles, a, P.y, flute) : 1);
         D.copy(N).multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a));
-        return vertex(V.copy(P).addScaledVector(D, rr), a, bark, rr, s, 1, w);
+        return vertex(V.copy(P).addScaledVector(D, rr), a, bark, rr, s, 1, w, L);
       });
     });
     const ring = rings[li];
@@ -185,10 +277,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       // The crotch: the rim sits in the shadow of the fork.
       for (const vi of rim) for (let e = 0; e < 3; e++) col[vi * 3 + e] *= 0.84;
     }
-    // The tip closes on one point.
-    const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len));
+    // The tip closes on one point (a snapped limb's in a ragged break).
     const last = ring[ring.length - 1];
-    for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
+    if (L.broken !== undefined) brokenEnd(L, last, len - tipLen, len, (p, a, r, s) => vertex(p, a, bark, r, s, 1, along(L.sway, L, s), L), idx);
+    else {
+      const tip = vertex(pointOn(L, len, P), 0, bark, 0.001, len, 1, along(L.sway, L, len), L);
+      for (let j = 0; j < last.length; j++) idx.push(last[j], last[(j + 1) % last.length], tip);
+    }
     if (L.order === 0) trunkFoot(L, bark, start);
     // The collar: this branch's first ring stitched to its hole's rim in the parent.
     if (L.parent >= 0) {
@@ -196,6 +291,19 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
       for (const vi of ring[0]) {
         wood[vi * 4 + 3] = 1;
         bb[vi * 4 + 3] = 0;
+      }
+      if (branchAligned) {
+        const parent = limbs[L.parent], pb = barks[L.parent], j = L.joint!;
+        const pc = pointOn(parent, j.s), pt = tangentOn(parent, j.s), pn = normalOn(parent, j.s, pt);
+        const binormal = new THREE.Vector3().crossVectors(pt, pn);
+        for (const vi of ring[0]) {
+          // Extend the parent's chart onto the branch ring too: a second fixed chart, not a
+          // parent-to-branch angle interpolation hidden under the texture blend.
+          V.set(pos[vi * 3] - pc.x, pos[vi * 3 + 1] - pc.y, pos[vi * 3 + 2] - pc.z);
+          const a = Math.atan2(V.dot(binormal), V.dot(pn));
+          parentBark.splice(vi * 4, 4, Math.cos(a), Math.sin(a), pb.tiles, pb.u);
+          parentV[vi] = pb.v + (j.s + V.dot(pt) - pb.s) * pb.k;
+        }
       }
     }
   });
@@ -215,7 +323,13 @@ export function woodGeometry(sk: Skeleton): THREE.BufferGeometry {
   g.setAttribute('aWood', pick(wood, 4));
   g.setAttribute('aBarkA', pick(ba, 4));
   g.setAttribute('aBarkB', pick(bb, 4));
-  packAttributes(g, ['aWood', 'aBarkA', 'aBarkB']);
+  if (dead) g.setAttribute('aDead', pick(dd, 4));
+  if (branchAligned) {
+    g.setAttribute('aBranchV', pick(branchV, 1));
+    g.setAttribute('aParentBark', pick(parentBark, 4));
+    g.setAttribute('aParentV', pick(parentV, 1));
+  }
+  packAttributes(g, ['aWood', 'aBarkA', 'aBarkB', 'aDead', 'aBranchV', 'aParentBark', 'aParentV']);
   g.setIndex(idx.map((i) => keep[i]));
   g.computeVertexNormals();
   g.computeBoundingSphere();

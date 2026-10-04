@@ -5,7 +5,7 @@ import { packAttributes } from '../../render/patch';
 import { crownDepth, crownNormal } from './crown';
 import { along, around, perpendicular, range, UP, type Skeleton, type Spray } from './skeleton';
 
-/** No leaf card reaches lower than this (m): it would brush the 2 m hero's head. */
+/** No tree's leaf card reaches lower than this (m): it would brush the 2 m hero's head (Species.head). */
 const HEAD = 2.15;
 
 /**
@@ -17,7 +17,7 @@ const HEAD = 2.15;
  */
 export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
   const rng = mulberry32(seed * 104729 + 7);
-  const { crown } = sk;
+  const { crown } = sk, head = sk.species.head ?? HEAD;
   const pos: number[] = [], nrm: number[] = [], uv: number[] = [], col: number[] = [], wind: number[] = [], flutter: number[] = [], card3: number[] = [], spine: number[] = [], idx: number[] = [];
   const out = new THREE.Vector3(), cn = new THREE.Vector3(), n = new THREE.Vector3(), p = new THREE.Vector3(), tmp = new THREE.Vector3();
   // Leaf masses: the sprays of one branch light together as one soft lobe of the crown, lit on top
@@ -36,9 +36,9 @@ export function leafGeometry(sk: Skeleton, seed: number): THREE.BufferGeometry {
   }
   const card = (s: Spray, foot: THREE.Vector3, up: THREE.Vector3, face: THREE.Vector3, w: number, h: number) => {
     const side = new THREE.Vector3().crossVectors(up, face).normalize();
-    // (A card that would reach down past the hero's head is lifted clear.)
+    // (A card that would reach down past the hero's head, or a bush's into the ground, is lifted clear.)
     const base = foot.clone();
-    base.y += Math.max(0, HEAD - (base.y + Math.min(0, up.y * h) - Math.abs(side.y) * w * 0.5));
+    base.y += Math.max(0, head - (base.y + Math.min(0, up.y * h) - Math.abs(side.y) * w * 0.5));
     const { u0, u1, v0, v1 } = sprayCell(Math.floor(rng() * SPRAY_CELLS * SPRAY_CELLS));
     const flip = rng() < 0.5, pad = 0.003;
     // The spray's own tone: lighter or darker, warmer or cooler, than its neighbours.

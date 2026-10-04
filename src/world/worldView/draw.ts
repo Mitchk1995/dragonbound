@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { applyHeightShade } from '../../render/surface';
 import { hash01, MOSS_TALL, ROCK_MASSES, rockBlock, rockMass, rockMassMoss, slabBlock } from '../../render/blocks';
 import { useStrataRock } from '../../render/rock';
-import { grownTrees, GROWN, GROWN_KINDS, thinWood, type TreeKind } from '../trees';
+import { clearOfStones, grownTrees, GROWN, GROWN_KINDS, thinWood, type TreeKind } from '../trees';
 import { grownArgs, treeArgs, withVertexShade } from './materials';
 import type { Scatter, Scene } from './scene';
 
@@ -11,13 +11,22 @@ import type { Scatter, Scene } from './scene';
 export function drawScatter(scene: Scene, sets: Scatter) {
   const { theme, inst, ts, woods } = scene;
   const { trees, grown, rocks, rockCols, rims, rimCols, walls, wallCols, bushes, bushCols, flowers, flowerCols, reeds, strata, strataCols, crevices, debris, debrisCols, mass, massCols, rockMasses, rockMassCols, mossMats, mossCols, ferns, fernCols, cushions, cushionCols } = sets;
+  // A grown dead ash is not planted with its foot in a boulder or a rim stone (pebbles may lie among its roots).
+  if (ts.grown) {
+    const tp = new THREE.Vector3(), sc = new THREE.Vector3();
+    const stones = [...rocks, ...rims].map((mm) => (tp.setFromMatrixPosition(mm), { x: tp.x, z: tp.z, r: sc.setFromMatrixScale(mm).x * 0.6 }));
+    const keep = clearOfStones(trees.ash.m.map((mm) => (tp.setFromMatrixPosition(mm), { x: tp.x, z: tp.z })), stones, 0.85);
+    trees.ash.m = trees.ash.m.filter((_, i) => keep[i]);
+    trees.ash.c = trees.ash.c.filter((_, i) => keep[i]);
+  }
   // Grown trees need far more room than one to a cell: their woods are thinned (trees.ts thinWood),
   // and no bush is left in the shade of their crowns.
   if (woods) {
     const tp = new THREE.Vector3();
-    const xz = (mm: THREE.Matrix4, spacing?: number) => (tp.setFromMatrixPosition(mm), { x: tp.x, z: tp.z, spacing });
-    const lists = [...(['pine', 'grove', 'ash'] as TreeKind[]).map((k) => ({ list: trees[k], spacing: undefined })), ...GROWN_KINDS.map((g) => ({ list: grown[g], spacing: GROWN[g].look.spacing }))];
-    const thin = thinWood(lists.flatMap(({ list, spacing }) => list.m.map((mm) => xz(mm, spacing))), bushes.map((mm) => xz(mm)));
+    const xz = (mm: THREE.Matrix4, spacing?: number, first?: boolean) => (tp.setFromMatrixPosition(mm), { x: tp.x, z: tp.z, spacing, first });
+    // (A grown dead ash needs its room too, and keeps it in its own patch before the living trees round it.)
+    const lists = [...(['pine', 'grove', 'ash'] as TreeKind[]).map((k) => ({ list: trees[k], spacing: k === 'ash' ? ts.grown?.ash.look.spacing : undefined, first: k === 'ash' })), ...GROWN_KINDS.map((g) => ({ list: grown[g], spacing: GROWN[g].look.spacing, first: false }))];
+    const thin = thinWood(lists.flatMap(({ list, spacing, first }) => list.m.map((mm) => xz(mm, spacing, first))), bushes.map((mm) => xz(mm)));
     let n = 0;
     for (const { list } of lists) {
       const keep = list.m.map(() => thin.trees[n++]);
@@ -31,7 +40,8 @@ export function drawScatter(scene: Scene, sets: Scatter) {
     }
   }
   for (const k of ['pine', 'grove', 'ash'] as TreeKind[]) {
-    if (!trees[k].m.length) continue;
+    // (A grown dead ash is drawn with the grown trees.)
+    if (!trees[k].m.length || (k === 'ash' && ts.grown)) continue;
     const [trunk, crown] = treeArgs(ts, k);
     // Painted canopies: leaf clusters on broadleaves, needle tufts on pines, bark on dead ash.
     // Each tree takes one of the style's canopy variants, picked from its position (no pattern
@@ -43,15 +53,19 @@ export function drawScatter(scene: Scene, sets: Scatter) {
     const made = [...inst(ts.trunk[k][0], trees[k].m, null, ...trunk)!, ...vs.flatMap((geo, v) => inst(geo, pick(trees[k].m, v), pick(trees[k].c, v), ...crown) ?? [])];
     for (const mesh of made) mesh.name = 'tree';
   }
-  // Grown trees: each shape's own wood paired with its own leaves, every one instanced.
-  for (const g of GROWN_KINDS) {
-    const { m: at, c: cols } = grown[g];
+  // Grown trees (and a grown dead ash, and the grown bushes): each shape's own wood paired with its own
+  // leaves (a dead ash has none), every one instanced, a shape picked from where it stands.
+  const growns = [
+    ...GROWN_KINDS.map((g) => ({ list: grown[g], set: grownTrees(g), look: GROWN[g].look, name: 'tree' })),
+    ...(ts.grown ? [{ list: trees.ash, set: ts.grown.ash, look: ts.grown.ash.look, name: 'tree' }, { list: { m: bushes, c: bushCols }, set: ts.grown.bush, look: ts.grown.bush.look, name: 'bush' }] : []),
+  ];
+  for (const { list: { m: at, c: cols }, set, look, name } of growns) {
     if (!at.length) continue;
-    const set = grownTrees(g), [trunk, crown] = grownArgs(GROWN[g].look), tp = new THREE.Vector3();
-    const variant = at.map((mm) => (tp.setFromMatrixPosition(mm), Math.floor(hash01(tp.x, tp.z) * set.canopy.length)));
+    const [trunk, crown] = grownArgs(look), tp = new THREE.Vector3();
+    const variant = at.map((mm) => (tp.setFromMatrixPosition(mm), Math.floor(hash01(tp.x, tp.z) * set.trunk.length)));
     const pick = <T>(list: T[], v: number) => list.filter((_, i) => variant[i] === v);
-    const made = set.canopy.flatMap((geo, v) => [...(inst(set.trunk[v], pick(at, v), null, ...trunk) ?? []), ...(inst(geo, pick(at, v), pick(cols, v), ...crown) ?? [])]);
-    for (const mesh of made) mesh.name = 'tree';
+    const made = set.trunk.flatMap((wood, v) => [...(inst(wood, pick(at, v), null, ...trunk) ?? []), ...(set.canopy[v] ? inst(set.canopy[v], pick(at, v), pick(cols, v), ...crown) ?? [] : [])]);
+    for (const mesh of made) mesh.name = name;
   }
   // Rocks are chunky faceted blocks (two shapes, alternating) sunk into the ground.
   const half = <T>(list: T[], odd: number) => list.filter((_, i) => i % 2 === odd);
@@ -107,7 +121,8 @@ export function drawScatter(scene: Scene, sets: Scatter) {
     new THREE.BoxGeometry(0.4, 0.2, 0.44).translate(0.26, 0.4, -0.22),
   ])!;
   inst(masonry, walls, wallCols, 0, true, 'masonry');
-  for (const mesh of inst(ts.bush, bushes, bushCols, 0, false, ts.paint.grove, true, ts.bushGrade, ts.shaded ? withVertexShade : undefined) ?? []) mesh.name = 'bush';
+  // (Grown bushes are drawn with the grown trees.)
+  if (!ts.grown) for (const mesh of inst(ts.bush, bushes, bushCols, 0, false, ts.paint.grove, true, ts.bushGrade, ts.shaded ? withVertexShade : undefined) ?? []) mesh.name = 'bush';
   // Moss cushions on the rock: a few soft lobes run together, flattened onto the ledge.
   if (cushions.length) {
     const lobe = (r: number, x: number, z: number) => new THREE.IcosahedronGeometry(r, 1).scale(1, 0.42, 1).translate(x, r * 0.12, z);

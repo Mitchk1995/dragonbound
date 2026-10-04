@@ -151,11 +151,12 @@ export function leafAtlas(kind: LeafKind) {
 /**
  * The bark kinds, one per grown kind: an oak's deep furrows, a common broadleaf's shallower ones, a
  * willow's criss-crossing ridges, a maple's grey plates, a yew's red-brown flakes and the magic
- * tree's pale ridges with glowing veins.
+ * tree's pale ridges with glowing veins; and the dead ash's: an ash's grey-brown bark, its ridges
+ * interlacing round long furrows, and the bare, weathered grey wood under it.
  */
-export type BarkKind = 'oak' | 'tree' | 'willow' | 'maple' | 'yew' | 'magic';
+export type BarkKind = 'oak' | 'tree' | 'willow' | 'maple' | 'yew' | 'magic' | 'ash' | 'deadwood';
 
-export const BARK_KINDS: BarkKind[] = ['oak', 'tree', 'willow', 'maple', 'yew', 'magic'];
+export const BARK_KINDS: BarkKind[] = ['oak', 'tree', 'willow', 'maple', 'yew', 'magic', 'ash', 'deadwood'];
 
 /** A bark's maps (public/textures/bark/, made by tools/bark_textures.py): its colour and its relief. */
 interface BarkMaps {
