@@ -26,7 +26,6 @@ const ALLOWED = {
   'src/world/castle/keepModel.ts': 781,
   'src/world/castleProps/bailey.ts': 980,
   'src/world/castleProps/curtain.ts': 914,
-  'src/world/props.ts': 3395,
   'src/world/terrain.ts': 1241,
   'src/world/worldView.ts': 1319,
   'tests/castle-geometry.test.ts': 879,
