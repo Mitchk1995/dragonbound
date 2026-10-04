@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MeshBasicNodeMaterial, MeshLambertNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, type Node, type NodeBuilder, type Renderer, type TextureNode } from 'three/webgpu';
-import { cameraViewMatrix, float, Fn, negateOnBackSide, normalViewGeometry, diffuseColor, instancedBufferAttribute, mat3, mat4, materialEmissive, materialReference, materialRoughness, modelNormalMatrix, modelWorldMatrix, normalGeometry, normalLocal, OnBeforeFrameUpdate, positionGeometry, positionLocal, positionWorld, texture, varying, vec2, vec3 } from 'three/tsl';
+import { cameraViewMatrix, float, Fn, negateOnBackSide, normalViewGeometry, diffuseColor, instancedBufferAttribute, mat3, mat4, materialEmissive, materialReference, materialRoughness, modelNormalMatrix, modelWorldMatrix, normalGeometry, normalLocal, OnBeforeFrameUpdate, positionGeometry, positionLocal, positionPrevious, positionWorld, texture, varying, vec2, vec3 } from 'three/tsl';
 
 /**
  * Composable material patches in the node shading language (TSL).
@@ -299,7 +299,12 @@ function patchedClass(Base: NodeMaterialClass) {
     }
 
     override setupPosition(builder: NodeBuilder) {
-      if (this.has('position')) positionLocal.assign(this.run('position', positionLocal as V3));
+      if (this.has('position')) {
+        positionLocal.assign(this.run('position', positionLocal as V3));
+        // With motion drawn (smooth edges), last frame's position takes the same shaping, or the sway
+        // and the lawn's lift would read as motion and smear.
+        if ((builder as NodeBuilder & { needsPreviousData(): boolean }).needsPreviousData()) positionPrevious.assign(this.run('position', positionPrevious as unknown as V3));
+      }
       return super.setupPosition(builder);
     }
 

@@ -10,6 +10,7 @@ import { XP_TUNING } from '../data/tuning';
 import { DROP_TABLES } from '../data/dropTables';
 import type { Interactable } from '../entities/interactable';
 import type { Game } from '../game';
+import type { LightingEffects } from '../render/post';
 import { generateItem, generateUnique, makeItem } from '../loot/itemGen';
 import { FUTURE_SKILLS, MAX_LEVEL, SKILL_INFO, xpForLevel } from '../progression/skills';
 import { SKILLS, SLOTS, type Item, type SkillId, type Slot } from '../types';
@@ -18,6 +19,9 @@ import { DRAG_THRESHOLD, swapSlots } from './hudLayout';
 import { icon } from './icons';
 import { skillTileInfo } from './skillGrid';
 import type { UI } from './ui';
+
+/** The lighting effects the debug panel switches (render/post.ts), each off until switched on. */
+const LIGHTING_TOGGLES: [keyof LightingEffects, string][] = [['bounce', 'Bounce light'], ['contact', 'Contact shading'], ['reflections', 'Reflections'], ['smooth', 'Smooth edges']];
 
 const SLOT_LABEL: Record<Slot, string> = { weapon: 'Weapon', helm: 'Helm', body: 'Body', gloves: 'Gloves', boots: 'Boots', amulet: 'Amulet', ring: 'Ring' };
 
@@ -655,6 +659,7 @@ export class Panels {
         <label><input type="checkbox" data-d="god" ${g.debug.god ? 'checked' : ''}> God mode</label>
         <label><input type="checkbox" data-d="oneShot" ${g.debug.oneShot ? 'checked' : ''}> One-shot enemies</label>
         <label>Drop rate × <select data-d="drop">${[1, 10, 100, 1000].map((v) => `<option ${g.debug.dropMult === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        ${LIGHTING_TOGGLES.map(([k, name]) => `<label><input type="checkbox" data-light="${k}" ${g.save.settings.lighting?.[k] ? 'checked' : ''}> ${name}</label>`).join('')}
         <div class="dbtns">
           <button class="btn sm" data-a="lvl">+5 all skills</button>
           <button class="btn sm" data-a="gold">+5,000 gold</button>
@@ -670,6 +675,9 @@ export class Panels {
       const d = i.dataset.d!;
       if (d === 'drop') g.debug.dropMult = Number((i as unknown as HTMLSelectElement).value);
       else (g.debug as any)[d] = i.checked;
+    }));
+    el.querySelectorAll<HTMLInputElement>('[data-light]').forEach((i) => i.addEventListener('change', () => {
+      g.setLighting({ ...g.save.settings.lighting, [i.dataset.light!]: i.checked });
     }));
     el.querySelectorAll<HTMLElement>('[data-go]').forEach((b) => b.addEventListener('click', () => g.travel(b.dataset.go!)));
     el.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => b.addEventListener('click', () => {

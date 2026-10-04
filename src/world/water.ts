@@ -3,6 +3,7 @@ import { WebGPUCoordinateSystem } from 'three';
 import type { Node, Renderer } from 'three/webgpu';
 import { abs, attribute, cameraViewMatrix, cos, diffuseColor, dot, float, If, length, mat3, max, min, mix, normalize, normalView, positionGeometry, positionView, positionWorld, pow, reflect, saturate, sin, smoothstep, transpose, vec2, vec3, vec4 } from 'three/tsl';
 import { addPatch, rot2, type F, type V2, type V3, type V4 } from '../render/patch';
+import { effectsWater } from '../render/surfaces';
 import { noiseTexture } from '../render/textures';
 
 /**
@@ -23,6 +24,16 @@ export const WATER_SKY = {
 export function setWaterSky(hemi: number, bg: number) {
   WATER_SKY.uSkyHigh.value.set(hemi).multiplyScalar(0.75);
   WATER_SKY.uSkyLow.value.set(bg).lerp(new THREE.Color(hemi), 0.25);
+}
+
+/**
+ * Whether two projections are the same lens, apart from the fraction of a pixel the smooth edges
+ * shift each frame by (elements 8 and 9: the view's offset), so a lazy mirror rests while the camera does.
+ */
+function sameLens(a: THREE.Matrix4, b: THREE.Matrix4) {
+  const x = a.elements, y = b.elements;
+  for (let i = 0; i < 16; i++) if (i !== 8 && i !== 9 && x[i] !== y[i]) return false;
+  return Math.abs(x[8] - y[8]) < 0.002 && Math.abs(x[9] - y[9]) < 0.002;
 }
 
 /** Where something strikes a pool: centre (x, z) in the pool mesh's own space, and a strength. */
@@ -73,7 +84,8 @@ export function poolWater(time: { value: number }, r: number, impacts: Impact[] 
     ...WATER_SKY,
   };
   if (mirror) uniforms.uRefl = { value: mirror.texture };
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0, transparent: true, depthWrite: false });
+  // (A surface for the screen-space effects; a pool with a mirror already shows what stands over it.)
+  const mat = effectsWater(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0, transparent: true, depthWrite: false }), mirror ? 0 : 1);
   addPatch(mat, {
     key: mirror ? 'pool4-mirror' : 'pool4',
     uniforms,
@@ -333,9 +345,10 @@ export function planarReflection(level: number | (() => number), layer?: number,
     if (lazy && on.value && drawnFor === camera && !busy) {
       renderer.getDrawingBufferSize(size);
       const a = drawnAt.elements, b = camera.matrixWorld.elements;
-      const still = drawnAt.equals(camera.matrixWorld) && drawnProj.equals(camera.projectionMatrix);
+      const lens = sameLens(drawnProj, (camera as THREE.PerspectiveCamera).projectionMatrix);
+      const still = drawnAt.equals(camera.matrixWorld) && lens;
       // (A step of the following camera, not a cut to somewhere else.)
-      const near = drawnProj.equals(camera.projectionMatrix) && Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]) < 0.3 && [0, 1, 2, 4, 5, 6, 8, 9, 10].every((k) => Math.abs(a[k] - b[k]) < 0.01);
+      const near = lens && Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]) < 0.3 && [0, 1, 2, 4, 5, 6, 8, 9, 10].every((k) => Math.abs(a[k] - b[k]) < 0.01);
       const fits = rt.width === Math.max(64, Math.round(size.x / coarse)) && rt.height === Math.max(64, Math.round(size.y / coarse));
       if (fits && (still || (near && waited < 1))) {
         if (!still) waited++;
@@ -400,11 +413,15 @@ export function planarReflection(level: number | (() => number), layer?: number,
     renderer.xr.enabled = false;
     for (const l of lights) if (l.shadow) l.shadow.autoUpdate = false;
     renderer.setRenderTarget(rt);
+    // (The mirror is one picture: the frame's surface buffers, when the effects draw them, stay out of it.)
+    const prevMRT = renderer.getMRT();
+    renderer.setMRT(null);
     // (The scene's matrices were brought up to date by the frame this mirror draws in.)
     const prevAuto = scene.matrixWorldAutoUpdate;
     scene.matrixWorldAutoUpdate = false;
     renderer.render(scene, vcam);
     scene.matrixWorldAutoUpdate = prevAuto;
+    renderer.setMRT(prevMRT);
     scene.background = bg;
     renderer.setClearColor(clearC, prevAlpha);
     renderer.xr.enabled = prevXr;

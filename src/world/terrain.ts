@@ -3,6 +3,7 @@ import type { ZoneTheme } from '../data/zones';
 import { abs, attribute, cameraViewMatrix, cos, diffuseColor, dot, float, If, length, mat3, max, min, mix, normalize, normalView, positionView, positionWorld, pow, reflect, saturate, sin, smoothstep, transpose, vec2, vec3 } from 'three/tsl';
 import { addPatch, packAttributes, rot2, type F, type V2, type V3 } from '../render/patch';
 import { applyGround, CAVE_TERRACE, GROUND_TIME } from '../render/surface';
+import { effectsWater } from '../render/surfaces';
 import { noiseTexture } from '../render/textures';
 import { mirrorUV, planarReflection, SUN_GLINT } from './water';
 import { Cell, Fluid, Ground, type ZoneLayout } from './layout';
@@ -1076,6 +1077,8 @@ function fluidSurface(geo: THREE.BufferGeometry, kind: Fluid, theme: ZoneTheme, 
     color: 0xffffff, roughness: lava ? 0.55 : 0.3, metalness: 0,
     transparent: !lava, opacity: lava ? 1 : 0.86, depthWrite: lava,
   });
+  // (A surface for the screen-space effects; mirror water already shows what stands over it.)
+  if (!lava) effectsWater(mat, refl ? 0 : 1);
   addPatch(mat, {
     key: lava ? 'fluid4-lava' : refl ? 'fluid4-mirror' : 'fluid4-water',
     uniforms,

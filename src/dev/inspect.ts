@@ -23,8 +23,8 @@ import type { Slot } from '../types';
  * trees:grown:<kind> for one grown kind's progress pictures, trees:roots for their roots and crowns), approved (approved artwork, see approvedInspect.ts),
  * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts),
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
- * charactersInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), dragons (the
- * drakeling and Cinderwing, see dragonInspect.ts).
+ * charactersInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), lightfx (the
+ * lighting effects one at a time, see lightFxInspect.ts), dragons (the drakeling and Cinderwing, see dragonInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
  * orbits round each: bailey-angles:hall-door+landing).
@@ -128,6 +128,9 @@ export async function runInspect(g: Game, suites: string) {
     // `lighting`, `lighting:keep` for the island alone, `lighting:cost` for what each part of the light costs, `lighting:quality` for switching quality mid-session).
     const lightArg = suites.split(',').find((s) => s === 'lighting' || s.startsWith('lighting:'));
     if (lightArg) report.lighting = await (await import('./lightingInspect')).lightingSuite(g, shot, lightArg === 'lighting:keep', lightArg === 'lighting:cost', lightArg === 'lighting:quality');
+    // The lighting effects one at a time, and their costs (explicit only: `lightfx`, or `lightfx:river+hero` for some views).
+    const fxArg = suites.split(',').find((s) => s === 'lightfx' || s.startsWith('lightfx:'));
+    if (fxArg) report.lightfx = await (await import('./lightFxInspect')).lightFxSuite(g, shot, fxArg.split(':')[1]?.split('+') ?? []);
     if (suites.split(',').includes('memory')) report.memory = await (await import('./memoryCheck')).memoryCheck(g);
     if (want('effects')) await effectsSuite(g, shot);
     if (want('boss')) await bossSuite(g, shot);
