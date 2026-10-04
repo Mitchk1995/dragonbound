@@ -85,16 +85,17 @@ async function meteorStrip(g: Game, c: Clock, box: Box) {
 }
 
 /**
- * Two fires (the campfire by the Foothills clearing, a torch in the keep), a frame every 1/30 s. Fires burn on the
- * renderer's own clock, so it is held and stepped by hand here.
+ * Two fires (the campfire by the Foothills clearing, the brazier in the keep's hall), a frame every 1/30 s. Fires burn
+ * on the renderer's own clock, so it is held and stepped by hand here.
  */
 async function flameStrips(g: Game, c: Clock, box: Box) {
   const frame = (g.renderer as unknown as { _nodes: { nodeFrame: { time: number; frameId: number; update: () => void } } })._nodes.nodeFrame;
   const update = frame.update;
   for (const zone of ['foothills', 'keep']) {
-    g.travel(zone, true);
-    const p = g.player, near = new THREE.Vector3(p.x, 0, p.z);
-    const s = fireSpots(g).sort((a, b) => a.distanceTo(near) - b.distanceTo(near))[0];
+    if (zone === 'foothills') arena(g, 'steel_sword', 0);
+    else g.travel(zone, true);
+    const p = g.player, near = new THREE.Vector3(p.x, 0, p.z), spots = fireSpots(g);
+    const s = zone === 'foothills' ? spots.sort((a, b) => a.distanceTo(near) - b.distanceTo(near))[0] : spots[Math.floor(spots.length / 2)];
     if (!s) continue;
     p.pos.set(s.x, g.zone.groundY(s.x, s.z + 3), s.z + 3);
     p.stop();

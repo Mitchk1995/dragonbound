@@ -6,6 +6,7 @@ import type { Game } from '../game';
 import { makeItem } from '../loot/itemGen';
 import { xpForLevel } from '../progression/skills';
 import type { Slot } from '../types';
+import { Cell } from '../world/layout';
 
 /**
  * The visual effects at the play camera, mid-effect, one family at a time (dev only): weapon hits and kills, spells,
@@ -266,8 +267,35 @@ async function spells(g: Game, c: Clock) {
   await c.shot('vfx-fireball-flight');
   c.step(1.5);
   await cast(g, c, 'fireball', 'apprentice_staff', 'Q', struck, [0.03, 0.12, 0.3, 0.6]);
+  await fireballOnWall(g, c);
   await cast(g, c, 'frost-nova', 'apprentice_staff', 'W', () => landed(g), [0.03, 0.12, 0.3]);
   await cast(g, c, 'chain-lightning', 'apprentice_staff', 'E', () => landed(g), [0.02, 0.08, 0.16]);
+}
+
+/** The fireball bursting against the cliff or wall nearest north of the clearing, the hero four short of it. */
+async function fireballOnWall(g: Game, c: Clock) {
+  const p = arena(g, 'apprentice_staff', 0), L = g.zone.layout, mid = openGround(g);
+  let wall: { x: number; z: number } | null = null, bd = Infinity;
+  for (let z = 0; z < L.h; z++) for (let x = 0; x < L.w; x++) {
+    const cell = L.cells[z * L.w + x], d = Math.hypot(x + 0.5 - mid.x, z + 0.5 - mid.z);
+    if ((cell !== Cell.Cliff && cell !== Cell.Wall) || z + 0.5 > mid.z || d >= bd) continue;
+    bd = d;
+    wall = { x: x + 0.5, z: z + 0.5 };
+  }
+  if (!wall) return;
+  const k = 4 / bd, hx = wall.x + (mid.x - wall.x) * k, hz = wall.z + (mid.z - wall.z) * k;
+  p.pos.set(hx, g.zone.groundY(hx, hz), hz);
+  g.camPos.copy(p.pos);
+  g.hovered = null;
+  g.ground.set(wall.x, 0, wall.z);
+  p.faceTo(wall.x, wall.z, true);
+  c.step(0.1);
+  g.combat.useAbility('Q');
+  const mine = () => g.zone.projectiles.some((q) => q.o.owner === 'player');
+  c.until(mine);
+  c.until(() => !mine());
+  await c.at('fireball-wall', [0.03, 0.15, 0.4]);
+  c.step(1.5);
 }
 
 async function skills(g: Game, c: Clock) {
@@ -396,14 +424,18 @@ export function lair(g: Game, c: Clock) {
   };
 }
 
-/** Cinderwing's fire: its breath mid-burn, the meteors it rains in flight, its tail slam's dust. */
+/**
+ * Cinderwing's fire: its breath mid-burn, the meteors it rains in flight (again at the play camera's own zoom, for a
+ * closer look), its tail slam's dust.
+ */
 async function boss(g: Game, c: Clock) {
   const den = lair(g, c);
   if (!den) return;
-  const cases: [ActionKind, number[]][] = [['breath', [1.7, 2.3]], ['tail', [1.6]], ['flight', [3, 4, 6.5]]];
-  for (const [kind, times] of cases) {
+  const cases: [string, ActionKind, number[], number][] = [['breath', 'breath', [1.7, 2.3], 1.35], ['tail', 'tail', [1.6], 1.35], ['flight', 'flight', [3, 4, 6.5], 1.35], ['flight-close', 'flight', [3, 4], 1]];
+  for (const [name, kind, times, zoom] of cases) {
+    g.camZoom = zoom;
     den.act(kind);
-    await c.at(`boss-${kind}`, times);
+    await c.at(`boss-${name}`, times);
     c.step(2);
   }
   den.done();
