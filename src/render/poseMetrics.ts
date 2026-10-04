@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { BOW_MID } from './anim';
+
 /**
  * World-space measurements of posed models, used by tests/poses.test.ts (CI) and the dev pose
  * tools. Characters face +Z, so "forward" = +Z, "up" = +Y, the hero's right = -X.
@@ -99,6 +101,9 @@ export interface BowFacts {
   upright: boolean;
   /** z of the string's midpoint minus z of the grip: negative = string toward the archer. */
   stringBehindGrip: number;
+  /** Cosine of the angle at the bow's middle (BOW_MID up the grip from the hand's hole) between the string's middle
+   * and the archer's chest (sock_chest): 1 = the string straight toward him, below 0 = turned away from him. */
+  stringFacing: number;
   arrowVisible: boolean;
   /** z component of the arrow's direction (1 = straight at the target). */
   arrowForward: number | null;
@@ -139,10 +144,14 @@ export function bowFacts(root: THREE.Object3D, drawHand: THREE.Object3D): BowFac
   const gripC = grip ? new THREE.Box3().setFromObject(grip).getCenter(new THREE.Vector3()) : body.getCenter(new THREE.Vector3());
   const mid = strings.length === 2 ? new THREE.Box3().setFromObject(strings[0]).union(new THREE.Box3().setFromObject(strings[1])).getCenter(new THREE.Vector3()) : null;
   const hand = drawHand.getWorldPosition(new THREE.Vector3());
+  const sock = root.getObjectByName('sock_handR')!, chest = root.getObjectByName('sock_chest')!;
+  const middle = sock.localToWorld(new THREE.Vector3(0, BOW_MID, 0));
+  const toChest = chest.getWorldPosition(new THREE.Vector3()).sub(middle).normalize();
   return {
     // A deep D bow (the Worn Shortbow) is about a third as deep as it is tall.
     upright: size.y > 1.2 && size.y > size.x * 3 && size.y > size.z * 2.5,
     stringBehindGrip: mid ? mid.z - gripC.z : NaN,
+    stringFacing: mid ? mid.clone().sub(middle).normalize().dot(toChest) : NaN,
     arrowVisible: !!arrow?.visible,
     arrowForward: arrow?.visible ? new THREE.Vector3(0, 1, 0).transformDirection(arrow.matrixWorld).z : null,
     nockToHand: strings.length ? strings[0].localToWorld(new THREE.Vector3(0, 1, 0)).distanceTo(hand) : null,

@@ -2,14 +2,16 @@ import * as THREE from 'three';
 import { COMBAT_TUNING } from '../data/tuning';
 import type { AnimState } from './anim';
 
-const REST = new THREE.Vector3();
+const REST = new THREE.Vector3(), OFF = new THREE.Vector3();
 
 /** The arrow looses at the attack's impact frame (COMBAT_TUNING.impact). */
 const RELEASE = COMBAT_TUNING.impact;
 /** Draw amount by which the hand has taken the string (the arrow shows from here on). */
 const GRAB = 0.1;
-/** The arrow runs from the nock through the bow and this far past it, so its head sits just beyond the bow. */
+/** The arrow runs from the nock past the side of the riser (clearing it by ARROW_CLEAR) and this far beyond its back,
+ * so its head sits just past the bow. */
 const ARROW_PAST = 0.14;
+const ARROW_CLEAR = 0.025;
 /** The arrowhead's length. */
 const HEAD = 0.12;
 
@@ -36,6 +38,10 @@ export class BowDraw {
   private grip = new THREE.Vector3();
   /** Unit direction from the grip back through the string's middle: the arrow line, toward the archer. */
   private back = new THREE.Vector3();
+  /** The riser (the bow round its middle), in the bow's own frame from the string's middle: the way out through its
+   * back (toBack), the way across it toward the side the arrow passes (side), how deep its front and back faces lie
+   * and its half width. */
+  private riser = { toBack: new THREE.Vector3(), side: new THREE.Vector3(), front: 0, back: 0, half: 0 };
   private strings: THREE.Mesh[] = [];
   private arrow: ReturnType<typeof buildArrow> | null = null;
   private tmp = new THREE.Vector3();
@@ -90,6 +96,30 @@ export class BowDraw {
     this.grip.copy(bc);
     this.grip[axis] = c[axis];
     this.back.subVectors(this.rest, this.grip).normalize();
+    // The arrow passes the riser on the side away from the archer, as on a real bow's shelf, and runs on past its back.
+    const r = this.riser;
+    r.toBack.copy(this.back).negate();
+    const along = new THREE.Vector3();
+    along[axis] = 1;
+    r.side.crossVectors(along, r.toBack).normalize();
+    r.front = Infinity;
+    r.back = r.half = 0;
+    group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || o === sm) return;
+      const p = o.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld).applyMatrix4(inv);
+        if (Math.abs(v[axis] - c[axis]) > 0.12) continue;
+        v.sub(this.rest);
+        const deep = v.dot(r.toBack);
+        r.front = Math.min(r.front, deep);
+        r.back = Math.max(r.back, deep);
+        r.half = Math.max(r.half, Math.abs(v.dot(r.side)));
+      }
+    });
+    // How far the string lies from the grip, which runs through the hand along the socket's Y: the rig turns a carried
+    // bow in the hand by it, so the string faces the archer (anim.ts bowSpin).
+    this.root.userData.bowDepth = Math.hypot(c.x, c.z);
     sm.visible = false;
     this.bow = group;
 
@@ -108,6 +138,7 @@ export class BowDraw {
   }
 
   detach() {
+    delete this.root.userData.bowDepth;
     for (const s of this.strings) s.removeFromParent();
     this.strings = [];
     this.arrow?.group.removeFromParent();
@@ -139,13 +170,17 @@ export class BowDraw {
       const { group, shaft, head } = this.arrow;
       group.visible = drawing && anim.attack < RELEASE && pull > GRAB;
       if (group.visible) {
-        // The arrow lies from the nock through the bow, as long as the draw, its head just beyond the bow.
-        const dir = REST.copy(this.grip).sub(nock);
+        // The arrow lies from the nock past the side of the riser, clear of its front corner, its head just beyond
+        // the bow's back.
+        const r = this.riser;
+        const toFront = r.front - OFF.subVectors(nock, this.rest).dot(r.toBack), toEnd = toFront - r.front + r.back + ARROW_PAST;
+        const dir = REST.copy(this.rest).addScaledVector(r.toBack, r.back + ARROW_PAST)
+          .addScaledVector(r.side, (r.half + ARROW_CLEAR) * toEnd / Math.max(toFront, 0.05)).sub(nock);
         const len = dir.length() || 1;
         group.position.copy(nock);
         group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.divideScalar(len));
-        shaft.scale.y = len + ARROW_PAST - HEAD;
-        head.position.y = len + ARROW_PAST - HEAD;
+        shaft.scale.y = len - HEAD;
+        head.position.y = len - HEAD;
       }
     }
   }
@@ -167,6 +202,7 @@ function buildArrow() {
   const feather = new THREE.MeshStandardMaterial({ color: 0xd84a2a, flatShading: true, side: THREE.DoubleSide });
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1, 5).translate(0, 0.5, 0), wood);
   const head = new THREE.Mesh(new THREE.ConeGeometry(0.035, HEAD, 4).translate(0, HEAD / 2, 0), steel);
+  head.name = 'bow_arrow_head';
   g.add(shaft, head);
   for (let k = 0; k < 3; k++) {
     const f = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.14).translate(0.03, 0.1, 0), feather);

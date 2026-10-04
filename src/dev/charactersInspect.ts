@@ -11,6 +11,8 @@ import { Studio, equip, fit } from './inspect';
 
 /** The hero's tunic and armour skirts mid-stride (explicit suite: `skirts`). */
 export { skirtsSuite } from './skirtsInspect';
+/** The bow in the hero's hands, and the goblin's and kobold's hips (explicit suite: `bow`). */
+export { bowSuite } from './bowInspect';
 
 type Shot = (n: string) => Promise<void>;
 
@@ -154,7 +156,7 @@ async function handsAndElbows(st: Studio, shot: Shot) {
     await flush(`char-bow-${label.replace(/\s+/g, '_')}`, 3, 2);
   }
 
-  // The bow carried plumb and out from the body, standing and mid-stride, its limbs clear of the legs.
+  // The bow carried ready in front of the hip, angled down and forward, standing and mid-stride, clear of the legs.
   const sideOn = new THREE.Vector3(-1, 0.15, 0.05), behind = new THREE.Vector3(0.35, 0.8, -1);
   for (const [label, set] of [['bow', HERO_SETS[2][1]], ['leather bow', HERO_SETS[4][1]]] as const) {
     h = hero(set, 'bow', -1);

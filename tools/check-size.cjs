@@ -28,7 +28,7 @@ const ALLOWED = {
   'src/world/terrain.ts': 1003,
   'tests/castle-geometry.test.ts': 879,
   'tools/blender/_common.py': 728,
-  'tools/blender/gear.py': 1079,
+  'tools/blender/gear.py': 975,
 };
 
 /** Every checked file under `root` as { file, kind, size }: lines for code, bytes for docs. */

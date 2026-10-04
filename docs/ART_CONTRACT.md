@@ -93,23 +93,46 @@ never shows), their cuffs on the forearm. Kobolds keep their lizard claws. Every
 forearm and a hand on three pivots, `armX` (shoulder), `elbowX` and `handX` (wrist), authored straight; limbs meeting
 at an elbow are rounded about it (`_common.joint_limb`), so the joint stays closed at any bend. The game bends them
 (anim.ts): a relaxed bend at rest; a staff carried upright with the forearm level (the "upright" hold, from the weapon
-on the hero and from a `staffbody` part on a creature); a bow carried plumb the same way but out from the body, the arm
-a little out and the forearm turned out at the elbow, because its limbs sweep in toward the string and would catch the
-striding leg (the "bow" hold); a blade, club or tool at the side, the wrist tipping it down; the sword's wind-up folds
-the forearm back over the shoulder and cocks the wrist so the blade rises in line with the forearm; and the bow draw
-reaches the string with a two-bone reach (`Rig.reach`), the elbow bent and swung out so the arm stays clear of the
-chest.
+on the hero and from a `staffbody` part on a creature); a bow carried ready in front of the hip, angled down and
+forward (the "bow" hold, below); a blade, club or tool at the side, the wrist tipping it down;
+the sword's wind-up folds the forearm back over the shoulder and cocks the wrist so the blade rises in line with the
+forearm; and the bow draw reaches the string with a two-bone reach (`Rig.reach`), the elbow bent and swung out so the
+arm stays clear of the chest.
+
+**A bow's string always faces the archer** (owner, October 4: "holding bow completely backwards", then "still held
+wrong"): its limbs curve away from him, carried, drawn and after the shot, and the hand holds it at the grip's middle.
+Carried, the bow arm is forward and out from the side, barely swinging, the bow ready in front of the hip, angled down
+and forward: back forward, string toward his chest. A bow as deep as the Worn Shortbow's D can face its string to him
+only so: at his side its string would pass through his arm or chest, so the deeper the bow, the further out it is held
+(`anim.ts` `BOW_OUT_K`). The bow turns in the hand about its grip (`bowSpin`); coming up to shoot it turns to its frame
+in `gear.py`, string down the arrow toward the archer. The archer turns side-on into the shot (90°), holds the stance
+between shots and lowers back to the carry a moment after the last, every step blended (`Rig.stance`). The draw hand
+anchors at the jaw, the arrow just under the chin: a minifigure's chin is out of the hand's reach (its head is as wide
+as its shoulders are far apart, and an armoured upper arm swung further across meets the breastplate).
+
+**The bow is measured, never judged by eye** (October 4). `src/render/bowMeasure.ts` reads it from the scene graph in
+world space, trusting nothing about how it was authored (tips from the string's ends, riser from its own vertices, its
+back as the way from the string through the riser, the grip from the piece named `bow_grip`), and holds it to the
+rules: string between riser and archer, toward his chest; limbs bending away; aimed, upright with the aim in its
+plane and the archer side-on, his shoulders along the aim; the hand's hole at the grip's middle; drawn, the draw hand
+on the nock beside the jaw, the arrow on the string, at the target, beside the riser, past the bow's back; carried,
+angled down and forward, back forward; and nothing of bow, string or arrow cutting into him. `tests/bow-audit.test.ts`
+plays every bow, in the starting outfit and in plate, frame by frame through standing, a stride, two shots and
+lowering, and proves the checks catch a bow turned round, pushed into him or off its grip; the `bow` inspect suite
+measures the player in the running game, shooting every way (report.json; a broken rule fails the run), and marks the
+bow in its pictures (string red, back blue, arrow head green) from the side and straight down; `bowcheck.py`
+`bow_check_all()` checks the string's side and the clipping in Blender.
 
 **Arms never cut into bodies.** Arms hang against the sides of the body and swing past them: anim.ts turns the hanging
 arms a little out (`ARM_SPLAY`), and every character's arms sit just outside its torso, belt and robe. On the hero,
 body armour's sides stand at x ±0.38 and its sleeves start there (`gear.py` `ARM_IN`, `sleeve`); the tunic's own
 sleeves come off under body armour. `fitcheck.py` `arm_clip_all()` poses every humanoid (hero in every gear set,
-creatures and town NPCs, and a bow in every kind of armour) as the game does (idle, walk, the frames of each attack and
-of the bow draw), elbows, wrists and the draw's reach included, and measures any arm cutting into the body; only the
-goblin's club arm passing behind its ear is allowed (and the draw arm's shoulder dipping under its cap for the instant
-the bow comes up). `held_clip_all()` does the same for what the hands carry (every hero weapon, in the starting outfit and
-in plate, and every creature's staff, club or hammer): it runs through the holding hand but cuts into nothing else, so
-no bow limb in the striding leg, staff foot in a robe or pommel in a forearm.
+creatures and town NPCs, and a bow in every kind of armour) as the game does (idle, walk, the frames of each attack, of
+the bow draw and of lowering the bow after it), elbows, wrists and the draw's reach included, and measures any arm
+cutting into the body; only the goblin's club arm passing behind its ear is allowed (and the draw arm's shoulder dipping
+under its cap for the instant the bow comes up). `held_clip_all()` does the same for what the hands carry (every hero
+weapon, in the starting outfit and in plate, and every creature's staff, club or hammer): it runs through the holding
+hand but cuts into nothing else, so no bow limb in the striding leg, staff foot in a robe or pommel in a forearm.
 
 **Legs never show through what hangs from the hips.** Like a LEGO minifigure's, the hero's legs hinge under his hips,
 at the tunic's hem (`hero.py` LEG_HINGE), the top of each thigh rounded about the hinge (`joint_limb`), and everything
@@ -119,9 +142,11 @@ sword swing turns the whole hero rather than twisting his body on his legs, so a
 them. A skirt's top is round about the hip axis up into its belt (`hips.py` `hip_skirt`), so the belt turns over it as
 the body leans; whatever hangs from a belt starts behind it (`TUCK`), so no gap opens under the belt in the walk. Legs
 hinged that low swing a little further and step a little quicker (anim.ts Rig `swing`, `stride`). Under body armour the
-tunic's skirt and belt come off. `skirtcheck.py` `skirt_clip_all()` poses every outfit and creature through the whole
-stride at every lean its body takes and in every attack, and measures any leg standing out through what hangs over it:
-every hero outfit measures zero.
+tunic's skirt and belt come off. The goblin and the kobold are built the same way (`minions.py` `GOB_HINGE`,
+`KOB_HINGE`): the goblin's seat, belt and loincloth flaps and the kobold's hips, belt, pouches and tail hang on their
+`sock_hips`, the thighs rounded about a hinge under them. `skirtcheck.py` `skirt_clip_all()` poses every outfit and
+creature through the whole stride at every lean its body takes and in every attack, and measures any leg standing out
+through what hangs over it: every hero outfit, the goblin and the kobold measure zero.
 
 Mostly blocky and modular, not dogmatically: use organic shapes where they look better (e.g. bat wings, hair,
 trees, flames). Blocks are the default where scripted geometry shines (armour, helms, weapons, NPC/enemy bodies,
@@ -177,7 +202,7 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `sword` | `sock_handR` | ~1.45 long, blade along +Y: a proper crossguard and a long blade with a bright `ROLE_trim` edge and fuller round a `ROLE_metal` spine (`gear.py` `blade`, `crossguard`) |
 | `longsword` | `sock_handR` | ~1.85 long, wider guard, same blade build |
 | `pickaxe` | `sock_handR` | head at +Y end |
-| `bow` | `sock_handR` | the bow along +Y through the hand (`gear.py` `bow_frame`), turned a quarter round so its string lies on the hand's +X side (`anim.ts` `BOW_STRING`; the draw turns the hand so it faces the archer), held `BOW_MID` below its middle so the arrow passes over the hand, a straight riser through the hole |
+| `bow` | `sock_handR` | the bow along +Y through the hand (`gear.py` `bow_frame`), turned a quarter round so its string lies on the hand's +X side (`anim.ts` `BOW_STRING`; the draw turns the hand so it faces the archer, and carried the bow turns in the hand so it faces his chest: `bowSpin`), held `BOW_MID` below its middle so the arrow passes over the hand, a straight riser through the hole; its grip (`grip_stack`, the piece named `bow_grip`, at most 0.12 across) centred on the hand, its bands beyond the hand either side, the limbs running on from them end to end (`limbs_round_grip`) |
 | `staff` | `sock_handR` | the staff along +Y through the hand (`staff_frame`), its grip in the hole; the game carries it upright, forearm forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
 | `helm_full` | `sock_head` | plain cube-over-cube great helm (`gear.py` `great_helm`): shell, top block, a low `ROLE_cloth` crest and a T visor cut right through a face plate standing proud of the shell (`slotted_plate`: a real recess with a lit lower lip, over a dark lining); no rivets, bands or ridges. Every heavy tier wears it (Emberforged adds a crimson crest, horns and a thin ember line in the slit); hides hair and beard |

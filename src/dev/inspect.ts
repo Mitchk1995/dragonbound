@@ -147,8 +147,12 @@ export async function runInspect(g: Game, suites: string) {
     // `approved:fit` runs one half).
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
-    // The redesigned characters close up and at the play camera; the hero's skirts mid-stride (explicit only: `characters`, `skirts`).
-    for (const s of (['characters', 'skirts'] as const).filter((n) => suites.split(',').includes(n))) await (await import('./charactersInspect'))[`${s}Suite`](g, shot);
+    // The redesigned characters close up and at the play camera; the hero's skirts mid-stride; the bow in his hands (explicit only: `characters`, `skirts`, `bow`).
+    // The bow suite also returns its measurements, taken in the running game.
+    for (const s of (['characters', 'skirts', 'bow'] as const).filter((n) => suites.split(',').includes(n))) {
+      const measured = await (await import('./charactersInspect'))[`${s}Suite`](g, shot);
+      if (measured) report[s] = measured;
+    }
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).
@@ -816,6 +820,8 @@ async function uiSuite(g: Game, shot: (n: string) => Promise<void>) {
 export class Studio {
   readonly scene = new THREE.Scene();
   readonly cam = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+  /** For cells with `ortho` (the half height they show, in world units): a straight-on view without perspective. */
+  readonly ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
   private overlay: HTMLElement;
   constructor(private g: Game) {
     this.scene.background = new THREE.Color(0x3b3a40);
@@ -832,7 +838,7 @@ export class Studio {
   }
 
   /** Render `cells` into a cols×rows grid on the main canvas, each with its own camera placement. */
-  sheet(cells: { label: string; obj: THREE.Object3D; eye: THREE.Vector3; at: THREE.Vector3 }[], cols: number, rows: number) {
+  sheet(cells: { label: string; obj: THREE.Object3D; eye: THREE.Vector3; at: THREE.Vector3; ortho?: number }[], cols: number, rows: number) {
     const r = this.g.renderer;
     const cw = Math.floor(W / cols), ch = Math.floor(H / rows);
     this.overlay.innerHTML = '';
@@ -840,15 +846,18 @@ export class Studio {
     const draw = () => {
       r.setScissorTest(true);
       cells.forEach((c, i) => {
-        const x = (i % cols) * cw, y = H - (Math.floor(i / cols) + 1) * ch;
+        // three.js's Renderer (WebGPU) measures viewports and scissors from the top left, like the labels.
+        const x = (i % cols) * cw, y = Math.floor(i / cols) * ch;
         r.setViewport(x, y, cw, ch);
         r.setScissor(x, y, cw, ch);
-        this.cam.aspect = cw / ch;
-        this.cam.updateProjectionMatrix();
-        this.cam.position.copy(c.eye);
-        this.cam.lookAt(c.at);
+        const cam = c.ortho ? this.ortho : this.cam;
+        if (c.ortho) this.ortho.left = -(this.ortho.right = c.ortho * cw / ch), this.ortho.bottom = -(this.ortho.top = c.ortho);
+        else this.cam.aspect = cw / ch;
+        cam.updateProjectionMatrix();
+        cam.position.copy(c.eye);
+        cam.lookAt(c.at);
         for (const o of cells) o.obj.visible = o === c;
-        r.render(this.scene, this.cam);
+        r.render(this.scene, cam);
       });
       r.setScissorTest(false);
       r.setViewport(0, 0, W, H);

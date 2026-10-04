@@ -501,7 +501,8 @@ export class HeroDresser {
         this.attachParts(parts);
       }
     }
-    // How the hand carries it (anim.ts Hold): staffs and bows upright in front, anything else at the side.
+    // How the hand carries it (anim.ts Hold): staffs upright in front, bows ready in front of the hip, anything else at
+    // the side.
     this.model.root.userData.hold = holdOf(weapon);
     this.refreshMaterials();
   }

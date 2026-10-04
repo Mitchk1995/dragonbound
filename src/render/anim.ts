@@ -46,11 +46,11 @@ export const SHOULDER_FOLLOW = 0.75;
 /**
  * How a humanoid carries what is in its right hand. Every hand is a LEGO hand (tools/blender/_common.py clip_hand):
  * whatever it holds runs through its hole, at right angles to the forearm. 'upright': a staff, carried upright
- * through the hand with the forearm forward; 'bow': a bow, carried the same way but plumb and out from the body
- * (BOW_OUT); 'side': a blade, club or tool, the arm hanging and the wrist tipping it a little down;
- * 'empty': nothing in it (a kobold's sling hangs free). The hero's comes from the weapon (registry.ts HeroDresser,
- * root.userData.hold); a creature's from its model: a part named 'staffbody' is a staff held upright, one named
- * 'weapon' is carried at the side.
+ * through the hand with the forearm forward; 'bow': a bow, carried ready in front of the hip, angled down and
+ * forward, its back forward and its string toward the archer (BOW_FWD); 'side': a blade, club or tool, the arm
+ * hanging and the wrist tipping it a little down; 'empty': nothing in it (a kobold's sling hangs free). The hero's
+ * comes from the weapon (registry.ts HeroDresser, root.userData.hold); a creature's from its model: a part named
+ * 'staffbody' is a staff held upright, one named 'weapon' is carried at the side.
  */
 export type Hold = 'upright' | 'bow' | 'side' | 'empty';
 
@@ -58,20 +58,36 @@ export type Hold = 'upright' | 'bow' | 'side' | 'empty';
  * the upper arm (y, the Euler order 'YXZ': negative swings the bent forearm toward -X). LEGO arms rest a little
  * bent. */
 export const ELBOW_REST = -0.25;
-/** The upright and bow holds: the forearm level and forward, high enough that the hand clears belts and hips, so the
- * staff or bow through the hand stands upright... */
+/** The upright hold: the forearm level and forward, high enough that the hand clears belts and hips, so the staff
+ * through the hand stands upright... */
 export const HOLD_BEND = -1.57;
-/** ...the wrist tipping a staff a touch toward the target. */
+/** ...the wrist tipping it a touch toward the target. */
 export const HOLD_WRIST = 0.17;
-/** A bow's limbs sweep in toward its string, which lies on the body's side of the hand (BOW_STRING), so a bow is
- * carried out from the body, its lower limb clear of the striding leg: the arm a little further out (BOW_OUT, about
- * Z), the forearm turned out at the elbow (BOW_CARRY, the elbow's turn) and the wrist rolling the bow back to plumb
- * (BOW_PLUMB, about the forearm). */
-export const BOW_OUT = 0.2;
-export const BOW_CARRY = -0.5;
-export const BOW_PLUMB = -0.2;
-/** Whether a hold carries its forearm level and forward (a staff or a bow). */
-const forearmForward = (hold: Hold) => hold === 'upright' || hold === 'bow';
+/**
+ * A bow is carried ready, the way an archer walks with one: the bow arm forward (BOW_FWD, about X) and out from the
+ * side (BOW_OUT, about Z), barely swinging with the stride (BOW_SWING), the elbow bent (BOW_BEND) and turned a little
+ * (BOW_ELBOW_TURN), the wrist (BOW_TIP, and BOW_WRIST_ROLL about the forearm) holding the bow angled down and forward
+ * in front of the hip, its back forward and its string toward the archer, and steadying it against the arm's swing.
+ * The bow turns in the hand about its grip (bowSpin) from its frame in the draw, where its string faces the archer
+ * down the arrow (the gear's own frame: BOW_STRING). Its string lies BowDraw's root.userData.bowDepth from the grip:
+ * past BOW_DEPTH, the deeper the bow, the further out it is held (BOW_OUT_K per unit) and turned (BOW_SPIN_K), so the
+ * string stays clear of the arm, chest and head. tests/bow-audit.test.ts measures every bow in every frame (the `bow`
+ * inspect suite in the running game, tools/blender/bowcheck.py in Blender).
+ */
+export const BOW_FWD = -0.42;
+export const BOW_OUT = 0.24;
+export const BOW_SWING = 0.045;
+export const BOW_BEND = 0.69;
+export const BOW_ELBOW_TURN = -0.08;
+export const BOW_TIP = -0.07;
+export const BOW_WRIST_ROLL = 0.46;
+export const BOW_DEPTH = 0.3;
+export const BOW_OUT_K = 1.63;
+export const BOW_SPIN = 0.64;
+export const BOW_SPIN_K = 0.58;
+/** How far a carried bow turns in the hand from its frame in the draw (about the grip, the hand socket's Y), for a
+ * string `depth` from the grip. */
+export const bowSpin = (depth: number) => BOW_SPIN + BOW_SPIN_K * (depth - BOW_DEPTH);
 /** The hand at the side tips its blade or tool a little down (the wrist, about X; positive turns it toward the
  * forearm's line). */
 export const SIDE_WRIST = 0.5;
@@ -94,33 +110,38 @@ export const CAST_WRIST = 0.885;
 export const CAST_REACH = 1.7;
 
 /**
- * Bow shot, side-on: the body turns BOW_TURN so the bow shoulder (right, -X) leads, the head turns to look down the
- * arrow and the straight bow arm points the bow at the target, the bow hand turned so the bow stands upright through
- * it with the string toward the archer and the arrow, drawn through the middle of the string (BOW_MID above the
- * hand, gear.py), level and at the target. The draw hand reaches that arrow line (Rig.reach): it takes the string
- * DRAW_GRAB behind the bow's middle while the bow comes up and draws it back to DRAW_ANCHOR, against the cheek, by
- * bending the elbow, the elbow swung toward DRAW_POLE so the arm stays clear of the chest. The string runs through
- * the draw hand's hole and the arrow leaves through the slot of its C.
+ * Bow shot, side-on: the archer turns BOW_TURN into the shot (over its first BOW_RAISE; back out over BOW_LOWER
+ * seconds once BOW_HOLD has passed after the last shot: Rig.stance), so the bow shoulder (right, -X) leads and the draw
+ * shoulder is behind, the head turns to look down the arrow and the straight bow arm points the bow at the target, the
+ * bow hand turned so the bow stands upright through it with the string toward the archer and the arrow, drawn through
+ * the middle of the string (BOW_MID above the hand, gear.py), level and at the target. The draw hand reaches that
+ * arrow line (Rig.reach): it takes the string DRAW_GRAB behind the bow's middle while the bow comes up and draws it
+ * back to DRAW_ANCHOR, at the jaw, by bending the elbow, the elbow swung toward DRAW_POLE so the arm stays clear of the
+ * chest. The string runs through the draw hand's hole and the arrow leaves through the slot of its C. (A minifigure's
+ * chin is out of the draw hand's reach: its head is as wide as its shoulders are far apart, and an armoured upper arm
+ * swung any further across meets the breastplate, tools/blender/fitcheck.py arm_clip_all.)
  */
 export const BOW_TURN = Math.PI / 2;
-export const BOW_HEAD = 0.85;
+export const BOW_HEAD = 1;
+export const BOW_RAISE = 0.2;
+export const BOW_HOLD = 0.25;
+export const BOW_LOWER = 0.35;
 /** Where the straight bow arm points, from the right shoulder (body space, unit-free). */
-export const BOW_AIM: [number, number, number] = [-0.807, 0.07, 0.586];
+export const BOW_AIM: [number, number, number] = [-0.8097, -0.0192, 0.5865];
 /** How the straight bow arm rolls: its local +Z (the inside of its elbow) turned up, so its shoulder armour stays
  * clear of the chest and helm. */
 export const BOW_ROLL: [number, number, number] = [0, 1, 0.3];
 export const BOW_MID = 0.15;
-/** The side of the hand the bow's string lies on, in the hand socket's frame (gear.py bow_frame turns the bow a
- * quarter round in the hand, so carried upright its string runs beside the forearm, not back through it). */
+/** The side of the hand the bow's string lies on in the draw, in the hand socket's frame (gear.py bow_frame turns the
+ * bow a quarter round in the hand, so its string runs beside the bow arm, not back through it). */
 export const BOW_STRING: [number, number, number] = [1, 0, 0];
-export const DRAW_GRAB = 1.29;
-export const DRAW_ANCHOR = 1.35;
+export const DRAW_GRAB = 1.289;
+export const DRAW_ANCHOR = 1.349;
 export const DRAW_POLE: [number, number, number] = [1, 0.1, 0.6];
 
-/** How far a humanoid's legs swing either way at a run (radians), for legs LEG_REACH long; tools/blender/animpose.py
- * mirrors both. */
+/** How far a humanoid's legs swing either way at a run (radians), for legs hinged at the hip axis (the body's pivot);
+ * tools/blender/animpose.py mirrors it. */
 export const LEG_SWING = 0.7;
-export const LEG_REACH = 0.9;
 
 /** Procedural animation over named rigid parts. */
 export class Rig {
@@ -136,6 +157,10 @@ export class Rig {
   private readonly modelHold: Hold;
   /** The arms' carry this frame (update): each arm's swing (x), each elbow's bend (e) and the right wrist (w). */
   private readonly carry = { xL: 0, xR: 0, eL: 0, eR: 0, wR: 0 };
+  /** How far the archer has turned into the bow shot, 0..1 (eased by bowPose): up with each shot's rise, held through
+   * one shot after another, and down over BOW_LOWER seconds once BOW_HOLD has passed since the last (sinceShot). */
+  private stance = 0;
+  private sinceShot = 0;
 
   constructor(public root: THREE.Object3D, public stride = 2.2) {
     root.traverse((o) => {
@@ -149,11 +174,11 @@ export class Rig {
     });
     this.quadruped = this.parts.has('legFL');
     this.modelHold = this.parts.has('staffbody') ? 'upright' : this.parts.has('weapon') ? 'side' : 'empty';
-    // Legs hinged low under level hips (a sock_hips, see levelHips) are shorter from the hinge than LEG_REACH: they
-    // swing a little further and step a little quicker, so the feet still keep pace with the ground.
-    const leg = this.parts.get('legL');
-    if (this.parts.has('sock_hips') && leg && leg.position.y > 0) {
-      const k = Math.sqrt(LEG_REACH / leg.position.y);
+    // Legs hinged low under level hips (a sock_hips, see levelHips) are shorter from the hinge than from the hip axis
+    // (the body's pivot): they swing a little further and step a little quicker, so the feet still keep pace.
+    const leg = this.parts.get('legL'), hip = this.parts.get('body')?.position.y ?? 0;
+    if (this.parts.has('sock_hips') && leg && leg.position.y > 0 && hip > leg.position.y) {
+      const k = Math.sqrt(hip / leg.position.y);
       this.swing = LEG_SWING * k;
       this.stride *= k;
     }
@@ -260,27 +285,41 @@ export class Rig {
     this.rot('body', hurtLean + moveAmt * 0.08);
     this.rot('head', -moveAmt * 0.05, Math.sin(t * 0.7) * 0.05);
     // The arms hang a little out from the sides (armL is at +X, armR at -X), so the hands clear the hips and skirts,
-    // and swing with the stride, the elbows bending a little more as each arm swings forward. A staff or bow swings
-    // less and keeps its forearm level through the stride, so it stays upright; a bow is carried out from the body.
-    const hold = this.hold(), fore = forearmForward(hold), bow = hold === 'bow', c = this.carry;
+    // and swing with the stride, the elbows bending a little more as each arm swings forward. A staff swings less and
+    // keeps its forearm level through the stride, so it stays upright; a bow is carried ready, angled down and forward
+    // in front of the hip (BOW_FWD).
+    const hold = this.hold(), upright = hold === 'upright', bow = hold === 'bow', c = this.carry;
     c.xL = -sw * 0.5 * moveAmt;
-    c.xR = sw * (fore ? 0.15 : 0.3) * moveAmt;
+    c.xR = sw * (upright ? 0.15 : bow ? BOW_SWING : 0.3) * moveAmt;
     c.eL = ELBOW_REST + Math.min(0, c.xL) * 0.5;
-    c.eR = fore ? HOLD_BEND - c.xR : ELBOW_REST + Math.min(0, c.xR) * 0.5;
-    // A blade or tool at the side is carried steady: the wrist counters the arm's swing.
-    c.wR = hold === 'side' ? SIDE_WRIST - c.xR : hold === 'upright' ? HOLD_WRIST : 0;
+    c.eR = upright ? HOLD_BEND - c.xR : bow ? -BOW_BEND : ELBOW_REST + Math.min(0, c.xR) * 0.5;
+    // A blade or tool at the side, or a bow ready in front, is carried steady: the wrist counters the arm's swing.
+    c.wR = hold === 'side' ? SIDE_WRIST - c.xR : upright ? HOLD_WRIST : bow ? BOW_TIP - c.xR : 0;
+    const out = bow ? BOW_OUT + BOW_OUT_K * (this.bowDepth() - BOW_DEPTH) : 0;
     this.rot('armL', c.xL, 0, ARM_SPLAY);
-    this.rot('armR', c.xR, 0, -ARM_SPLAY - (bow ? BOW_OUT : 0));
+    this.rot('armR', c.xR + (bow ? BOW_FWD : 0), 0, -ARM_SPLAY - out);
     this.rot('elbowL', c.eL);
-    this.rot('elbowR', c.eR, bow ? BOW_CARRY : 0);
+    this.rot('elbowR', c.eR, bow ? BOW_ELBOW_TURN : 0);
     this.rot('handL');
-    this.rot('handR', c.wR, bow ? BOW_PLUMB : 0);
+    this.rot('handR', c.wR, bow ? BOW_WRIST_ROLL : 0);
+    this.rot('sock_handR', 0, bow ? bowSpin(this.bowDepth()) : 0);
     this.rot('tail1', 0, Math.sin(t * 3) * 0.3);
     this.rot('tail2', 0, Math.sin(t * 3 - 0.8) * 0.4);
 
+    // The bow stance rises with each shot, holds between shots and, a moment after the last, lowers back to the carry.
+    const shooting = s.attack >= 0 && s.attackKind === 'bow';
+    this.sinceShot = shooting ? 0 : this.sinceShot + dt;
+    if (shooting) this.stance = Math.max(this.stance, Math.min(1, s.attack / BOW_RAISE));
+    else if (this.sinceShot > BOW_HOLD) this.stance = Math.max(0, this.stance - dt / BOW_LOWER);
     if (s.attack >= 0) this.attackPose(s);
+    else if (bow && this.stance > 0) this.bowPose(1);
     this.followShoulders();
     this.levelHips();
+  }
+
+  /** How far the string of the bow in the hand lies from its grip (BowDraw measures it; BOW_DEPTH before it has). */
+  private bowDepth() {
+    return (this.root.userData.bowDepth as number | undefined) ?? BOW_DEPTH;
   }
 
   /**
@@ -394,28 +433,47 @@ export class Rig {
     }
   }
 
-  /** The bow shot (see BOW_TURN). */
+  /** The bow shot (see BOW_TURN), at progress a: blended in by the stance, which also lowers the bow after the shot
+   * (a = 1, the hand left at the anchor after the release). */
   private bowPose(a: number) {
-    const raise = ease(Math.min(1, a / 0.2));
+    const raise = ease(this.stance);
     this.root.rotation.y = BOW_TURN * raise;
     this.rot('head', 0, -BOW_TURN * BOW_HEAD * raise);
-    const armR = this.parts.get('armR'), sock = this.parts.get('sock_handR');
-    if (!this.parts.get('body') || !armR || !sock) return;
-    // Bow arm: straight, pointing the bow at the target; its hold turns into the aim as the bow comes up.
-    this.pointArm(armR, B.aim.fromArray(BOW_AIM).normalize(), B.front.fromArray(BOW_ROLL), raise);
-    this.rot('elbowR', lerp(this.carry.eR, 0, raise), lerp(BOW_CARRY, 0, raise));
-    // Bow hand: the bow upright through it (the hand's +Z up) and its string, on the hand's +X side (BOW_STRING), toward
-    // the archer (body +X): the hand's +Y turns to body -Z.
-    this.orientHand('R', B.up.set(0, 1, 0), B.back.set(0, 0, -1), raise);
-    // Draw hand: onto the arrow line, where it takes the string, then back to the anchor at the cheek, where it holds
-    // after the release.
+    const armR = this.parts.get('armR'), elbowR = this.parts.get('elbowR'), handR = this.parts.get('handR');
+    const sock = this.parts.get('sock_handR');
+    if (!this.parts.get('body') || !armR || !elbowR || !handR || !sock) return;
+    const bow = this.hold() === 'bow';
+    // The bow hand as carried, before the arm moves: the bow turns from there up into the shot in the body's space,
+    // its limbs swinging past the hip, not across it, however the arm swings up.
+    const carry = B.carry.copy(armR.quaternion), carried = B.q.setFromRotationMatrix(this.bodySpace(handR, B.m));
+    // Where the draw hand goes: onto the arrow line where it takes the string, then back to the anchor at the jaw,
+    // where it holds after the release, all measured on the bow as it is aimed (the stance in full), so that coming
+    // up and lowering, the hand moves straight between there and its carry and never chases a bow still on its way.
+    this.aimBow(1, bow, carried);
     const s = this.bodySpace(sock, B.m);
     const target = B.target.set(0, BOW_MID, 0).applyMatrix4(s);
-    const back = B.back.fromArray(BOW_STRING).transformDirection(s);
-    target.addScaledVector(back, lerp(DRAW_GRAB, DRAW_ANCHOR, a < IMPACT ? bowDrawAmount(a) : 1));
+    target.addScaledVector(B.back.fromArray(BOW_STRING).transformDirection(s), lerp(DRAW_GRAB, DRAW_ANCHOR, a < IMPACT ? bowDrawAmount(a) : 1));
+    const along = B.along.set(0, 1, 0).transformDirection(s);
+    // The bow arm itself, at the stance.
+    armR.quaternion.copy(carry);
+    this.rot('elbowR', this.carry.eR, bow ? BOW_ELBOW_TURN : 0);
+    this.rot('handR', this.carry.wR, bow ? BOW_WRIST_ROLL : 0);
+    this.aimBow(raise, bow, carried);
     this.reach('L', target, B.pole.fromArray(DRAW_POLE).normalize(), raise);
     // The draw hand turns so the string runs through its hole (the hand's +Z along the bow), continuing its forearm.
-    this.orientHand('L', B.up.set(0, 1, 0).transformDirection(s), null, raise);
+    this.orientHand('L', along, null, raise);
+  }
+
+  /** The bow arm into the shot by k from its carry: straight, pointing the bow at the target, the hand turning the bow
+   * upright with its string toward the archer (from `carried`, the hand as carried), the bow turning in the hand from
+   * its carry late in the rise (1 - k⁴), once the arm has swung it up clear of the chest and head. */
+  private aimBow(k: number, bow: boolean, carried: THREE.Quaternion) {
+    if (bow) this.rot('sock_handR', 0, bowSpin(this.bowDepth()) * (1 - k ** 4));
+    this.pointArm(this.parts.get('armR')!, B.aim.fromArray(BOW_AIM).normalize(), B.front.fromArray(BOW_ROLL), k);
+    this.rot('elbowR', lerp(this.carry.eR, 0, k), lerp(bow ? BOW_ELBOW_TURN : 0, 0, k));
+    // Bow hand: the bow upright through it (the hand's +Z up) and its string, on the hand's +X side (BOW_STRING), toward
+    // the archer, back down the arrow: the hand's +Y turns square to the arrow, away from the chest's side of it.
+    this.orientHand('R', B.up.set(0, 1, 0), B.back.set(-Math.cos(BOW_TURN), 0, -Math.sin(BOW_TURN)), k, carried);
   }
 
   /** A part's world matrix in the body's space (written into `out`). */
@@ -465,9 +523,10 @@ export class Rig {
   /**
    * Turns hand<side> (a wrist pivot) so its hole runs along `axis` (body space, the hand's +Z) and its length back
    * along `along` (the hand's +Y, toward the wrist); without `along` the hand only twists on its forearm, its hole as
-   * near `axis` as that allows. Blended in by k from the pose already set.
+   * near `axis` as that allows. Blended in by k from the pose already set, or, given `from`, from that turn in the
+   * body's space (so the hand turns the same way however its arm moves meanwhile).
    */
-  private orientHand(side: 'L' | 'R', axis: THREE.Vector3, along: THREE.Vector3 | null, k: number) {
+  private orientHand(side: 'L' | 'R', axis: THREE.Vector3, along: THREE.Vector3 | null, k: number, from?: THREE.Quaternion) {
     const hand = this.parts.get(`hand${side}`);
     if (!hand?.parent) return;
     const fore = this.bodySpace(hand.parent, R.m2);
@@ -481,17 +540,20 @@ export class Rig {
     }
     const x = R.x.crossVectors(y, z);
     const want = R.q.setFromRotationMatrix(R.m.makeBasis(x, y, z));
-    hand.quaternion.slerp(R.q2.setFromRotationMatrix(fore).invert().multiply(want), k);
+    const toLocal = R.q2.setFromRotationMatrix(fore).invert();
+    if (from) hand.quaternion.copy(toLocal.multiply(R.q3.copy(from).slerp(want, k)));
+    else hand.quaternion.slerp(toLocal.multiply(want), k);
   }
 }
 
 /** Scratch space for the bow pose and its helpers (no allocation per frame). */
 const B = {
   aim: new THREE.Vector3(), front: new THREE.Vector3(), up: new THREE.Vector3(), back: new THREE.Vector3(),
-  target: new THREE.Vector3(), pole: new THREE.Vector3(), m: new THREE.Matrix4(),
+  target: new THREE.Vector3(), pole: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion(),
+  carry: new THREE.Quaternion(), along: new THREE.Vector3(),
 };
 const R = {
   x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), t: new THREE.Vector3(), o: new THREE.Vector3(),
   u: new THREE.Vector3(), f: new THREE.Vector3(), q: new THREE.Quaternion(), q2: new THREE.Quaternion(),
-  m: new THREE.Matrix4(), m2: new THREE.Matrix4(),
+  q3: new THREE.Quaternion(), m: new THREE.Matrix4(), m2: new THREE.Matrix4(),
 };
