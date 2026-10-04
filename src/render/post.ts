@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BlendMode, DepthTexture, NodeMaterial, QuadMesh, RendererUtils, RenderPipeline, RenderTarget, TextureNode, type Node, type NodeBuilder, type NodeFrame, type PassNode, type Renderer } from 'three/webgpu';
-import { abs, clamp, cross, diffuseColor, dot, exp, float, Fn, getViewPosition, If, interleavedGradientNoise, max, mix, mrt, NodeUpdateType, normalize, normalView, output, packNormalToRGB, pass, perspectiveDepthToViewZ, roughness, rtt, sample, screenCoordinate, select, smoothstep, uniform, unpackRGBToNormal, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
+import { abs, cameraViewMatrix, clamp, cross, diffuseColor, dot, exp, float, Fn, getViewPosition, If, interleavedGradientNoise, mat3, max, mix, mrt, NodeUpdateType, normalize, normalView, output, packNormalToRGB, pass, perspectiveDepthToViewZ, roughness, rtt, sample, screenCoordinate, select, smoothstep, uniform, unpackRGBToNormal, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js';
 import { ao as gtao, type default as GTAONode } from 'three/examples/jsm/tsl/display/GTAONode.js';
@@ -40,8 +40,9 @@ const LUMA = vec3(0.2126, 0.7152, 0.0722);
 export interface LightingEffects {
   /**
    * Bounce light (screen-space global illumination): every lit surface on screen lights what faces
-   * it, in its own colour, so sunlit floors and walls throw warm light into rooms, archways and the
-   * shade beside them.
+   * it within a few metres, in its own colour, so sunlit floors, steps and lawns throw warm or green
+   * light into doorways, under eaves and sills and into the shade beside them. (Only what is on
+   * screen gives light: a room seen from outside gets what shows through its door and windows.)
    */
   bounce: boolean;
   /** Soft contact shading by ground-truth ambient occlusion (GTAO), in place of the occlusion above. */
@@ -62,21 +63,31 @@ export const NO_EFFECTS: LightingEffects = { bounce: false, contact: false, refl
 export type EffectLevel = 'high' | 'medium' | 'low';
 
 /**
- * Per level: the bounce light's size on screen (1 full, 0.5 half), its slices and steps; the contact
- * shading's size and samples; the reflections' size and how finely they march.
+ * The bounce light, the contact shading and the reflections are worked at half the screen's size
+ * (their light is broad; the composite brings them up to full size along each surface), the smoothing
+ * at full size.
  */
-const LEVELS: Record<EffectLevel, { gi: number; giSlices: number; giSteps: number; ao: number; aoSamples: number; ssr: number; ssrQuality: number }> = {
-  high: { gi: 0.5, giSlices: 2, giSteps: 10, ao: 0.5, aoSamples: 16, ssr: 0.5, ssrQuality: 0.5 },
-  medium: { gi: 0.5, giSlices: 2, giSteps: 8, ao: 0.5, aoSamples: 12, ssr: 0.5, ssrQuality: 0.4 },
-  low: { gi: 0.5, giSlices: 1, giSteps: 8, ao: 0.5, aoSamples: 8, ssr: 0.5, ssrQuality: 0.3 },
+const HALF = 0.5;
+
+/** Per level: the bounce light's slices and steps, the contact shading's samples, how finely the reflections march. */
+const LEVELS: Record<EffectLevel, { giSlices: number; giSteps: number; aoSamples: number; ssrQuality: number }> = {
+  high: { giSlices: 2, giSteps: 10, aoSamples: 16, ssrQuality: 0.5 },
+  medium: { giSlices: 2, giSteps: 8, aoSamples: 12, ssrQuality: 0.4 },
+  low: { giSlices: 1, giSteps: 8, aoSamples: 8, ssrQuality: 0.3 },
 };
 
 /** The effects' look, tuned for the painted style (see setQuality). */
 export const EFFECT_TUNING = {
-  /** Bounce light: how far it carries (metres), how strong it is. */
+  /**
+   * Bounce light: how far it carries (metres), how strong it is, how thick things are taken to be,
+   * and how its samples spread (1 even, higher crowding them near: the brick joints then glow).
+   */
   giRadius: 3.5,
-  giIntensity: 7,
+  giIntensity: 12,
   giThickness: 0.6,
+  giSpread: 1.3,
+  /** How much of it a brightly sunlit surface takes (the shade takes all). */
+  giInSun: 0.3,
   /** Contact shading: how far round a point it looks (metres) and how thick it takes things to be. */
   aoRadius: 1.4,
   aoThickness: 1.5,
@@ -89,6 +100,8 @@ export const EFFECT_TUNING = {
   /** The reflectivity of water, and of the glossiest dry surface (wet rock, obsidian). */
   waterShine: 0.8,
   glossShine: 0.45,
+  /** How soft the water's reflection is (as a roughness: its blur). */
+  waterBlur: 0.6,
   /** The sharpen after the smoothing: 0 the most, 2 none. */
   sharpness: 0.35,
 };
@@ -133,27 +146,73 @@ const surfaceValue = (value: (builder: NodeBuilder) => V3) => Fn((builder: NodeB
 const gloss = Fn((builder: NodeBuilder): V2 => {
   const m = builder.material as Plain | null;
   if (!m || !(m.isMeshStandardMaterial || m.isMeshPhysicalMaterial)) return vec2(0, 1);
-  if (isEffectsWater(m)) return vec2(EFFECT_TUNING.waterShine * waterShine(m), roughness);
+  // (The water's reflection is softened like its mirrors': a soft, coherent picture, never a torn one.)
+  if (isEffectsWater(m)) return vec2(EFFECT_TUNING.waterShine * waterShine(m), EFFECT_TUNING.waterBlur);
   if (!solid(builder) || (m.metalness ?? 0) > 0.5) return vec2(0, 1);
-  return vec2(float(1).sub(smoothstep(0.12, 0.42, roughness)).mul(EFFECT_TUNING.glossShine), roughness);
+  return vec2(float(1).sub(smoothstep(0.12, 0.42, roughness)).mul(EFFECT_TUNING.glossShine), max(roughness, 0.3));
 });
 
 /**
- * The surface buffers the switched-on effects read, beside the frame itself: facing and colour (a
- * byte a channel, blended by the surface-or-not alpha, see surfaceValue), gloss (reflections, two
- * bytes) and motion (smooth edges, two half floats: where each pixel stood a frame ago, three.js
- * keeping every object's last place; a see-through thing writes its own). All together they fit
- * the 32 bytes a pixel every WebGPU device allows.
+ * The facing the effects read: the surface's own, but the water's calmed (most of its ripple taken
+ * out, as its mirrors see it), so what it reflects wavers gently rather than breaking up.
  */
+const facing = (builder: NodeBuilder): V3 => {
+  const m = builder.material as THREE.Material | null;
+  if (!m || !isEffectsWater(m)) return packNormalToRGB(normalView) as V3;
+  const up = normalize(mat3(cameraViewMatrix).mul(vec3(0, 1, 0)));
+  return packNormalToRGB(normalize(mix(up, normalView, 0.3))) as V3;
+};
+
+/** One surface buffer: what it holds, for which effects, and its texel. */
+interface SurfaceBuffer {
+  name: string;
+  /** Whether the switched-on effects read it. */
+  wanted(fx: LightingEffects): boolean;
+  type: THREE.TextureDataType;
+  format: THREE.PixelFormat;
+  /** Blended by the surface-or-not alpha (four channels only; see surfaceValue). */
+  blended: boolean;
+  value(): Node;
+}
+
+/**
+ * The surface buffers the switched-on effects read, beside the frame itself: facing and colour (a
+ * byte a channel, blended by the surface-or-not alpha), gloss (reflections, two bytes) and motion
+ * (smooth edges, two half floats: where each pixel stood a frame ago, three.js keeping every
+ * object's last place; a see-through thing writes its own). All together they fit the 32 bytes a
+ * pixel every WebGPU device allows (attachmentBytes).
+ */
+const SURFACE_BUFFERS: SurfaceBuffer[] = [
+  { name: 'normal', wanted: (fx) => fx.bounce || fx.contact || fx.reflections || fx.smooth, type: THREE.UnsignedByteType, format: THREE.RGBAFormat, blended: true, value: () => surfaceValue(facing) },
+  { name: 'albedo', wanted: (fx) => fx.bounce, type: THREE.UnsignedByteType, format: THREE.RGBAFormat, blended: true, value: () => surfaceValue(() => diffuseColor.rgb as unknown as V3) },
+  { name: 'gloss', wanted: (fx) => fx.reflections, type: THREE.UnsignedByteType, format: THREE.RGFormat, blended: false, value: () => gloss() },
+  { name: 'velocity', wanted: (fx) => fx.smooth, type: THREE.HalfFloatType, format: THREE.RGFormat, blended: false, value: () => velocity },
+];
+
+/** The surface buffers drawn for these effects (none while all are off: the frame alone). */
+export const surfaceLayout = (fx: LightingEffects) => SURFACE_BUFFERS.filter((b) => b.wanted(fx)).map(({ name, type, format }) => ({ name, type, format }));
+
+/**
+ * The bytes a pixel of the scene pass takes with these buffers beside the frame (half floats, four
+ * channels), as WebGPU counts them against its limit: each texel's cost, each aligned to its own
+ * channel size (a byte-a-channel four-channel texel counts eight).
+ */
+export function attachmentBytes(layout: { type: THREE.TextureDataType; format: THREE.PixelFormat }[]) {
+  let total = 0;
+  for (const { type, format } of [{ type: THREE.HalfFloatType, format: THREE.RGBAFormat }, ...layout]) {
+    const align = type === THREE.HalfFloatType ? 2 : type === THREE.FloatType ? 4 : 1;
+    const channels = format === THREE.RGBAFormat ? 4 : format === THREE.RGFormat ? 2 : 1;
+    const cost = channels === 4 ? Math.max(8, 4 * align) : channels * align;
+    total = Math.ceil(total / align) * align + cost;
+  }
+  return total;
+}
+
+/** The scene pass's buffers for these effects: the frame, and the surface buffers they read. */
 function surfaceBuffers(fx: LightingEffects) {
-  const outputs: Record<string, Node> = { output };
-  const blended = ['normal', 'albedo'];
-  outputs.normal = surfaceValue(() => packNormalToRGB(normalView) as V3);
-  if (fx.bounce) outputs.albedo = surfaceValue(() => diffuseColor.rgb as unknown as V3);
-  if (fx.reflections) outputs.gloss = gloss();
-  if (fx.smooth) outputs.velocity = velocity;
-  const m = mrt(outputs);
-  for (const name of blended) if (outputs[name]) m.setBlendMode(name, new BlendMode(THREE.NormalBlending));
+  const wanted = SURFACE_BUFFERS.filter((b) => b.wanted(fx));
+  const m = mrt({ output, ...Object.fromEntries(wanted.map((b) => [b.name, b.value()])) });
+  for (const b of wanted) if (b.blended) m.setBlendMode(b.name, new BlendMode(THREE.NormalBlending));
   return m;
 }
 
@@ -268,17 +327,11 @@ export class PostChain {
     const color = scenePass.getTextureNode('output'), depth = scenePass.getTextureNode('depth');
     let normal: Node | null = null, albedo: TextureNode | null = null;
     if (buffers) {
-      // (Facing and colour at a byte a channel, gloss in two, motion in two half floats: plenty for
-      // light, less to read, and within the bytes a pixel every device allows.)
-      const tex = (name: string, type: THREE.TextureDataType, format: THREE.PixelFormat = THREE.RGBAFormat) => {
-        Object.assign(scenePass.getTexture(name), { type, format });
-        return scenePass.getTextureNode(name);
-      };
-      const n = tex('normal', THREE.UnsignedByteType);
+      // (Each buffer's texel as the layout gives it: plenty for light, less to read.)
+      for (const b of surfaceLayout(fx)) Object.assign(scenePass.getTexture(b.name), { type: b.type, format: b.format });
+      const n = scenePass.getTextureNode('normal');
       normal = sample((at) => unpackRGBToNormal(n.sample(at).rgb));
-      if (fx.bounce) albedo = tex('albedo', THREE.UnsignedByteType);
-      if (fx.reflections) tex('gloss', THREE.UnsignedByteType, THREE.RGFormat);
-      if (fx.smooth) tex('velocity', THREE.HalfFloatType, THREE.RGFormat);
+      if (fx.bounce) albedo = scenePass.getTextureNode('albedo');
     }
     const cam = this.camera;
     let ao: Occlusion | null = null;
@@ -287,22 +340,22 @@ export class PostChain {
         // (It reads four depths at once, which a multisampled depth cannot give: then a plain copy.)
         const aoDepth = samples > 0 ? own(new FlatDepth(depth)) : depth;
         const node = (this.fx.gtao = own(gtao(aoDepth, normal!, cam)));
-        node.resolutionScale = level.ao;
+        node.resolutionScale = HALF;
         node.samples.value = level.aoSamples;
         node.radius.value = EFFECT_TUNING.aoRadius;
         node.thickness.value = EFFECT_TUNING.aoThickness;
         // (With smooth edges its grain turns frame to frame and settles; without, it is smoothed in place.)
         node.useTemporalFiltering = fx.smooth;
         const raw = node.getTextureNode();
-        ao = fx.smooth ? { tex: raw, kernel: 4 } : { tex: own(rtt(denoise(raw, depth, normal!, cam), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: level.ao })) as unknown as TextureNode, kernel: 2 };
+        ao = fx.smooth ? { tex: raw, kernel: 4 } : { tex: own(rtt(denoise(raw, depth, normal!, cam), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode, kernel: 2 };
       } else {
-        ao = { tex: own(rtt(this.occlusion(depth), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: 0.5 })) as unknown as TextureNode, kernel: 4 };
+        ao = { tex: own(rtt(this.occlusion(depth), null, null, { type: THREE.UnsignedByteType, format: THREE.RedFormat, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode, kernel: 4 };
       }
     }
     let gi: TextureNode | null = null;
     if (fx.bounce) {
       const node = (this.fx.ssgi = own(new ScaledSSGI(color, depth, normal!, cam)));
-      node.scale = level.gi;
+      node.scale = HALF;
       node.sliceCount.value = level.giSlices;
       node.stepCount.value = level.giSteps;
       node.radius.value = EFFECT_TUNING.giRadius;
@@ -310,15 +363,18 @@ export class PostChain {
       node.thickness.value = EFFECT_TUNING.giThickness;
       // (Sampled over a fixed distance in the world, so the light carries as far at every zoom.)
       node.useScreenSpaceSampling.value = false;
+      node.expFactor.value = EFFECT_TUNING.giSpread;
       node.useTemporalFiltering = fx.smooth;
+      // (Smoothed in place even with smooth edges: the light it gathers is broad, its grain fine, and
+      // the smoothing over frames alone leaves a sparkle in the shade.)
       const raw = node.getGINode() as unknown as TextureNode;
-      gi = fx.smooth ? raw : own(rtt(denoise(raw, depth, normal!, cam), null, null, { type: THREE.HalfFloatType, depthBuffer: false, resolutionScale: level.gi })) as unknown as TextureNode;
+      gi = own(rtt(denoise(raw, depth, normal!, cam), null, null, { type: THREE.HalfFloatType, depthBuffer: false, resolutionScale: HALF })) as unknown as TextureNode;
     }
     let reflection: TextureNode | null = null;
     if (fx.reflections) {
       const g = scenePass.getTextureNode('gloss');
       const node = (this.fx.ssr = own(ssr(color, depth, normal as V3, { metalnessNode: g.r, roughnessNode: g.g, camera: cam }) as unknown as SSRNode));
-      node.resolutionScale = level.ssr;
+      node.resolutionScale = HALF;
       node.quality.value = level.ssrQuality;
       node.maxDistance.value = EFFECT_TUNING.ssrDistance;
       node.thickness.value = EFFECT_TUNING.ssrThickness;
@@ -363,7 +419,7 @@ export class PostChain {
     this.nearFar.value.set(cam.near, cam.far);
     this.renderer.getDrawingBufferSize(this.size);
     this.texel.value.set(1 / this.size.x, 1 / this.size.y);
-    this.aoTexel.value.set(1 / Math.max(1, Math.floor(this.size.x * 0.5)), 1 / Math.max(1, Math.floor(this.size.y * 0.5)));
+    this.aoTexel.value.set(1 / Math.max(1, Math.floor(this.size.x * HALF)), 1 / Math.max(1, Math.floor(this.size.y * HALF)));
     const fog = this.fog();
     if (fog) this.fade.value.set(fog.near * 0.6, fog.far * 0.8);
     else this.fade.value.set(1e6, 2e6);
@@ -456,27 +512,36 @@ export class PostChain {
         const z0 = viewZ(at).toVar();
         // (The haze covers what the effects do to far things.)
         const near = float(1).sub(smoothstep(fade.x, fade.y, z0)).toVar();
+        // A half-size buffer smoothed over a k × k patch, only from samples at this surface's depth.
+        // (Where no sample shares the surface's depth, `none` stands in.)
+        const smoothed = (tex: TextureNode, kernel: number, none: V4): V4 => {
+          const sum = vec4(0).toVar(), wsum = float(0).toVar();
+          const h = (kernel - 1) / 2;
+          for (let j = 0; j < kernel; j++) for (let i = 0; i < kernel; i++) {
+            const q = at.add(vec2(i - h, j - h).mul(aoTexel)).toVar();
+            const w = exp(abs(viewZ(q).sub(z0)).negate().div(z0.mul(0.02).add(0.02))).toVar();
+            sum.addAssign(tex.sample(q).mul(w));
+            wsum.addAssign(w);
+          }
+          return select(wsum.greaterThan(1e-4), sum.div(wsum), none);
+        };
         if (ao) {
-          let occ: F;
-          if (ao.kernel > 0) {
-            // Smooth the half-size occlusion over a k × k patch, only from samples at this surface's depth.
-            const sum = float(0).toVar(), wsum = float(0).toVar();
-            const h = (ao.kernel - 1) / 2;
-            for (let j = 0; j < ao.kernel; j++) for (let i = 0; i < ao.kernel; i++) {
-              const q = at.add(vec2(i - h, j - h).mul(aoTexel)).toVar();
-              const w = exp(abs(viewZ(q).sub(z0)).negate().div(z0.mul(0.02).add(0.02))).toVar();
-              sum.addAssign(ao.tex.sample(q).r.mul(w));
-              wsum.addAssign(w);
-            }
-            occ = select(wsum.greaterThan(1e-4), sum.div(wsum), float(1));
-          } else occ = ao.tex.sample(at).r;
+          const occ = ao.kernel > 0 ? smoothed(ao.tex, ao.kernel, vec4(1) as unknown as V4).r : (ao.tex.sample(at).r as unknown as F);
           const lum = dot(c, LUMA);
           // Sunlit surfaces keep more of their light; the haze covers the occlusion of far things.
           const k = mix(1, litKeep, smoothstep(0.3, 1.3, lum)).mul(strength).mul(near);
           c.mulAssign(mix(1, occ, k));
         }
-        // The light bounced onto the surface, in its own colour.
-        if (bounce) c.addAssign(bounce.albedo.sample(at).rgb.mul(bounce.gi.sample(at).rgb).mul(near));
+        // The light bounced onto the surface, in its own colour (gathered at half size, so brought up
+        // to full size only from samples at this surface's depth: it never bleeds off an edge). It
+        // shows in the shade; what the sun already lights brightly takes little of it (beside the
+        // sun it is faint, and a sunlit white would flare in the bloom).
+        if (bounce) {
+          const lum = dot(c, LUMA).toVar();
+          const add = bounce.albedo.sample(at).rgb.mul(smoothed(bounce.gi, 3, bounce.gi.sample(at) as unknown as V4).rgb).mul(mix(1, EFFECT_TUNING.giInSun, smoothstep(0.25, 1.1, lum))).mul(near).toVar();
+          // (Never past the bloom's threshold: bounce light never makes a surface glow.)
+          c.addAssign(add.mul(clamp(float(0.9).sub(lum).div(max(dot(add, LUMA), 1e-4)), 0, 1)));
+        }
         // What a glossy surface reflects takes the place of part of its own colour (on the water, of the
         // painted sky it reflects): its colour gives way where something stands in the reflection, and
         // the reflection (already weighted by the gloss and the angle) shows over it.

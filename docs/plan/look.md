@@ -2,6 +2,10 @@
 
 Part of the design plan; the index and the current direction are in [DESIGN_DECISIONS.md](../DESIGN_DECISIONS.md). The style every visual job starts from is "The look" in [ART_CONTRACT.md](../ART_CONTRACT.md). The engine test and the round 6 castle notes are under "Engine choice comes first" in [castle.md](castle.md). Newer decisions take precedence over older ones. Record each new decision here, dated, in the same session it is made.
 
+## October 4
+
+- **Lighting effects to choose from** (October 4, phase 2 of the WebGPU move): four switches, each off until Mitchell picks from pictures on the review page, and each in the debug panel (F1) to try in play: bounce light (screen-space global illumination), soft contact shading (ground-truth ambient occlusion, in place of the old occlusion), reflections in water and on wet stone (screen-space reflections) and smooth edges (temporal antialiasing, in place of multisampling). Screen-space bounce lights only from what is on screen, so a room seen from outside gets little of it; light that fills rooms needs light probes baked per building (three.js's light probe grid), a later step. Voxel GI (new in three.js r186) was set aside: it voxelises the scene on the CPU, and at our world's size its voxels are coarser than a brick wall, so light leaks into rooms. Cascaded sun shadows were not needed: the sun's shadow map is fitted to the screen, so distant shadows stay sharp and steady.
+
 ## October 3
 
 - **A more natural world, not photoreal** (October 3). Mitchell asked about going more realistic for the plants, water,

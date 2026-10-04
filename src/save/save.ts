@@ -90,7 +90,7 @@ export function newSave(): SaveData {
     portals: {},
     tutorial: 0,
     stats: { deaths: 0, kills: 0, playtime: 0, bestBossTime: null },
-    settings: { volume: 0.6, graphics: 'high' },
+    settings: { volume: 0.6, graphics: 'high', lighting: {} },
   };
 }
 
