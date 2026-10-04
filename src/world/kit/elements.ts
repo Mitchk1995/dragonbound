@@ -28,6 +28,11 @@ export interface Part {
   color?: number;
   /** Drawn only while the piece is in this state (a door shut or open). */
   state?: 'shut' | 'open';
+  /**
+   * A whole modelled shape (props.ts), its own edges bevelled and worn by its modelling: drawn
+   * without the corner pulls and worn edges the material gives a piece's stones and boards.
+   */
+  whole?: boolean;
 }
 
 /**
@@ -206,7 +211,7 @@ export const windowEl = (w: number, h: number, cols: number, rows: number, bars:
   parts: [
     part(() => frame(w, h * STEP_U), 'oak', { grain: 'box' }),
     part(() => glazingBars(w, h * STEP_U, cols, rows), 'oak', { color: bars, grain: 'box' }),
-    part(() => pane(w, h * STEP_U), 'glass'),
+    part(() => pane(w, h * STEP_U, cols, rows), 'glass'),
   ],
 });
 

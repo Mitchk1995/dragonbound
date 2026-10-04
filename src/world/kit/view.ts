@@ -53,7 +53,7 @@ function geometry(s: Shape): THREE.BufferGeometry {
   let g = geoCache.get(s.key);
   if (!g) {
     g = s.textured
-      ? texturedGeometry(s.parts.map((p) => ({ mesh: p.mesh(), layer: p.look as Exclude<Part['look'], 'glass' | 'glow' | 'card'>, grain: p.grain, color: p.color })))
+      ? texturedGeometry(s.parts.map((p) => ({ mesh: p.mesh(), layer: p.look as Exclude<Part['look'], 'glass' | 'glow' | 'card'>, grain: p.grain, color: p.color, whole: p.whole })))
       : plainGeometry(s.parts[0].mesh());
     geoCache.set(s.key, (g = shareResource(g)));
   }

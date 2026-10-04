@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { KitBuild, type Placed } from '../src/world/kit/build';
 import { overlap, placeClaim, turn, inside, type Claim, type Hull, type P3 } from '../src/world/kit/claims';
 import { ELEMENTS, stoneEl } from '../src/world/kit/elements';
@@ -11,10 +11,17 @@ import { APEX, CHIMNEY_TOP, plane } from '../src/world/kit/houseRoof';
 import { CELL, CELL_U, COURSE, HERO_H, STEP, STEP_U, U, type Rot } from '../src/world/kit/scale';
 import { texturedGeometry } from '../src/world/kit/geometry';
 import { box } from '../src/world/kit/mesh';
+import { parseKitProps, propNames, propShape } from '../src/world/kit/props';
 import { lightOf } from '../src/world/kit/shapes/openings';
 import { FIXED, LAYERS } from '../src/world/kit/surfaces';
 import { KitView } from '../src/world/kit/view';
 import { course, joints, type Line } from '../src/world/kit/walls';
+
+// The modelled furniture and props (the game fetches them; here they are read from disk).
+beforeAll(async () => {
+  const file = fs.readFileSync(path.join(__dirname, '..', 'public', 'models', 'kit_props.glb'));
+  await parseKitProps(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer);
+});
 
 // (The kit's material needs its textures loaded in a browser; drawing is checked here with a plain one.)
 vi.mock('../src/world/kit/surfaces', async (actual) => {
@@ -334,6 +341,42 @@ function jpegSize(file: string): [number, number] {
   }
   throw new Error(`no frame in ${file}`);
 }
+
+describe('the furniture and props', () => {
+  it('are each one continuous, watertight shape, never parts pushed into one another (things really apart, like bedding or iron bands, apart)', () => {
+    const bad: string[] = [];
+    expect(propNames().length).toBeGreaterThan(10);
+    for (const name of propNames()) {
+      const m = propShape(name);
+      // (One place, one vertex: an edge modelled sharp is two vertices there, one for each face's normal.)
+      const cells = new Map<string, number[]>(), up: number[] = [], pts: number[][] = [];
+      const at = (i: number) => {
+        const p = [0, 1, 2].map((c) => m.pos[i * 3 + c]), g = p.map((v) => Math.floor(v / 0.001));
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+          for (const v of cells.get(`${g[0] + dx},${g[1] + dy},${g[2] + dz}`) ?? []) if (Math.hypot(pts[v][0] - p[0], pts[v][1] - p[1], pts[v][2] - p[2]) < 1e-4) return v;
+        }
+        const v = pts.length, key = g.join(',');
+        pts.push(p);
+        up.push(v);
+        cells.set(key, [...(cells.get(key) ?? []), v]);
+        return v;
+      };
+      const root = (v: number): number => (up[v] === v ? v : (up[v] = root(up[v])));
+      const edges = new Map<string, number>();
+      for (let t = 0; t < m.idx.length; t += 3) {
+        const [a, b, c] = [at(m.idx[t]), at(m.idx[t + 1]), at(m.idx[t + 2])];
+        for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+          const e = p < q ? `${p}-${q}` : `${q}-${p}`;
+          edges.set(e, (edges.get(e) ?? 0) + 1);
+          up[root(p)] = root(q);
+        }
+      }
+      const open = [...edges.values()].filter((n) => n !== 2).length, pieces = new Set(up.map((_, v) => root(v))).size;
+      if (open || pieces !== 1) bad.push(`${name}: ${pieces} pieces, ${open} edges not between two faces`);
+    }
+    expect(bad).toEqual([]);
+  });
+});
 
 describe('drawing the kit', () => {
   it('gives every vertex its surface, its stone or board (marked where the part has its own colour) and where it lies in that stone', () => {

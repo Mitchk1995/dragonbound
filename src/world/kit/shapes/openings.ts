@@ -26,24 +26,31 @@ export function frame(w: number, hU: number, door = false): Mesh3 {
   return prism(ring(rect(-half(w), 0, half(w), hU), 0.7), [hole], FRAME_D * 2, 0.7)[0];
 }
 
-/** Glazing bars dividing a window's light into `cols` × `rows` panes, a little proud of the glass. */
-export function glazingBars(w: number, hU: number, cols: number, rows: number): Mesh3 {
-  const [x0, y0, x1, y1] = lightOf(w, hU), parts: Mesh3[] = [];
-  for (let i = 1; i < cols; i++) {
-    const x = x0 + ((x1 - x0) * i) / cols;
-    parts.push(box(x - 0.8, y0, -1.6, x + 0.8, y1, 1.6, 0.3));
+/** The openings `cols` × `rows` glazing bars (1.6 U wide) leave in a window's light: [x0, y0, x1, y1] each. */
+function panes(w: number, hU: number, cols: number, rows: number) {
+  const [x0, y0, x1, y1] = lightOf(w, hU), bar = 0.8, out: [number, number, number, number][] = [];
+  const at = (a: number, b: number, k: number, n: number) => a + ((b - a) * k) / n;
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    out.push([i ? at(x0, x1, i, cols) + bar : x0, j ? at(y0, y1, j, rows) + bar : y0, i + 1 < cols ? at(x0, x1, i + 1, cols) - bar : x1, j + 1 < rows ? at(y0, y1, j + 1, rows) - bar : y1]);
   }
-  for (let j = 1; j < rows; j++) {
-    const y = y0 + ((y1 - y0) * j) / rows;
-    parts.push(box(x0, y - 0.8, -1.5, x1, y + 0.8, 1.5, 0.3));
-  }
-  return join(...parts);
+  return out;
 }
 
-/** The glass in a window's light. */
-export function pane(w: number, hU: number): Mesh3 {
-  const [x0, y0, x1, y1] = lightOf(w, hU);
-  return box(x0 - 0.6, y0 - 0.6, -0.5, x1 + 0.6, y1 + 0.6, 0.5, 0);
+/**
+ * Glazing bars dividing a window's light into `cols` × `rows` panes: one grid, the light less its
+ * panes (a hair of it left along the frame, which it touches), standing a little proud of the glass.
+ */
+export function glazingBars(w: number, hU: number, cols: number, rows: number): Mesh3 {
+  if (cols * rows === 1) return new Mesh3();
+  const [x0, y0, x1, y1] = lightOf(w, hU), e = 0.05;
+  const holes = panes(w, hU, cols, rows).map(([a, b, c, d]) => ring(rect(a === x0 ? a + e : a, b === y0 ? b + e : b, c === x1 ? c - e : c, d === y1 ? d - e : d).reverse(), 0));
+  return prism(ring(rect(x0, y0, x1, y1), 0), holes, 3, 0)[0];
+}
+
+/** The glass of a window's light: a pane filling each opening of its glazing bars, touching them all round. */
+export function pane(w: number, hU: number, cols = 1, rows = 1): Mesh3 {
+  const [x0, y0, x1, y1] = lightOf(w, hU), e = cols * rows === 1 ? 0 : 0.05;
+  return join(...panes(w, hU, cols, rows).map(([a, b, c, d]) => box(a === x0 ? a + e : a, b === y0 ? b + e : b, -0.5, c === x1 ? c - e : c, d === y1 ? d - e : d, 0.5, 0)));
 }
 
 // ─── Doors ──────────────────────────────────────────────────────────────────

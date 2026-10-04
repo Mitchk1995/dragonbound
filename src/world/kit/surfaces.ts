@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { abs, attribute, cross, dFdx, dFdy, dot, float, fract, int, max, min, mix, normalize, positionGeometry, positionView, select, sign, sin, smoothstep, step, vec3, varying } from 'three/tsl';
 import { addPatch, instanceOrigin, type F, type V2, type V3, type V4 } from '../../render/patch';
 import { shareResource } from '../../render/resources';
+import { loadKitProps } from './props';
 
 /**
  * What the kit's pieces are made of, and how each is drawn: one texture array holds every surface
@@ -101,9 +102,9 @@ async function plantAtlas(): Promise<THREE.Texture> {
   return shareResource(tex);
 }
 
-/** Loads the kit's surfaces (once; before any building is drawn). */
+/** Loads the kit's surfaces and its modelled props (once; before any building is drawn). */
 export function loadKitSurfaces(): Promise<Maps> {
-  loading ??= Promise.all([strip('./textures/kit/surfaces.jpg', true), strip('./textures/kit/surfaces-normal.jpg', false), plantAtlas()])
+  loading ??= Promise.all([strip('./textures/kit/surfaces.jpg', true), strip('./textures/kit/surfaces-normal.jpg', false), plantAtlas(), loadKitProps()])
     .then(([color, normal, plants]) => (maps = { color, normal, plants }))
     .catch((err) => {
       // (Not kept: the next building to be drawn tries again.)

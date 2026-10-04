@@ -3,10 +3,11 @@ import { boxClaim, type Box, type Claim } from './claims';
 import { def, footprint, type ElementDef, type Look, type Part } from './elements';
 import { arc, box, cylinder, join, prism, ring, turned, type Mesh3, type Turn, type V2 } from './mesh';
 import { CELL_U, half, PLAY, STEP_U } from './scale';
-import { barrel, bed, bench, candle, chest, cob, counter, flame, longLoaf, rug, sack, shelves, stool, table, wardrobe } from './shapes/furniture';
-import { lampPost, lantern, pot, signBoard, signBracket, windowBox } from './shapes/details';
+import { barrel, candle, cob, flame, longLoaf, rug, sack } from './shapes/furniture';
+import { lampPost, lanternGlass, pot } from './shapes/details';
 import { plantCards, type Plant } from './shapes/plants';
 import { archFront } from './shapes/masonry';
+import { prop } from './props';
 
 /**
  * The kit's furnishings and street pieces: furniture, bread, the stair and its rails, the oven's fire,
@@ -26,19 +27,29 @@ export const FURNISH = {
 
 // ─── Furniture ──────────────────────────────────────────────────────────────
 
-export const counterEl = (w: number, h: number) => def({
-  id: `counter${w}x${h}`, name: `Shop counter ${w} long`, w, d: 2, h, kind: 'detail',
-  claims: [boxClaim(-half(w) - 1.2, 0, -half(2) - 1.2, half(w) + 1.2, h * STEP_U, half(2) + 1.2)],
-  parts: [part(() => counter(w, h * STEP_U), 'oak', { grain: 'auto' })],
+/** The surfaces a modelled prop's materials stand for (props.ts, tools/blender/kit_props.py). */
+const SURFACES: Record<string, Pick<Part, 'look' | 'grain' | 'color'>> = {
+  'oak.x': { look: 'oak', grain: 'x' }, 'oak.y': { look: 'oak', grain: 'y' }, 'oak.z': { look: 'oak', grain: 'z' },
+  iron: { look: 'iron', color: FURNISH.iron }, linen: { look: 'cloth', color: FURNISH.linen }, blanket: { look: 'cloth', color: FURNISH.blanket },
+  earth: { look: 'cloth', color: FURNISH.earth }, bread: { look: 'clay', color: FURNISH.bread }, crust: { look: 'clay', color: FURNISH.crust },
+};
+
+/** A prop modelled in Blender: a part for each of its materials, drawn as the surface that material stands for. */
+const modelled = (name: string, materials: string[]): Part[] => materials.map((m) => ({ mesh: () => prop(name, m), whole: true, ...SURFACES[m] }));
+
+/** The shop counter, eight cells long and two deep: a panelled carcass, its thick top overhanging all round. */
+export const counterEl = () => def({
+  id: 'counter8', name: 'Shop counter', w: 8, d: 2, h: 5.5, kind: 'detail',
+  claims: [boxClaim(-half(8) - 1.2, 0, -half(2) - 1.2, half(8) + 1.2, 5.5 * STEP_U, half(2) + 1.2)],
+  parts: modelled('counter8', ['oak.x', 'oak.y']),
 });
 
-export const tableEl = (w: number, d: number, h: number) => def({
-  id: `table${w}x${d}x${h}`, name: `Table ${w} × ${d}`, w, d, h, kind: 'detail', parts: [part(() => table(w, d, h * STEP_U), 'oak')],
-});
+/** A table `w` cells long and two deep, five steps tall. */
+export const tableEl = (w: 3 | 4) => def({ id: `table${w}`, name: `Table ${w} long`, w, d: 2, h: 5, kind: 'detail', parts: modelled(`table${w}`, ['oak.x', 'oak.y', 'oak.z']) });
 
-export const stoolEl = (h: number) => def({ id: `stool${h}`, name: 'Stool', w: 1, d: 1, h, kind: 'detail', claims: [round(9.4, h * STEP_U)], parts: [part(() => stool(h * STEP_U), 'oak', { grain: 'y' })] });
+export const stoolEl = () => def({ id: 'stool', name: 'Stool', w: 1, d: 1, h: 2.5, kind: 'detail', claims: [round(9.4, 20)], parts: modelled('stool', ['oak.x', 'oak.y']) });
 
-export const benchEl = (w: number, h: number) => def({ id: `bench${w}x${h}`, name: `Bench ${w} long`, w, d: 1, h, kind: 'detail', parts: [part(() => bench(w, h * STEP_U), 'oak', { grain: 'x' })] });
+export const benchEl = () => def({ id: 'bench3', name: 'Bench', w: 3, d: 1, h: 2.5, kind: 'detail', parts: modelled('bench3', ['oak.x', 'oak.y']) });
 
 export const barrelEl = () => def({
   id: 'barrel', name: 'Barrel', w: 2, d: 2, h: 5, kind: 'detail', claims: [round(17.4, 40)],
@@ -66,19 +77,16 @@ export const candleEl = () => def({
   parts: [part(() => candle()[0], 'plaster', { color: FURNISH.wax }), part(() => candle()[1], 'iron', { color: FURNISH.iron }), part(() => flame(1.1, 3.6).moved(new THREE.Matrix4().makeTranslation(0, 6.9, 0)), 'glow', { color: FURNISH.flameGlow })],
 });
 
-export const bedEl = (w: number, d: number) => def({
-  id: `bed${w}x${d}`, name: 'Bed', w, d, h: 4.5, kind: 'detail',
-  parts: [part(() => bed(w, d)[0], 'oak'), part(() => bed(w, d)[1], 'cloth', { color: FURNISH.linen }), part(() => bed(w, d)[2], 'cloth', { color: FURNISH.blanket })],
+/** A bed six cells long and four wide: its frame, and the mattress, pillows and blanket on it. */
+export const bedEl = () => def({ id: 'bed6', name: 'Bed', w: 6, d: 4, h: 4.5, kind: 'detail', parts: modelled('bed6', ['oak.x', 'oak.y', 'oak.z', 'linen', 'blanket']) });
+
+export const chestEl = () => def({
+  id: 'chest3', name: 'Chest', w: 3, d: 1, h: 3, kind: 'detail', claims: [boxClaim(-half(3) + 1, 0, -8.3, half(3) - 1, 24, 8.3)], parts: modelled('chest3', ['oak.x', 'iron']),
 });
 
-export const chestEl = (w: number) => def({
-  id: `chest${w}`, name: 'Chest', w, d: 1, h: 3, kind: 'detail', claims: [boxClaim(-half(w) + 1, 0, -8.3, half(w) - 1, 24, 8.3)],
-  parts: [part(() => chest(w, 24)[0], 'oak', { grain: 'x' }), part(() => chest(w, 24)[1], 'iron', { color: FURNISH.iron })],
-});
-
-export const wardrobeEl = (w: number, h: number) => def({
-  id: `wardrobe${w}x${h}`, name: 'Wardrobe', w, d: 1, h, kind: 'detail',
-  claims: [boxClaim(-half(w) - 0.6, 0, -9, half(w) + 0.6, h * STEP_U, 9.6)], parts: [part(() => wardrobe(w, h * STEP_U), 'oak', { grain: 'y' })],
+export const wardrobeEl = () => def({
+  id: 'wardrobe3', name: 'Wardrobe', w: 3, d: 1, h: 12, kind: 'detail', claims: [boxClaim(-half(3) - 0.6, 0, -9, half(3) + 0.6, 12 * STEP_U, 9.6)],
+  parts: modelled('wardrobe3', ['oak.x', 'oak.y', 'iron']),
 });
 
 export const rugEl = (w: number, d: number) => def({
@@ -86,15 +94,16 @@ export const rugEl = (w: number, d: number) => def({
   parts: [part(() => rug(w, d)[0], 'cloth', { color: FURNISH.wool }), part(() => rug(w, d)[1], 'cloth', { color: FURNISH.border })],
 });
 
-/** Shelves against a wall, their boards (all but the top one) stocked with bread. */
-export const shelvesEl = (w: number, h: number, n: number) => def({
-  id: `shelves${w}x${h}x${n}`, name: 'Shelves of bread', w, d: 1, h, kind: 'detail',
-  parts: [part(() => shelves(w, h * STEP_U, n), 'oak', { grain: 'x' }), part(() => {
-    const out: Mesh3[] = [];
-    for (let k = 0; k + 1 < n; k++) {
-      const y = 4 + ((h * STEP_U - 6) * k) / (n - 1) + 2, count = w * 2 - 1;
+/** Shelves four cells long against a wall, eleven steps tall, their three lower boards stocked with bread. */
+export const shelvesEl = () => def({
+  id: 'shelves4', name: 'Shelves of bread', w: 4, d: 1, h: 11, kind: 'detail',
+  parts: [...modelled('shelves4', ['oak.x', 'oak.y']), part(() => {
+    const out: Mesh3[] = [], count = 7;
+    for (let k = 0; k < 3; k++) {
+      // (On each board's top: the boards stand 4 U up and every 27⅓ U above, 2 U thick.)
+      const y = 4 + (82 * k) / 3 + 2;
       for (let i = 0; i < count; i++) {
-        const x = -half(w) + 10 + ((2 * half(w) - 20) * i) / (count - 1), s = (k * 7 + i * 3) % 4;
+        const x = -half(4) + 10 + ((2 * half(4) - 20) * i) / (count - 1), s = (k * 7 + i * 3) % 4;
         out.push((s === 1 ? longLoaf(12, 4.4).moved(new THREE.Matrix4().makeRotationY(1.35).setPosition(x, y, -1)) : cob(6.2 + s * 0.4).moved(new THREE.Matrix4().makeTranslation(x, y, (s % 2) * 2 - 1))).tag(k * 20 + i + 1));
       }
     }
@@ -102,14 +111,20 @@ export const shelvesEl = (w: number, h: number, n: number) => def({
   }, 'clay', { color: FURNISH.bread })],
 });
 
-/** A plank top laid on supports: a shelf board, a landing. */
-
 // ─── The stair and its rails ────────────────────────────────────────────────
 
-/** A turned baluster from y0 to y1 at (x, z). */
-const baluster = (x: number, z: number, y0: number, y1: number) => {
-  const h = y1 - y0;
-  return cylinder(1.3, h, 0.3, 7, [x, y0, z]).add(cylinder(2, h * 0.16, 0.4, 7, [x, y0 + h * 0.12, z]));
+/**
+ * A turned baluster from y0 up to y1 at (x, z), one turned shape with a collar low on its shaft. Its
+ * top meets a rail rising `slope` U per U along x: the baluster is sheared to it, so its top lies on
+ * the rail's underside, as cut to fit.
+ */
+const baluster = (x: number, z: number, y0: number, y1: number, slope = 0) => {
+  const h = y1 - y0, b = turned([
+    { r: 0, y: 0 }, { r: 1.6, y: 0 }, { r: 1.6, y: 0.8, round: true }, { r: 1.3, y: 1.4 }, { r: 1.3, y: h * 0.12, smooth: true }, { r: 2, y: h * 0.17, smooth: true },
+    { r: 1.3, y: h * 0.24, smooth: true }, { r: 1.3, y: h - 1.4 }, { r: 1.6, y: h - 0.8, round: true }, { r: 1.6, y: h }, { r: 0, y: h },
+  ], 8, [x, y0, z]);
+  for (let i = 0; i < b.pos.length; i += 3) b.pos[i + 1] += (b.pos[i] - x) * slope * ((b.pos[i + 1] - y0) / h);
+  return b;
 };
 
 /**
@@ -140,7 +155,8 @@ export function stairEl(n: number, w: number, riseU: number, railed: number, rai
       part(() => join(...Array.from({ length: railed }, (_, i) => {
         const y = top(i) + railU, r = rail(i);
         const hand = prism(ring([[x0(i), r.bottom.at0], [x0(i + 1), r.bottom.at1], [x0(i + 1), r.top.at1], [x0(i), r.top.at0]], 0.6), [], 3.6, 0.6, 'z', [0, 0, rz])[0];
-        return join(baluster(mid(i), rz, top(i), y - 0.6), hand).tag(100 + i);
+        // (The rail's underside is 1.6 U under its line over the middle of each step.)
+        return join(baluster(mid(i), rz, top(i), y - 1.6, riseU / CELL_U), hand).tag(100 + i);
       })), 'oak', { grain: 'x' }),
     ],
   });
@@ -189,27 +205,20 @@ export function ovenMouthEl(brick: number): ElementDef {
   });
 }
 
-/** The oven's dome over its chamber, `w` × `d` cells and `hU` tall, and the flue from its back to the wall at its +x end. */
+/** The oven's dome over its chamber, `w` × `d` cells and `hU` tall, and its flue (where it rises, how high, how thick: kit_props.py). */
 const OVEN_DOME = { w: 6, d: 3, hU: 52, flue: [30, -10] as const, flueTop: 80, r: 6.5 } as const;
 
 /**
  * The bread oven's dome: a low dome of clay daubed over the baking chamber, standing on the oven's
- * base, its mouth's front set against it; a clay flue rising from its back and turning into the wall.
+ * base, its mouth's front set against it; its flue rising out of it and turning in a mitred elbow
+ * into the wall at its +x end, all one shape (modelled: props.ts).
  */
 export function ovenDomeEl(flue: number): ElementDef {
-  const { w, d, hU, flue: [fx, fz], flueTop, r } = OVEN_DOME, X = half(w), Z = half(d);
-  const prof: Turn[] = [{ r: 0, y: 0 }, { r: 1, y: 0 }, { r: 0.99, y: 0.15, smooth: true }, { r: 0.94, y: 0.36, smooth: true }, { r: 0.82, y: 0.58, smooth: true }, { r: 0.62, y: 0.78, smooth: true }, { r: 0.34, y: 0.93, smooth: true }, { r: 0, y: 1 }];
-  const pipeY = flueTop - r;
+  const { w, d, hU, flue: [fx, fz], flueTop, r } = OVEN_DOME, X = half(w), Z = half(d), pipeY = flueTop - r;
   return def({
     id: `ovenDome${w}x${d}_${flue}`, name: 'Oven dome', w, d, h: flueTop / STEP_U, kind: 'detail',
-    claims: [boxClaim(-X, 0, -Z, X, hU, Z), boxClaim(fx - r - 0.1, hU * 0.6, fz - r - 0.1, fx + r + 0.1, flueTop, fz + r + 0.1), boxClaim(fx, pipeY - r - 0.1, fz - r - 0.1, X, flueTop, fz + r + 0.1)],
-    parts: [
-      part(() => turned(prof.map((p) => ({ ...p, r: p.r * X, y: p.y * hU })), 22, [0, 0, 0], [1, Z / X]), 'clay'),
-      part(() => join(
-        cylinder(r, flueTop - hU * 0.6, 0.6, 12, [fx, hU * 0.6, fz]),
-        cylinder(r, X - fx, 0.6, 12).moved(new THREE.Matrix4().makeRotationZ(-Math.PI / 2).setPosition(fx, pipeY, fz)),
-      ), 'clay', { color: flue }),
-    ],
+    claims: [boxClaim(-X, 0, -Z, X, hU, Z), boxClaim(fx - r - 0.1, hU * 0.6, fz - r - 0.1, fx + r + 0.1, flueTop, fz + r + 0.1), boxClaim(fx - r - 0.1, pipeY - r - 0.1, fz - r - 0.1, X, flueTop, fz + r + 0.1)],
+    parts: [part(() => prop('ovenDome', 'clay'), 'clay', { whole: true }), part(() => prop('ovenDome', 'flue'), 'clay', { color: flue, whole: true })],
   });
 }
 
@@ -225,19 +234,19 @@ const tongues = (y: number, list: number[][]) =>
   join(...list.map(([x, z, r, hU, lean, yaw]) => flame(r, hU, lean, yaw, 0.6).moved(new THREE.Matrix4().makeTranslation(x, y, z))));
 
 /**
- * A fire of split logs in an oven's mouth, `w` × `d` cells and `hU` tall: charred logs crossed on a
- * bed of glowing embers, tongues of flame licking up from among them, yellow low down where they
- * burn hottest and orange where they reach.
+ * A fire of split logs in an oven's mouth, `w` × `d` cells and `hU` tall: two charred logs side by
+ * side on a bed of glowing embers and a third laid across them, end-on to the room, each resting on
+ * what is under it; tongues of flame licking up between them, yellow low down where they burn
+ * hottest and orange where they reach.
  */
 export const fireEl = (w: number, d: number, hU: number) => def({
   id: `fire${w}x${d}x${hU}`, name: 'Fire', w, d, h: hU / STEP_U, kind: 'detail', claims: [boxClaim(-half(w) + 7, 0, -half(d) + 2.5, half(w) - 7, hU, half(d) - 2.5)],
   parts: [
-    // (The top log lies end-on to the room, set back so the flames' yellow heart burns in front of it.)
-    part(() => join(...[[-2, 2.6, -1.5, 0.3], [2, 2.6, 1.5, -0.35], [0, 6.8, -2.6, 1.3]].map(([x, y, z, a], i) => log(x, y, z, i === 2 ? 7.5 : 19, 2.5, a).tag(i + 1))), 'oak', { color: FURNISH.charred, grain: 'box' }),
+    // (Set back, so the flames' yellow heart burns in front of the top log's end.)
+    part(() => join(...[[0, 3.2, -2.6, 0], [0, 3.2, 2.6, 0], [0, 8.2, -2.6, Math.PI / 2]].map(([x, y, z, a], i) => log(x, y, z, i === 2 ? 7.5 : 19, 2.5, a).tag(i + 1))), 'oak', { color: FURNISH.charred, grain: 'box' }),
     part(() => join(
       box(-half(w) + 9, 0, -half(d) + 4, half(w) - 9, 0.7, half(d) - 4, 0.3),
-      ...[[-9, -2.5, 2, 1.1], [-5.5, 3, 1.7, 1.4], [-1.5, -3.6, 2.1, 1], [3, 3.2, 2.3, 1.3], [7, -2.4, 1.8, 1.2], [9.2, 2.6, 1.5, 0.9], [0.5, 0.4, 2.4, 1.5], [-7.5, 0.4, 1.6, 1.2]]
-        .map(([x, z, s, h], i) => box(-s, 0, -s * 0.7, s, h, s * 0.7, 0.45).moved(new THREE.Matrix4().makeRotationY(i * 0.83).setPosition(x, 0.4, z))),
+      ...[[-10.5, -2.6], [-10.5, 2.4], [10.5, -2.4], [10.5, 2.6]].map(([x, z], i) => box(-0.6, 0, -0.5, 0.6, 1, 0.5, 0.3).moved(new THREE.Matrix4().makeRotationY(i * 0.83).setPosition(x, 0.7, z))),
     ), 'glow', { color: FURNISH.ember }),
     // (The hot yellow tongues stand in front of the taller orange ones, so they show as the fire's heart.)
     part(() => tongues(1.2, [[-6.5, -1.2, 3.4, hU - 6, 2.4, 0.2], [-2, -1.6, 3.8, hU - 3, -1.8, 0], [2.8, -1, 3.6, hU - 4.5, 2.2, 0.3], [7, -1.4, 3, hU - 8, -2.2, 0]]), 'glow', { color: FURNISH.flameGlow }),
@@ -252,31 +261,30 @@ export const lampEl = () => def({
   id: 'lamp', name: 'Street lamp', w: 1, d: 1, h: (LAMP_H + 33) / STEP_U, kind: 'detail', claims: [round(9.2, LAMP_H + 33)],
   parts: [
     part(() => lampPost(LAMP_H), 'iron'),
-    part(() => lantern()[0].moved(new THREE.Matrix4().makeTranslation(0, LAMP_H, 0)), 'iron'),
-    part(() => lantern()[1].moved(new THREE.Matrix4().makeTranslation(0, LAMP_H, 0)), 'glow', { color: FURNISH.lampGlow }),
+    part(() => prop('lantern', 'iron').moved(new THREE.Matrix4().makeTranslation(0, LAMP_H, 0)), 'iron', { whole: true }),
+    part(() => lanternGlass().moved(new THREE.Matrix4().makeTranslation(0, LAMP_H, 0)), 'glow', { color: FURNISH.lampGlow }),
   ],
 });
 
 export const signBracketEl = () => def({
   id: 'signBracket', name: 'Sign bracket', w: 1, d: 1, h: 4, kind: 'detail',
   claims: [boxClaim(-4.5, 4, half(1), 4.5, 30, 30), boxClaim(-4.5, 23.4, 30, 4.5, 30, 45.6), boxClaim(-32, 19, 37.4, 32, 27.8, 42.6)],
-  parts: [part(signBracket, 'iron')],
+  parts: [part(() => prop('signBracket', 'iron'), 'iron', { whole: true })],
 });
 
 export const signEl = () => def({
   id: 'sign', name: 'Baker\'s sign', w: 3, d: 1, h: 6, kind: 'detail', claims: [boxClaim(-30, 3, -2.2, 30, 43, 7)],
-  parts: [part(() => signBoard()[0], 'oak', { grain: 'x' }), part(() => signBoard()[1], 'clay', { color: FURNISH.bread })],
+  parts: modelled('sign', ['oak.x', 'bread', 'crust']),
 });
 
-/** A window box `w` cells long hung on a wall's face, planted with clumps of the flowers given, a little greenery between. */
+/** A window box `w` cells long (2 to 4) hung on a wall's face, full of earth, planted with clumps of the flowers given, a little greenery between. */
 export function windowBoxEl(w: number, blooms: Plant[]): ElementDef {
   const z = half(1) + 5.2, n = w * 2;
   return def({
     id: `windowBox${w}_${blooms.join('_')}`, name: 'Window box', w, d: 1, h: 2, kind: 'detail',
     claims: [boxClaim(-half(w), -5, half(1), half(w), 30, half(1) + 10)],
     parts: [
-      part(() => windowBox(w)[0].moved(new THREE.Matrix4().makeTranslation(0, 0, half(1))), 'oak', { grain: 'x' }),
-      part(() => windowBox(w)[1].moved(new THREE.Matrix4().makeTranslation(0, 0, half(1))), 'cloth', { color: FURNISH.earth }),
+      ...modelled(`windowBox${w}`, ['oak.x', 'oak.y', 'earth']),
       part(() => join(...Array.from({ length: n }, (_, i) => {
         const x = -half(w) + 6 + (i * (2 * half(w) - 12)) / (n - 1), kind = i % 3 === 2 ? 'bush' : blooms[i % blooms.length];
         return plantCards(kind, x, 5.6, z, kind === 'bush' ? 11 : 12, kind === 'bush' ? 12 : 18 + (i % 2) * 4, 3, i * 0.7, 0.72);
@@ -285,8 +293,8 @@ export function windowBoxEl(w: number, blooms: Plant[]): ElementDef {
   });
 }
 
-/** A clay pot two cells across with a leafy shrub in it. */
+/** A clay pot two cells across, filled with earth to just under its rim, a leafy shrub growing in it. */
 export const potEl = () => def({
   id: 'pot', name: 'Potted shrub', w: 2, d: 2, h: 7, kind: 'detail', claims: [round(19.5, 56)],
-  parts: [part(() => pot(14, 20), 'clay'), part(() => cylinder(11.6, 1, 0, 16, [0, 17.4, 0]), 'cloth', { color: FURNISH.earth }), part(() => plantCards('bush', 0, 16.5, 0, 36, 38, 4, 0.3), 'card')],
+  parts: [part(() => pot(14, 20)[0], 'clay'), part(() => pot(14, 20)[1], 'cloth', { color: FURNISH.earth }), part(() => plantCards('bush', 0, 16.5, 0, 36, 38, 4, 0.3), 'card')],
 });

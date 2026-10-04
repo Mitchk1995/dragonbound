@@ -73,16 +73,16 @@ function oven(b: KitBuild) {
 function shop(b: KitBuild) {
   const g = H.walk, part = 'g.in';
   // The counter between the customers and the baker at the oven, its top laid with bread.
-  b.place(counterEl(8, 5.5), 13, g, 9, C.boards, { part });
+  b.place(counterEl(), 13, g, 9, C.boards, { part });
   for (const [x, n] of [[14, 3], [18, 2]] as const) b.place(breadEl(n), x, g + 5.5, 10, C.boards, { part });
   // Shelves of bread on the east wall behind it.
-  b.place(shelvesEl(4, 11, 4), 23, g, 5, C.boards, { rot: 3, part });
+  b.place(shelvesEl(), 23, g, 5, C.boards, { rot: 3, part });
   // Flour and a barrel in the corner by the east window; a table, a bench and a stool for customers by the west window.
   for (const [x, z] of [[22, 15], [23, 15], [23, 14]]) b.place(sackEl(), x, g, z, C.boards, { part });
   b.place(barrelEl(), 20, g, 14, C.boards, { part });
-  b.place(tableEl(3, 2, 5), 3, g, 10, C.boards, { part });
-  b.place(benchEl(3, 2.5), 3, g, 12, C.boards, { part });
-  b.place(stoolEl(2.5), 6, g, 10, C.boards, { part });
+  b.place(tableEl(3), 3, g, 10, C.boards, { part });
+  b.place(benchEl(), 3, g, 12, C.boards, { part });
+  b.place(stoolEl(), 6, g, 10, C.boards, { part });
   b.place(candleEl(), 4, g + 5, 10, C.boards, { part });
 }
 
@@ -94,14 +94,14 @@ function room(b: KitBuild) {
   for (let x = STAIR.well[0]; x < STAIR.well[1]; x += 7) b.place(railEl(Math.min(7, STAIR.well[1] - x), 5 * STEP_U), x, u, STAIR.well[3], C.timber, { rot: 2, part });
   b.place(railEl(STAIR.well[3] - STAIR.well[2], 5 * STEP_U), STAIR.well[0] - 1, u, STAIR.well[2], C.timber, { rot: 1, part });
   // The bed by the west wall with a chest at its foot, a wardrobe on the east wall.
-  b.place(bedEl(6, 4), 1, u, 12, C.boards, { part });
-  b.place(chestEl(3), 7, u, 13, C.boards, { rot: 3, part });
-  b.place(wardrobeEl(3, 12), 23, u, 6, C.boards, { rot: 3, part });
+  b.place(bedEl(), 1, u, 12, C.boards, { part });
+  b.place(chestEl(), 7, u, 13, C.boards, { rot: 3, part });
+  b.place(wardrobeEl(), 23, u, 6, C.boards, { rot: 3, part });
   // A table by the front windows with a candle, two stools, on a rug.
   b.place(rugEl(8, 6), 11, u, 8, C.boards, { part });
-  b.place(tableEl(4, 2, 5), 13, u + 0.5, 11, C.boards, { part });
+  b.place(tableEl(4), 13, u + 0.5, 11, C.boards, { part });
   b.place(candleEl(), 15, u + 5.5, 11, C.boards, { part });
-  for (const [x, z] of [[12, 11], [17, 12]]) b.place(stoolEl(2.5), x, u + 0.5, z, C.boards, { part });
+  for (const [x, z] of [[12, 11], [17, 12]]) b.place(stoolEl(), x, u + 0.5, z, C.boards, { part });
 }
 
 // ─── The street front ───────────────────────────────────────────────────────

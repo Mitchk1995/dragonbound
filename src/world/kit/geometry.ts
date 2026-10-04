@@ -37,12 +37,13 @@ function axesFor(n: number, grain: number): { u: number; v: number; end: boolean
   return { u: other, v: grain, end: false };
 }
 
-/** One textured part: its mesh, surface, grain and (when it has one) its own colour. */
+/** One textured part: its mesh, surface, grain, (when it has one) its own colour, and whether it is a whole modelled shape (no stones or boards of its own to wear). */
 export interface TexturedPart {
   mesh: Mesh3;
   layer: Layer;
   grain?: Grain;
   color?: number;
+  whole?: boolean;
 }
 
 interface Arrays {
@@ -73,7 +74,7 @@ function boxesOf(mesh: Mesh3) {
 const own = new THREE.Color();
 
 /** Appends one part's vertices to `out`. */
-function addPart(out: Arrays, { mesh, layer, grain = SURFACE[layer].grain ? 'auto' : 'box', color }: TexturedPart) {
+function addPart(out: Arrays, { mesh, layer, grain = SURFACE[layer].grain ? 'auto' : 'box', color, whole }: TexturedPart) {
   const tile = SURFACE[layer].tile, li = LAYERS.indexOf(layer);
   let g = -1;
   if (grain === 'auto') {
@@ -106,10 +107,11 @@ function addPart(out: Arrays, { mesh, layer, grain = SURFACE[layer].grain ? 'aut
         if (color === undefined) out.col.push(s, s, s);
         else out.col.push(own.r * s, own.g * s, own.b * s);
         out.kit.push((P[i * 3 + u] * U) / tile, (P[i * 3 + v] * U) / tile, li, mesh.sub[i] + (color === undefined ? 0 : FIXED));
+        // (A whole shape gets no box: the material leaves its corners and edges as they were modelled.)
         const b = boxes.get(mesh.sub[i])!;
         for (let k = 0; k < 3; k++) {
-          out.rel.push((P[i * 3 + k] - (b.lo[k] + b.hi[k]) / 2) * U);
-          out.half.push(((b.hi[k] - b.lo[k]) / 2) * U);
+          out.rel.push(whole ? 0 : (P[i * 3 + k] - (b.lo[k] + b.hi[k]) / 2) * U);
+          out.half.push(whole ? 0 : ((b.hi[k] - b.lo[k]) / 2) * U);
         }
       }
       out.idx.push(j);
