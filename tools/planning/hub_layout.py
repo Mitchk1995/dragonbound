@@ -17,7 +17,7 @@ sys.dont_write_bytecode = True
 import numpy as np
 
 from hub_geometry import (check_layout, distance_to_line, parcel, rectangle,
-                          sample_line, smooth_line, surface)
+                          reconcile_routes, sample_line, smooth_line)
 from hub_draw import draw_plan, draw_sections, render
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -138,6 +138,7 @@ def build():
              "river": smooth_line(RIVER), "burn": smooth_line(BURN),
              "market": MARKET, "orchard": ORCHARD, "lots": [],
              "portal": None}
+    reconcile_routes(world)
     # Lower contour front. Deliberately leave the middle open to the market stair.
     lot(world, "Weaver House", (83, 131), 9.9, 7.2, 4.5, "ochre", 2)
     lot(world, "Carpenter House", (100, 135), 12.6, 8.1, 4.0, "shingle", 2)
@@ -164,14 +165,6 @@ def build():
     front = p + n * (road["width"]/2 + 1.8)
     world["portal"] = {"c": front + n*8.6, "poly": parcel(front,t,n,18,18),
                        "front": front, "road": p, "floor": float(h+.1), "t":t,"n":n}
-    reference = {**world, "streets": [s for s in streets if s["kind"] != "stairs"]}
-    for stairs in streets:
-        if stairs["kind"] != "stairs":
-            continue
-        line = stairs["line"]
-        chain = np.r_[0,np.cumsum(np.linalg.norm(np.diff(line,axis=0),axis=1))]
-        ends = [float(surface(reference,*p)) for p in (line[0],line[-1])]
-        stairs["heights"] = np.interp(chain,[0,chain[-1]],ends)
     return world
 
 

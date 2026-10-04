@@ -67,18 +67,93 @@ def parcel(front, t, n, w, d):
     return [front-t*w/2,front+t*w/2,front+t*w/2+n*d,front-t*w/2+n*d]
 
 
+def route_samples(road, spacing=.1):
+    """Include every authored vertex and sample each segment at bounded spacing."""
+    line, heights = road["line"], road["heights"]
+    points, levels = [], []
+    for i, (a, b) in enumerate(zip(line[:-1], line[1:])):
+        ts = np.linspace(0, 1, max(1, math.ceil(np.linalg.norm(b-a)/spacing)),
+                         endpoint=False)
+        points.extend(a+(b-a)*t for t in ts)
+        levels.extend(heights[i]+(heights[i+1]-heights[i])*ts)
+    return np.array(points+[line[-1]]), np.r_[levels, heights[-1]]
+
+
+def route_junctions(a, b):
+    """Exact centreline crossings, including shared endpoints."""
+    p, v = a[:-1, None, :], np.diff(a, axis=0)[:, None, :]
+    q, w = b[None, :-1, :], np.diff(b, axis=0)[None, :, :]
+    cross = lambda u, v: u[..., 0]*v[..., 1]-u[..., 1]*v[..., 0]
+    den = cross(v, w)
+    safe = np.where(np.abs(den)>1e-12, den, 1)
+    t, u = cross(q-p, w)/safe, cross(q-p, v)/safe
+    valid = (np.abs(den)>1e-12)&(t>=-1e-9)&(t<=1+1e-9)&(u>=-1e-9)&(u<=1+1e-9)
+    crossings = p+v*np.clip(t, 0, 1)[..., None]
+    points = list(crossings[valid])
+    for endpoint in (a[0], a[-1], b[0], b[-1]):
+        if float(distance_to_line(a, *endpoint)[0])<1e-8 and float(distance_to_line(b, *endpoint)[0])<1e-8:
+            points.append(endpoint)
+    return np.unique(np.round(points, 9), axis=0) if points else np.empty((0, 2))
+
+
+def reconcile_routes(world):
+    """All crossing routes use the same elevation at their shared junction.
+
+    Keep the High Street profile and every route footprint. Joining profiles use
+    exact crossing knots, then grade back to their own ground. Stairs also land
+    on the market terrace, and bridge endpoints
+    share the street datum while the deck remains above the river.
+    """
+    previous = []
+    for road in world["streets"]:
+        if road["id"] == "High Street":
+            previous.append(road)
+            continue
+        line, heights = road["line"], road["heights"]
+        chain = np.r_[0, np.cumsum(np.linalg.norm(np.diff(line, axis=0), axis=1))]
+        anchors = []
+        for primary in previous:
+            for p in route_junctions(line, primary["line"]):
+                _, i, f = distance_to_line(line, *p)
+                station = chain[int(i)]+float(f)*(chain[int(i)+1]-chain[int(i)])
+                anchors.append((station, float(sample_line(primary["line"], primary["heights"], p)[2])))
+        if road["kind"] == "stairs":
+            reference = {**world, "streets": previous}
+            for endpoint in (0, len(line)-1):
+                if not any(abs(s-chain[endpoint])<1e-7 for s, _ in anchors):
+                    anchors.append((chain[endpoint], float(surface(reference, *line[endpoint]))))
+        stations = np.unique(np.r_[chain, [s for s, _ in anchors]])
+        line = np.column_stack([np.interp(stations, chain, line[:, axis]) for axis in (0, 1)])
+        heights = np.interp(stations, chain, heights)
+        chain, fixed = stations, np.zeros(len(stations), bool)
+        for station, level in anchors:
+            i = int(np.argmin(np.abs(chain-station)))
+            if not fixed[i]:
+                heights[i], fixed[i] = level, True
+        if road["kind"] == "stairs":
+            knots = np.flatnonzero(fixed)
+            heights = np.interp(chain, chain[knots], heights[knots])
+        elif road["kind"] == "bridge":
+            heights = np.interp(chain, [0, chain[-1]], [heights[0], heights[-1]])
+        else:
+            limit = .17 if road["kind"] == "street" else .35
+            steps = np.diff(chain)*limit
+            for _ in range(2):
+                for i in range(1, len(heights)):
+                    if not fixed[i]:
+                        heights[i] = np.clip(heights[i], heights[i-1]-steps[i-1], heights[i-1]+steps[i-1])
+                for i in range(len(heights)-2, -1, -1):
+                    if not fixed[i]:
+                        heights[i] = np.clip(heights[i], heights[i+1]-steps[i], heights[i+1]+steps[i])
+        road["line"], road["heights"] = line, heights
+        previous.append(road)
+
+
 def surface(world, x, z):
     x, z = np.broadcast_arrays(np.asarray(x,float), np.asarray(z,float))
     h = world["ground"](x,z)
     mh = 18.5 - .03*(z-116) + .008*(x-128)
     h = np.where(inside(world["market"],x,z),mh,h)
-    for road in world["streets"]:
-        if road["kind"] == "bridge":
-            continue
-        d, i, f = distance_to_line(road["line"],x,z)
-        rh = road["heights"][i]*(1-f)+road["heights"][i+1]*f
-        blend = np.clip((road["width"]/2+1.5-d)/1.5,0,1)
-        h = h*(1-blend)+(rh+.02*d)*blend
     for lot in world["lots"]:
         h = np.where(inside(lot["parcel"],x,z),lot["floor"]-.1,h)
         access = np.array([lot["road"],lot["door"]])
@@ -87,6 +162,22 @@ def surface(world, x, z):
     portal = world["portal"]
     if portal is not None:
         h = np.where(inside(portal["poly"],x,z),portal["floor"]-.1,h)
+    # One shared road surface, independent of list order. Inverse-distance
+    # weights preserve each route's exact centreline profile and converge to
+    # the common knot elevation at crossings. Road benches cover door strips.
+    weights, levels, uncovered = np.zeros(x.shape), np.zeros(x.shape), np.ones(x.shape)
+    for road in world["streets"]:
+        if road["kind"] == "bridge":
+            continue
+        d, i, f = distance_to_line(road["line"],x,z)
+        rh = road["heights"][i]*(1-f)+road["heights"][i+1]*f
+        blend = np.clip((road["width"]/2+1.5-d)/1.5,0,1)
+        weight = blend/np.maximum(d, 1e-12)**2
+        weights += weight
+        levels += rh*weight
+        uncovered *= 1-blend
+    road_h = levels/np.maximum(weights, 1e-12)
+    h = h*uncovered+road_h*(1-uncovered)
     return h
 
 
@@ -191,6 +282,24 @@ def check_layout(world):
         if lot["form"]=="court" and lot["width"]*.37<4.0:
             failures.append(f"Courtyard too narrow: {lot['id']}")
     roads = world["streets"]
+    junction_errors = []
+    final_grades = {}
+    for i, road in enumerate(roads):
+        for other in roads[i+1:]:
+            for p in route_junctions(road["line"], other["line"]):
+                a = float(sample_line(road["line"], road["heights"], p)[2])
+                b = float(sample_line(other["line"], other["heights"], p)[2])
+                junction_errors.append(abs(a-b))
+                if abs(a-b)>.02:
+                    failures.append(f"Junction level mismatch: {road['id']} / {other['id']} ({abs(a-b):.3f}m)")
+        profile, authored = route_samples(road, .025)
+        levels = authored if road["kind"] == "bridge" else surface(world, profile[:, 0], profile[:, 1])
+        grades = np.abs(np.diff(levels))/np.linalg.norm(np.diff(profile, axis=0), axis=1)
+        maximum = float(np.max(grades))
+        final_grades[road["id"]] = maximum
+        limit = .6 if road["kind"] == "stairs" else (.35 if road["kind"] == "lane" else .17)
+        if maximum>limit+.00001:
+            failures.append(f"Final terrain exceeds {limit*100:g}% grade: {road['id']} ({maximum*100:.2f}%)")
     for road in roads:
         if road["kind"]!="bridge":
             for water,width in [("river",5.7),("burn",3.0)]:
@@ -224,10 +333,8 @@ def check_layout(world):
     if len(visited)!=len(roads):
         failures.append("Street network has a disconnected branch")
     main = roads[0]
-    grades = np.abs(np.diff(main["heights"]))/np.linalg.norm(np.diff(main["line"],axis=0),axis=1)
-    if float(np.max(grades))>.17001:
-        failures.append("High Street exceeds the proposed 17% grade")
-    cut = np.abs(main["heights"]-world["ground"](main["line"][:,0],main["line"][:,1]))
+    profile, _ = route_samples(main, .025)
+    cut = np.abs(surface(world, profile[:,0], profile[:,1])-world["ground"](profile[:,0],profile[:,1]))
     if float(np.max(cut))>2.5:
         failures.append("High Street cut/fill exceeds 2.5m")
     # Drainage datum and direction are explicit and continuous at the confluence.
@@ -250,12 +357,15 @@ def check_layout(world):
         "minimum_parcel_gap_m":round(min(parcels),2),
         "minimum_parcel_street_clearance_m":round(min(street_clearance),2),
         "minimum_parcel_water_clearance_m":round(min(water_clearance),2),
-        "high_street_max_grade_pct":round(float(np.max(grades))*100,2),
+        "high_street_max_grade_pct":round(final_grades[main["id"]]*100,2),
+        "final_route_max_grade_pct":{name:round(grade*100,2) for name,grade in final_grades.items()},
+        "maximum_junction_level_error_m":round(max(junction_errors),4),
         "high_street_max_cut_fill_m":round(float(np.max(cut)),2),
         "river_datum_m":0, "castle_crest_m":44,
         "bakery_footprint_m":[11.25,8.1],
         "checks":["roof and parcel separation","street and water buffers",
                   "unobstructed door links","connected streets, bridge and stairs",
+                  "shared junction levels and final terrain grades",
                   "bounded street cut/fill","bridge clearance and stair space",
                   "clear public market","downhill stream to river","bakery preservation"]
     }
