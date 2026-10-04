@@ -12,6 +12,13 @@ import { kitMaterial, plantMaterial } from './surfaces';
  * stone count. Every textured piece is drawn with the kit's one material (its surface picked by the
  * texture array's layer); each instance takes its piece's colour (`aTint`), and the material gives
  * each its own patch of the texture and a tone of its own from where it stands.
+ *
+ * What lasts and what a view owns: the shapes' vertex data (built once, below), the kit's material,
+ * its texture arrays and the props' models are cached for the session and never freed by a view.
+ * Each view draws the shapes through geometries of its own over the cached arrays, so the buffers the
+ * renderer uploads for them are the view's alone: freeing a view frees exactly those, its colours and
+ * its placements, and nothing another view still draws from. (The renderer destroys every buffer of a
+ * geometry when it is disposed, so two views must never draw from one buffer.)
  */
 
 const glowMats = new Map<number, THREE.Material>();
@@ -48,6 +55,7 @@ function shapesOf(e: ElementDef): Shape[] {
   return out;
 }
 
+/** Each shape's vertex data, built once for the session; views draw it through geometries of their own (own). */
 const geoCache = new Map<string, THREE.BufferGeometry>();
 function geometry(s: Shape): THREE.BufferGeometry {
   let g = geoCache.get(s.key);
@@ -60,14 +68,25 @@ function geometry(s: Shape): THREE.BufferGeometry {
   return g;
 }
 
-/** A batch's own geometry: the shape's, shared, with a colour per instance. */
-function tinted(shared: THREE.BufferGeometry, count: number) {
-  const g = new THREE.BufferGeometry();
-  for (const [name, a] of Object.entries(shared.attributes)) g.setAttribute(name, a);
-  g.setIndex(shared.index);
+/**
+ * A batch's own geometry: the shape's cached arrays (not copied) in attributes of the batch's own, so
+ * the renderer uploads them into buffers only this batch draws and frees them with it; and, for a
+ * textured shape, a colour per instance.
+ */
+function own(shared: THREE.BufferGeometry, count: number, tint: boolean) {
+  const g = new THREE.BufferGeometry(), packs = new Map<THREE.InterleavedBuffer, THREE.InterleavedBuffer>();
+  // (Attributes packed into one buffer, as the textured shapes' are, stay packed into one of the batch's own.)
+  const copy = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute) => {
+    if (!(a instanceof THREE.InterleavedBufferAttribute)) return new THREE.BufferAttribute(a.array, a.itemSize, a.normalized);
+    let pack = packs.get(a.data);
+    if (!pack) packs.set(a.data, (pack = new THREE.InterleavedBuffer(a.data.array, a.data.stride)));
+    return new THREE.InterleavedBufferAttribute(pack, a.itemSize, a.offset, a.normalized);
+  };
+  for (const [name, a] of Object.entries(shared.attributes)) g.setAttribute(name, copy(a));
+  g.setIndex(copy(shared.index!) as THREE.BufferAttribute);
   g.boundingBox = shared.boundingBox;
   g.boundingSphere = shared.boundingSphere;
-  g.setAttribute('aTint', new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
+  if (tint) g.setAttribute('aTint', new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
   return g;
 }
 
@@ -111,8 +130,7 @@ export class KitView {
       else byEl.set(p.el, [p]);
     }
     for (const [e, items] of byEl) for (const s of shapesOf(e)) {
-      const count = items.length * n, shared = geometry(s);
-      const geo = s.textured ? tinted(shared, count) : shared;
+      const count = items.length * n, geo = own(geometry(s), count, s.textured);
       const mesh = new THREE.InstancedMesh(geo, s.textured ? kitMaterial() : plainMaterial(s.parts[0]), count);
       mesh.name = s.key;
       mesh.castShadow = s.textured && casts(e);
@@ -176,14 +194,13 @@ export class KitView {
     return { pieces: this.build.items.length, shown, calls, tris: Math.round(tris) };
   }
 
+  /** Frees what the view alone owns: its batches' geometries (their buffers and colours) and placements. */
   dispose() {
     this.group.removeFromParent();
     for (const b of this.batches) {
+      b.mesh.geometry.dispose();
       b.mesh.dispose();
-      // A textured batch's geometry is its own (its colours), over the shape's shared buffers: disposing
-      // it frees its colours and lets the renderer drop the shared buffers too, which it uploads again
-      // when another view next draws them. A plain batch draws the shared geometry itself, kept.
-      if (b.tint) b.mesh.geometry.dispose();
     }
+    this.batches.length = 0;
   }
 }

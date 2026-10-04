@@ -15,7 +15,8 @@ type Free = (n: string, eye: THREE.Vector3, look: THREE.Vector3, fov?: number) =
 
 /**
  * The building kit's first house in the hub town's ground below the castle (explicit suite: `kit`;
- * `kit:gallery` adds every piece of the kit laid out). The house stands on a clear, level plot of the
+ * `kit:gallery` adds every piece of the kit laid out; `kit:cycles` instead draws and frees streets over
+ * and over, checking nothing is freed while drawn and nothing leaks, kitCycles.ts). The house stands on a clear, level plot of the
  * home island's meadow south of the castle rock, the hero beside it: the play camera outside, a wide
  * view and two more angles, at the door at his eye height (in plate armour), inside both floors
  * through the play camera with the cut-away the game's buildings use, the stair, the oven's mouth,
@@ -23,6 +24,7 @@ type Free = (n: string, eye: THREE.Vector3, look: THREE.Vector3, fov?: number) =
  * from above. Reports the frame cost with none, one and sixteen houses.
  */
 export async function kitSuite(g: Game, shot: Shot, args: string[]) {
+  if (args.includes('cycles')) return (await import('./kitCycles')).kitCycles(g);
   g.travel('keep', true);
   await new Promise((r) => setTimeout(r, 400));
   await loadKitSurfaces();

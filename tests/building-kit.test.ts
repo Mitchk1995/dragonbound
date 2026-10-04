@@ -456,22 +456,30 @@ describe('drawing the kit', () => {
     v.dispose();
   });
 
-  it('frees each batch\'s own colours when a view goes, never the shapes\' shared buffers another view still draws', () => {
-    const a = new KitView(build, copies), b = new KitView(build);
-    const gone = new Set<THREE.BufferGeometry>();
-    const watch = (v: KitView) => (v.group.children as THREE.InstancedMesh[]).map((mesh) => {
-      mesh.geometry.addEventListener('dispose', () => gone.add(mesh.geometry));
-      return mesh.geometry;
+  it('frees only what a view alone owns: freeing one street never destroys a buffer another view draws, nor the shapes kept for the next', () => {
+    // The renderer's rule: disposing a geometry destroys the GPU buffer of each attribute it holds (an
+    // interleaved one's shared buffer) and of its index. Freeing one view while another drew from the
+    // same buffers was the "buffer used while destroyed" failure.
+    const destroyed = new Set<object>();
+    const buffersOf = (g: THREE.BufferGeometry) => [...Object.values(g.attributes).map((a) => ((a as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (a as THREE.InterleavedBufferAttribute).data : a)), g.index!];
+    const watch = (v: KitView) => (v.group.children as THREE.InstancedMesh[]).flatMap((mesh) => {
+      mesh.geometry.addEventListener('dispose', () => buffersOf(mesh.geometry).forEach((b) => destroyed.add(b)));
+      return buffersOf(mesh.geometry);
     });
-    const mine = watch(a), theirs = watch(b);
-    // (Both draw the same shapes' buffers, each with colours of its own.)
-    expect(batchOf(a, stoneEl(2).id).geometry.getAttribute('position')).toBe(batchOf(b, stoneEl(2).id).geometry.getAttribute('position'));
-    expect(batchOf(a, stoneEl(2).id).geometry.getAttribute('aTint')).not.toBe(batchOf(b, stoneEl(2).id).geometry.getAttribute('aTint'));
+    const a = new KitView(build, copies), b = new KitView(build), mine = watch(a), theirs = watch(b);
     a.dispose();
-    expect(mine.every((g) => gone.has(g))).toBe(true);
-    expect(theirs.some((g) => gone.has(g))).toBe(false);
-    expect(batchOf(b, stoneEl(2).id).geometry.getAttribute('position').count).toBeGreaterThan(0);
+    expect(mine.every((x) => destroyed.has(x))).toBe(true);
+    expect(theirs.filter((x) => destroyed.has(x))).toEqual([]);
+    // A view drawn after the first is freed draws from none of its buffers either.
+    const c = new KitView(build, copies), next = watch(c);
+    expect(next.filter((x) => destroyed.has(x))).toEqual([]);
+    // (Each view's buffers hold the shapes' one copy of their vertices, not copies of their own.)
+    const pos = (v: KitView) => batchOf(v, stoneEl(2).id).geometry.getAttribute('position') as THREE.InterleavedBufferAttribute;
+    expect(pos(b).data).not.toBe(pos(c).data);
+    expect(pos(b).data.array).toBe(pos(c).data.array);
     b.dispose();
+    c.dispose();
+    expect(theirs.concat(next).every((x) => destroyed.has(x))).toBe(true);
   });
 });
 
