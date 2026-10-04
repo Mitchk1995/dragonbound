@@ -40,14 +40,14 @@ export class Items {
         if (!it.item) g.sfx.play('gold', 0.6);
         else g.sfx.play(`drop_${r}`, 0.8);
         if (r === 'unique') {
-          g.glow.burst(it.group.position.clone().setY(0.5), { count: 60, color: [0xff8a1a, 0xffe080, 0xffffff], speed: 6, up: 8, life: 1.2, gravity: 4, size: 0.14 });
+          g.fx.loot(it.x, it.group.position.y + 0.5, it.z, true);
           g.shake(0.3, 0.4);
         } else if (r === 'rare') {
-          g.glow.burst(it.group.position.clone().setY(0.4), { count: 20, color: [0xffd84a, 0xffffff], speed: 3, up: 5, life: 0.8, gravity: 4, size: 0.1 });
+          g.fx.loot(it.x, it.group.position.y + 0.4, it.z, false);
         }
       }
       if (it.item?.rarity === 'unique' && Math.random() < 0.3) {
-        g.glow.spawn(it.x + (Math.random() - 0.5) * 0.4, 0.3, it.z + (Math.random() - 0.5) * 0.4, 0, 2 + Math.random() * 2, 0, 1, 0.08, 0xffb040, 0, 0.5);
+        g.glow.spawn(it.x + (Math.random() - 0.5) * 0.4, it.baseY + 0.3, it.z + (Math.random() - 0.5) * 0.4, 0, 2 + Math.random() * 2, 0, 1, 0.08, 0xffb040, 0, 0.5, 'glint');
       }
       if (!it.item && it.landed && !p.dead && Math.hypot(p.x - it.x, p.z - it.z) < 1.1) this.pickup(it);
     }
@@ -414,6 +414,6 @@ export class Items {
     p.healRate = (g.stats.maxHp * 0.45) / 1.5;
     g.combat.restoreMana(MANA_TUNING.potionFrac, 1.5);
     g.sfx.play('potion');
-    g.glow.burst(p.pos.clone().setY(1), { count: 16, color: [0xff4a6a, 0xff9ab0], speed: 1.5, up: 3, life: 0.8, gravity: -1, size: 0.1 });
+    g.fx.heal(p.x, p.z);
   }
 }

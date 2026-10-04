@@ -128,7 +128,7 @@ export class Skilling {
     a.wait = BASES[pick.base].swingTicks ?? 5;
     this.swingAnim = 1;
     g.sfx.play('hit', 0.5, 1.6 + Math.random() * 0.2);
-    g.fx.sparks(a.node.x, 0.8, a.node.z, ore.color);
+    g.fx.mine(a.node.x, 0.8, a.node.z, ore.color);
     if (Math.random() >= mineChance(ore, g.levels.mining)) return;
 
     const extra = g.save.diaryClaimed.medium && g.zone.def.id === 'mine' && Math.random() < 0.1 ? 1 : 0;

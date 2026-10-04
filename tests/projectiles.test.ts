@@ -16,7 +16,7 @@ function fixture(kind: 'fireball' | 'arrow', range = 2) {
     projectiles: [projectile], group, enemies: [] as any[],
     layout: { w: 20, h: 20, cells: new Uint8Array(400) },
   };
-  const fx = { fireBurst: vi.fn() };
+  const fx = { fireBurst: vi.fn(), trail: vi.fn() };
   const game = {
     zone, player: { x: 0, z: 0, radius: 0.45, dead: false },
     glow: { spawn: vi.fn() }, fx, sfx: { play: vi.fn() }, shake: vi.fn(),

@@ -131,9 +131,6 @@ export const CAVE_PROPS: Record<string, Builder> = {
     k.mesh(g, taper(0.42, 0.42, 0.8, 0.8, 0.3), IRON, [0, 0.9, 0]);
     k.box(g, [0.66, 0.06, 0.66], [0, 1.03, 0], 0x4a1c0c, undefined, PAL.fire, 0.4);
     const f = flame(k, g, 0, 0.95, 0, 0.7);
-    g.traverse((o) => {
-      if (o.name === 'flame') ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5;
-    });
     const l = light(g, 0xff7a3a, 3.2, 7, 1.5);
     return { obj: g, light: l, tick: (t: number) => { f(t); l.intensity = 3.2 + Math.sin(t * 9 + g.id) * 0.3; } };
   },

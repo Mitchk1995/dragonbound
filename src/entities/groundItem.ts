@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { lootBeam } from '../fx/meshFx';
 import { shareResource } from '../render/resources';
 import { BASES } from '../data/items';
 import { itemName } from '../loot/itemGen';
@@ -85,11 +86,7 @@ export class GroundItem {
       this.group.add(model);
       if (item.rarity !== 'normal') {
         const h = { magic: 2.2, rare: 4, unique: 9, normal: 0 }[item.rarity];
-        const beamGeo = new THREE.CylinderGeometry(0.1, 0.22, h, 6, 1, true).translate(0, h / 2, 0);
-        this.beam = new THREE.Mesh(
-          beamGeo,
-          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
-        );
+        this.beam = lootBeam(color, h);
         this.group.add(this.beam);
       }
     } else {
@@ -123,11 +120,6 @@ export class GroundItem {
   /** Returns true on the frame it lands. */
   update(dt: number): boolean {
     this.t += dt;
-    if (this.beam) {
-      const m = this.beam.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.3 + Math.sin(this.t * 3) * 0.12;
-      this.beam.rotation.y += dt;
-    }
     if (!this.flight) return false;
     const f = this.flight;
     const p = Math.min(1, this.t / f.dur);

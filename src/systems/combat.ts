@@ -189,11 +189,7 @@ export class Combat {
     const g = this.g, p = g.player;
     for (const pr of this.z.projectiles) {
       pr.step(dt);
-      if (pr.o.kind === 'fireball') {
-        g.glow.spawn(pr.x, pr.mesh.position.y, pr.z, Math.random() - 0.5, 0.5, Math.random() - 0.5, 0.35, 0.22, Math.random() < 0.5 ? PAL.fire : PAL.ember, 0, 1);
-      } else if (pr.o.kind === 'bolt') {
-        g.glow.spawn(pr.x, pr.mesh.position.y, pr.z, 0, 0, 0, 0.2, 0.12, PAL.arcane, 0, 0);
-      }
+      g.fx.trail(pr.o.kind, pr.x, pr.mesh.position.y, pr.z);
       if (pr.o.owner === 'player') {
         for (const e of this.z.enemies) {
           if (e.dead || e.untargetable || pr.hit.has(e)) continue;
@@ -263,12 +259,10 @@ export class Combat {
     if (heavy && !o.tick && e.hp > 0 && e.def.behavior !== 'boss') e.stagger(g, T.stagger.secs);
     if (!o.tick) g.hitstop(hit.crit ? T.hitstopCrit : T.hitstop);
     g.text.damage(hit.amount, e.x, e.model.height, e.z, hit.crit ? 'crit' : 'dmg');
-    const blood = e.def.model === 'goblin' ? 0x5a8a2a : e.def.model === 'cultist' || e.def.model === 'priest' ? 0x5a1a2c : 0xb02a1a;
-    g.particles.burst(new THREE.Vector3(e.x, e.model.height * 0.5, e.z), { count: hit.crit ? 10 : 5, color: [blood, 0x3a1a10], speed: 3.5, up: 3, life: 0.5, size: 0.12 });
+    g.fx.hit(e, hit.crit, o.fromX ?? g.player.x, o.fromZ ?? g.player.z);
     if (hit.crit) {
       g.sfx.play('crit', 0.9, 0.9 + Math.random() * 0.2);
       g.shake(0.18, 0.15);
-      g.glow.burst(new THREE.Vector3(e.x, e.model.height * 0.6, e.z), { count: 8, color: [0xffffff, 0xffe070], speed: 7, up: 2, life: 0.25, gravity: 0, size: 0.1 });
     } else {
       g.sfx.play('hit', 0.6, 0.9 + Math.random() * 0.25);
     }
@@ -332,9 +326,7 @@ export class Combat {
     e.anim.special = -1;
     e.path = [];
     g.sfx.play('enemyDie', 0.8, 0.8 + Math.random() * 0.4);
-    const pos = new THREE.Vector3(e.x, e.model.height * 0.5, e.z);
-    g.particles.burst(pos, { count: 18, color: [0x3a3030, 0x6a5a50], speed: 5, up: 4, life: 0.8, size: 0.16 });
-    g.glow.burst(pos, { count: 10, color: [PAL.ember, PAL.fire], speed: 3, up: 3, life: 0.6, gravity: 1, size: 0.1 });
+    g.fx.death(e);
     if (g.player.cmd.kind === 'attack' && g.player.cmd.target === e) g.player.stop();
 
     const s = g.save;
@@ -428,7 +420,7 @@ export class Combat {
         for (let i = 0; i < count; i++) {
           const a = dir + (Math.random() - 0.5) * angle * 0.9;
           const sp = 12 + Math.random() * 6;
-          g.glow.spawn(h.x, 1.4, h.z, Math.cos(a) * sp, (Math.random() - 0.3) * 2, Math.sin(a) * sp, (r / sp) * (0.8 + Math.random() * 0.3), 0.3 + Math.random() * 0.3, [PAL.fire, PAL.ember, 0xff3a0a][i % 3], 0, 0.3);
+          g.glow.spawn(h.x, 1.4, h.z, Math.cos(a) * sp, (Math.random() - 0.3) * 2, Math.sin(a) * sp, (r / sp) * (0.8 + Math.random() * 0.3), 0.3 + Math.random() * 0.3, [PAL.fire, PAL.ember, 0xff3a0a][i % 3], 0, 0.3, 'flame');
         }
       }
       if (h.tickT <= 0) {
@@ -470,7 +462,7 @@ export class Combat {
       halo.scale.setScalar(0.9 + Math.sin(f * 40) * 0.1);
       const due = Math.floor((1 - f) * dur * METEOR_TRAIL_RATE + 1e-6);
       for (let k = emitted; k < due; k++) {
-        g.glow.spawn(rock.position.x + (Math.random() - 0.5) * 0.5, rock.position.y + 0.3, rock.position.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.6, 3 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.22 + Math.random() * 0.2, k % 3 ? PAL.ember : PAL.fire, 0, 0.5);
+        g.glow.spawn(rock.position.x + (Math.random() - 0.5) * 0.5, rock.position.y + 0.3, rock.position.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.6, 3 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.22 + Math.random() * 0.2, k % 3 ? PAL.ember : PAL.fire, 0, 0.5, 'flame');
       }
       emitted = Math.max(emitted, due);
     });

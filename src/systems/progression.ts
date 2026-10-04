@@ -57,10 +57,7 @@ export class Progression {
     this.recomputeStats();
     if (skill === 'hitpoints') g.player.hp += g.stats.maxHp - oldMax;
     const p = g.player.pos;
-    const col = new THREE.Color(SKILL_INFO[skill].color).getHex();
-    for (let i = 0; i < 3; i++) {
-      g.glow.burst(new THREE.Vector3(p.x, 0.3 + i * 0.8, p.z), { count: 24, color: [0xffe070, 0xffffff, col], speed: 4, up: 6, life: 1.2, gravity: 3, size: 0.12 });
-    }
+    g.fx.levelUp(p.x, p.z, new THREE.Color(SKILL_INFO[skill].color).getHex());
     if (level === 15 && (skill === 'melee' || skill === 'ranged' || skill === 'magic')) {
       const ab = abilityFor(skill, 'E');
       if (ab) g.announce(`New ability unlocked: ${ab.name} (E) for ${name}!`, 'unique');
