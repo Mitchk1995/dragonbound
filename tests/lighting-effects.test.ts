@@ -61,7 +61,7 @@ describe('saved lighting settings', () => {
   it("keep the player's switches, and defaults for anything else", async () => {
     expect((await load({ bounce: true, smooth: false }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, bounce: true, smooth: false });
     expect((await load({ contact: false, reflections: false }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, contact: false, reflections: false });
-    expect((await load({ bounce: 'yes', contact: 1, reflections: false, smooth: false, glow: true }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, reflections: false });
+    expect((await load({ bounce: 'yes', contact: 1, reflections: false, smooth: false, glow: true }))!.settings.lighting).toEqual({ ...DEFAULT_LIGHTING, reflections: false, smooth: false });
     for (const junk of [null, 'all', 3, ['bounce']]) expect((await load(junk))!.settings.lighting).toEqual(DEFAULT_LIGHTING);
   });
 });
