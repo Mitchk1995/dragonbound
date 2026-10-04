@@ -6,6 +6,8 @@ import { rockAtlas, rockFaceN, rockPaint, ROCK_TILE } from './rock';
 import { addPatch, rot2, surfaceFrame, type F, type V2, type V3, type V4 } from './patch';
 import { heightColor, heightRoughness } from './surfaceDetail';
 
+// ─── Ground: the painted, splatted terrain ──────────────────────────────────
+
 /**
  * Painted colour drifts on the walkable floor rock (flat, low, rock-splatted ground only), from
  * slow noise fetches: in the lair a fine, low-contrast ash tone (a slightly greyer, lighter film
