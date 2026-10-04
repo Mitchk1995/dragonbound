@@ -81,11 +81,10 @@ export class Game {
   save: SaveData = newSave();
   hasSave = false;
   backend: SaveBackend = getBackend();
-  /** Saving's own state (game/saving.ts). */
+  /** Saving's own state (see SaveHost in game/saving.ts). */
   saveWriter = new SaveWriter((json) => this.backend.write(json));
   savesInFlight = 0;
   saveWarned = false;
-  /** False once another window has taken over the save (browser only), so stale windows can't overwrite it. */
   ownsSave = true;
   stats!: PlayerStats;
   levels: Record<SkillId, number> = { melee: 1, ranged: 1, magic: 1, defence: 1, hitpoints: 10, mining: 1, smithing: 1 };
@@ -345,6 +344,7 @@ export class Game {
     this.view.fit();
   }
 
+  /** Follow the hero with the play camera (dev tooling calls this to frame captures). */
   private updateCamera(dt: number) {
     followCamera(this, dt);
   }
