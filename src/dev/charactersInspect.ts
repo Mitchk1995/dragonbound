@@ -25,10 +25,10 @@ const HERO_SETS: [string, Partial<Record<Slot, string>>, AttackKind][] = [
 ];
 
 /** Each enemy's attack, as its behaviour plays it (enemy.ts startAct). */
-const ENEMY_ATTACK: Record<string, AttackKind> = { chaser: 'swing', kiter: 'throw', caster: 'cast' };
+export const ENEMY_ATTACK: Record<string, AttackKind> = { chaser: 'swing', kiter: 'throw', caster: 'cast' };
 
 /** The wind-up's peak, where each attack reads best in a still. */
-const MID_ATTACK: Record<AttackKind, number> = { swing: 0.36, bow: 0.4, cast: 0.4, throw: 0.36, slam: 0.4, bite: 0.4 };
+export const MID_ATTACK: Record<AttackKind, number> = { swing: 0.36, bow: 0.4, cast: 0.4, throw: 0.36, slam: 0.4, bite: 0.4 };
 
 /** Mid-strike, the sword arm swinging forward past the body. */
 const IMPACT_FRAME = COMBAT_TUNING.impact;
@@ -37,7 +37,7 @@ const IMPACT_FRAME = COMBAT_TUNING.impact;
 const WALK_SPEED = 5.6;
 
 /** The hero in `set`, at `attack` of `kind`; with `walk`, mid-stride at that phase of it (PI / 2: right leg forward). */
-function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attack: number, walk = 0) {
+export function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attack: number, walk = 0) {
   const m = makeModel('hero');
   const holder = new THREE.Group();
   holder.add(m.root);
@@ -52,11 +52,13 @@ function hero(set: Partial<Record<Slot, string>>, kind: AttackKind, attack: numb
   return holder;
 }
 
-function creature(model: string, kind: AttackKind, attack: number) {
+/** A creature or NPC at `attack` of `kind`; with `walk`, mid-stride at that phase of it (as hero()). */
+export function creature(model: string, kind: AttackKind, attack: number, walk = 0) {
   const m = makeModel(model);
   const holder = new THREE.Group();
   holder.add(m.root);
-  new Rig(m.root).update(0, { ...newAnimState(), attackKind: kind, attack });
+  const rig = new Rig(m.root);
+  rig.update(walk / (WALK_SPEED * rig.stride), { ...newAnimState(), attackKind: kind, attack, speed: walk ? WALK_SPEED : 0 });
   return holder;
 }
 
@@ -100,7 +102,8 @@ export async function charactersSuite(g: Game, shot: Shot) {
   }
   await closeUps(st, shot);
   await handsAndElbows(st, shot);
-  await playCamera(g, shot);
+  await playCamera(g, shot, ['goblin', 'kobold', 'cultist', 'cinder_priest'],
+    { spacing: 2.2, back: 2.6, zooms: [[1, 'default'], [0.65, 'near'], [0.4, 'close']], name: (zoom, pose) => `char-playcam-${zoom}-${pose}` });
 }
 
 /**
@@ -112,7 +115,7 @@ export async function characterSuites(g: Game, shot: Shot, suites: string) {
   const list = suites.split(',');
   if (list.includes('characters')) await charactersSuite(g, shot);
   const minifig = list.find((s) => s === 'minifig' || s.startsWith('minifig:'));
-  if (minifig) await (await import('./minifigInspect')).minifigSuite(g, shot, minifig.slice(8));
+  if (minifig) await (await import('./minifigInspect')).minifigSuite(g, shot, minifig.slice('minifig:'.length));
 }
 
 /** A town NPC as the game stands it (idle). */
@@ -257,8 +260,19 @@ async function closeUps(st: Studio, shot: Shot) {
   await flush('char-side-attacks', 3, 2);
 }
 
-/** The hero and one of each enemy in a row in the Foothills, posed by hand (the simulation is held). */
-async function playCamera(g: Game, shot: Shot) {
+/** Where and how playCamera stands its row and shoots it. */
+export interface PlayCameraShots {
+  /** Between neighbours in the row, and from the hero back to it. */
+  spacing: number;
+  back: number;
+  /** Camera zooms, each with its name in the captures. */
+  zooms: [number, string][];
+  name: (zoom: string, pose: 'idle' | 'attack') => string;
+}
+
+/** The hero and a row of enemies (`ids`) in the Foothills, posed by hand (the simulation is held), idle and mid-attack
+ * at each zoom. */
+export async function playCamera(g: Game, shot: Shot, ids: string[], opt: PlayCameraShots) {
   g.travel('foothills', true);
   for (let i = 0; i < 15; i++) await new Promise<void>((r) => requestAnimationFrame(() => r()));
   // On the paved way into the cultists' shrine, clear of trees.
@@ -273,8 +287,8 @@ async function playCamera(g: Game, shot: Shot) {
   p.pos.set(spot.x, 0, spot.z);
   p.stop();
   g.camPos.copy(p.pos);
-  const row = ['goblin', 'kobold', 'cultist', 'cinder_priest'].map((id, i) => {
-    const e = g.combat.spawnEnemy(id, spot.x - 3.3 + i * 2.2, spot.z - 2.6, null);
+  const row = ids.map((id, i) => {
+    const e = g.combat.spawnEnemy(id, spot.x + (i - (ids.length - 1) / 2) * opt.spacing, spot.z - opt.back, null);
     e.pos.y = g.zone.nav.y(e.x, e.z);
     e.faceTo(p.x, p.z + 6, true);
     e.obj.rotation.y = e.facing;
@@ -290,13 +304,13 @@ async function playCamera(g: Game, shot: Shot) {
     }
     p.rig.update(0, { ...newAnimState(), attackKind: 'swing', attack: attack < 0 ? -1 : MID_ATTACK.swing });
   };
-  for (const [zoom, tag] of [[1, 'default'], [0.65, 'near'], [0.4, 'close']] as const) {
+  for (const [zoom, tag] of opt.zooms) {
     g.camZoom = zoom;
     g.camPos.copy(p.pos);
     for (const [attack, label] of [[-1, 'idle'], [0.5, 'attack']] as const) {
       pose(attack);
       g['updateCamera'](0);
-      await shot(`char-playcam-${tag}-${label}`);
+      await shot(opt.name(tag, label));
     }
   }
   g.camZoom = 1;

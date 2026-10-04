@@ -1,33 +1,20 @@
 import * as THREE from 'three';
+import type { AttackKind } from '../render/anim';
 import type { Game } from '../game';
-import { makeItem } from '../loot/itemGen';
-import { Rig, newAnimState, type AnimState, type AttackKind } from '../render/anim';
-import { HeroDresser, makeModel } from '../render/registry';
-import { Studio, equip } from './inspect';
+import { MID_ATTACK, creature, hero, playCamera } from './charactersInspect';
+import { Studio } from './inspect';
 
 type Shot = (n: string) => Promise<void>;
-
-/** Running speed for the walking captures (the stride at full swing). */
-const WALK_SPEED = 5.6;
-/** The peak of each wind-up, where an attack reads best in a still. */
-const MID: Record<AttackKind, number> = { swing: 0.36, bow: 0.4, cast: 0.4, throw: 0.36, slam: 0.4, bite: 0.4 };
 
 interface Pose { attack: number; walk?: number }
 
 /** Each figure's own attack (enemy.ts: the goblin swings his club, the cultist casts). */
 const ATTACK: Record<string, AttackKind> = { hero: 'swing', goblin: 'swing', cultist: 'cast' };
 
-/** A model posed as the game poses it: idle, at `attack` of its attack, or mid-stride (walk = the stride's phase). */
-function posed(model: string, p: Pose) {
-  const m = makeModel(model);
-  const holder = new THREE.Group();
-  holder.add(m.root);
-  if (model === 'hero') new HeroDresser(m).dress({ name: '', skin: 1, hair: 1, hairColor: 1, beard: 0, cloth: 0, cloth2: 5 }, { weapon: makeItem('bronze_sword') });
-  const s: AnimState = { ...newAnimState(), attackKind: ATTACK[model], attack: p.attack, speed: p.walk ? WALK_SPEED : 0 };
-  const rig = new Rig(m.root);
-  rig.update(p.walk ? p.walk / (WALK_SPEED * rig.stride) : 0, s);
-  return holder;
-}
+/** A figure posed as the game poses it: idle, at `attack` of its attack, or mid-stride (walk = the stride's phase);
+ * the hero in his starting outfit with the bronze sword. */
+const posed = (model: string, p: Pose) =>
+  model === 'hero' ? hero({ weapon: 'bronze_sword' }, ATTACK.hero, p.attack, p.walk) : creature(model, ATTACK[model], p.attack, p.walk);
 
 /** Camera directions round a figure facing +Z: '3-4' from its front left, as the concept sheets are drawn; 'side' from
  * its left, 'right' from its right. */
@@ -94,7 +81,7 @@ export async function minifigSuite(g: Game, shot: Shot, tag: string) {
   };
   for (const who of ['goblin', 'cultist', 'hero']) {
     const cell = (dir: string, p: Pose, f = close[who]): Cell => ({ obj: posed(who, p), dir: DIRS[dir], ...f });
-    const attack: Pose = { attack: MID[ATTACK[who]] }, walk: Pose = { attack: -1, walk: Math.PI / 2 };
+    const attack: Pose = { attack: MID_ATTACK[ATTACK[who]] }, walk: Pose = { attack: -1, walk: Math.PI / 2 };
     await row(g, st, shot, `${pre}-${who}-idle`, [cell('front', idle), cell('3-4', idle), cell('side', idle)]);
     await row(g, st, shot, `${pre}-${who}-round`, [cell('back', idle), cell('back-3-4', idle), cell('right', idle)]);
     await row(g, st, shot, `${pre}-${who}-attack`, [cell('front', attack, raised[who]), cell('3-4', attack, raised[who]), cell('side', attack, raised[who])]);
@@ -105,51 +92,7 @@ export async function minifigSuite(g: Game, shot: Shot, tag: string) {
   await row(g, st, shot, `${pre}-hood`, [hood('front'), hood('3-4'), hood('side')]);
   const strap = (dir: string): Cell => ({ obj: posed('goblin', idle), dir: DIRS[dir], at: 1.2, dist: 2.4 });
   await row(g, st, shot, `${pre}-strap`, [strap('front'), strap('side'), strap('back-3-4')]);
-  await playCamera(g, shot, pre);
   document.body.classList.remove('inspect-clean');
-}
-
-/** The hero, the goblin and the cultist side by side in the Foothills at the play camera (the simulation held). */
-async function playCamera(g: Game, shot: Shot, pre: string) {
-  g.travel('foothills', true);
-  for (let i = 0; i < 15; i++) await new Promise<void>((r) => requestAnimationFrame(() => r()));
-  const dais = g.zone.layout.props.find((p) => p.kind === 'ritual_dais')!;
-  const spot = { x: dais.x + 10, z: dais.z + 2.6 };
-  g.debug.hold = () => false;
-  for (const e of g.zone.enemies) e.obj.removeFromParent();
-  g.zone.enemies = [];
-  const p = g.player;
-  equip(g, { weapon: 'bronze_sword', helm: null, body: null, gloves: null, boots: null });
-  p.pos.set(spot.x, 0, spot.z);
-  p.stop();
-  p.pos.y = g.zone.nav.y(p.x, p.z);
-  const foes = ['goblin', 'cultist'].map((id, i) => {
-    const e = g.combat.spawnEnemy(id, spot.x - 1.6 + i * 3.2, spot.z - 1.2, null);
-    e.pos.y = g.zone.nav.y(e.x, e.z);
-    e.faceTo(p.x, p.z + 6, true);
-    e.obj.rotation.y = e.facing;
-    return e;
-  });
-  p.faceTo(p.x, p.z + 4, true);
-  p.obj.rotation.y = p.facing;
-  const pose = (attack: boolean) => {
-    for (const e of foes) {
-      const kind = ATTACK[e.def.model] ?? 'swing';
-      e.rig.update(0, { ...newAnimState(), attackKind: kind, attack: attack ? MID[kind] : -1 });
-    }
-    p.rig.update(0, { ...newAnimState(), attackKind: 'swing', attack: attack ? MID.swing : -1 });
-  };
-  for (const [zoom, z] of [[1, 'default'], [0.55, 'near']] as const) {
-    g.camZoom = zoom;
-    g.camPos.copy(p.pos);
-    for (const attack of [false, true]) {
-      pose(attack);
-      g['updateCamera'](0);
-      await shot(`${pre}-playcam-${z}-${attack ? 'attack' : 'idle'}`);
-    }
-  }
-  g.camZoom = 1;
-  for (const e of foes) e.obj.removeFromParent();
-  g.zone.enemies = [];
-  g.debug.hold = null;
+  await playCamera(g, shot, ['goblin', 'cultist'],
+    { spacing: 3.2, back: 1.2, zooms: [[1, 'default'], [0.55, 'near']], name: (zoom, pose) => `${pre}-playcam-${zoom}-${pose}` });
 }

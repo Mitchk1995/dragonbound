@@ -8,6 +8,7 @@ Run the builder scripts first so their DB_* scenes exist in this .blend (fit_all
     exec(open(os.path.join(os.environ['DRAGONBOUND_ROOT'], 'tools', 'blender', 'fitcheck.py')).read())
     fit('plate', ['DB_gear_body_plate', 'DB_gear_longsword'])
     report = fit_all()   # every gear piece on the hero, audited in every pose (plate_variants.py audit)
+    report = fit_all(body=True)   # the same on a plain figure built on the minifigure body every humanoid shares
     report = arm_clip_all()   # arms (and the gear on them) cutting into the body, every character and pose
     report = held_clip_all()  # what the hands carry cutting into the body, every weapon, character and pose
 """
@@ -34,6 +35,14 @@ _p = os.path.join(_ROOT, 'tools', 'blender', 'hero.py')
 _g = {'DB_RUN': False, '__name__': 'db_fit', '__file__': _p}
 exec(open(_p, encoding='utf-8').read(), _g)
 build_hero = _g['build_hero']
+import minifig
+importlib.reload(minifig)
+
+
+def build_body(scene_name='DB_fitcheck'):
+    """A plain figure on the minifigure body (minifig.py) with the hero's legs and head, dressable as the hero is."""
+    f = minifig.figure(scene_name, legs='normal', dressable=True)
+    return f.scene, f.root
 
 
 def _copy_tree(o, parent, scene, src, sock, turn=None):
@@ -118,10 +127,11 @@ SETS = {
 }
 
 
-def fit_all(poses=('idle', 'walk', 'windup', 'slam', 'cast'), render=False):
-    """Build every gear model, dress the hero in each set and audit it in every pose with plate_variants.py's numeric
-    checks: hero surface poking out through gear (hero_pokes) and, at rest, gear touching nothing (floating).
-    Returns {set: {pose: report}} plus the sockets any piece missed."""
+def fit_all(poses=('idle', 'walk', 'windup', 'slam', 'cast'), render=False, body=False):
+    """Build every gear model, dress the hero (or, with `body`, a plain figure on the minifigure body) in each set and
+    audit it in every pose with plate_variants.py's numeric checks: hero surface poking out through gear (hero_pokes)
+    and, at rest, gear touching nothing (floating). Returns {set: {pose: report}} plus the sockets any piece missed."""
+    build = build_body if body else build_hero
     gp = os.path.join(_ROOT, 'tools', 'blender', 'gear.py')
     g = {'DB_RUN': False, '__name__': 'db_gear', '__file__': gp}
     exec(open(gp, encoding='utf-8').read(), g)
@@ -138,7 +148,7 @@ def fit_all(poses=('idle', 'walk', 'windup', 'slam', 'cast'), render=False):
         sources = [scene_of(m) for m in models]
         rep = {}
         for pose in poses:
-            scene, root = build_hero('DB_fitcheck')
+            scene, root = build('DB_fitcheck')
             missing = dress(scene, sources)
             v['apply_pose'](scene, v['POSES'][pose])
             bpy.context.view_layer.update()

@@ -320,10 +320,21 @@ describe('the minifigure body', () => {
       for (const side of ['L', 'R']) expect(size(fig, side).distanceTo(size(hero, side)), `${name} hand${side}`).toBeLessThan(1e-3);
     });
   }
-  it('every figure carries the body\'s attachment points for necks, backs, belts and skirts, in the same places', () => {
-    const [a, b] = FIGURES.map((n) => makeModel(n).root);
-    for (const part of ['sock_neck', 'sock_back', 'sock_belt', 'sock_skirt']) expect(pose(a, part).at.distanceTo(pose(b, part).at), part).toBeLessThan(1e-3);
-  });
+  // The body's own attachment points, from the torso's centre (minifig.py BODY_SOCKETS): the hero has none of them.
+  const POINTS: Record<string, [number, number, number]> = {
+    sock_neck: [0, 0.31, 0], sock_back: [0, -0.02, -0.21], sock_belt: [0, -0.37, 0], sock_skirt: [0, -0.44, 0],
+  };
+  for (const name of FIGURES) {
+    it(`${name}: the body's attachment points for necks, backs, belts and skirts, where the body puts them`, () => {
+      const fig = makeModel(name).root;
+      for (const [part, at] of Object.entries(POINTS)) expect(pose(fig, part).at.distanceTo(new THREE.Vector3(...at)), `${name} ${part}`).toBeLessThan(1e-3);
+    });
+    it(`${name}: stands on the ground, its feet or robe's hem at ground level`, () => {
+      const root = makeModel(name).root;
+      root.updateMatrixWorld(true);
+      expect(Math.abs(new THREE.Box3().setFromObject(root).min.y), `${name} lowest point`).toBeLessThan(0.01);
+    });
+  }
 });
 
 describe('creatures', () => {

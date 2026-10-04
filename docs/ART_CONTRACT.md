@@ -225,10 +225,11 @@ plus these attachment points:
 draw calls than its parts; shoulder pads (on `sock_shoulderL/R`, following the arm by 3/4), what the right hand holds
 and outfit pieces keep their own. A figure that wears gear is built `dressable`: its upper arms and feet are outfit
 pieces (`outfit_body_sleeveL/R`, `outfit_boots_L/R`) that come off under body armour and boots, as the hero's sleeves
-and boots do; so dressed, it takes every gear set as the hero does (`fitcheck.py fit_all`). Boots are made for the
-hero's legs and do not fit short legs, and a character's own head (the goblin's) does not take the hero's helms, as
-with LEGO's special heads. `tests/character-art.test.ts` checks that every figure's sockets, arm joints and hands sit
-where the hero's do.
+and boots do; so dressed, it takes every gear set as the hero does (`fitcheck.py fit_all(body=True)` audits a plain
+one exactly as `fit_all()` audits the hero). Boots are made for the hero's legs and do not fit short legs, and a
+character's own head (the goblin's) does not take the hero's helms, as with LEGO's special heads.
+`tests/character-art.test.ts` checks that every figure's sockets, arm joints and hands sit where the hero's do, and
+its new attachment points and its feet where the body puts them.
 
 ### Enemies/NPCs/props
 Goblin Grunt, Kobold Slinger, Ember Cultist and Cinder Priest (`priest.glb`) are built in `minions.py` from their approved concept sheets (October 3); the goblin (short legs) and the cultist (a robe in place of legs) on the minifigure body.

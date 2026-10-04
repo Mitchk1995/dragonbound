@@ -37,20 +37,17 @@ def hood_fn(rows, e=3.0):
     return fn
 
 
-def hood_rows_fn(rows, arch):
-    """The priest's cowl over its rows (hood_fn, a rounder section), with the height of its arch."""
-    return hood_fn(rows, 2.6), arch
-
-
 # The priest's cowl (head space, y up from the neck): drawn up into a tall pointed hood.
 PRIEST_HOOD = ((-0.2, 0.375, 0.36, -0.02, 9), (-0.05, 0.35, 0.33, -0.01, 18), (0.1, 0.31, 0.32, 0.02, 42),
                (0.26, 0.3, 0.32, 0.04, 40), (0.4, 0.28, 0.31, 0.06, 26), (0.52, 0.24, 0.28, 0.06, 0),
                (0.68, 0.17, 0.21, 0.04, 0), (0.86, 0.09, 0.12, 0.0, 0), (0.98, 0.0, 0.0, -0.03, 0))
 
 
-def cowl(head, rows, arch_v, inside=(0, 0.15, -0.02), shadow=0.46):
-    """The hood shell, a lighter lip along the face opening, a dark void inside with two glowing eyes set back."""
-    fn, _ = hood_rows_fn(rows, arch_v)
+def cowl(head, rows, arch_v):
+    """The priest's hood: a rounded shell over its rows (hood_fn), a lighter lip along the face opening up to its arch
+    (`arch_v` of the way up), a dark void inside with two glowing eyes set back."""
+    inside, shadow = (0, 0.15, -0.02), 0.46
+    fn = hood_fn(rows, 2.6)
     surf(head, fn, 12, 2 * len(rows) - 8, 0.035, ROBE_DK, inside=inside, bevel=0.01)
     for u0, u1 in ((0.0, 0.045), (0.955, 1.0)):
         surf(head, grow(sub(fn, u0, u1, 0.0, arch_v), 0.004, inside), 1, 7, 0.03, HOOD_EDGE, inside=inside)

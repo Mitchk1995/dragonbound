@@ -80,10 +80,13 @@ describe('pose audit: models loaded', () => {
     // Cinderwing's glowing cracks (on the body, neck and every leg), eyes and molten mouth each keep their own material,
     // hence its extra meshes. A goblin is one mesh per rig part: body, head, legs, and each arm's upper arm, forearm
     // (below the elbow) and hand (below the wrist), the club, and the shoulder pad (it rides the shoulder, which
-    // follows the arm by 3/4).
+    // follows the arm by 3/4). A cultist (no legs: her robe stands in for them) is her body, head, arms, forearms,
+    // hands, two shoulder pads and staff, plus what glows, each with its own material: her eyes, the ember stones on her
+    // arms, the gem on her robe and the staff's crystal. What hangs on her neck, belt, back and skirt is fused in.
     expect(count('drakeling')).toBeLessThanOrEqual(20);
     expect(count('cinderwing')).toBeLessThanOrEqual(31);
     expect(count('goblin')).toBeLessThanOrEqual(12);
+    expect(count('cultist')).toBeLessThanOrEqual(16);
     for (const part of ['head', 'jaw', 'wingL', 'wingR', 'tail1', 'legFL']) expect(makeModel('drakeling').root.getObjectByName(part), part).toBeTruthy();
   });
 });

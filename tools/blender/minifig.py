@@ -59,9 +59,12 @@ MOVING = ('sock_shoulderL', 'sock_shoulderR', 'sock_handR')
 RIG = ('body', 'head', 'armL', 'armR', 'elbowL', 'elbowR', 'handL', 'handR', 'legL', 'legR', 'weapon', 'staffbody',
        'sling') + MOVING
 
-# Blender keeps object names unique per file, so a second figure's parts are 'body.001'...: the contract name is the
-# name without that suffix (the game strips it too).
-contract = lambda o: re.sub(r'\.\d{3}$', '', o.name)
+
+def contract(o):
+    """An object's contract name: Blender keeps names unique per file, so a second figure's parts are 'body.001'...;
+    the game strips that suffix too."""
+    return re.sub(r'\.\d{3}$', '', o.name)
+
 
 COLORS = {'torso': 0x808080, 'hips': 0x606060, 'belt': 0x5A3A22, 'neck': 0xE0AC84, 'head': 0xE0AC84,
           'upper': 0x808080, 'forearm': 0xE0AC84, 'hand': 0xE0AC84,
@@ -88,6 +91,9 @@ def figure(scene_name, colors=None, legs='normal', head=True, dressable=False):
     character brings its own), the hero's head cube. A `dressable` figure wears gear as the hero does: its upper arms
     and feet are outfit pieces (`outfit_body_sleeveL/R`, `outfit_boots_L/R`, as the hero's sleeves and boots) that come
     off under the body armour and boots that cover them (registry.ts HeroDresser)."""
+    unknown = set(colors or {}) - set(COLORS)
+    if unknown:
+        raise ValueError(f'unknown figure colours {sorted(unknown)}; the parts are {sorted(COLORS)}')
     col = dict(COLORS, **(colors or {}))
     scene, root = fresh_scene(scene_name)
     fig = Figure(scene, root)
@@ -152,8 +158,13 @@ def finish(fig):
             mw = o.matrix_world.copy()
             o.parent = a
             o.matrix_world = mw
-    for o in [o for o in fig.scene.objects if o.type == 'EMPTY']:
-        if not keep(o) and not contract(o).startswith('sock_') and not contract(o).endswith('_root') and not o.children:
+    helper = lambda o: (o.type == 'EMPTY' and not keep(o) and not contract(o).startswith('sock_')
+                        and not contract(o).endswith('_root') and not o.children)
+    while True:   # emptied helpers nested in helpers go in turn
+        gone = [o for o in fig.scene.objects if helper(o)]
+        if not gone:
+            break
+        for o in gone:
             bpy.data.objects.remove(o, do_unlink=True)
     bpy.context.view_layer.update()
     return fig
@@ -211,9 +222,9 @@ def ribbon(parent, pts, normals, w, t, color, w1=None):
 def torso_surface(y, x, side, lift=0.0, y0=0.0):
     """A point on the torso's front (side=1) or back (side=-1) face at height y and across x, with its outward normal,
     `lift` off the face (body frame, the hip line at y0)."""
-    (w, h, d), (fx, fz) = TORSO, TORSO_FLARE
+    (_, h, d), (_, fz) = TORSO, TORSO_FLARE
     k = (y - y0 - (TORSO_Y - h / 2)) / h               # 0 at the torso's foot, 1 at its top
     half_d = d / 2 * (1 + (fz - 1) * k)
-    tilt = d / 2 * (fz - 1) / h                        # the face leans out this much per unit up
-    nrm = Vector((0, -tilt, 1)).normalized() * side
+    tilt = d / 2 * (fz - 1) / h                        # either face leans out this much per unit up
+    nrm = Vector((0, -tilt, side)).normalized()
     return Vector((x, y, side * half_d)) + nrm * lift, nrm

@@ -143,7 +143,7 @@ export async function runInspect(g: Game, suites: string) {
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
     // The redesigned characters close up and at the play camera, and the minifigure body (explicit only: `characters`, `minifig`).
-    if (/(^|,)(characters|minifig)(,|:|$)/.test(suites)) await (await import('./charactersInspect')).characterSuites(g, shot, suites);
+    if (/(^|,)(characters|minifig(:[^,]*)?)(,|$)/.test(suites)) await (await import('./charactersInspect')).characterSuites(g, shot, suites);
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).
