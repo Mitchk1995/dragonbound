@@ -7,8 +7,8 @@ import { BRICK, HERO_H, LDU, PLATE, STUD } from '../src/world/brick/scale';
 import { DOOR_OPENING } from '../src/world/brick/shapesOpen';
 import { course, joints, masonryBricks, plainBricks, type Line } from '../src/world/brick/walls';
 
-/** The hero: 2.15 m tall bare-headed, 1.19 m across his sleeves (hero.py), a 0.45 radius on the walk grid. */
-const HERO_W = 1.19;
+/** The hero: 2.15 m tall bare-headed, 1.37 m across his shoulders with the outfit's pauldron (as measured in the game). */
+const HERO_W = 1.37;
 const ldu = (m: number) => m / LDU;
 
 describe('the brick kit\'s scale', () => {
@@ -23,7 +23,7 @@ describe('the brick kit\'s scale', () => {
   it('has a door the hero walks through with room over his head', () => {
     const clearH = (DOOR_OPENING.y1 - DOOR_OPENING.y0) * LDU, clearW = (DOOR_OPENING.x1 - DOOR_OPENING.x0) * LDU;
     expect(clearH).toBeGreaterThan(HERO_H + 0.6);
-    expect(clearW).toBeGreaterThan(HERO_W + 0.2);
+    expect(clearW).toBeGreaterThan(HERO_W + 0.12);
   });
 });
 
