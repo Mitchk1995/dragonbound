@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ModelKit, PAL, ROLE, type Model } from './kit';
 
 /*
- * Code-built placeholder models. They follow docs/ART_CONTRACT.md exactly (part names,
+ * Code-built placeholder models. They follow docs/ART_NAMES.md exactly (part names,
  * sockets, role materials) so Blender-exported .glb files replace them one for one.
  * Models face +Z; a +Z-facing character's right hand is at -X.
  */

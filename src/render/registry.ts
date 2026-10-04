@@ -15,7 +15,7 @@ import { applyCharPaint, applyGrade, CHAR_PAINTS, MODEL_GRADE, packCharAttribute
 /**
  * Blender-made models (public/models/<name>.glb) replace the code-built placeholders when
  * present. Any model that fails to load silently falls back to its placeholder builder.
- * See docs/ART_CONTRACT.md for naming conventions.
+ * See docs/ART_NAMES.md for naming conventions.
  */
 const loaded = new Map<string, { scene: THREE.Group; height: number }>();
 const loader = new GLTFLoader();

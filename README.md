@@ -57,7 +57,8 @@ npm run review -- castle --base  # labelled before/after review sheets of an are
 | [CASTLE_DESIGN.md](docs/CASTLE_DESIGN.md) | The castle as built: walls, wards, buildings, floors and stairs. |
 | [blueprints/](docs/blueprints/) | The castle-v4 plan the castle is built from, the home-island-v1 plan the island is built from, and the superseded castle-v2. |
 | [concepts/](docs/concepts/) | Concept sheets (made with Codex image generation) that models are built from. |
-| [ART_CONTRACT.md](docs/ART_CONTRACT.md) | How Blender scripts and the game agree on names and materials. |
+| [ART_CONTRACT.md](docs/ART_CONTRACT.md) | The look every visual job starts from, and how Blender scripts build models for the game. |
+| [ART_NAMES.md](docs/ART_NAMES.md) | What each model file holds and the names the game reads from it: rig parts, sockets and materials. |
 | [history/](docs/history/) | Finished plans (Chapter 1 among them), superseded decisions and the Codex/Claude review log. Read for context, not direction. |
 
 ## Contributing
