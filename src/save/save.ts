@@ -29,8 +29,8 @@ export type Graphics = 'high' | 'medium' | 'low';
 /** The screen-space lighting effects switched on or off (see render/post.ts). */
 export type Lighting = Partial<LightingEffects>;
 const LIGHTING_KEYS = ['bounce', 'contact', 'reflections', 'smooth'] as const;
-/** Each effect's switch unless the player sets it (October 4: contact shading and reflections approved on). */
-export const DEFAULT_LIGHTING: LightingEffects = { bounce: false, contact: true, reflections: true, smooth: false };
+/** Each effect's switch unless the player sets it (October 4: contact shading, reflections and smooth edges approved on). */
+export const DEFAULT_LIGHTING: LightingEffects = { bounce: false, contact: true, reflections: true, smooth: true };
 
 export interface SaveData {
   version: number;
