@@ -8,6 +8,10 @@
 // staff counts as its own joint (the fist closes round it), and each gear socket is one (gear is worn over the
 // body, a separate file). Everything else a joint carries, the bits of a boot, a sword, a head or a helm, is one
 // rigid object and is held to the rule.
+//
+// What it cannot see: an open piece (a sheet, or a shell with a crack in it) has no inside, so nothing is measured
+// inside it, though its own surface is still tested against closed pieces; and two parts that share a vertex weld
+// into one piece and are not compared with each other. The summary counts each model's open pieces.
 const fs = require('node:fs');
 const path = require('node:path');
 const { TOUCH, meshNodes, pieces, depthInside } = require('./one-piece-geometry.cjs');
@@ -16,61 +20,64 @@ const { TOUCH, meshNodes, pieces, depthInside } = require('./one-piece-geometry.
 // nearest of these above it, or to the model's root. Blender's numbered copies (body.002) count as the same name.
 const JOINT = /^(?:body|head|jaw|inner|neck\d+|tail\d+|wing[LR]|arm[LR]|elbow[LR]|hand[LR]|leg(?:[LR]|[FB][LR])|sock_\w+|weapon|bowbody|staffbody)$/;
 
-// Models that were already breaking the rule when the check came in, each held at its worst depth then (mm,
-// rounded up) so it cannot get worse. A rebuild that fixes a model takes it off this list; a rebuild that only
-// improves it lowers its number. Never add to it or raise a number.
+// Models that were already breaking the rule when the check came in, each held at its worst depth then (whole mm)
+// and its number of pairs of pieces passing inside one another, so neither can grow. A rebuild that fixes a model
+// takes it off this list; a rebuild that only improves it lowers its numbers. Never add to it or raise a number.
 const ALLOWED = {
-  'beard_1': 13,
-  'beard_2': 55,
-  'beard_3': 50,
-  'cinderwing': 838,
-  'cultist': 126,
-  'drakeling': 237,
-  'gear_body_chain': 45,
-  'gear_body_leather': 118,
-  'gear_body_plate': 28,
-  'gear_body_plate_e': 35,
-  'gear_body_plate_p': 28,
-  'gear_boots': 95,
-  'gear_boots_e': 65,
-  'gear_boots_p': 65,
-  'gear_bow_drakebone': 49,
-  'gear_bow_hunter': 47,
-  'gear_bow_recurve': 74,
-  'gear_bow_worn': 82,
-  'gear_gloves': 74,
-  'gear_gloves_e': 11,
-  'gear_gloves_p': 11,
-  'gear_helm_full': 16,
-  'gear_helm_full_e': 98,
-  'gear_helm_full_p': 16,
-  'gear_helm_open': 53,
-  'gear_longsword': 59,
-  'gear_pickaxe': 79,
-  'gear_staff_apprentice': 49,
-  'gear_staff_ember': 50,
-  'gear_staff_oak': 59,
-  'gear_staff_runed': 43,
-  'gear_sword': 35,
-  'gear_u_ashen_crown': 40,
-  'gear_u_cinderfang': 59,
-  'gear_u_emberstring': 45,
-  'gear_u_kindled_ash': 54,
-  'gear_u_scaleguard': 144,
-  'gear_u_wyrmbone': 95,
-  'goblin': 131,
-  'golem': 71,
-  'hair_3': 19,
-  'hero': 128,
-  'kobold': 94,
-  'priest': 147,
-  'quartermaster': 125,
-  'warden': 210,
-  'whelp': 96,
+  'beard_1': [13, 4],
+  'beard_2': [55, 9],
+  'beard_3': [50, 16],
+  'cinderwing': [838, 443],
+  'cultist': [125, 86],
+  'drakeling': [236, 226],
+  'gear_body_chain': [45, 33],
+  'gear_body_leather': [118, 61],
+  'gear_body_plate': [28, 8],
+  'gear_body_plate_e': [35, 17],
+  'gear_body_plate_p': [28, 8],
+  'gear_boots': [95, 26],
+  'gear_boots_e': [65, 4],
+  'gear_boots_p': [65, 4],
+  'gear_bow_drakebone': [49, 9],
+  'gear_bow_hunter': [47, 10],
+  'gear_bow_recurve': [74, 14],
+  'gear_bow_worn': [82, 18],
+  'gear_gloves': [74, 6],
+  'gear_gloves_e': [10, 2],
+  'gear_gloves_p': [10, 2],
+  'gear_helm_full': [15, 8],
+  'gear_helm_full_e': [98, 15],
+  'gear_helm_full_p': [15, 8],
+  'gear_helm_open': [53, 10],
+  'gear_longsword': [59, 16],
+  'gear_pickaxe': [79, 12],
+  'gear_staff_apprentice': [49, 12],
+  'gear_staff_ember': [50, 12],
+  'gear_staff_oak': [59, 17],
+  'gear_staff_runed': [43, 16],
+  'gear_sword': [35, 13],
+  'gear_u_ashen_crown': [40, 24],
+  'gear_u_cinderfang': [59, 14],
+  'gear_u_emberstring': [45, 47],
+  'gear_u_kindled_ash': [54, 18],
+  'gear_u_scaleguard': [144, 174],
+  'gear_u_wyrmbone': [95, 38],
+  'goblin': [130, 102],
+  'golem': [70, 24],
+  'hair_3': [19, 1],
+  'hero': [128, 67],
+  'kobold': [94, 103],
+  'priest': [147, 121],
+  'quartermaster': [125, 62],
+  'warden': [210, 65],
+  'whelp': [96, 101],
 };
 
-/** Rounds a depth in metres up to whole millimetres, as the allowlist records it. */
-const mm = (metres) => Math.ceil(metres * 1000 - 1e-6);
+/**
+ * A depth in metres as the allowlist records it: whole millimetres, rounded up, though a hundredth of a millimetre
+ * over is still that millimetre (models are built to whole millimetres, and their float vertices miss by far less).
+ */
+const mm = (metres) => Math.ceil(metres * 1000 - 0.01);
 
 /**
  * The rigid groups of a model: its meshes keyed by the path down to the joint (or root) that carries them, the
@@ -126,33 +133,40 @@ function summary(results) {
   });
 }
 
-/** What breaks the rule: new offenders, allowlisted models past their depth or below it, and stale entries. */
+/**
+ * What breaks the rule: new offenders, allowlisted models worse than their entry or better than it (lower it), and
+ * stale entries. An entry is [worst depth in mm, pairs of pieces inside one another].
+ */
 function problems(results, allowed = ALLOWED) {
   const bad = [];
   const seen = new Set();
   const where = 'tools/check-one-piece.cjs';
+  const what = ([depth, count]) => `${depth} mm deep in ${count} pairs`;
   for (const { model, pairs, worst } of results) {
-    const ceiling = allowed[model];
-    const now = mm(worst);
-    if (ceiling !== undefined) {
+    const entry = allowed[model];
+    const now = [mm(worst), pairs.length];
+    if (entry !== undefined) {
       seen.add(model);
       if (!pairs.length) bad.push(`${model}: now one piece throughout; remove it from the allowlist in ${where}`);
-      else if (now > ceiling) bad.push(`${model}: pieces pass ${now} mm inside one another, past its allowlisted ${ceiling} mm (${pairs[0].a} / ${pairs[0].b}); model it as one shape`);
-      else if (now < ceiling) bad.push(`${model}: worst overlap now ${now} mm, below its allowlisted ${ceiling} mm; lower its entry in ${where}`);
+      else if (now[0] > entry[0] || now[1] > entry[1]) {
+        bad.push(`${model}: pieces pass inside one another ${what(now)}, worse than its allowlisted ${what(entry)} (worst ${pairs[0].a} / ${pairs[0].b}); model each object as one shape`);
+      } else if (now[0] < entry[0] || now[1] < entry[1]) {
+        bad.push(`${model}: now ${what(now)}, better than its allowlisted ${what(entry)}; lower its entry in ${where} to [${now.join(', ')}]`);
+      }
     } else if (pairs.length) {
-      bad.push(`${model}: ${pairs.length} pairs of pieces pass inside one another, worst ${now} mm (${pairs[0].joint}: ${pairs[0].a} / ${pairs[0].b}); model each object as one shape (AGENTS.md, One object, one shape)`);
+      bad.push(`${model}: pieces pass inside one another ${what(now)} (worst ${pairs[0].joint}: ${pairs[0].a} / ${pairs[0].b}); model each object as one shape (AGENTS.md, One object, one shape)`);
     }
   }
   for (const model of Object.keys(allowed)) if (!seen.has(model)) bad.push(`${model}: allowlisted but missing; remove it from the allowlist in ${where}`);
   return bad;
 }
 
-module.exports = { ALLOWED, JOINT, groups, measureModel, measure, summary, problems, mm };
+module.exports = { groups, measure, summary, problems };
 
 if (require.main === module) {
   const results = measure(path.join(__dirname, '..'));
   console.log(summary(results).join('\n'));
   const bad = problems(results);
   if (bad.length) { console.error(bad.join('\n')); process.exitCode = 1; }
-  else console.log('Every model keeps one object to one shape, or no worse than its allowlisted depth.');
+  else console.log('Every model keeps one object to one shape, or is no worse than its allowlist entry.');
 }

@@ -3,7 +3,9 @@
  * primitives pushed into each other. The check (tools/check-one-piece.cjs) is proven on small made-up shapes, then
  * run over every committed model, which must be clean or no worse than its allowlisted depth.
  */
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -15,16 +17,57 @@ type Result = { model: string; pieces: number; open: number; pairs: Pair[]; wors
 const load = createRequire(import.meta.url);
 const geometry = load('../tools/one-piece-geometry.cjs') as {
   TOUCH: number;
+  meshNodes: (file: string) => Mesh[];
   pieces: (meshes: { name: string; tris: Float64Array }[]) => Piece[];
+  oddCrossings: (piece: Piece, axis: number, p: number[]) => boolean;
   depthInside: (a: Piece, b: Piece) => number;
 };
 const check = load('../tools/check-one-piece.cjs') as {
-  ALLOWED: Record<string, number>;
   groups: (meshes: Mesh[]) => Map<string, Mesh[]>;
   measure: (root: string) => Result[];
   summary: (results: Result[]) => string[];
-  problems: (results: Result[], allowed?: Record<string, number>) => string[];
+  problems: (results: Result[], allowed?: Record<string, [number, number]>) => string[];
 };
+
+/**
+ * A .glb holding one triangle: positions interleaved with normals (a 24-byte stride), 16-bit indices, its mesh
+ * node `child` (moved 1 up) under `parent` (scaled 2, turned a quarter about Z, moved to 1, 2, 3).
+ */
+function oneTriangleGlb(): Buffer {
+  const vertices = new Float32Array([0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1]);
+  const bin = Buffer.alloc(80);
+  Buffer.from(vertices.buffer).copy(bin, 0);
+  Buffer.from(new Uint16Array([0, 1, 2]).buffer).copy(bin, 72);
+  const s = Math.SQRT1_2;
+  const json = Buffer.from(JSON.stringify({
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [
+      { name: 'parent', children: [1], translation: [1, 2, 3], rotation: [0, 0, s, s], scale: [2, 2, 2] },
+      { name: 'child', mesh: 0, translation: [0, 1, 0] },
+    ],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1 }] }],
+    buffers: [{ byteLength: 80 }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 72, byteStride: 24 }, { buffer: 0, byteOffset: 72, byteLength: 6 }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3' },
+      { bufferView: 1, componentType: 5123, count: 3, type: 'SCALAR' },
+    ],
+  }));
+  const jsonChunk = Buffer.concat([json, Buffer.alloc((4 - (json.length % 4)) % 4, 0x20)]);
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546c67, 0);
+  header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(12 + 8 + jsonChunk.length + 8 + bin.length, 8);
+  const chunk = (body: Buffer, type: number) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32LE(body.length, 0);
+    head.writeUInt32LE(type, 4);
+    return Buffer.concat([head, body]);
+  };
+  return Buffer.concat([header, chunk(jsonChunk, 0x4e4f534a), chunk(bin, 0x004e4942)]);
+}
 
 /** A closed box's 12 triangles between corners lo and hi. */
 function box(lo: number[], hi: number[]): number[] {
@@ -42,6 +85,33 @@ const twoPieces = (a: number[], b: number[]) => {
 };
 
 describe('one object, one shape: the measure', () => {
+  it('reads a model\'s triangles where its nodes put them', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'one-piece-'));
+    try {
+      const file = path.join(dir, 'tri.glb');
+      fs.writeFileSync(file, oneTriangleGlb());
+      const [m] = geometry.meshNodes(file);
+      expect(m.chain).toEqual(['parent', 'child']);
+      // (0,0,0), (1,0,0), (0,0,1): up 1, doubled, turned so +X points to +Y, then moved to (1, 2, 3).
+      const want = [-1, 2, 3, -1, 4, 3, -1, 2, 5];
+      expect([...m.tris].map((x, i) => x - want[i]).every((d) => Math.abs(d) < 1e-6)).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('counts a ray along a face\'s diagonal, where two triangles meet, once', () => {
+    // Every face of the box is split along a diagonal through x = y = z, so each of these rays runs exactly down
+    // a shared edge on the faces it crosses.
+    const [b] = geometry.pieces([mesh('box', box([0, 0, 0], [1, 1, 1]))]);
+    for (const axis of [0, 1, 2]) {
+      expect(geometry.oddCrossings(b, axis, [0.5, 0.5, 0.5])).toBe(true);
+      expect(geometry.oddCrossings(b, axis, [0.25, 0.25, 0.25])).toBe(true);
+      expect(geometry.oddCrossings(b, axis, [-0.5, -0.5, -0.5])).toBe(false);
+      expect(geometry.oddCrossings(b, axis, [0, 0, 0].map((_, d) => (d === axis ? -0.5 : 0.5)))).toBe(false);
+    }
+  });
+
   it('welds a continuous surface split across meshes back into one closed piece', () => {
     // One box's faces exported as two meshes (as a material split would) is still one piece.
     const all = box([0, 0, 0], [1, 1, 1]);
@@ -105,21 +175,24 @@ describe('one object, one shape: the allowlist', () => {
     pairs: worst ? [{ joint: 'root', a: 'p1', b: 'p2', depth: worst }] : [],
   });
 
-  it('passes clean models and allowlisted ones at their depth', () => {
-    expect(check.problems([result('anvil', 0), result('sword', 0.035)], { sword: 35 })).toEqual([]);
+  it('passes clean models and allowlisted ones at their entry, float noise included', () => {
+    expect(check.problems([result('anvil', 0), result('sword', 0.035), result('axe', 0.04000001)], { sword: [35, 1], axe: [40, 1] }))
+      .toEqual([]);
   });
 
-  it('fails a new offender, a model past its depth, one below it and stale entries', () => {
+  it('fails a new offender, a model deeper or with more pairs, one better than its entry and stale entries', () => {
+    const more = { ...result('mace', 0.02), pairs: [...result('mace', 0.02).pairs, ...result('mace', 0.01).pairs] };
     const bad = check.problems(
-      [result('anvil', 0.01), result('sword', 0.036), result('bow', 0.02), result('staff', 0)],
-      { sword: 35, bow: 30, staff: 10, gone: 5 },
+      [result('anvil', 0.01), result('sword', 0.036), more, result('bow', 0.02), result('staff', 0)],
+      { sword: [35, 1], mace: [20, 1], bow: [30, 1], staff: [10, 1], gone: [5, 1] },
     );
-    expect(bad).toHaveLength(5);
-    expect(bad[0]).toMatch(/^anvil: 1 pairs of pieces pass inside one another, worst 10 mm/);
-    expect(bad[1]).toMatch(/^sword: pieces pass 36 mm inside one another, past its allowlisted 35 mm/);
-    expect(bad[2]).toMatch(/^bow: worst overlap now 20 mm, below its allowlisted 30 mm; lower its entry/);
-    expect(bad[3]).toMatch(/^staff: now one piece throughout; remove it from the allowlist/);
-    expect(bad[4]).toMatch(/^gone: allowlisted but missing/);
+    expect(bad).toHaveLength(6);
+    expect(bad[0]).toMatch(/^anvil: pieces pass inside one another 10 mm deep in 1 pairs/);
+    expect(bad[1]).toMatch(/^sword: pieces pass inside one another 36 mm deep in 1 pairs, worse than its allowlisted 35 mm/);
+    expect(bad[2]).toMatch(/^mace: pieces pass inside one another 20 mm deep in 2 pairs, worse than/);
+    expect(bad[3]).toMatch(/^bow: now 20 mm deep in 1 pairs, better than its allowlisted 30 mm .*to \[20, 1\]$/);
+    expect(bad[4]).toMatch(/^staff: now one piece throughout; remove it from the allowlist/);
+    expect(bad[5]).toMatch(/^gone: allowlisted but missing/);
   });
 });
 

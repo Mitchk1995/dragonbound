@@ -277,6 +277,13 @@ function surfaceDistance(tris, px, py, pz, floor) {
   return Math.sqrt(best);
 }
 
+/** Distance between the vertices at j and k in `t`. (A square root, not Math.hypot: it rounds the same on every
+ * machine, so the depths do too.) */
+function edgeLength(t, j, k) {
+  const dx = t[k] - t[j], dy = t[k + 1] - t[j + 1], dz = t[k + 2] - t[j + 2];
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 /**
  * How deep piece `a`'s surface runs inside closed piece `b` (metres; 0 when it stays outside or only touches).
  * Points spread over a's triangles are tested inside/outside b by ray parity; an inside point's depth is its
@@ -296,12 +303,7 @@ function depthInside(a, b, touch = TOUCH) {
       outside = M <= lo[d] || m >= hi[d];
     }
     if (outside) continue;
-    // (Square roots, not Math.hypot: they round the same on every machine, so the depths do too.)
-    const length = (j, k) => {
-      const dx = t[k] - t[j], dy = t[k + 1] - t[j + 1], dz = t[k + 2] - t[j + 2];
-      return Math.sqrt(dx * dx + dy * dy + dz * dz);
-    };
-    const longest = Math.max(length(i, i + 3), length(i, i + 6), length(i + 3, i + 6));
+    const longest = Math.max(edgeLength(t, i, i + 3), edgeLength(t, i, i + 6), edgeLength(t, i + 3, i + 6));
     const n = Math.min(SAMPLE_CAP, Math.max(1, Math.ceil(longest / SAMPLE_STEP)));
     for (let p = 0; p <= n; p++) for (let q = 0; q <= n - p; q++) {
       // A lattice over the triangle: its inner points shifted a third of a step off the grid (so they don't land on
@@ -324,4 +326,4 @@ function depthInside(a, b, touch = TOUCH) {
   return deepest > touch ? deepest : 0;
 }
 
-module.exports = { WELD, TOUCH, readGlb, meshNodes, pieces, depthInside };
+module.exports = { TOUCH, meshNodes, pieces, oddCrossings, depthInside };
