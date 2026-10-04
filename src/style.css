@@ -495,7 +495,7 @@ svg { display: block; }
 
 /* Equipment: an OSRS paper doll, then the numbers. */
 /* Equipment: an OSRS paper doll. The body column (helm, body, boots) runs down the middle; jewellery flanks
-   the neck and weapon/gloves the hands, half a row lower, over a figure and rails (panels.ts DOLL_FIG). */
+   the neck and weapon/gloves the hands, half a row lower, over a figure and rails (ui/panels/equipment.ts DOLL_FIG). */
 .doll {
   --c: var(--slot); --gx: 16px; --gy: 16px; --pad: 8px; --row: calc(var(--c) + var(--gy));
   position: relative; margin: 2px auto 10px;
