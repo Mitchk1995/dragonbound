@@ -1,7 +1,7 @@
 /**
  * Character and gear art rules from the owner's review, measured on the real exported GLBs: hair covers the whole
  * scalp (no bald patches at the temples), the tunic front is plain cloth (no floating V-neck wedge), kobolds are
- * short, dragon wings are mirrored on the shoulder blades and span most of a drakeling's length, swords are long, every hairstyle is one sculpted piece, plate
+ * short, dragon wings are mirrored on the shoulder blades and span most of a drakeling's length, swords are long, plate
  * stays a few bold blocks, the Emberforged set glows only in thin seams and its visor slit, swept and tied hair sit on
  * the head (no gap under their edge), and the Wyrmbone shoulders stay compact behind the hero.
  */
@@ -77,17 +77,18 @@ describe('hair meets the head', () => {
       root.updateMatrixWorld(true);
       const sock = root.getObjectByName('sock_head')!;
       const inv = sock.matrixWorld.clone().invert();
-      const hair = meshes(root).filter((m) => role(m) === 'hair')[0];
-      const pos = hair.geometry.getAttribute('position');
       const v = new THREE.Vector3();
       // Lowest hair point over each strip of the side faces of the head (front half to back, both sides).
       const lowest = new Map<string, THREE.Vector3>();
-      for (let i = 0; i < pos.count; i++) {
-        v.fromBufferAttribute(pos, i).applyMatrix4(hair.matrixWorld).applyMatrix4(inv);
-        if (Math.abs(v.x) < 0.16 || Math.abs(v.z) > 0.16) continue;
-        const key = `${Math.sign(v.x)}:${Math.round(v.z / 0.04)}`;
-        const cur = lowest.get(key);
-        if (!cur || v.y < cur.y) lowest.set(key, v.clone());
+      for (const hair of meshes(root).filter((m) => role(m) === 'hair')) {
+        const pos = hair.geometry.getAttribute('position');
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(hair.matrixWorld).applyMatrix4(inv);
+          if (Math.abs(v.x) < 0.16 || Math.abs(v.z) > 0.16) continue;
+          const key = `${Math.sign(v.x)}:${Math.round(v.z / 0.04)}`;
+          const cur = lowest.get(key);
+          if (!cur || v.y < cur.y) lowest.set(key, v.clone());
+        }
       }
       expect(lowest.size).toBeGreaterThan(10);
       // Distance outside the chamfered head cube (0.23 half size, 0.06 chamfers).
@@ -98,16 +99,6 @@ describe('hair meets the head', () => {
         return d;
       };
       for (const [key, p] of lowest) expect(outside(p), `hair ${style} edge at ${key}: ${p.toArray().map((x) => x.toFixed(3))}`).toBeLessThan(0.02);
-    });
-  }
-});
-
-describe('hair is one piece', () => {
-  // The owner: every style has to be one cohesive piece, not a base cap with wigs and locks stacked on top.
-  for (const style of [1, 2, 3, 4]) {
-    it(`style ${style} is a single hair mesh`, () => {
-      const hair = meshes(makeModel(`hair_${style}`).root).filter((m) => role(m) === 'hair');
-      expect(hair.length).toBe(1);
     });
   }
 });

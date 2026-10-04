@@ -11,9 +11,11 @@ Two checks:
   into the head, the ears and the brows, and whether it comes out through the headgear (hair pressed in under a band,
   inside its walls, is covered by it and fine);
 - on the hero in every body armour with each kind of weapon, posed as anim.ts poses him (animpose.py pose_list: idle,
-  both walk extremes and the frames of each attack, the bow shot's head turn included): how deep it runs into anything
-  that moves apart from the head (the body, its armour, the arms and gloves, and what the hands carry). The bow shot
-  turns the head three quarters round inside the collar, so there the head's own corners are measured too, to compare.
+  both walk extremes and the frames of each attack, the bow shot's head turn included; and thrown back by a hit, the
+  body leaning back over the hips), the tied style's tail swung as the game swings it (animpose.py ponytail): how deep
+  the piece runs into anything that moves apart from the head (the body, its armour, the arms and gloves, and what the
+  hands carry), and how deep the tail runs into the head and the rest of the hair. The bow shot turns the head a quarter
+  round inside the collar, so there the head's own corners are measured too, to compare.
 A sample counts as inside a part only if a ray out from it crosses that part an odd number of times (fitcheck.py).
 The strip along the moulding's edge, tucked under the skin on purpose (hair_cage.TUCK), is left out of both.
 """
@@ -29,15 +31,16 @@ import bpy
 from mathutils import Vector
 
 
-def _load(name, **extra):
+def _load(name):
     p = os.path.join(_ROOT, 'tools', 'blender', name)
-    g = {'DB_RUN': False, '__name__': f'db_{name[:-3]}', '__file__': p, **extra}
+    g = {'DB_RUN': False, '__name__': f'db_{name[:-3]}', '__file__': p}
     exec(open(p, encoding='utf-8').read(), g)
     return g
 
 
 _fit = _load('fitcheck.py')
 _strip = lambda n: re.sub(r'\.\d{3}$', '', n)
+_samples, _ancestor = _fit['_surface_samples'], _fit['_ancestor']
 
 STYLES = ('hair_1', 'hair_2', 'hair_3', 'hair_4', 'beard_1', 'beard_2', 'beard_3')
 # Headgear that leaves each kind of piece showing (registry.ts HAIR_HIDDEN_BY).
@@ -68,11 +71,6 @@ def _build_sources(models):
             g['build'](m)
 
 
-def _samples(o):
-    """Points over a mesh's surface: each face's middle, its corners and edge midpoints drawn a little in."""
-    return _fit['_surface_samples'](o)
-
-
 def _deepest(points, solids):
     """The deepest any point runs inside any solid: (depth, the solid's label)."""
     worst = (0.0, None)
@@ -88,17 +86,13 @@ def _deepest(points, solids):
     return worst
 
 
-def _ancestor(o, names):
-    return _fit['_ancestor'](o, names)
-
-
 def _piece(scene, style):
     """The hair or beard meshes in a dressed scene (copied from the style's scene: their 'pv' is its scene)."""
     return [o for o in scene.objects if o.type == 'MESH' and o.get('pv') == f'DB_{style}']
 
 
 def _head_parts(scene):
-    """Everything riding the head that is not the piece: the head, ears, eyes, brows and headgear."""
+    """The meshes riding the head: the head, ears, eyes and brows, the headgear and the piece itself."""
     return [o for o in scene.objects if o.type == 'MESH' and len(o.data.polygons) and _ancestor(o, ('head',))]
 
 
@@ -188,16 +182,23 @@ def head_fit(style, helm=None):
             'through': _through(pts, gear, axis) if gear else (0.0, None)}
 
 
-def posed_fit(style, body=None, weapon=None, helm=None):
-    """The style on the hero in `body` armour with `weapon`, in every pose its attacks take: {pose: (depth, where)} for
-    the piece in anything not riding the head, and, in the bow shot, 'head <pose>' for the head's own corners in the
-    same parts (the bow shot turns the head inside the collar)."""
-    sources = [f'DB_{style}'] + [_scene_of(m) for m in (body, weapon, helm) if m]
+def poses(weapon):
+    """The poses the hero takes with `weapon`: animpose.py pose_list, and thrown back by a hit, standing and mid-stride."""
+    hold = _fit['hold_of'](weapon)
+    hurt = [('stand hurt', _fit['anim_pose'](hold=hold, hurt=1.0))]
+    hurt += [(f'walk hurt{"+" if sw > 0 else "-"}', _fit['anim_pose'](sw=sw, hold=hold, hurt=1.0)) for sw in (1.0, -1.0)]
+    return _fit['pose_list'](_fit['hero_kinds'](weapon) if weapon else (), hold) + hurt
+
+
+def posed_fit(style, body=None, weapon=None):
+    """The style on the hero in `body` armour with `weapon`, in every pose (poses): {pose: (depth, where)} for the
+    piece in anything not riding the head; 'tail <pose>' for the tied style's tail in the head and the rest of the hair;
+    and, in the bow shot, 'head <pose>' for the head's own corners in the parts the piece is measured against (the bow
+    shot turns the head inside the collar)."""
     scene, _ = _fit['build_hero']('DB_haircheck')
-    _fit['dress'](scene, sources)
+    _fit['dress'](scene, [f'DB_{style}'] + [_scene_of(m) for m in (body, weapon) if m])
     out = {}
-    kinds = _fit['hero_kinds'](weapon) if weapon else ()
-    for pose, offs in _fit['pose_list'](kinds, _fit['hold_of'](weapon)):
+    for pose, offs in poses(weapon):
         _fit['pose_scene'](scene, offs)
         meshes = [o for o in scene.objects if o.type == 'MESH' and len(o.data.polygons)]
         piece = _piece(scene, style)
@@ -205,7 +206,15 @@ def posed_fit(style, body=None, weapon=None, helm=None):
         solids = [_fit['_solid'](o) for o in rest]
         # (The edge tucked under the skin is inside the head, and inside whatever the head itself sinks into: left out.)
         out[pose] = _deepest(_away_from_edge(piece, [P for o in piece for P in _samples(o)]), solids)
-        if pose.startswith('bow@'):
+        tail = [o for o in piece if _ancestor(o, ('ponytail',))]
+        if tail:
+            # The tail into the head, and the rest of the hair into the tail (a closed solid; the rest is an open shell).
+            skull = [o for o in _head_parts(scene) if 'pv' not in o]
+            cap = [o for o in piece if o not in tail]
+            into_head = _deepest([P for o in tail for P in _samples(o)], [_fit['_solid'](o) for o in skull])
+            into_tail = _deepest(_away_from_edge(cap, [P for o in cap for P in _samples(o)]), [_fit['_solid'](o) for o in tail])
+            out[f'tail {pose}'] = max(into_head, into_tail, key=lambda x: x[0])
+        if pose.startswith('bow'):
             # The head's own corners in the same parts (the neck, which runs up inside the head, left out).
             skull = [o for o in meshes if _ancestor(o, ('head',)) and o not in piece and 'pv' not in o]
             collar = [s for s in solids if _fit['_hero_part'](s[0]) != 'body/skin']
@@ -239,7 +248,7 @@ def hair_clip_all(styles=STYLES, bodies=BODIES, weapons=WEAPONS, limit=0.003):
                     if pose.startswith('head ') or d <= limit:
                         continue
                     own = r.get(f'head {pose}', (0.0, None))[0]
-                    note = f' (the head itself: {own * 1000:.0f} mm)' if pose.startswith('bow@') else ''
+                    note = f' (the head itself: {own * 1000:.0f} mm)' if f'head {pose}' in r else ''
                     fails.append(f'{style} {body or "outfit"} {weapon} {pose}: {d * 1000:.0f} mm into {where}{note}')
         out[style] = rep
     out['fails'] = fails

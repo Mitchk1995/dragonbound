@@ -7,6 +7,7 @@ Each file is one `sock_head` empty whose children are the piece (ROLE_hair; a ti
 the same mesh in their own colour), authored relative to the head centre (the hero's head is a 0.46 cube centred on
 sock_head; face at +Z, ears at +-0.245 X).
 """
+import math
 import os
 import sys
 
@@ -20,7 +21,7 @@ importlib.reload(_common)
 from _common import *
 import hair_cage
 importlib.reload(hair_cage)
-from hair_cage import (DOWN, Cap, Head, bald_spots, bearing, cap_cage, grow, head_normal, jaw, keyed, lock_creases,
+from hair_cage import (DOWN, Cage, Cap, Head, bald_spots, bearing, cap_cage, grow, head_normal, jaw, keyed, lock_creases,
                        mould, ramp, sheet_cage, shell, tube)
 from mathutils import Vector
 
@@ -34,13 +35,13 @@ def facing(p, want, width=60.0):
     return max(0.0, 1 - d / width) ** 1.5
 
 
-def covers(obj, line, margin=0.03):
-    """Refuse a hairstyle that leaves the head showing anywhere more than `margin` above its hairline (`line`)."""
+def covers(h, objs, line, margin=0.03):
+    """Refuse a hairstyle (its parts `objs` under the head's socket `h`) that leaves the head showing anywhere more than
+    `margin` above its hairline (`line`)."""
     lo = keyed(line)
-    bad = bald_spots(obj, lambda p: p.y > lo(bearing(p)) + margin)
+    bad = bald_spots(h, objs, lambda p: p.y > lo(bearing(p)) + margin)
     if bad:
-        raise ValueError(f'{obj.name} leaves {len(bad)} head points showing, e.g. {[tuple(round(x, 3) for x in p) for p in bad[:6]]}')
-    return obj
+        raise ValueError(f'{objs[0].name} leaves {len(bad)} head points showing, e.g. {[tuple(round(x, 3) for x in p) for p in bad[:6]]}')
 
 
 def crown_fit(p, lo=0.085, hi=0.215):
@@ -79,9 +80,9 @@ def hair_1(h, head):
             else:          # the notch between two tips
                 p += UP * 0.008
         return crown_fit(p)
-    cage, psis, vs, inner, top = cap_cage(cap, head.surface, n, rows, point, shell(cap.dir(0, 0), 0.08))
+    cage, vs = cap_cage(cap, head.surface, n, rows, point, shell(cap.dir(0, 0), 0.08))
     lock_creases(cage, vs, rows, grooves, ridge=0.3)
-    covers(mould(cage, h, H, head), LINE)
+    covers(h, [mould(cage, h, H, head)], LINE)
 
 
 # Swept back: a clear forehead with the hairline sitting on it, temple fill to the top of the ear, over the ear and down
@@ -107,10 +108,10 @@ def hair_2(h, head):
         lock = (0.011 if i not in grooves else -0.013) * ramp(s, ((0, 0.3), (0.1, 1.0), (0.62, 0.8), (0.82, 0.45)))
         # The wave leans back (more back than up), so from the front the hair reads combed back over the crown.
         return crown_fit(base + nrm * (lock + wave * 0.35) + Vector((0, wave * 0.75, -wave * 0.7)))
-    cage, psis, vs, inner, top = cap_cage(cap, head.surface, n, rows, point, shell(cap.dir(0, 0), 0.062),
-                                          flush=lambda i, psi: True)            # (combed down flat to the hairline)
+    cage, vs = cap_cage(cap, head.surface, n, rows, point, shell(cap.dir(0, 0), 0.062),
+                        flush=lambda i, psi: True)                      # (combed down flat to the hairline)
     lock_creases(cage, vs, rows, grooves, groove=((0, 0.8), (0.2, 1.0), (0.5, 1.0), (0.8, 0.5)), ridge=0.2, pointed=False)
-    covers(mould(cage, h, H, head), LINE_COMB)
+    covers(h, [mould(cage, h, H, head)], LINE_COMB)
 
 
 # Long and tied: parted in the middle, the hair frames the face down to the temples, runs back over the ear and falls
@@ -124,17 +125,43 @@ LINE_LONG = [(0, 0.205), (7, 0.17), (22, 0.145), (33, 0.138), (45, 0.08), (60, 0
 BAND = (0x5A3A22, 'leather')      # the leather tie
 # The tie sits below the Ashen Crown's band (which rings the head from 0.09 to 0.21), so the crown never cuts it.
 TIE = Vector((0, 0.0, -0.34))
-# The tail from the tie down the back: (centre, radius), the first two rings the tie's band; it ends in a point.
-TAIL = [((0, 0.0, -0.34), 0.075), ((0, -0.008, -0.382), 0.075), ((0, -0.04, -0.415), 0.085), ((0, -0.15, -0.44), 0.09),
-        ((0, -0.26, -0.43), 0.072), ((0, -0.35, -0.4), 0.046)]
+# The leather band round the tie: its top and its foot (centre, radius).
+BAND_RINGS = [((0, 0.0, -0.34), 0.075), ((0, -0.008, -0.382), 0.075)]
+# The tail is a part of its own, hanging from a pivot at the band's foot (PONYTAIL), where the game swings it
+# (src/render/ponytail.ts): its top is a ball centred on the pivot (TAIL_BALL its radius), sitting in the band's mouth
+# however it turns. Then down the back to a point: (centre, radius).
+PONYTAIL = 'ponytail'
+TAIL_BALL = 0.068
+TAIL = [((0, -0.04, -0.415), 0.085), ((0, -0.15, -0.44), 0.09), ((0, -0.26, -0.43), 0.072), ((0, -0.35, -0.4), 0.046)]
 TAIL_TIP = (0, -0.44, -0.37)
+
+
+def ponytail(h, head, cap, psis):
+    """The tail on its pivot at the band's foot: a ball top inside the band's mouth, then the tail down the back, its
+    locks running on from the cap's (the same columns round it)."""
+    foot, top = Vector(BAND_RINGS[1][0]), Vector(BAND_RINGS[0][0])
+    pv = pivot(h, PONYTAIL, tuple(foot))
+    out = (foot - top).normalized()                                     # the band's axis, out of the head
+    turn = cap.a.rotation_difference(out)
+    f1, f2 = turn @ cap.e1, turn @ cap.e2
+    cage = Cage()
+    ring = lambda c, r: [cage.v(c + (f1 * math.cos(p) + f2 * math.sin(p)) * r) for p in psis]
+    rel = lambda p: Vector(p) - foot                                     # (the part is built about its pivot)
+    equator = ring(Vector(), TAIL_BALL)
+    crown = ring(-out * TAIL_BALL * 0.7, TAIL_BALL * 0.71)               # the ball's top half, up inside the band
+    cage.ring_faces(crown, equator)
+    apex = cage.v(-out * TAIL_BALL)
+    for i in range(len(psis)):
+        cage.face((crown[(i + 1) % len(psis)], crown[i], apex))
+    tube(cage, equator, cap.a, cap.e1, cap.e2, psis, [rel(c) for c, _ in TAIL], [r for _, r in TAIL],
+         lobes=lambda i, k: 1.07 if i % 2 else 0.93, tip=rel(TAIL_TIP))
+    return mould(cage, pv, H, head)
 
 
 def hair_3(h, head):
     """Long and tied back: a clear centre parting, the hair framing the face down to the temples, running back over
-    each ear and falling behind it in a full side mass; every lock runs back to a leather tie at the back of the head
-    and carries on, unbroken, into a thick tail hanging down the back (one piece: the tail and the tie's band are the
-    same mesh as the cap)."""
+    each ear and falling behind it in a full side mass; every lock runs back to a leather tie at the back of the head,
+    and out of it hangs a thick tail down the back, a part of its own that swings at the tie (ponytail)."""
     cap = Cap(LINE_LONG, TIE, ref=(0, 1, 0))
     n, rows = 24, (0.0, 0.07, 0.17, 0.32, 0.5, 0.7, 0.86)
     grooves = set(range(0, n, 2))                                       # column 0, over the top, is the parting
@@ -165,16 +192,16 @@ def hair_3(h, head):
         lock *= min(1.0, width(i, s) / 0.05)
         return crown_fit(base + nrm * (lock + part + 0.03 * side))
     # (Laid down flat to the hairline all round: the fall behind the ears swells from the skin, no edge standing off it.)
-    cage, psis, vs, inner, _ = cap_cage(cap, head.surface, n, rows, point, None, flush=lambda i, psi: True)
+    cage, vs = cap_cage(cap, head.surface, n, rows, point, None, flush=lambda i, psi: True)
     lock_creases(cage, vs, rows, grooves, groove=((0, 0.8), (0.2, 1.0), (0.5, 1.0), (0.76, 0.0)), ridge=0.2, pointed=False,
                  scale=lambda i, s: min(1.0, width(i, s) / 0.05))
-    # The tail: a ring at the tie, the band (in leather) and on down the back to a point, its locks running on.
-    rings = tube(cage, vs[-1], cap.a, cap.e1, cap.e2, psis, [c for c, _ in TAIL], [r for _, r in TAIL],
-                 mats=[0, 1, 0, 0, 0, 0], lobes=lambda i, k: 1.0 if k < 2 else (1.07 if i % 2 else 0.93), tip=TAIL_TIP)
-    for ring in rings[1:3]:                                               # the band's crisp edges
+    # The hair gathered into the tie and the leather band round it, open at its foot, where the tail hangs from.
+    rings = tube(cage, vs[-1], cap.a, cap.e1, cap.e2, psis, [c for c, _ in BAND_RINGS], [r for _, r in BAND_RINGS],
+                 mats=[0, 1])
+    for ring in rings[1:]:                                                # the band's crisp edges
         for i in range(n):
             cage.crease(ring[i], ring[(i + 1) % n], 1.0)
-    covers(mould(cage, h, H, head, extra=(BAND,)), LINE_LONG)
+    covers(h, [mould(cage, h, H, head, extra=(BAND,)), ponytail(h, head, cap, psis)], LINE_LONG)
 
 
 def hair_4(h, head):
@@ -199,14 +226,14 @@ def hair_4(h, head):
             drop = 0.07 - 0.03 * facing(base, 0) - 0.035 * facing(base, 180)
             p += DOWN * drop + nrm * 0.028
         return crown_fit(p) if not ln else p
-    cage, psis, vs, inner, top = cap_cage(cap, head.surface, n, rows, point, shell(cap.dir(0, 0), 0.07))
+    cage, vs = cap_cage(cap, head.surface, n, rows, point, shell(cap.dir(0, 0), 0.07))
     lock_creases(cage, vs, rows, set(range(1, n, 2)), groove=((0, 1.0), (0.4, 0.8), (0.8, 0.5)), ridge=0.25)
     for (i, s) in spikes:                          # each spike a sharp point with crisp edges
         v = vs[rows.index(s)][i]
         v[cage.vcrease] = 1.0
         for e in v.link_edges:
             e[cage.ecrease] = max(e[cage.ecrease], 0.6)
-    covers(mould(cage, h, H, head), LINE)
+    covers(h, [mould(cage, h, H, head)], LINE)
 
 
 # ─── Beards ──────────────────────────────────────────────────────────────────
@@ -229,7 +256,7 @@ def chin(b, y, depth):
     collar line it is carried forward (easing in over the 2 cm above it) to stand in front of every collar, so the
     beard's lower part hangs as one block before the chin."""
     base, out = jaw(b, y, 0.0), jaw(b, y, 1.0) - jaw(b, y, 0.0)
-    if b <= HANG:
+    if abs(b) <= HANG:
         base.z += (max(base.z, FRONT) - base.z) * ramp(y, ((COLLAR_TOP, 1.0), (COLLAR_TOP + 0.02, 0.0)))
     return base + out * depth
 

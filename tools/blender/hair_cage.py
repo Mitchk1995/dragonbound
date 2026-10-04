@@ -121,7 +121,7 @@ def keyed(keys):
 
 class Skin:
     """The head proxy's surface, for laying the cage's edge on the skin: `on(p)` is the point of the head straight out
-    from its centre through p, SKIN_LIFT out from it."""
+    from its centre through p, SKIN_LIFT out from it (the mould's shrinkwrap then sets it exactly)."""
 
     def __init__(self, proxy):
         me, mw = proxy.data, proxy.matrix_world
@@ -129,12 +129,12 @@ class Skin:
         local = (proxy.parent.matrix_world if proxy.parent else mw).inverted() @ mw     # (in the socket's own space)
         self.tree = BVHTree.FromPolygons([local @ v.co for v in me.vertices], [list(p.vertices) for p in me.polygons])
 
-    def on(self, p, lift=SKIN_LIFT):
+    def on(self, p):
         d = Vector(p).normalized()
         hit, nor, _, _ = self.tree.ray_cast(d * 0.6, -d, 0.6)
         if hit is None:
             raise ValueError(f'no head under {tuple(round(x, 3) for x in p)}')
-        return hit + nor * lift
+        return hit + nor * SKIN_LIFT
 
 
 def jaw(beta, y, depth=0.0, r=0.08):
@@ -192,19 +192,25 @@ def head_points(n=20):
     return pts
 
 
-def bald_spots(obj, above, lift=0.0015):
-    """Head points the hair `obj` leaves showing: every point of head_points() that `above` (point -> bool) says the
-    hair should cover, where a ray from the head's centre out through it meets no hair beyond it. Returns them."""
-    me, mw = obj.data, obj.matrix_local
-    tree = BVHTree.FromPolygons([mw @ v.co for v in me.vertices], [list(p.vertices) for p in me.polygons])
+def bald_spots(sock, objs, above, lift=0.0015):
+    """Head points the hair (`objs`, the parts of one style under the head's socket `sock`) leaves showing: every point
+    of head_points() that `above` (point -> bool) says the hair should cover, where a ray from the head's centre out
+    through it meets no hair beyond it. Returns them."""
+    bpy.context.view_layer.update()
+    verts, polys = [], []
+    for o in objs:
+        mw, base = sock.matrix_world.inverted() @ o.matrix_world, len(verts)
+        verts += [mw @ v.co for v in o.data.vertices]
+        polys += [[base + i for i in p.vertices] for p in o.data.polygons]
+    tree = BVHTree.FromPolygons(verts, polys)
     bad = []
     for p in head_points():
         if not above(p):
             continue
+        # The hair beyond the skin: some crossing of the ray out through the hair must lie outside the head point.
         d = p.normalized()
         hit = tree.ray_cast(Vector(), d, 1.0)
         far = hit[0] is not None and hit[0].length > p.length + lift
-        # (the hair beyond the skin: its outermost crossing along the ray must lie outside the head point)
         while hit[0] is not None and not far:
             hit = tree.ray_cast(hit[0] + d * 1e-4, d, 1.0)
             far = hit[0] is not None and hit[0].length > p.length + lift
@@ -322,10 +328,10 @@ class Cage:
         if e is not None:
             e[self.ecrease] = max(e[self.ecrease], value)
 
-    def ring_faces(self, lo, hi, mat=0, closed=True):
-        """Quads between two rows of vertices (equal counts)."""
+    def ring_faces(self, lo, hi, mat=0):
+        """Quads between two closed rings of vertices (equal counts)."""
         n = len(lo)
-        for i in range(n if closed else n - 1):
+        for i in range(n):
             j = (i + 1) % n
             self.face((lo[i], lo[j], hi[j], hi[i]), mat)
 
@@ -337,8 +343,8 @@ def cap_cage(cap, skin, n, rows, point, crown, flush=False):
     point(i, s, psi, d) (d: the direction of its spot from the head's centre), never nearer the head than off_head
     allows; a wall from the hairline row in to the skin under it (except at the columns where `flush(i, psi)` holds:
     there the hairline row itself lies on the skin, so the hair runs down onto the head with no edge to it); and the
-    last row closed over the crown point `crown` (None: left open, for a tail to carry on from). Returns (cage, psis,
-    rows of vertices, the skin row, the crown vertex)."""
+    last row closed over the crown point `crown` (None: left open, for a tail to carry on from). Returns (cage, rows of
+    vertices)."""
     cage = Cage()
     psis = cap.columns(n)
     flat = [bool(flush and flush(i, psi)) for i, psi in enumerate(psis)]
@@ -352,7 +358,6 @@ def cap_cage(cap, skin, n, rows, point, crown, flush=False):
             cage.face(corners)
     for lo, hi in zip(vs, vs[1:]):
         cage.ring_faces(lo, hi)
-    top = None
     if crown is not None:
         top = cage.v(crown)
         for i in range(n):
@@ -360,7 +365,7 @@ def cap_cage(cap, skin, n, rows, point, crown, flush=False):
     for row in (inner, vs[0]):
         for i in range(n):
             cage.crease(row[i], row[(i + 1) % n], 1.0)
-    return cage, psis, vs, inner, top
+    return cage, vs
 
 
 def tube(cage, first, axis, e1, e2, psis, path, radii, mats=None, lobes=None, tip=None):
@@ -386,10 +391,10 @@ def tube(cage, first, axis, e1, e2, psis, path, radii, mats=None, lobes=None, ti
     return rings
 
 
-def grow(cage, ring, path, scales, mats=None, tip=None, corner_tip=True):
+def grow(cage, ring, path, scales, mats=None, tip=None):
     """Box-model a tube out of a ring of cage vertices (a face left out of the cage, in that face's order): ring k is
     the first ring's shape (its vertices about its centre) scaled by scales[k] and moved to path[k]; the faces between
-    ring k and the one before take mats[k]; `tip` closes it to a point. Returns the rings (the first included)."""
+    ring k and the one before take mats[k]; `tip` closes it to a sharp point. Returns the rings (the first included)."""
     c0 = sum((v.co for v in ring), Vector()) / len(ring)
     offs = [v.co - c0 for v in ring]
     rings = [list(ring)]
@@ -398,7 +403,7 @@ def grow(cage, ring, path, scales, mats=None, tip=None, corner_tip=True):
         cage.ring_faces(rings[-1], new, mats[k] if mats else 0)
         rings.append(new)
     if tip is not None:
-        end = cage.v(tip, corner=corner_tip)
+        end = cage.v(tip, corner=True)
         n = len(ring)
         for i in range(n):
             cage.face((rings[-1][i], rings[-1][(i + 1) % n], end), mats[-1] if mats else 0)
@@ -448,10 +453,12 @@ def mould(cage, parent, color, head, extra=(), name='hair'):
     for k in ('lift', 'tuck', 'edge'):
         only = o.modifiers.new(f'only the edge ({k})', 'VERTEX_WEIGHT_EDIT')
         only.vertex_group, only.use_remove, only.remove_threshold = k, True, 0.999
-    for k, mode, offset in (('lift', 'OUTSIDE_SURFACE', SKIN_LIFT), ('tuck', 'ON_SURFACE', -TUCK)):
+    # (Each offset is measured out from the skin whichever side of it the vertex starts on: ON_SURFACE would keep an
+    # edge vertex that starts inside the head on that side, and a tuck would leave it standing off the skin.)
+    for k, offset in (('lift', SKIN_LIFT), ('tuck', -TUCK)):
         snap = o.modifiers.new(f'onto the skin ({k})', 'SHRINKWRAP')
         snap.target, snap.vertex_group = head.skin, k
-        snap.wrap_method, snap.wrap_mode, snap.offset = 'NEAREST_SURFACEPOINT', mode, offset
+        snap.wrap_method, snap.wrap_mode, snap.offset = 'NEAREST_SURFACEPOINT', 'OUTSIDE_SURFACE', offset
     keep = o.modifiers.new('clear of the head', 'SHRINKWRAP')
     keep.target, keep.vertex_group, keep.invert_vertex_group = head.clear, 'edge', True
     keep.wrap_method, keep.wrap_mode, keep.offset = 'NEAREST_SURFACEPOINT', 'OUTSIDE', CLEAR
