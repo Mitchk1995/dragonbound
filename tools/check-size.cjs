@@ -18,7 +18,6 @@ const IGNORED = new Set(['node_modules', 'previews', '__pycache__']);
 const ALLOWED = {
   'docs/CASTLE_DESIGN.md': 29410,
   'src/dev/inspect.ts': 1181,
-  'src/game.ts': 966,
   'src/render/masonry.ts': 655,
   'src/ui/panels.ts': 653,
   'src/world/buildingModel.ts': 2387,
