@@ -152,13 +152,13 @@ export class KitView {
 
   /** Each placement's painted flames in each copy, together in a group of their own. */
   private light() {
-    const fires = new THREE.Group(), at = new THREE.Vector3();
+    const fires = new THREE.Group(), foot = new THREE.Vector3();
     fires.name = 'flames';
     for (const p of this.build.items) for (const f of p.el.flames ?? []) {
       const m = this.build.matrix(p, tmp);
       for (const c of this.copies) {
-        at.set(f.x * U, f.y * U, f.z * U).applyMatrix4(m).applyMatrix4(c);
-        this.flames.push({ p, card: fireCard(fires, at.x, at.y, at.z, f.s, f.broad) });
+        foot.set(f.x * U, f.y * U, f.z * U).applyMatrix4(m).applyMatrix4(c);
+        this.flames.push({ p, card: fireCard(fires, foot.x, foot.y, foot.z, f.s, f.broad) });
       }
     }
     if (this.flames.length) this.group.add(fires);

@@ -23,8 +23,8 @@ import { Cell } from '../world/layout';
 export type Shot = (name: string) => Promise<void>;
 
 /** Every family, in the order they run. */
-export const VFX_FAMILIES = ['hits', 'spells', 'skills', 'potion', 'levelup', 'loot', 'mining', 'fires', 'travel', 'boss', 'angles', 'strips', 'lightfx', 'perf'] as const;
-export type VfxFamily = (typeof VFX_FAMILIES)[number];
+const VFX_FAMILIES = ['hits', 'spells', 'skills', 'potion', 'levelup', 'loot', 'mining', 'fires', 'travel', 'boss', 'angles', 'strips', 'lightfx', 'perf'] as const;
+type VfxFamily = (typeof VFX_FAMILIES)[number];
 
 /** Stepping the game by hand and capturing at times after a moment. */
 export interface Clock {
@@ -37,6 +37,8 @@ export interface Clock {
 }
 
 export async function vfxSuite(g: Game, shot: Shot, only: readonly string[] = []) {
+  const unknown = only.filter((f) => !(VFX_FAMILIES as readonly string[]).includes(f));
+  if (unknown.length) throw new Error(`vfx: no family ${unknown.join(', ')} (the families: ${VFX_FAMILIES.join(', ')})`);
   const want = (f: VfxFamily) => !only.length || only.includes(f);
   const report: Record<string, unknown> = {};
   const style = document.createElement('style');
