@@ -5,8 +5,11 @@ trim down the split front of its skirt, a belt with a square gold buckle and a p
 with a gold clasp and a fang, one steel pauldron on the left shoulder, leather bracers and tall turned-down boots.
 
 The body, legs and head keep the earlier hero's sizes, so gear still fits; each arm is an upper arm, an elbow, a forearm
-and a LEGO hand, with its gear sockets on the part they ride (see the arms below). The starting outfit's extra pieces live under `outfit_<slot>_*` empties that the game hides when gear fills that slot (registry.ts
-HeroDresser): the collar, the skirt's split, the strap, clasp, buckle, pouch and pauldron under body armour, the bracers under gloves, the boots under
+and a LEGO hand, with its gear sockets on the part they ride (see the arms below). Like a LEGO minifigure's, the legs
+hinge under the hips: at the tunic's hem, each thigh's top rounded about the hinge, while the skirt hangs on the hips
+(sock_hips), which stay level with the legs as the body leans over them. The starting outfit's extra pieces live under
+`outfit_<slot>_*` empties that the game hides when gear fills that slot (registry.ts HeroDresser): the collar, the
+skirt, the strap, clasp, buckle, pouch and pauldron under body armour, the bracers under gloves, the boots under
 boots. No armour slot, weapon, hair or helmet here: those are separate gear_*.glb / hair_*.glb / beard_*.glb files
 attached to the sock_* empties at runtime. Faces +Z; right side (armR/legR) is at -X.
 """
@@ -22,9 +25,15 @@ import importlib
 import _common
 importlib.reload(_common)
 from _common import *
+import hips as _hips
+importlib.reload(_hips)
+from hips import hip_skirt
 
 PI = math.pi
-HIP = 0.9
+HIP = 0.9            # the hip axis: the body's pivot, which it leans about over the hips (sock_hips)
+# The legs hinge at the tunic's hem, like a LEGO minifigure's under its hips: each thigh's top is rounded about that
+# hinge and turns inside the skirt, so a striding leg never reaches through anything hanging from the hips (hips.py).
+LEG_HINGE = 0.725
 GOLD = 0xD9A640      # buckle, clasp and studs (authored, not recoloured)
 EYE = 0x1E1614
 TRIM = 0xA9B6C6      # the pale trim down the tunic's front and round its hem
@@ -42,34 +51,40 @@ HAND = dict(outer=0.135, inner=0.07, depth=0.22, gap=0.07, gap_tilt=0.6, stub=(0
 def build_hero(scene_name='DB_hero'):
     scene, root = fresh_scene(scene_name)
 
-    # Legs: trousers (cloth2) in a thigh and a shin block. legL on +X, legR on -X. The tall boots (leather, under
-    # outfit_boots_*) take the foot: a dark sole, the foot, a shaft round the shin and a turned-down cuff with a gold
-    # stud on the outside. Gear boots replace them whole.
+    # Legs: trousers (cloth2) in a thigh and a shin block, hinged at LEG_HINGE, the thigh's top rounded about the hinge
+    # (_common.joint_limb). legL on +X, legR on -X. The tall boots (leather, under outfit_boots_*) take the foot: a dark
+    # sole, the foot, a shaft round the shin and a turned-down cuff with a gold stud on the outside. Gear boots replace
+    # them whole. (Heights below are from the old hinge at HIP, shifted by `up`, so the legs keep their sizes.)
+    up = HIP - LEG_HINGE
     for name, x in (('legL', 0.19), ('legR', -0.19)):
         s = 1 if x > 0 else -1
-        leg = pivot(root, name, (x, HIP, 0))
-        box(leg, (0.29, 0.44, 0.31), (0, -0.2, 0), R.cloth2, bevel=0.04)          # thigh
-        box(leg, (0.26, 0.3, 0.28), (0, -0.52, 0), R.cloth2, bevel=0.035)          # shin
+        leg = pivot(root, name, (x, LEG_HINGE, 0))
+        joint_limb(leg, 0.29, 0.31, 0.0, -0.42 + up, R.cloth2, round_top=True, bevel=0.04)  # thigh
+        box(leg, (0.26, 0.3, 0.28), (0, -0.52 + up, 0), R.cloth2, bevel=0.035)              # shin
         boot = pivot(leg, 'outfit_boots_' + ('L' if s > 0 else 'R'))
-        box(boot, (0.32, 0.045, 0.44), (0, -0.8775, 0.055), SOLE, bevel=0.012)    # sole
-        box(boot, (0.31, 0.15, 0.42), (0, -0.785, 0.05), R.leather, bevel=0.045)  # foot
-        box(boot, (0.28, 0.2, 0.3), (0, -0.62, 0), R.leather, bevel=0.035)        # shaft
-        box(boot, (0.32, 0.11, 0.33), (0, -0.48, 0), R.leather, bevel=0.03)  # turned-down cuff
-        box(boot, (0.012, 0.055, 0.055), (s * 0.163, -0.48, 0.02), GOLD, bevel=0.006)        # cuff stud
-        pivot(leg, 'sock_footL' if x > 0 else 'sock_footR', (0, -0.72, 0))
+        box(boot, (0.32, 0.045, 0.44), (0, -0.8775 + up, 0.055), SOLE, bevel=0.012)        # sole
+        box(boot, (0.31, 0.15, 0.42), (0, -0.785 + up, 0.05), R.leather, bevel=0.045)      # foot
+        box(boot, (0.28, 0.2, 0.3), (0, -0.62 + up, 0), R.leather, bevel=0.035)            # shaft
+        box(boot, (0.32, 0.11, 0.33), (0, -0.48 + up, 0), R.leather, bevel=0.03)           # turned-down cuff
+        box(boot, (0.012, 0.055, 0.055), (s * 0.163, -0.48 + up, 0.02), GOLD, bevel=0.006)  # cuff stud
+        pivot(leg, 'sock_footL' if x > 0 else 'sock_footR', (0, -0.72 + up, 0))
 
     body = pivot(root, 'body', (0, HIP, 0))
-    # Tunic torso (flares to the shoulders) and the skirt below the belt, its front split up to the belt, the pale trim
-    # down both edges of the split and round the hem.
-    # (Only a slight flare, so the sleeves hang against its sides without cutting into them.)
+    # Tunic torso (flares to the shoulders). (Only a slight flare, so the sleeves hang against its sides without cutting
+    # into them.)
     box(body, (0.68, 0.66, 0.42), (0, 0.42, 0), R.cloth, taper=(1.03, 1.04), bevel=0.05)
-    box(body, (0.7, 0.24, 0.44), (0, -0.05, 0), R.cloth, taper=(0.96, 0.96), bevel=0.04)
-    box(body, (0.72, 0.05, 0.46), (0, -0.15, 0), TRIM, bevel=0.015)                 # hem trim
+    # Everything below the belt hangs on the hips (sock_hips, on the hip axis), which stay level with the legs while the
+    # body leans over them (anim.ts Rig.levelHips); armour's skirts hang there too, and the tunic's comes off under them
+    # (it would show below their hems). The tunic's skirt, its top rounded under the belt (_common.hip_skirt), its front
+    # split up to the belt, the pale trim down both edges of the split and round the hem, which is where the legs hinge.
+    hips = pivot(body, 'sock_hips')
+    skirt = pivot(hips, 'outfit_body_skirt')
+    hip_skirt(skirt, 0.34, 0.2138, -0.17, R.cloth, (0.01, 0.13), flare=(0.0099, 0.0062), bevel=0.04)   # (belt below)
+    box(skirt, (0.72, 0.05, 0.46), (0, -0.15, 0), TRIM, bevel=0.015)                # hem trim
     lean = -0.0375                                                                    # the skirt front leans back
-    split = pivot(body, 'outfit_body_split')                                          # (under armour's skirts)
-    box(split, (0.07, 0.19, 0.03), (0, -0.07, 0.212), R.cloth2, rot=(lean, 0, 0), bevel=0.006)   # the split
+    box(skirt, (0.07, 0.19, 0.03), (0, -0.07, 0.212), R.cloth2, rot=(lean, 0, 0), bevel=0.006)   # the split
     for s in (-1, 1):
-        box(split, (0.04, 0.2, 0.03), (s * 0.052, -0.07, 0.218), TRIM, rot=(lean, 0, 0), bevel=0.008)
+        box(skirt, (0.04, 0.2, 0.03), (s * 0.052, -0.07, 0.218), TRIM, rot=(lean, 0, 0), bevel=0.008)
     box(body, (0.2, 0.12, 0.2), (0, 0.8, 0), R.skin, bevel=0.03)                     # neck
     # Standing collar in the tunic's darker shade, open in a V over the pale undershirt; armour hides it.
     col = pivot(body, 'outfit_body_collar')
@@ -78,15 +93,17 @@ def build_hero(scene_name='DB_hero'):
         box(col, (0.08, 0.09, 0.3), (s * 0.17, 0.79, -0.02), R.clothDark, bevel=0.02)          # sides
         box(col, (0.065, 0.18, 0.025), (s * 0.075, 0.68, 0.226), R.clothDark, rot=(-0.04, 0, -s * 0.666), bevel=0.008)  # lapels
     box(col, (0.18, 0.13, 0.02), (0, 0.685, 0.212), UNDER, taper=(0.15, 1), rot=(-0.04, 0, PI), bevel=0)    # the V
-    # Belt (kept under every armour) with its square gold buckle and the pouch (both hidden under armour).
-    box(body, (0.72, 0.12, 0.46), (0, 0.07, 0), R.leather, bevel=0.03)
+    # Belt with its square gold buckle, and the pouch on the left hip, hanging on the hips (all hidden under armour,
+    # which has a belt of its own).
     kit = pivot(body, 'outfit_body_belt')
+    box(kit, (0.72, 0.12, 0.46), (0, 0.07, 0), R.leather, bevel=0.03)
     box(kit, (0.16, 0.14, 0.03), (0, 0.07, 0.235), GOLD, bevel=0.012)               # buckle frame
     box(kit, (0.08, 0.06, 0.03), (0, 0.07, 0.24), R.leather, bevel=0)                # the strap end through it
     box(kit, (0.018, 0.06, 0.02), (-0.02, 0.07, 0.252), GOLD, bevel=0)                # tongue
-    box(kit, (0.15, 0.17, 0.09), (0.225, -0.03, 0.2), R.leather, bevel=0.03)         # pouch (left hip)
-    box(kit, (0.16, 0.08, 0.1), (0.225, 0.04, 0.205), R.leather, rot=(0.12, 0, 0), bevel=0.02)   # its flap
-    box(kit, (0.04, 0.045, 0.02), (0.225, 0.005, 0.256), GOLD, bevel=0.006)           # clasp
+    pouch = pivot(hips, 'outfit_body_pouch')
+    box(pouch, (0.15, 0.17, 0.09), (0.225, -0.03, 0.2), R.leather, bevel=0.03)       # pouch (left hip)
+    box(pouch, (0.16, 0.08, 0.1), (0.225, 0.04, 0.205), R.leather, rot=(0.12, 0, 0), bevel=0.02)   # its flap
+    box(pouch, (0.04, 0.045, 0.02), (0.225, 0.005, 0.256), GOLD, bevel=0.006)        # clasp
     # Strap over the right shoulder to the left hip, front and back, with a gold clasp and a fang on the chest.
     st = pivot(body, 'outfit_body_strap')
     for z in (0.236, -0.236):

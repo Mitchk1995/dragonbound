@@ -111,6 +111,18 @@ the bow comes up). `held_clip_all()` does the same for what the hands carry (eve
 in plate, and every creature's staff, club or hammer): it runs through the holding hand but cuts into nothing else, so
 no bow limb in the striding leg, staff foot in a robe or pommel in a forearm.
 
+**Legs never show through what hangs from the hips.** Like a LEGO minifigure's, the hero's legs hinge under his hips,
+at the tunic's hem (`hero.py` LEG_HINGE), the top of each thigh rounded about the hinge (`joint_limb`), and everything
+below the belt hangs on the hips socket, `sock_hips`: the tunic's skirt, every armour's skirt and the flaps, tassets
+and tabard hanging from its belt. The hips stay level with the legs however the body leans (anim.ts `levelHips`), and a
+sword swing turns the whole hero rather than twisting his body on his legs, so a striding leg only ever swings below
+them. A skirt's top is round about the hip axis up into its belt (`hips.py` `hip_skirt`), so the belt turns over it as
+the body leans; whatever hangs from a belt starts behind it (`TUCK`), so no gap opens under the belt in the walk. Legs
+hinged that low swing a little further and step a little quicker (anim.ts Rig `swing`, `stride`). Under body armour the
+tunic's skirt and belt come off. `skirtcheck.py` `skirt_clip_all()` poses every outfit and creature through the whole
+stride at every lean its body takes and in every attack, and measures any leg standing out through what hangs over it:
+every hero outfit measures zero.
+
 Mostly blocky and modular, not dogmatically: use organic shapes where they look better (e.g. bat wings, hair,
 trees, flames). Blocks are the default where scripted geometry shines (armour, helms, weapons, NPC/enemy bodies,
 belts, trims): chamfered boxes (`box(... bevel=)`), stacked slabs, wedges and tapered blocks (`beam`), cut gems
@@ -127,10 +139,11 @@ Never name an object ending in three digits.
 ### Hero base: `hero.glb` (`tools/blender/hero.py`)
 Height ~2.0. The starting outfit from the approved concept sheet (October 3): tunic `ROLE_cloth` with its collar and sleeve bands in `ROLE_clothDark` (the tunic's dye, darkened by the game), trousers `ROLE_cloth2`, belt, bracers and boots `ROLE_leather`, skin `ROLE_skin`; no armour slot, no weapon, no hair.
 
-The outfit's extra pieces sit under empties named `outfit_<slot>_*`, and the game hides them while gear fills that slot (`registry.ts` HeroDresser): `outfit_body_*` (collar, the skirt's split, strap, buckle, pouch, the single pauldron, the sleeves) under body armour, `outfit_gloves_*` (bracers) under gloves, `outfit_boots_*` (boots) under boots. The body, arms, hands and legs under them keep the earlier hero's sizes, so every gear piece fits unchanged; `fitcheck.py` `fit_all()` and `tests/character-art.test.ts` check every piece on the hero.
+The outfit's extra pieces sit under empties named `outfit_<slot>_*`, and the game hides them while gear fills that slot (`registry.ts` HeroDresser): `outfit_body_*` (collar, the skirt, belt and pouch, strap, the single pauldron, the sleeves) under body armour, `outfit_gloves_*` (bracers) under gloves, `outfit_boots_*` (boots) under boots. The body, arms, hands and legs under them keep the earlier hero's sizes, so every gear piece fits unchanged; `fitcheck.py` `fit_all()` and `tests/character-art.test.ts` check every piece on the hero.
 
 Rig parts (pivots = empties at joints, children are meshes):
-`body` (hips pivot) → `head`, `armL` (+X side), `armR` (−X side); `legL` (+X), `legR` (−X) on the root. Each arm:
+`body` (the hip axis, 0.9 up: the body leans about it) → `head`, `armL` (+X side), `armR` (−X side); `legL` (+X),
+`legR` (−X) on the root, hinged at the tunic's hem (0.725 up, under the hips). Each arm:
 `armX` (shoulder, the upper arm) → `elbowX` (0.28 below, the forearm) → `handX` (the wrist, 0.52 below the shoulder,
 the hand), authored straight.
 
@@ -140,6 +153,7 @@ hole (0.655 below the shoulder) while the arm hangs straight, each riding its ow
 |---|---|---|---|
 | `sock_head` | `head` | head centre | helmets, hair, beards |
 | `sock_chest` | `body` | torso centre | body armour |
+| `sock_hips` | `body` | on the hip axis, 0.44 below `sock_chest`; kept level with the legs (anim.ts `levelHips`) | everything below the belt: skirts, flaps, tassets, tabards (`hips.py`) |
 | `sock_shoulderL` / `sock_shoulderR` | `body` | top of each shoulder | pauldrons (from body armour files) |
 | `sock_upperL` / `sock_upperR` | `armL` / `armR` | the hole's centre, arm hanging | upper-arm armour: sleeves, rerebraces, lames, the pauldron's side block |
 | `sock_cuffL` / `sock_cuffR` | `elbowL` / `elbowR` | the hole's centre, arm hanging | glove cuffs, vambraces |
@@ -167,9 +181,9 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `staff` | `sock_handR` | the staff along +Y through the hand (`staff_frame`), its grip in the hole; the game carries it upright, forearm forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
 | `helm_full` | `sock_head` | plain cube-over-cube great helm (`gear.py` `great_helm`): shell, top block, a low `ROLE_cloth` crest and a T visor cut right through a face plate standing proud of the shell (`slotted_plate`: a real recess with a lit lower lip, over a dark lining); no rivets, bands or ridges. Every heavy tier wears it (Emberforged adds a crimson crest, horns and a thin ember line in the slit); hides hair and beard |
-| `body_chain` | `sock_chest`, `sock_shoulderL/R`, `sock_upperL/R` | box mail shirt with a skirt block, fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
-| `body_plate` | `sock_chest`, `sock_shoulderL/R`, `sock_upperL/R` | a few bold blocks, like a toy knight readable at ~100px: chest block over a waist block, belt, gorget, one slab tasset per thigh and one accent (a plain `ROLE_cloth` tabard dyed like the wearer's tunic); block pauldron caps and a plain rerebrace down each upper arm (same as plate set `p`). No lames, ridges, straps, rivets or trim bands |
-| `body_leather` | `sock_chest`, `sock_shoulderL/R`, `sock_upperL/R` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
+| `body_chain` | `sock_chest`, `sock_hips`, `sock_shoulderL/R`, `sock_upperL/R` | box mail shirt with a short skirt (on the hips), fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
+| `body_plate` | `sock_chest`, `sock_hips`, `sock_shoulderL/R`, `sock_upperL/R` | a few bold blocks, like a toy knight readable at ~100px: chest block over a waist block, belt, gorget, one slab tasset per thigh and one accent (a plain `ROLE_cloth` tabard dyed like the wearer's tunic); block pauldron caps and a plain rerebrace down each upper arm (same as plate set `p`). No lames, ridges, straps, rivets or trim bands |
+| `body_leather` | `sock_chest`, `sock_hips`, `sock_shoulderL/R`, `sock_upperL/R` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
 | `gloves` | `sock_handL`, `sock_gloveR`, `sock_cuffL/R` | the hand's LEGO C a size up (`gear.py` `GLOVE`, `GAUNTLET`) on the hand sockets, its open cuff on the forearm sockets, both authored round the hole's centre (off the hero they are joined again: `registry.ts` `joinCuffs`) |
 | `boots` | `sock_footL`, `sock_footR` | covers shoe, cuff at shin |
 | `u_<unique id>` | as its base | hand-built unique look (own colours allowed; metal parts use `_common.metallic()` so they get the forged-metal finish) |

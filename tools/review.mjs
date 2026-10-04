@@ -25,6 +25,7 @@ const AREAS = {
   trees: { suite: 'trees:ladder', about: 'the woodcutting ladder' },
   'tree-roots': { suite: 'trees:roots', about: 'every tree species\' roots and crown' },
   characters: { suite: 'characters', about: 'the redesigned hero and enemies, close up and at the play camera' },
+  skirts: { suite: 'skirts', about: 'the hero\'s tunic and armour skirts mid-stride, close up and at the play camera' },
   dragons: { suite: 'dragons', about: 'the drakeling and Cinderwing' },
   text: { suite: 'font,uitext', about: 'the painted alphabets and the menus\' lettering' },
   digits: { suite: 'digits', about: 'the painted damage numbers' },

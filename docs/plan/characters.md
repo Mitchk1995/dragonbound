@@ -6,6 +6,10 @@ Part of the design plan; the index and the current direction are in [DESIGN_DECI
 
 - **Characters** come after the castle and stay blocky and modular. The work is on branch `art/character-polish` (stages A–D, plus part of the first critique round). Re-create its worktree from that branch to continue.
 
+## October 4
+
+- **No leg shows through a skirt any more** (in the game, awaiting Mitchell's verdict). At the end of each stride the thigh pushed through the chain and leather skirts (up to about 8 cm; more when hit or swinging a sword while stepping), and through the tunic and every other armour skirt too. Now, like a LEGO minifigure, the legs hinge under the hips at the tunic's hem, the tops of the thighs rounded inside it, and everything below the belt (the tunic's skirt, every armour's skirt and its flaps, tassets and tabard) stays level with the legs while the body leans over it; a sword swing turns the whole hero. The skirts keep their approved looks: their tops round up under the belt, the leather flaps and the plate's tassets start a little up behind the belt and the tabard a little over it, so no gap opens as the belt moves, and the legs swing a touch further and step a touch quicker, so the stride covers the same ground. Under armour the tunic's skirt and belt come off (their hem used to peek out under the leather, chain and Wyrmbone). Checked for every outfit through the whole stride, hurt and in every attack (`skirtcheck.py`). The goblin's loincloth and the kobold's hips still let a thigh through (their own models, not changed here); these are the hips the shared minifigure body (below) can carry to every humanoid, so no robe or skirt lets a leg through.
+
 ## October 3
 
 - **Characters, enemies and NPCs are not locked** (October 3): "we could improve the designs we have too". They stay blocky and modular; the concept sheets are fresh takes to improve on.

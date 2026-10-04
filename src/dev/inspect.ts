@@ -142,8 +142,8 @@ export async function runInspect(g: Game, suites: string) {
     // `approved:fit` runs one half).
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
-    // The redesigned characters close up and at the play camera (explicit only: `characters`).
-    if (suites.split(',').includes('characters')) await (await import('./charactersInspect')).charactersSuite(g, shot);
+    // The redesigned characters close up and at the play camera; the hero's skirts mid-stride (explicit only: `characters`, `skirts`).
+    for (const s of (['characters', 'skirts'] as const).filter((n) => suites.split(',').includes(n))) await (await import('./charactersInspect'))[`${s}Suite`](g, shot);
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).

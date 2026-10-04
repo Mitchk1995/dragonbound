@@ -9,6 +9,9 @@ import { HeroDresser, makeModel } from '../render/registry';
 import type { Slot } from '../types';
 import { Studio, equip, fit } from './inspect';
 
+/** The hero's tunic and armour skirts mid-stride (explicit suite: `skirts`). */
+export { skirtsSuite } from './skirtsInspect';
+
 type Shot = (n: string) => Promise<void>;
 
 const LOOK = { name: '', skin: 1, hair: 1, hairColor: 1, beard: 0, cloth: 0, cloth2: 5 };
