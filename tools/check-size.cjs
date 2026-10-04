@@ -25,7 +25,6 @@ const ALLOWED = {
   'src/world/castle/keepModel.ts': 781,
   'src/world/castleProps/bailey.ts': 980,
   'src/world/castleProps/curtain.ts': 914,
-  'src/world/terrain.ts': 1003,
   'tests/castle-geometry.test.ts': 879,
   'tools/blender/_common.py': 728,
   'tools/blender/gear.py': 1079,
