@@ -272,19 +272,33 @@ async function spells(g: Game, c: Clock) {
   await cast(g, c, 'chain-lightning', 'apprentice_staff', 'E', () => landed(g), [0.02, 0.08, 0.16]);
 }
 
-/** The fireball bursting against the cliff or wall nearest north of the clearing, the hero four short of it. */
+/**
+ * The fireball bursting against a wall of Emberdeep Mine: the wall nearest its entry with open floor seven cells
+ * wide for six in front of it (so nothing stands between it and the camera), the hero four short of it.
+ */
 async function fireballOnWall(g: Game, c: Clock) {
-  const p = arena(g, 'apprentice_staff', 0), L = g.zone.layout, mid = openGround(g);
+  const p = arena(g, 'apprentice_staff', 0);
+  g.travel('mine', true);
+  for (const e of g.zone.enemies) {
+    e.dead = true;
+    e.obj.removeFromParent();
+  }
+  g.zone.enemies = [];
+  const L = g.zone.layout, e0 = L.entry;
+  const open = (x: number, z: number) => x >= 0 && z >= 0 && x < L.w && z < L.h && L.cells[z * L.w + x] === Cell.Ground;
   let wall: { x: number; z: number } | null = null, bd = Infinity;
   for (let z = 0; z < L.h; z++) for (let x = 0; x < L.w; x++) {
-    const cell = L.cells[z * L.w + x], d = Math.hypot(x + 0.5 - mid.x, z + 0.5 - mid.z);
-    if ((cell !== Cell.Cliff && cell !== Cell.Wall) || z + 0.5 > mid.z || d >= bd) continue;
+    const cell = L.cells[z * L.w + x], d = Math.hypot(x - e0.x, z - e0.z);
+    if ((cell !== Cell.Cliff && cell !== Cell.Wall) || d >= bd) continue;
+    let clear = true;
+    for (let dz = 1; dz <= 6 && clear; dz++) for (let dx = -3; dx <= 3; dx++) if (!open(x + dx, z + dz)) clear = false;
+    if (!clear) continue;
     bd = d;
     wall = { x: x + 0.5, z: z + 0.5 };
   }
   if (!wall) return;
-  const k = 4 / bd, hx = wall.x + (mid.x - wall.x) * k, hz = wall.z + (mid.z - wall.z) * k;
-  p.pos.set(hx, g.zone.groundY(hx, hz), hz);
+  p.pos.set(wall.x, g.zone.groundY(wall.x, wall.z + 4), wall.z + 4);
+  p.stop();
   g.camPos.copy(p.pos);
   g.hovered = null;
   g.ground.set(wall.x, 0, wall.z);
