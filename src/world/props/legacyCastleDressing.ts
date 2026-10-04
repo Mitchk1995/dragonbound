@@ -9,7 +9,8 @@ import { cb } from './core';
 import { archPane, archRing, archShape } from './legacyCastleArches';
 import { DRESS, GILT, HERALD_BLUE, IRON, SLATE_BLUE, WOOD_D } from './palette';
 
-// The castle's and the buildings' trim (base courses, spires, friezes, quoins, lancets, window glass and the lord's cloth).
+// The castle's and the buildings' trim (base courses, spires, friezes, quoins, lancets, window glass and the lord's cloth),
+// and the shapes its statues and fountains are built of (limb, round, ball, drum).
 // Legacy: replaced by the modular kit (src/world/kit) and deleted with the old building code.
 
 /** The castle's base course: two courses of its walling's own stone, standing a hand proud round every foot. */
