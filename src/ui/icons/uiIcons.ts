@@ -1,22 +1,9 @@
 /** Icons for the interface itself, the faint empty-equipment-slot silhouettes, and the fallback rune. */
 import { amuletPart, bodyPart, bootPart, glovesPart, helmPart, ringPart, scrollSheet, shieldPart, swordPart } from './parts';
-import { C, E, HI, HOLE, OUT, P, R, gearD, hiFill, hiStroke, line, polar, spark, spiralD, star4, wavyD, type Draw } from './pen';
+import { C, E, HI, HOLE, OUT, P, R, hiFill, hiStroke, line, polar, spark, spiralD, star4, wavyD, type Draw } from './pen';
 
 export const UI_ICONS: Record<string, Draw> = {
   // ------------------------------------------------ UI
-  bag: (c) =>
-    P('M13 24 Q13 17 20 17 H44 Q51 17 51 24 V54 Q51 60 45 60 H19 Q13 60 13 54 Z', c.f('leather')) +
-    c.hl(hiStroke('M16.5 26 V51', 2.2, 0.35)) +
-    P('M19 43 H45 V53 Q45 57 41 57 H23 Q19 57 19 53 Z', c.f('leather', 'v')) +
-    c.hl(`<path d="M22 46.5 H42" fill="none" stroke="#e8cf8f" stroke-width="1.1" stroke-dasharray="2 2" opacity=".7"/>`) +
-    P('M13 25 Q13 19 20 19 H44 Q51 19 51 25 V35 Q32 42 13 35 Z', c.f('redLeather', 'v')) +
-    c.hl(`<path d="M16 34 Q32 40.5 48 34" fill="none" stroke="#e8cf8f" stroke-width="1.1" stroke-dasharray="2 2" opacity=".7"/>`) +
-    R(9, 6, 46, 12, 6, c.f('bone', 'v')) +
-    c.hl(line('M20 7 V17 M44 7 V17', '#8a5530', 3)) +
-    c.hl(hiStroke('M14 9.5 H30', 1.6, 0.8)) +
-    R(27.5, 33, 9, 10, 2, c.f('gold')) +
-    c.hl(R(30.5, 36, 3, 4, 0.8, `fill="${HOLE}" stroke="none"`)),
-
   skills: (c) =>
     scrollSheet(c) +
     c.hl(line('M20 21 H44 M20 27 H40 M20 33 H44 M20 39 H36', '#8a6a44', 2)) +
@@ -42,45 +29,6 @@ export const UI_ICONS: Record<string, Draw> = {
     c.hl(P('M31 24 L35 30 L31 36 L27 30 Z', `fill="#7e2a1b" stroke="none"`)) +
     c.hl(hiStroke('M18 10 H36', 1.6, 0.4)) +
     P('M38 55 V63 L41.5 60 L45 63 V55 Z', c.f('gold', 'v')),
-
-  collection: (c) =>
-    P('M3 20 V55 Q18 51 32 57 Q46 51 61 55 V20 Z', c.f('redLeather', 'v')) +
-    P('M32 17 Q19 10 5 14 V50 Q19 46 32 53 Z', c.f('bone', 'h')) +
-    P('M32 17 Q45 10 59 14 V50 Q45 46 32 53 Z', c.f('bone', 'v')) +
-    c.hl(line('M5 50 Q19 46 32 53 Q45 46 59 50', '#b8a47c', 1)) +
-    c.hl(line('M10 22 Q18 19 27 22 M10 28 Q18 25 27 28 M10 34 Q18 31 27 34 M10 40 Q17 37.5 24 40', '#8a6a44', 1.6)) +
-    P('M45.5 21 L52 30 L45.5 40 L39 30 Z', c.f('arcane')) +
-    c.hl(hiFill('M45.5 23.5 L41.5 30 H45.5 Z', 0.8)) +
-    c.hl(line('M32 17 V53', '#8a7a5a', 1.4)) +
-    P('M30.5 52 V62 L32.5 60 L34.5 62 V52 Z', c.f('gold', 'v')),
-
-  keep: (c) =>
-    c.rod('M32 17 V3', '#6b4426', 1.8) +
-    P('M33 3.5 L47 7 L33 11 Z', c.f('blood')) +
-    P('M16 25 H48 L50 58 H14 Z', c.f('stone')) +
-    P('M11 15 H19 V19 H24.5 V15 H39.5 V19 H45 V15 H53 V26 H11 Z', c.f('stone', 'v')) +
-    c.hl(line('M16 32 H48.4 M15.6 40 H48.9 M15.2 48 H49.4 M24 25 V32 M40 25 V32 M32 32 V40 M22 40 V48 M42 40 V48', '#4a453d', 1.2, 0.7)) +
-    c.hl(hiFill('M13 16.5 H17.5 V24.5 H13 Z', 0.4)) +
-    P('M25 58 V48 Q32 39 39 48 V58 Z', c.f('wood', 'v')) +
-    c.hl(line('M32 44 V58', '#2b170a', 1.2)) +
-    R(29.5, 30, 5, 8, 2.5, c.solid(HOLE)) +
-    R(10, 57, 44, 5, 2, c.f('stone', 'v')),
-
-  settings: (c) =>
-    P(gearD(32, 32, 8, 28.5, 22, 0), c.f('iron')) +
-    c.hl(hiStroke('M14 22 Q19 13 29 10.5', 2, 0.6)) +
-    C(32, 32, 12.5, c.f('gold')) +
-    C(32, 32, 5.5, c.solid(HOLE)) +
-    c.hl(hiStroke('M23.5 29 Q25 23.5 30 22', 1.6, 0.7)),
-
-  help: (c) =>
-    shieldPart(
-      c,
-      'arcane',
-      c.rod('M24.5 23 Q24.5 15.5 32 15.5 Q39.5 15.5 39.5 22.5 Q39.5 27.5 32 30.5 V35', '#e8c46a', 4.4) +
-        c.hl(line('M25.5 21 Q27 17 31 16.8', '#fff3c4', 1.2)) +
-        C(32, 43, 3.4, c.f('gold')),
-    ),
 
   potion: (c) => {
     const body = 'M27 11 V23.7 A18 18 0 1 0 37 23.7 V11 Z';

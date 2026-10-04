@@ -1,6 +1,6 @@
 import type { Item } from '../types';
 import { swapSlots } from '../ui/hudLayout';
-import { frames, type Audit, type Probe } from './approvedProbe';
+import { drawnText, frames, type Audit, type Probe } from './approvedProbe';
 
 /**
  * Last in the approved-artwork UI run (see approvedInspect.ts), so the capture numbers before them stay: the third
@@ -29,10 +29,10 @@ export async function inventoryPanel(c: Probe, inventory: Record<string, Audit>,
     return { bubbles: true, button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
   };
   const sp = side()!;
-  panel.title = sp.querySelector('.stitle')?.textContent;
+  panel.title = drawnText(sp.querySelector('.stitle'));
   panel.tabs = sp.querySelectorAll('.stab').length;
   panel.slots = slots().length;
-  panel.foot = [...sp.querySelectorAll('.invfoot > *')].map((e) => e.textContent?.trim());
+  panel.foot = [...sp.querySelectorAll('.invfoot > *')].map(drawnText);
   if (panel.title !== 'Inventory') bad(`titled ${panel.title}`);
   if (panel.tabs !== 6) bad(`${panel.tabs} tabs`);
   if (panel.slots !== 28 || g.save.inventory.length !== 28) bad(`${panel.slots} slots for ${g.save.inventory.length} items`);
@@ -103,7 +103,7 @@ export async function inventoryPanel(c: Probe, inventory: Record<string, Audit>,
   for (const [name, open, hint] of [['bank', () => ui.openBank(false), 'Click to deposit'], ['shop', () => ui.openShop(), 'Click to sell']] as const) {
     open();
     await frames(2);
-    const foot = [...document.querySelectorAll('.sidepanel .invfoot > *')].map((e) => e.textContent?.trim());
+    const foot = [...document.querySelectorAll('.sidepanel .invfoot > *')].map(drawnText);
     panel[name] = foot;
     if (foot.join('|') !== `${hint}|Sort`) bad(`${name} footer shows [${foot.join(', ')}]`);
     closeWindows();
