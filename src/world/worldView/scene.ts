@@ -73,8 +73,8 @@ export function createScene(layout: ZoneLayout, theme: ZoneTheme, seed: number, 
   };
   /** A tree at (x, z) (on the ground, or standing at `y`); with `keep` false its draws are made but it is left out. */
   const addTree = (x: number, z: number, scale = 1, y?: number, kind = speciesAt(x, z), keep = true) => {
-    // (Grown trees vary less in size: they are true to size.)
-    const g = grownAt(x, z, kind), look = g ? GROWN[g].look : undefined, [lo, hi] = look?.size ?? [0.8, 1.4];
+    // (Grown trees vary less in size: they are true to size. So does a grown dead ash.)
+    const g = grownAt(x, z, kind), look = g ? GROWN[g].look : kind === 'ash' ? ts.grown?.ash.look : undefined, [lo, hi] = look?.size ?? [0.8, 1.4];
     const sc = (lo + rng() * (hi - lo)) * scale;
     if (y === undefined) p.set(x + (rng() - 0.5) * 0.3, heightAt(x, z) - 0.05, z + (rng() - 0.5) * 0.3);
     else p.set(x, y - 0.05, z);
