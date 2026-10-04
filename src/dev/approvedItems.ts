@@ -2,7 +2,7 @@ import { BASES, TIERS, TIER_ORDER, UNIQUES, pieceId, type TierId } from '../data
 import { makeItem } from '../loot/itemGen';
 import type { Item, Slot } from '../types';
 import { itemArtUrl } from '../ui/approvedArt';
-import { BOWS_STAVES, EQUIPMENT, JEWELLERY, LEATHER, MATERIAL_SAMPLE, UNIQUE_IDS, fileOf, frames, make, tier, unique, type Audit, type Probe } from './approvedProbe';
+import { BOWS_STAVES, EQUIPMENT, JEWELLERY, LEATHER, MATERIAL_SAMPLE, UNIQUE_IDS, drawnText, fileOf, frames, make, tier, unique, type Audit, type Probe } from './approvedProbe';
 import { equip } from './inspect';
 
 /**
@@ -161,7 +161,7 @@ export async function itemWindows(c: Probe) {
     await frames(2);
     checks.anvil = await audit('anvil', document.querySelector('#panel-craft'));
     for (const t of TIER_ORDER) {
-      [...document.querySelectorAll<HTMLElement>('#panel-craft .rg-title')].find((x) => x.textContent === TIERS[t].name)?.scrollIntoView({ block: 'start' });
+      [...document.querySelectorAll<HTMLElement>('#panel-craft .rg-title')].find((x) => drawnText(x).toLowerCase() === TIERS[t].name.toLowerCase())?.scrollIntoView({ block: 'start' });
       await frames(1);
       await next(`anvil-${t}`);
     }

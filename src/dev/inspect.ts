@@ -23,7 +23,8 @@ import type { Slot } from '../types';
  * trees:grown:<kind> for one grown kind's progress pictures, trees:roots for their roots and crowns), approved (approved artwork, see approvedInspect.ts),
  * digits (painted damage numbers, see digitsInspect.ts), font (the painted alphabets, see fontInspect.ts),
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
- * charactersInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), lightfx (the
+ * charactersInspect.ts; skirts: the hero's skirts mid-stride; bow: the bow in his hands, measured; minifig: the shared
+ * minifigure body, see minifigInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), lightfx (the
  * lighting effects one at a time, see lightFxInspect.ts), dragons (the drakeling and Cinderwing, see dragonInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
@@ -145,12 +146,10 @@ export async function runInspect(g: Game, suites: string) {
     // Approved artwork and the Steel Platebody's fit (explicit: `approved`, or one half: `approved:ui`, `approved:fit`).
     const approvedArg = suites.split(',').find((s) => s === 'approved' || s.startsWith('approved:'));
     if (approvedArg) report.approved = await (await import('./approvedInspect')).approvedSuite(g, shot, approvedArg.slice(9) as 'ui' | 'fit' | '');
-    // The redesigned characters close up and at the play camera; the hero's skirts mid-stride; the bow in his hands (explicit only: `characters`, `skirts`, `bow`).
-    // The bow suite also returns its measurements, taken in the running game.
-    for (const s of (['characters', 'skirts', 'bow'] as const).filter((n) => suites.split(',').includes(n))) {
-      const measured = await (await import('./charactersInspect'))[`${s}Suite`](g, shot);
-      if (measured) report[s] = measured;
-    }
+    // The redesigned characters close up and at the play camera, the hero's skirts mid-stride, the bow in his hands (its
+    // measurements, taken in the running game, go in the report) and the minifigure body (explicit only: `characters`,
+    // `skirts`, `bow`, `minifig` or `minifig:<tag>`).
+    if (/(^|,)(characters|skirts|bow|minifig(:[^,]*)?)(,|$)/.test(suites)) Object.assign(report, await (await import('./charactersInspect')).characterSuites(g, shot, suites));
     const kitArg = suites.split(',').find((s) => s === 'kit' || s.startsWith('kit:')); // the building kit's house (kitInspect.ts)
     if (kitArg) report.kit = await (await import('./kitInspect')).kitSuite(g, shot, kitArg.split(':').slice(1).join(':').split('+'));
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).

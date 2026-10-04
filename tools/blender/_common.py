@@ -68,7 +68,7 @@ def metallic(color):
     return mat(c(color), metal=True)
 
 
-# ─── Role materials (recoloured at runtime, see docs/ART_CONTRACT.md) ─────────
+# ─── Role materials (recoloured at runtime, see docs/ART_NAMES.md) ────────────
 # Neutral placeholder colours; the game replaces them per skin tone / cloth dye / gear tier.
 ROLE_COLORS = {
     'skin': 0xE0AC84, 'hair': 0x5A3A22, 'cloth': 0x3A6EA5, 'clothDark': 0x1F3F66, 'cloth2': 0x4B4B58, 'leather': 0x6A4428,
@@ -179,19 +179,19 @@ def box(parent, size, pos, color, rot=(0, 0, 0), bevel=0.025, emissive=None, str
     return _mesh_obj(bm, parent, pos, rot, color, emissive, strength)
 
 
-def union(base, *others):
-    """Fuse meshes into `base` as one closed solid (exact boolean union), removing the others: one part, one painted
-    tone, no seams or buried faces between the pieces."""
+def union(base, *others, colours=False):
+    """Fuse meshes into `base` as one closed solid (exact boolean union), removing the others: one part, no seams or
+    buried faces between the pieces, in one painted tone or, with `colours`, each piece keeping its own. Each piece's
+    faces keep their shading."""
     bpy.context.view_layer.update()
     for o in others:
         m = base.modifiers.new('union', 'BOOLEAN')
         m.operation = 'UNION'
         m.solver = 'EXACT'
+        m.material_mode = 'TRANSFER' if colours else 'INDEX'
         m.object = o
     dg = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(base.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
-    for p in me.polygons:
-        p.use_smooth = False
     old = [base.data] + [o.data for o in others]
     base.modifiers.clear()
     base.data = me

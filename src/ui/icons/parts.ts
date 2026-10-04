@@ -43,10 +43,6 @@ function arrowPart(c: Pen, fletch: Tone = 'blood'): string {
   );
 }
 
-/** Arrow placed with its nock at (nx,ny) pointing at angle deg. */
-export const arrowAt = (c: Pen, nx: number, ny: number, deg: number, s: number, fletch: Tone = 'blood') =>
-  c.at(nx, ny, deg, s, 7, 32) + arrowPart(c, fletch) + '</g>';
-
 /** Recurve bow, belly facing left; arrow pointing right when drawn. */
 export function bowPart(c: Pen, drawn: boolean): string {
   const limb = 'M38 5 Q50 7 53 20 Q56 32 53 44 Q50 57 38 59';

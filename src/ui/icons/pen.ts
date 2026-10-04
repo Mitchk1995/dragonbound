@@ -8,17 +8,15 @@ export const GHOST = '#cdbb95';
 export const GHOST_SW = 2.4;
 
 export type Tone =
-  | 'iron' | 'gold' | 'ember' | 'blood' | 'arcane' | 'poison' | 'wood' | 'bone'
-  | 'leather' | 'stone' | 'violet' | 'cloud' | 'spark' | 'darkIron' | 'redLeather';
+  | 'iron' | 'gold' | 'blood' | 'poison' | 'wood' | 'bone'
+  | 'leather' | 'stone' | 'violet' | 'darkIron' | 'redLeather';
 
 /** [lit, mid, shadow] */
 const TONE: Record<Tone, [string, string, string]> = {
   iron: ['#b9c2cc', '#8d959f', '#5f6670'],
   darkIron: ['#8d959f', '#646b75', '#41464d'],
   gold: ['#f3d98a', '#d8b25a', '#a07a30'],
-  ember: ['#ffd070', '#ffb040', '#ff7a1a'],
   blood: ['#d9503a', '#b02a1a', '#6e1409'],
-  arcane: ['#bfe0ff', '#5a9cff', '#2c5fc4'],
   poison: ['#a8e27e', '#6cc24a', '#3b7d27'],
   wood: ['#9a6a42', '#6b4426', '#482b17'],
   bone: ['#fbf6ea', '#eee4cc', '#c9b893'],
@@ -26,8 +24,6 @@ const TONE: Record<Tone, [string, string, string]> = {
   redLeather: ['#a8412c', '#7e2a1b', '#521509'],
   stone: ['#aea896', '#827b6c', '#57524a'],
   violet: ['#e2bcff', '#a45ee0', '#62279a'],
-  cloud: ['#a7afc0', '#6f788c', '#454c5d'],
-  spark: ['#ffffff', '#fff3a8', '#f3cd5a'],
 };
 
 export const HI = '#fffaf0'; // highlight colour
@@ -102,18 +98,6 @@ export class Pen {
           `</radialGradient>`,
       );
     }
-    return `fill="url(#${id})"`;
-  }
-
-  /** Free-form linear gradient fill attribute from explicit stops (objectBoundingBox coords). */
-  lin(stops: [number, string, number?][], x1 = 0, y1 = 0, x2 = 1, y2 = 1): string {
-    if (this.ghost) return '';
-    const id = this.id();
-    this.defs.push(
-      `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">` +
-        stops.map(([o, c, a]) => `<stop offset="${o}" stop-color="${c}"${a === undefined ? '' : ` stop-opacity="${a}"`}/>`).join('') +
-        `</linearGradient>`,
-    );
     return `fill="url(#${id})"`;
   }
 
@@ -198,19 +182,6 @@ export function star4(cx: number, cy: number, r: number, ri = r * 0.26): string 
 export const spark = (c: Pen, cx: number, cy: number, r: number, fill = '#fff6d0') =>
   c.hl(P(star4(cx, cy, r), `fill="${fill}" stroke-width="${r > 5 ? 2 : 1.6}"`));
 
-export function gearD(cx: number, cy: number, teeth: number, ro: number, ri: number, hole: number): string {
-  const step = 360 / teeth;
-  const list: [number, number][] = [];
-  for (let i = 0; i < teeth; i++) {
-    const a = i * step - 90;
-    list.push(polar(cx, cy, ri, a - step * 0.3));
-    list.push(polar(cx, cy, ro, a - step * 0.17));
-    list.push(polar(cx, cy, ro, a + step * 0.17));
-    list.push(polar(cx, cy, ri, a + step * 0.3));
-  }
-  return pts(list) + ` M${cx + hole} ${cy} A${hole} ${hole} 0 1 0 ${cx - hole} ${cy} A${hole} ${hole} 0 1 0 ${cx + hole} ${cy} Z`;
-}
-
 export function wavyD(cx: number, cy: number, r: number, bumps: number, amp: number): string {
   const list: [number, number][] = [];
   for (let i = 0; i < 96; i++) {
@@ -229,24 +200,4 @@ export function spiralD(cx: number, cy: number, r0: number, r1: number, turns: n
     out.push(`${i ? 'L' : 'M'}${n2(x)} ${n2(y)}`);
   }
   return out.join(' ');
-}
-
-/** Clockwise arc arrow (screen angles, degrees). */
-export function arcArrow(c: Pen, cx: number, cy: number, r: number, a0: number, a1: number, w: number, tone: Tone): string {
-  const [sx, sy] = polar(cx, cy, r, a0);
-  const [ex, ey] = polar(cx, cy, r, a1);
-  const large = a1 - a0 > 180 ? 1 : 0;
-  const d = `M${n2(sx)} ${n2(sy)} A${r} ${r} 0 ${large} 1 ${n2(ex)} ${n2(ey)}`;
-  const t: [number, number] = [-Math.sin(rad(a1)), Math.cos(rad(a1))];
-  const nv: [number, number] = [Math.cos(rad(a1)), Math.sin(rad(a1))];
-  const hw = w * 1.25;
-  const tip: [number, number] = [ex + t[0] * w * 1.5, ey + t[1] * w * 1.5];
-  const b1: [number, number] = [ex + nv[0] * hw - t[0], ey + nv[1] * hw - t[1]];
-  const b2: [number, number] = [ex - nv[0] * hw - t[0], ey - nv[1] * hw - t[1]];
-  const [l, m] = TONE[tone];
-  return (
-    c.rod(d, m, w) +
-    c.hl(`<path d="${d}" fill="none" stroke="${l}" stroke-width="${n2(w * 0.3)}" opacity=".9" transform="translate(-0.8 -0.8)"/>`) +
-    P(pts([b1, tip, b2]), c.solid(m))
-  );
 }

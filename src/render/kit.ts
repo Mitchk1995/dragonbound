@@ -34,7 +34,7 @@ export const PAL = {
 
 /**
  * Role colours: pass these instead of a hex colour and the material is named ROLE_<role>,
- * so the game can recolour it (appearance, gear tier palettes). See docs/ART_CONTRACT.md.
+ * so the game can recolour it (appearance, gear tier palettes). See docs/ART_NAMES.md.
  */
 const ROLE_NAMES = ['skin', 'hair', 'cloth', 'cloth2', 'leather', 'metal', 'trim', 'dark', 'glow'] as const;
 export const ROLE = { skin: -1, hair: -2, cloth: -3, cloth2: -4, leather: -5, metal: -6, trim: -7, dark: -8, glow: -9 } as const;

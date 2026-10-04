@@ -38,6 +38,23 @@ export const frames = async (n: number) => {
 };
 export const fileOf = (src: string | null | undefined) => (src ? src.split('/').pop()! : null);
 
+/**
+ * The words an element shows. Game text is painted (ui/uiText.ts): each run of words becomes a `.ptext` element of
+ * glyph images that keeps its words only in its aria-label, so `textContent` would read just the spaces between
+ * them. Text the painter leaves alone (an unpainted run, a field) is read as it is.
+ */
+export function drawnText(el: Element | null | undefined): string {
+  if (!el) return '';
+  const out: string[] = [];
+  const walk = (n: Node) => {
+    if (n instanceof Element && n.classList.contains('ptext')) out.push(` ${n.getAttribute('aria-label') ?? ''} `);
+    else if (n.nodeType === Node.TEXT_NODE) out.push((n as Text).data);
+    else n.childNodes.forEach(walk);
+  };
+  walk(el);
+  return out.join('').replace(/\s+/g, ' ').trim();
+}
+
 export const unique = (id: string): Item => generateUnique(Math.random, id, 20);
 export const make = (id: string): Item => (id === 'iron_platebody' ? makeMasterwork(Math.random, id, 99) : { ...makeItem(id), ...(RARITY[id] ? { rarity: RARITY[id] } : {}) });
 
@@ -147,7 +164,7 @@ export function createProbe(g: Game, shot: Shot) {
       slotArt: fileOf(c?.querySelector('img.art')?.getAttribute('src')),
       routed: it ? fileOf(itemArtUrl(it)) : undefined,
       visible: !!c && getComputedStyle(tip).display !== 'none' && tip.offsetWidth > 0,
-      lines: [...tip.children].map((d) => d.textContent?.trim()).filter(Boolean),
+      lines: [...tip.children].map(drawnText).filter(Boolean),
     };
     if (!r.visible) problems.push(`tooltip ${label}: not shown`);
     if (!it) problems.push(`tooltip ${label}: hovered slot holds no item`);

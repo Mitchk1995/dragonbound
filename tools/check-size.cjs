@@ -19,7 +19,6 @@ const ALLOWED = {
   'docs/CASTLE_DESIGN.md': 29410,
   'src/dev/inspect.ts': 1181,
   'src/render/masonry.ts': 655,
-  'src/ui/panels.ts': 653,
   'src/world/buildingModel.ts': 2387,
   'src/world/castle/keepModel.ts': 781,
   'src/world/castleProps/bailey.ts': 980,

@@ -493,9 +493,8 @@ svg { display: block; }
 }
 .modechip { font-family: var(--serif); font-size: 11px; letter-spacing: 1px; color: #1a1006; background: linear-gradient(#3a2c14, #1c1408); border: 1px solid #b08a44; border-radius: 8px; padding: 0 8px; box-shadow: 0 1px 2px #000; --ptint: 255 220 90; }
 
-/* Equipment: an OSRS paper doll, then the numbers. */
 /* Equipment: an OSRS paper doll. The body column (helm, body, boots) runs down the middle; jewellery flanks
-   the neck and weapon/gloves the hands, half a row lower, over a figure and rails (panels.ts DOLL_FIG). */
+   the neck and weapon/gloves the hands, half a row lower, over a figure and rails (ui/panels/equipment.ts DOLL_FIG). */
 .doll {
   --c: var(--slot); --gx: 16px; --gy: 16px; --pad: 8px; --row: calc(var(--c) + var(--gy));
   position: relative; margin: 2px auto 10px;
