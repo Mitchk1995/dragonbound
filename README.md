@@ -42,11 +42,12 @@ npm run review -- castle --base  # labelled before/after review sheets of an are
 - `src/data/`: **all content and tuning**: items and tiers, recipes, ores, enemies, drops, zones, quests, diary, keep restorations, shop.
 - `src/systems/`: combat, items (inventory, bank, shop), progression, skilling (tick-based), story (tutorial, quests, diary, restorations, dialogue), fx.
 - `src/world/`: zone runtime (one fresh instance per portal trip), layouts, nav grid, world view, props.
-- `src/world/brick/`: the brick kit buildings are built from (elements at the hero's scale, placing on the grid, running bond, instanced drawing) and the first hub-town house.
+- `src/world/kit/`: the building kit buildings are built from (pieces on one grid at the hero's scale: dressed stone, timber, plaster, tiles, openings, furniture; placing, running bond, textured instanced drawing) and the first hub-town house, the bakery.
 - `src/render/`: model registry (GLB loading, gear attachment, role recolouring), rig animation, 3D item icons.
 - `src/ui/`: HUD, panels, title and character creation, tooltip, stone and iron kit, SVG icons.
 - `tools/blender/`: every model is a script; see [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
 - `tools/bark_textures.py`: turns sourced bark images into the grown trees' tileable bark maps in `public/textures/bark/` (sources listed in its `LICENSES.md`).
+- `tools/kit_textures.py`: turns sourced painted surfaces and plant sprays into the building kit's texture strips and plant atlas in `public/textures/kit/` (sources listed in its `LICENSES.md`).
 
 ## Docs
 

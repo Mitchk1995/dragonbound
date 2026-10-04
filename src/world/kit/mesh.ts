@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { LDU } from './scale';
 
 /**
- * Geometry for the brick elements, built in LDU and handed to three.js in metres: bevelled prisms
- * (a profile drawn in a plane and pushed straight through it, every edge chamfered) and bevelled
- * turned shapes. A chamfer is shaded from one face's normal to the next, so each edge catches the
- * light like the slightly rounded edge of a moulded part, while the faces themselves stay flat.
+ * Geometry for the kit's pieces, built in kit units: bevelled prisms (a profile drawn in a plane and
+ * pushed straight through it, every edge chamfered) and bevelled turned shapes. A chamfer is shaded
+ * from one face's normal to the next, so each edge catches the light like a dressed or planed edge,
+ * while the faces themselves stay flat. Every vertex also carries the stone, tile or board it
+ * belongs to within its piece (`sub`, so each shows its own face of the texture) and a shade.
  */
 
 export type V2 = readonly [number, number];
@@ -13,7 +13,7 @@ export type V2 = readonly [number, number];
 /**
  * A closed profile. `smooth[i]` shades across point i (a curve); `round[i]` marks edge i (from point
  * i to i + 1) as a chamfer, shaded from the edge before it to the edge after it; `group[i]` puts
- * edge i's faces in another mesh (a slope's textured face).
+ * edge i's faces in another mesh.
  */
 export interface Ring {
   pts: V2[];
@@ -24,19 +24,31 @@ export interface Ring {
 
 const v3 = new THREE.Vector3(), w3 = new THREE.Vector3(), u3 = new THREE.Vector3();
 
-/** A triangle mesh under construction, in LDU. */
+/** A triangle mesh under construction, in kit units. */
 export class Mesh3 {
   readonly pos: number[] = [];
   readonly nor: number[] = [];
   readonly idx: number[] = [];
+  /** Which stone, tile or board of its piece each vertex belongs to. */
+  readonly sub: number[] = [];
+  /** A shade on each vertex (1 lit as is; less where the face sits in a recess). */
+  readonly shade: number[] = [];
+  /** Texture coordinates, where a shape carries its own (a plant's cards). */
+  readonly uv: number[] = [];
 
   get empty() {
     return this.idx.length === 0;
   }
 
+  get count() {
+    return this.pos.length / 3;
+  }
+
   vert(x: number, y: number, z: number, nx: number, ny: number, nz: number) {
     this.pos.push(x, y, z);
     this.nor.push(nx, ny, nz);
+    this.sub.push(0);
+    this.shade.push(1);
     return this.pos.length / 3 - 1;
   }
 
@@ -74,6 +86,9 @@ export class Mesh3 {
       this.pos.push(v3.x, v3.y, v3.z);
       this.nor.push(w3.x, w3.y, w3.z);
     }
+    this.sub.push(...o.sub);
+    this.shade.push(...o.shade);
+    this.uv.push(...o.uv);
     for (const i of o.idx) this.idx.push(base + i);
     return this;
   }
@@ -83,7 +98,24 @@ export class Mesh3 {
     return new Mesh3().add(this, m);
   }
 
-  /** The bounds in LDU: [min, max]. */
+  /** Marks every vertex as stone, tile or board `k` of its piece. */
+  tag(k: number) {
+    this.sub.fill(k);
+    return this;
+  }
+
+  /** Multiplies the shade of the vertices `which` picks (by position and normal) by `f`. */
+  darken(f: number, which: (p: THREE.Vector3, n: THREE.Vector3) => boolean = () => true) {
+    const p = new THREE.Vector3(), n = new THREE.Vector3();
+    for (let i = 0; i < this.shade.length; i++) {
+      p.fromArray(this.pos, i * 3);
+      n.fromArray(this.nor, i * 3);
+      if (which(p, n)) this.shade[i] *= f;
+    }
+    return this;
+  }
+
+  /** The bounds in kit units: [min, max]. */
   bounds(): [THREE.Vector3, THREE.Vector3] {
     const lo = new THREE.Vector3(Infinity, Infinity, Infinity), hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
     for (let i = 0; i < this.pos.length; i += 3) {
@@ -93,22 +125,11 @@ export class Mesh3 {
     }
     return [lo, hi];
   }
-
-  /** In metres, for three.js. */
-  geometry(): THREE.BufferGeometry {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos.map((v) => v * LDU), 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setIndex(this.idx);
-    g.computeBoundingSphere();
-    g.computeBoundingBox();
-    return g;
-  }
 }
 
 // ─── Profiles ───────────────────────────────────────────────────────────────
 
-const sub = (a: V2, b: V2): V2 => [a[0] - b[0], a[1] - b[1]];
+const sub2 = (a: V2, b: V2): V2 => [a[0] - b[0], a[1] - b[1]];
 const len = (a: V2) => Math.hypot(a[0], a[1]);
 const norm = (a: V2): V2 => {
   const l = len(a) || 1;
@@ -118,7 +139,7 @@ const norm = (a: V2): V2 => {
 const edgeNormal = (a: V2, b: V2): V2 => norm([b[1] - a[1], a[0] - b[0]]);
 
 /** Signed area (positive when counter-clockwise). */
-export function area(pts: V2[]) {
+export function area(pts: readonly V2[]) {
   let s = 0;
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i], b = pts[(i + 1) % pts.length];
@@ -132,21 +153,23 @@ export function area(pts: V2[]) {
  * along both its edges (a chamfer, shaded round), gentler turns are left as smooth curve points.
  * `groups` gives each original edge's mesh group.
  */
-export function ring(poly: V2[], bevel: number, groups?: number[], curve = 0.36): Ring {
+export function ring(poly: readonly V2[], bevel: number, groups?: number[], curve = 0.36): Ring {
   const n = poly.length, out: Ring = { pts: [], smooth: [], round: [], group: [] };
   const turn = (i: number) => {
-    const a = norm(sub(poly[i], poly[(i - 1 + n) % n])), b = norm(sub(poly[(i + 1) % n], poly[i]));
+    const a = norm(sub2(poly[i], poly[(i - 1 + n) % n])), b = norm(sub2(poly[(i + 1) % n], poly[i]));
     return Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1])));
   };
   for (let i = 0; i < n; i++) {
     const p = poly[i], prev = poly[(i - 1 + n) % n], next = poly[(i + 1) % n];
     const g = groups?.[i] ?? 0;
-    if (bevel > 0 && turn(i) > curve) {
-      // (A quarter of a short edge at most from each end, so enough of it is left for the cap's own
-      // bevel to inset without turning it inside out: a 33° slope's toe is only 2 LDU.)
-      const lp = len(sub(p, prev)), ln = len(sub(next, p));
-      const cp = Math.min(bevel, lp * 0.25), cn = Math.min(bevel, ln * 0.25);
-      const dp = norm(sub(prev, p)), dn = norm(sub(next, p));
+    const t = turn(i);
+    if (bevel > 0 && t > curve) {
+      // (The sharper the corner, the longer its chamfer, so the cap's own bevel can inset it without
+      // turning it inside out; a quarter of a short edge at most from each end.)
+      const lp = len(sub2(p, prev)), ln = len(sub2(next, p));
+      const c = bevel * Math.max(1, (1.15 * Math.tan(t / 4)) / Math.max(0.05, Math.cos(t / 2)));
+      const cp = Math.min(c, lp * 0.25), cn = Math.min(c, ln * 0.25);
+      const dp = norm(sub2(prev, p)), dn = norm(sub2(next, p));
       out.pts.push([p[0] + dp[0] * cp, p[1] + dp[1] * cp], [p[0] + dn[0] * cn, p[1] + dn[1] * cn]);
       out.smooth.push(false, false);
       out.round.push(true, false);
@@ -173,6 +196,26 @@ function orient(r: Ring, ccw: boolean): Ring {
   };
 }
 
+/**
+ * The deepest bevel a ring's caps can be inset by: an edge shortens by the bevel times tan(half the
+ * turn) at each corner where the solid is convex. (The prism winds every ring with the solid on its
+ * left, so those are the corners turning left; a corner turning right lengthens its edges.)
+ */
+function maxBevel(r: Ring): number {
+  const n = r.pts.length;
+  const halfTan = (i: number) => {
+    const a = norm(sub2(r.pts[i], r.pts[(i - 1 + n) % n])), b = norm(sub2(r.pts[(i + 1) % n], r.pts[i]));
+    const cross = a[0] * b[1] - a[1] * b[0], cos = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1]));
+    return cross > 0 ? Math.tan(Math.min(Math.acos(cos), 3) / 2) : 0;
+  };
+  let best = Infinity;
+  for (let i = 0; i < n; i++) {
+    const shrink = halfTan(i) + halfTan((i + 1) % n);
+    if (shrink > 1e-6) best = Math.min(best, (len(sub2(r.pts[(i + 1) % n], r.pts[i])) * 0.9) / shrink);
+  }
+  return best;
+}
+
 /** A rectangle [x0, x1] × [y0, y1], counter-clockwise. */
 export const rect = (x0: number, y0: number, x1: number, y1: number): V2[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
 
@@ -188,7 +231,7 @@ export function arc(cx: number, cy: number, rx: number, ry: number, a0: number, 
 
 // ─── Prisms ─────────────────────────────────────────────────────────────────
 
-/** How a prism's profile plane and its depth lie in the element: the profile in x–y, in z–y, or flat in x–z. */
+/** How a prism's profile plane and its depth lie in the piece: the profile in x–y, in z–y, or flat in x–z. */
 export type Axis = 'z' | 'x' | 'y';
 
 const AXES: Record<Axis, THREE.Matrix4> = {
@@ -205,12 +248,14 @@ const AXES: Record<Axis, THREE.Matrix4> = {
  * its plane, every edge bevelled by `bevel`. Returns one mesh per group (group 0 first), laid along
  * `axis` and moved by `at` (the middle of its depth).
  */
-export function prism(outer: Ring, holes: Ring[], depth: number, bevel: number, axis: Axis = 'z', at: [number, number, number] = [0, 0, 0]): Mesh3[] {
+export function prism(outer: Ring, holes: Ring[], depth: number, bevelAsked: number, axis: Axis = 'z', at: [number, number, number] = [0, 0, 0]): Mesh3[] {
   const meshes: Mesh3[] = [];
   const mesh = (g: number) => (meshes[g] ??= new Mesh3());
   const rings = [orient(outer, true), ...holes.map((h) => orient(h, false))];
+  // (No deeper than the shortest edge allows: insetting the caps must never fold an edge over.)
+  const bevel = Math.min(bevelAsked, depth * 0.3, ...rings.map(maxBevel));
   const h = depth / 2 - bevel, H = depth / 2;
-  const inset: V2[][] = [];
+  const insetPts: V2[][] = [];
   const facing = new THREE.Vector3();
   for (const r of rings) {
     const n = r.pts.length;
@@ -226,7 +271,7 @@ export function prism(outer: Ring, holes: Ring[], depth: number, bevel: number, 
       const k = bevel / Math.max(0.35, m[0] * at(i)[0] + m[1] * at(i)[1]);
       return [p[0] - m[0] * k, p[1] - m[1] * k];
     });
-    inset.push(q);
+    insetPts.push(q);
     for (let i = 0; i < n; i++) {
       const M = mesh(r.group[i]);
       const a = r.pts[i], b = r.pts[(i + 1) % n], sa = startN(i), sb = endN(i);
@@ -245,8 +290,8 @@ export function prism(outer: Ring, holes: Ring[], depth: number, bevel: number, 
     }
   }
   // The two caps.
-  const contour = inset[0].map((p) => new THREE.Vector2(p[0], p[1]));
-  const holeVs = inset.slice(1).map((r) => r.map((p) => new THREE.Vector2(p[0], p[1])));
+  const contour = insetPts[0].map((p) => new THREE.Vector2(p[0], p[1]));
+  const holeVs = insetPts.slice(1).map((r) => r.map((p) => new THREE.Vector2(p[0], p[1])));
   const faces = THREE.ShapeUtils.triangulateShape(contour, holeVs);
   const all = [...contour, ...holeVs.flat()];
   const M = mesh(0);
@@ -260,10 +305,16 @@ export function prism(outer: Ring, holes: Ring[], depth: number, bevel: number, 
   return Array.from(meshes, (x) => (x ? x.moved(m) : new Mesh3()));
 }
 
-/** A bevelled box from (x0, y0, z0) to (x1, y1, z1), in LDU. */
+/** A bevelled box from (x0, y0, z0) to (x1, y1, z1), in kit units. */
 export function box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, bevel: number): Mesh3 {
   const b = Math.min(bevel, (x1 - x0) * 0.3, (y1 - y0) * 0.3, (z1 - z0) * 0.3);
   return prism(ring(rect(x0, y0, x1, y1), b), [], z1 - z0, b, 'z', [0, 0, (z0 + z1) / 2])[0];
+}
+
+/** A bevelled slab cut to a convex outline `poly` in the x–y plane, from z0 to z1. */
+export function slab(poly: readonly V2[], z0: number, z1: number, bevel: number, axis: Axis = 'z'): Mesh3 {
+  const at: [number, number, number] = axis === 'z' ? [0, 0, (z0 + z1) / 2] : axis === 'x' ? [(z0 + z1) / 2, 0, 0] : [0, (z0 + z1) / 2, 0];
+  return prism(ring(poly, bevel), [], z1 - z0, bevel, axis, at)[0];
 }
 
 // ─── Turned shapes ──────────────────────────────────────────────────────────
@@ -280,9 +331,9 @@ export interface Turn {
 
 /**
  * A shape turned about the vertical: `profile` runs from the bottom up the outside (radius ≥ 0),
- * `seg` faces round. `at` is its centre at the foot.
+ * `seg` faces round. `at` is its centre at the foot; `squash` scales it across (x, z).
  */
-export function turned(profile: Turn[], seg: number, at: [number, number, number] = [0, 0, 0]): Mesh3 {
+export function turned(profile: Turn[], seg: number, at: [number, number, number] = [0, 0, 0], squash: [number, number] = [1, 1]): Mesh3 {
   const M = new Mesh3();
   const n = profile.length;
   const en: V2[] = [];
@@ -292,6 +343,7 @@ export function turned(profile: Turn[], seg: number, at: [number, number, number
   }
   const avg = (a: V2, b: V2) => norm([a[0] + b[0], a[1] + b[1]]);
   const facing = new THREE.Vector3();
+  const [sx, sz] = squash;
   for (let i = 0; i + 1 < n; i++) {
     const a = profile[i], b = profile[i + 1];
     const prev = en[i - 1] ?? en[i], next = en[i + 1] ?? en[i];
@@ -300,8 +352,9 @@ export function turned(profile: Turn[], seg: number, at: [number, number, number
     const ring0: number[] = [], ring1: number[] = [];
     for (let j = 0; j <= seg; j++) {
       const t = (j / seg) * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
-      ring0.push(M.vert(at[0] + a.r * c, at[1] + a.y, at[2] + a.r * s, na[0] * c, na[1], na[0] * s));
-      ring1.push(M.vert(at[0] + b.r * c, at[1] + b.y, at[2] + b.r * s, nb[0] * c, nb[1], nb[0] * s));
+      const n0 = new THREE.Vector3(na[0] * c / sx, na[1], na[0] * s / sz).normalize(), n1 = new THREE.Vector3(nb[0] * c / sx, nb[1], nb[0] * s / sz).normalize();
+      ring0.push(M.vert(at[0] + a.r * c * sx, at[1] + a.y, at[2] + a.r * s * sz, n0.x, n0.y, n0.z));
+      ring1.push(M.vert(at[0] + b.r * c * sx, at[1] + b.y, at[2] + b.r * s * sz, n1.x, n1.y, n1.z));
     }
     for (let j = 0; j < seg; j++) {
       const t = ((j + 0.5) / seg) * Math.PI * 2;
@@ -314,7 +367,7 @@ export function turned(profile: Turn[], seg: number, at: [number, number, number
   return M;
 }
 
-/** A bevelled cylinder standing on (x, y, z): radius r, height h, its top (and its foot, if `foot`) edge bevelled. */
+/** A bevelled cylinder standing on `at`: radius r, height h, its top (and its foot, if `foot`) edge bevelled. */
 export function cylinder(r: number, h: number, bevel: number, seg: number, at: [number, number, number] = [0, 0, 0], foot = true): Mesh3 {
   const b = Math.min(bevel, r * 0.3, h * 0.3);
   const p: Turn[] = b <= 0
@@ -331,3 +384,4 @@ export function join(...parts: Mesh3[]): Mesh3 {
   for (const p of parts) out.add(p);
   return out;
 }
+

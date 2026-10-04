@@ -151,8 +151,8 @@ export async function runInspect(g: Game, suites: string) {
       const measured = await (await import('./charactersInspect'))[`${s}Suite`](g, shot);
       if (measured) report[s] = measured;
     }
-    const brickArg = suites.split(',').find((s) => s === 'brick' || s.startsWith('brick:')); // the brick kit's house (brickInspect.ts)
-    if (brickArg) report.brick = await (await import('./brickInspect')).brickSuite(g, shot, brickArg.split(':').slice(1).join(':').split('+'));
+    const kitArg = suites.split(',').find((s) => s === 'kit' || s.startsWith('kit:')); // the building kit's house (kitInspect.ts)
+    if (kitArg) report.kit = await (await import('./kitInspect')).kitSuite(g, shot, kitArg.split(':').slice(1).join(':').split('+'));
     // The drakeling and Cinderwing against their concept sheets (explicit only: `dragons`).
     if (suites.split(',').includes('dragons')) await (await import('./dragonInspect')).dragonSuite(g, shot);
     // The painted damage numbers floating in the real game (explicit only: `digits`).
