@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MeshBasicNodeMaterial, MeshLambertNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, type Node, type NodeBuilder, type Renderer, type TextureNode } from 'three/webgpu';
 import { cameraViewMatrix, float, Fn, negateOnBackSide, normalViewGeometry, diffuseColor, instancedBufferAttribute, mat3, mat4, materialEmissive, materialReference, materialRoughness, modelNormalMatrix, modelWorldMatrix, normalGeometry, normalLocal, OnBeforeFrameUpdate, positionGeometry, positionLocal, positionPrevious, positionWorld, texture, varying, vec2, vec3 } from 'three/tsl';
+import { freeInstanceBuffersWithMeshes } from './instanceBuffers';
 
 /**
  * Composable material patches in the node shading language (TSL).
@@ -344,7 +345,11 @@ const PATCHED: [string, NodeMaterialClass][] = [
   ['MeshBasicMaterial', patchedClass(MeshBasicNodeMaterial)],
 ];
 
-/** Let a renderer run patches: its node twins of the plain material types become the patched ones. */
+/**
+ * Let a renderer run patches: its node twins of the plain material types become the patched ones. An
+ * instanced mesh's per-instance buffers (the patches' among them) are freed with it.
+ */
 export function installPatchedMaterials(renderer: Renderer) {
   for (const [type, cls] of PATCHED) renderer.library.materialNodes.set(type, cls as never);
+  freeInstanceBuffersWithMeshes(renderer);
 }
