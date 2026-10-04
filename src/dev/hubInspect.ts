@@ -17,8 +17,6 @@ import { houseColour } from './kitStreet';
 
 type Shot = (name: string) => Promise<void>;
 const PLANS: Record<string, () => HubPlan> = { a: planA, b: planB, c: planC };
-/** What the options leave drawn, freed once the last is captured. */
-interface Done { overlays: THREE.Object3D[]; houses: KitView[] }
 
 /**
  * The hub town's three layout options (explicit suite: `hub`, or `hub:a+c` for some), each on a lot
@@ -34,17 +32,11 @@ export async function hubSuite(g: Game, shot: Shot, suites: string) {
   g.debug.timeScale = 0;
   g.player.stop();
   const bakery = buildBakery(), out: Record<string, unknown> = {};
-  // (Each option's drawings are taken out of the scene when it is done but freed only at the end: every
-  // option's street of kit houses shares the kit's attribute buffers, and freeing one view destroys the
-  // buffers the next option's view draws from.)
-  const done: Done = { overlays: [], houses: [] };
   const unknown = only.filter((id) => !PLANS[id]);
   if (unknown.length) throw new Error(`hub suite: no layout option ${unknown.join(', ')} (there are ${Object.keys(PLANS).join(', ')})`);
   try {
-    for (const id of only.length ? only : Object.keys(PLANS)) out[id] = await option(g, shot, PLANS[id](), bakery, done);
+    for (const id of only.length ? only : Object.keys(PLANS)) out[id] = await option(g, shot, PLANS[id](), bakery);
   } finally {
-    for (const o of done.overlays) disposeOverlay(o);
-    for (const v of done.houses) v.dispose();
     document.body.classList.remove('inspect-clean');
     g.debug.timeScale = 1;
     g.travel('keep', true);
@@ -52,10 +44,11 @@ export async function hubSuite(g: Game, shot: Shot, suites: string) {
   return out;
 }
 
-async function option(g: Game, shot: Shot, plan: HubPlan, bakery: ReturnType<typeof buildBakery>, done: Done) {
+async function option(g: Game, shot: Shot, plan: HubPlan, bakery: ReturnType<typeof buildBakery>) {
   const zone: ZoneDef = { id: `hub-${plan.id}`, name: plan.name, kind: 'hub', arch: 0xffffff, build: () => plan.layout, theme: { ...ZONES.keep.theme } };
   ZONES[zone.id] = zone;
   const added: THREE.Object3D[] = [];
+  let houses: KitView | null = null;
   try {
     g.travel(zone.id, true);
     await new Promise((r) => setTimeout(r, 500));
@@ -72,8 +65,7 @@ async function option(g: Game, shot: Shot, plan: HubPlan, bakery: ReturnType<typ
         .multiply(new THREE.Matrix4().makeRotationY((TURN[face] * Math.PI) / 2))
         .multiply(new THREE.Matrix4().makeTranslation(-HOUSE_CELLS.mid.x * CELL, 0, -HOUSE_CELLS.mid.z * CELL));
     });
-    const houses = new KitView(bakery, copies);
-    done.houses.push(houses);
+    houses = new KitView(bakery, copies);
     houses.recolor((p, k) => houseColour(p.color, k));
     add(houses.group);
 
@@ -102,10 +94,9 @@ async function option(g: Game, shot: Shot, plan: HubPlan, bakery: ReturnType<typ
     await free(g, shot, `hub-${plan.id}-4-street`, new THREE.Vector3(eye.x, floor(eye.x, eye.z) + 1.7, eye.z), new THREE.Vector3(look.x, floor(look.x, look.z) + look.y, look.z), 55);
     return { houses: plan.houses.length, rockTop: +rockTop.toFixed(2), walks: timed.map((w) => `${w.from}-${w.to} ${w.seconds} s (${w.metres} m)`) };
   } finally {
-    for (const o of added) {
-      o.removeFromParent();
-      if (!done.houses.some((v) => v.group === o)) done.overlays.push(o);
-    }
+    // (The street of houses frees only what it alone owns: the next option's street draws on undisturbed.)
+    houses?.dispose();
+    for (const o of added) if (o !== houses?.group) disposeOverlay(o);
     delete ZONES[zone.id];
   }
 }
