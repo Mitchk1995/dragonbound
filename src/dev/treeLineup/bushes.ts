@@ -3,7 +3,7 @@ import type { Game } from '../../game';
 import { GROWN, GROWN_KINDS, grownTrees, TREE_STYLE, treeSet, type GrownStandIn } from '../../world/trees';
 import { OCCLUDE } from '../../world/worldView';
 import { WIND } from '../../world/worldView/materials';
-import { frames, freeShot, gameplayCamera, hideEnemies, measure, openField, overlay, plantTree, restore, sheetShot, standHero, zoneShot, type SheetView, type Shot } from './stage';
+import { frames, freeShot, gameplayCamera, labelUnder, meadowStage, measure, overlay, plantTree, restore, sheetShot, standHero, zoneShot, type SheetView, type Shot } from './stage';
 
 /** One shape of a grown stand-in (the dead ash, a bush) as instanced meshes with its own materials, as the world draws it. */
 function standIn(part: GrownStandIn, v: number, at: THREE.Matrix4, color: number) {
@@ -48,7 +48,7 @@ function standing(g: Game) {
  * (out from under the trees' crowns) among its trees: open walkable ground out from under any crown,
  * the camera drawn back a little.
  */
-export function woodSpot(g: Game, ashWeight: number) {
+function woodSpot(g: Game, ashWeight: number) {
   const s = standing(g), L = g.zone.layout;
   const clear = (p: THREE.Vector3, d = 0) => s.tree.every((t) => Math.hypot(t.x - p.x, t.z - p.z) > (t.r ?? 4) + d);
   const open = s.bush.filter((p) => clear(p, 0.3));
@@ -62,6 +62,23 @@ export function woodSpot(g: Game, ashWeight: number) {
     if (score > best.score) best = { x: x + 0.5, z: z + 0.5, zoom: 1.2, score };
   }
   return { ...best, ash: seen(s.ash, best.x, best.z), bushes: seen(open, best.x, best.z) };
+}
+
+/**
+ * The Foothills' mixed wood and the dead wood of Cinderwing's lair as they ship, through the gameplay
+ * camera at the spot showing most dead ash and bushes (`<name>-foothills`, `<name>-lair`), with each
+ * view's frame cost and spot in `out`; `then` runs at each spot after its view.
+ */
+export async function woodViews(g: Game, shot: Shot, name: string, out: Record<string, unknown>, then?: (zone: string, spot: ReturnType<typeof woodSpot>) => Promise<void>) {
+  for (const [zone, weight] of [['foothills', 4], ['lair', 2]] as const) {
+    TREE_STYLE.value = 'natural';
+    g.travel(zone, true);
+    await frames(20);
+    const spot = woodSpot(g, weight);
+    out[`${zone}Spot`] = spot;
+    out[zone] = await zoneShot(g, shot, zone, 'natural', spot, `${name}-${zone}`, true);
+    await then?.(zone, spot);
+  }
 }
 
 /**
@@ -108,16 +125,7 @@ export async function bushesSuite(g: Game, shot: Shot, opts: string[] = []) {
   try {
     TREE_STYLE.value = 'natural';
     const grown = treeSet('natural').grown!, { ash, bush } = grown;
-    g.travel('foothills', true);
-    await frames(20);
-    hideEnemies(g);
-    g.debug.timeScale = 0;
-    document.body.classList.add('inspect-clean');
-    g.zone.group.traverse((o) => {
-      if (o.name === 'tree' || o.name === 'bush') o.visible = false;
-    });
-    g.zone.group.add(stage);
-    const c = openField(g, 12), hAt = g.zone.view.heightAt;
+    const c = await meadowStage(g, stage), hAt = g.zone.view.heightAt;
     if (opts.includes('angles')) {
       await anglesSuite(g, shot, stage, c, grown);
       return out;
@@ -135,15 +143,8 @@ export async function bushesSuite(g: Game, shot: Shot, opts: string[] = []) {
       return false;
     };
     await frames(3);
-    // (Labels large enough to read on a review sheet, centred under what they name.)
     const ov = overlay();
-    const label = (text: string, p: THREE.Vector3, dz: number) => {
-      const q = p.clone().add(new THREE.Vector3(0, 0, dz)).project(g.camera), l = document.createElement('div');
-      l.className = 'lbl';
-      l.textContent = text;
-      Object.assign(l.style, { left: `${((q.x + 1) / 2) * innerWidth}px`, top: `${((1 - q.y) / 2) * innerHeight}px`, transform: 'translateX(-50%)', font: "700 22px 'Alegreya Sans', sans-serif" });
-      ov.el.appendChild(l);
-    };
+    const label = (text: string, p: THREE.Vector3, dz: number) => labelUnder(g, ov.el, text, p, dz);
     label('oak', oak, 2.5);
     label('common tree', tree, 2);
     ashes.forEach((p, v) => label(`dead ash ${v + 1}`, p, 3));
@@ -167,15 +168,9 @@ export async function bushesSuite(g: Game, shot: Shot, opts: string[] = []) {
     await freeShot(g, shot, 'dead-ash-close', aLook.clone().add(new THREE.Vector3(6.5, 1.0, 13)), aLook, 16);
     stage.clear();
 
-    // The woods as they ship, through the gameplay camera, with what the view costs; and what it
-    // cost with the block dead ash and bushes (measured only).
-    for (const [zone, weight] of [['foothills', 4], ['lair', 2]] as const) {
-      TREE_STYLE.value = 'natural';
-      g.travel(zone, true);
-      await frames(20);
-      const spot = woodSpot(g, weight);
-      out[`${zone}Spot`] = spot;
-      out[zone] = await zoneShot(g, shot, zone, 'natural', spot, `bushes-wood-${zone}`, true);
+    // The woods as they ship, with what each view costs; and what it cost with the block dead ash
+    // and bushes (measured only).
+    await woodViews(g, shot, 'bushes-wood', out, async (zone, spot) => {
       const set = treeSet('natural');
       delete set.grown;
       try {
@@ -183,7 +178,7 @@ export async function bushesSuite(g: Game, shot: Shot, opts: string[] = []) {
       } finally {
         set.grown = grown;
       }
-    }
+    });
   } finally {
     restore(g, stage, shipped);
   }

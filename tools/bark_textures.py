@@ -7,7 +7,7 @@ For each bark: the colour image is made to tile (a minimum-error cut through an 
 large-scale light and stains are evened out so no stripe repeats round a trunk, and it is toned to the
 bark's colour in the game's warm light. The normal map (OpenGL convention, green up) is drawn from the
 colour's shading: the dark furrows deep, the light plates raised. A photographed bark is cut from its photo
-(`crop`, true to its scale on the trunk), cleared of knots and other marks that would repeat round a trunk by
+(`crop`, kept in its own proportions), cleared of knots and other marks that would repeat round a trunk by
 covering each with bark from elsewhere in the photo (`patch`), and draws its relief from the photo's own
 height map (`height`), cut and cleared with it.
 
@@ -51,7 +51,8 @@ BARKS = {
     # Magic: pale silver-blue, smooth flowing ridges with fine glowing veins (most of its own hue kept).
     'magic': dict(color=CODEX / 'bark' / 'bark-magic.png', mean=(176, 184, 196), contrast=0.9, overlap=96, depth=2.2, hue=0.85),
     # The dead ash's bark: grey-brown, narrow ridges interlacing round long furrows (Poly Haven's Bark Brown 02, a
-    # metre of trunk photographed: 0.4 m round by 0.6 m up cut from it, its knots and a white speck covered).
+    # metre of trunk photographed: 0.4 m round by 0.6 m up cut from it, its knots and a white speck covered; once
+    # tiled, about 0.35 by 0.53 m of bark, which the dead ash wears about 1.7 times as large).
     'ash': dict(color=SRC / 'bark_brown_02_diff_1k.jpg', height=SRC / 'bark_brown_02_disp_1k.jpg', crop=(215, 0, 615, 600),
                 patch=[(305, 262, 34, 0, 170), (168, 272, 44, 0, 190), (360, 570, 9, 0, -40)],
                 mean=(96, 94, 90), contrast=0.85, overlap=96, depth=5.0, hue=0.12),
@@ -173,6 +174,12 @@ def normal_map(h, depth):
     return n * 0.5 + 0.5
 
 
+def low_pass(a, sigma):
+    """A Gaussian blur of a single-channel image that does not wrap round: its edges are mirrored out first."""
+    p = int(3 * sigma)
+    return blur(np.pad(a, p, mode='reflect'), sigma)[p:-p, p:-p]
+
+
 def patched(img, x, y, r, dx, dy):
     """Cover a disc of radius r at (x, y) with the image shifted by (dx, dy), feathered over the disc's outer third."""
     yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
@@ -195,12 +202,16 @@ def bark_source(b):
     # (A photograph: its height cut, cleared and made to tile with its colour; only its height's relief is kept,
     # not the trunk's own curve and lean, so a patch of bark carried elsewhere sits at the height round it.)
     height = np.asarray(Image.open(b['height']).convert('L')).astype(np.float64) / 255.0
-    img = np.dstack([src, height - blur(height, 24) + height.mean()])
     x0, y0, x1, y1 = b['crop']
-    img = img[y0:y1, x0:x1]
+    src, height = src[y0:y1, x0:x1], height[y0:y1, x0:x1]
+    img = np.dstack([src, height - low_pass(height, 24) + height.mean()])
     for x, y, r, dx, dy in b.get('patch', []):
         img = patched(img, x, y, r, dx, dy)
-    img = np.clip(resized(make_tile(img, int(b['overlap'] * img.shape[0] / SIZE)), SIZE), 0, 1)
+    # (Cut each way in proportion to its sides, so the tile keeps the crop's proportions.)
+    cut = int(b['overlap'] * img.shape[0] / SIZE)
+    img = tile_x(img, round(cut * img.shape[1] / img.shape[0]))
+    img = tile_x(img.transpose(1, 0, 2), cut).transpose(1, 0, 2)
+    img = np.clip(resized(img, SIZE), 0, 1)
     return img[..., :3], img[..., 3]
 
 

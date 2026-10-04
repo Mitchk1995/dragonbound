@@ -37,6 +37,32 @@ export function overlay() {
   return { el, label };
 }
 
+/** A label on an overlay, large enough to read on a review sheet, centred under `p` (moved `dz` m toward the camera). */
+export function labelUnder(g: Game, el: HTMLElement, text: string, p: THREE.Vector3, dz: number) {
+  const q = p.clone().add(new THREE.Vector3(0, 0, dz)).project(g.camera), l = document.createElement('div');
+  l.className = 'lbl';
+  l.textContent = text;
+  Object.assign(l.style, { left: `${((q.x + 1) / 2) * innerWidth}px`, top: `${((1 - q.y) / 2) * innerHeight}px`, transform: 'translateX(-50%)', font: "700 22px 'Alegreya Sans', sans-serif" });
+  el.appendChild(l);
+}
+
+/**
+ * The Foothills meadow as a bare stage: its enemies gone, time stopped, the interface hidden and the
+ * zone's own trees and bushes hidden, `stage` added to it. Returns an open, flat stretch of its grass.
+ */
+export async function meadowStage(g: Game, stage: THREE.Group) {
+  g.travel('foothills', true);
+  await frames(20);
+  hideEnemies(g);
+  g.debug.timeScale = 0;
+  document.body.classList.add('inspect-clean');
+  g.zone.group.traverse((o) => {
+    if (o.name === 'tree' || o.name === 'bush') o.visible = false;
+  });
+  g.zone.group.add(stage);
+  return openField(g, 12);
+}
+
 /** Gameplay camera framing a point (game.ts updateCamera), with the sun and fill placed the same way. */
 export function gameplayCamera(g: Game, x: number, y: number, z: number, zoom = 1) {
   g.camera.position.set(x, y + 21 * zoom, z + 14 * zoom);

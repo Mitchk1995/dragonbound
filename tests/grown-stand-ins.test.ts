@@ -135,6 +135,15 @@ describe('the dead ash', () => {
       // Each snapped limb's tallest splinter reaches the limb's end (0); the rest of its break lies short of its foot (1).
       expect(tips).toBeGreaterThanOrEqual(sk.limbs.filter((L) => L.broken !== undefined).length);
       expect(breaks).toBeGreaterThan(tips);
+      // A limb that never snapped reads as far from any break, to its tip.
+      const pos = wood.getAttribute('position'), whole = sk.limbs.filter((L) => L.broken === undefined);
+      expect(whole.length).toBeGreaterThan(0);
+      for (const L of whole) {
+        const tip = L.path[L.path.length - 1];
+        const at = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.hypot(pos.getX(i) - tip.x, pos.getY(i) - tip.y, pos.getZ(i) - tip.z) < 1e-5);
+        expect(at.length).toBeGreaterThan(0);
+        for (const i of at) expect(dead.getW(i)).toBe(99);
+      }
     }
     // A living tree's wood and a bush's carry none.
     expect(woodGeometry(growTree(OAK, 1)).getAttribute('aDead')).toBeUndefined();

@@ -147,7 +147,9 @@ export function grownBark(mat: THREE.MeshStandardMaterial, wind: WindClock, look
  * patches run up the limbs, against how far gone the bark is there: little near the foot, more up
  * the trunk, most on the thin branches and round a break. A finer noise tears its edge. The bark's
  * torn edge shows its paler inner bark; the wood just past it, where the bark held on longest, is
- * stained darker. A break's splintered end is pale, fibrous wood.
+ * stained darker. A break's splintered end is pale, fibrous wood. (Over a collar the branch's and its
+ * parent's distances from their breaks blend, so a branch leaving a limb just under its break is a
+ * little bare at its foot too.)
  */
 function deadBark(u: UniformReader, b: NodeBuilder, uv: V2, wood: V4, bark: V3, dead: DeadWood) {
   const maps = barkFor(dead.wood);

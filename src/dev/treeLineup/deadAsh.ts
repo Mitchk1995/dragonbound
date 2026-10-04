@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import type { Game } from '../../game';
 import { GROWN, TREE_STYLE, treeSet } from '../../world/trees';
 import { OCCLUDE } from '../../world/worldView';
-import { plant, woodSpot } from './bushes';
-import { frames, freeShot, gameplayCamera, hideEnemies, measure, openField, overlay, plantTree, restore, standHero, zoneShot, type Shot } from './stage';
+import { plant, woodViews } from './bushes';
+import { frames, freeShot, gameplayCamera, labelUnder, meadowStage, measure, overlay, plantTree, restore, standHero, type Shot } from './stage';
 
 /**
  * The dead ash's bark and bare wood (`trees:ash`), in the Foothills meadow with its own trees and
@@ -23,16 +23,7 @@ export async function deadAshSuite(g: Game, shot: Shot) {
   try {
     TREE_STYLE.value = 'natural';
     const { ash } = treeSet('natural').grown!;
-    g.travel('foothills', true);
-    await frames(20);
-    hideEnemies(g);
-    g.debug.timeScale = 0;
-    document.body.classList.add('inspect-clean');
-    g.zone.group.traverse((o) => {
-      if (o.name === 'tree' || o.name === 'bush') o.visible = false;
-    });
-    g.zone.group.add(stage);
-    const c = openField(g, 12), hAt = g.zone.view.heightAt;
+    const c = await meadowStage(g, stage), hAt = g.zone.view.heightAt;
     const oak = plantTree(g, stage, 'oak', c.x - 12, c.z - 3, 0, 2.2, GROWN.oak.look.palette[0]).pos;
     const tree = plantTree(g, stage, 'tree', c.x - 4, c.z - 3.5, 1, 0.6, GROWN.tree.look.palette[0]).pos;
     const yaws = [0.8, 2.9, 5.0];
@@ -45,13 +36,7 @@ export async function deadAshSuite(g: Game, shot: Shot) {
     };
     await frames(3);
     const ov = overlay();
-    const label = (text: string, p: THREE.Vector3, dz: number) => {
-      const q = p.clone().add(new THREE.Vector3(0, 0, dz)).project(g.camera), l = document.createElement('div');
-      l.className = 'lbl';
-      l.textContent = text;
-      Object.assign(l.style, { left: `${((q.x + 1) / 2) * innerWidth}px`, top: `${((1 - q.y) / 2) * innerHeight}px`, transform: 'translateX(-50%)', font: "700 22px 'Alegreya Sans', sans-serif" });
-      ov.el.appendChild(l);
-    };
+    const label = (text: string, p: THREE.Vector3, dz: number) => labelUnder(g, ov.el, text, p, dz);
     label('oak', oak, 2.5);
     label('common tree', tree, 2);
     ashes.forEach((p, v) => label(`dead ash ${v + 1}`, p, 3));
@@ -85,15 +70,8 @@ export async function deadAshSuite(g: Game, shot: Shot) {
     await freeShot(g, shot, 'ash-bark-beside-oak', rLook.clone().add(new THREE.Vector3(0.6, 0.2, 9.5)), rLook, 10);
     stage.clear();
 
-    // The woods as they ship, through the gameplay camera, with what the view costs.
-    for (const [zone, weight] of [['foothills', 4], ['lair', 2]] as const) {
-      TREE_STYLE.value = 'natural';
-      g.travel(zone, true);
-      await frames(20);
-      const spot = woodSpot(g, weight);
-      out[`${zone}Spot`] = spot;
-      out[zone] = await zoneShot(g, shot, zone, 'natural', spot, `ash-wood-${zone}`, true);
-    }
+    // The woods as they ship, through the gameplay camera, with what each view costs.
+    await woodViews(g, shot, 'ash-wood', out);
   } finally {
     restore(g, stage, shipped);
   }
