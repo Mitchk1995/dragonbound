@@ -161,10 +161,10 @@ def ring_cage(rings):
     """Half a cloth cage (x >= 0) from rings (see MANTLE_RINGS), each run from its rim round MANTLE_AROUND (or its own
     angles) to the back's centre line with MANTLE_FOLDS pressed into it."""
     rows = []
-    for ring in rings:
-        yf, ys, yb, a, zf, zb, rim, fold = ring[:8]
+    for spec in rings:
+        yf, ys, yb, a, zf, zb, rim, fold = spec[:8]
         row = [rim]
-        for deg, f in zip(ring[8] if len(ring) > 8 else MANTLE_AROUND, MANTLE_FOLDS):
+        for deg, f in zip(spec[8] if len(spec) > 8 else MANTLE_AROUND, MANTLE_FOLDS):
             t = math.radians(deg)
             x, z = a * ssin(t, 3.0), (zf if deg <= 90 else -zb) * scos(t, 3.0)
             y = yf + (ys - yf) * math.sin(t) ** 2 if deg <= 90 else ys + (yb - ys) * math.sin(t - PI / 2) ** 2
@@ -242,20 +242,19 @@ HORN_R = (0.07, 0.066, 0.056, 0.043, 0.027, 0.0)
 def iron_mask(fig):
     """Her head: the masked casque and its horns, fused into one shape that keeps each part's colour (by_colour)."""
     h = fig['sock_head']
-    iron, dark = IRON, IRON_DK
-    casque = box(h, (0.48, 0.47, 0.48), (0, 0.005, -0.01), iron, taper=(0.8, 0.8), bevel=0.11)
+    casque = box(h, (0.48, 0.47, 0.48), (0, 0.005, -0.01), IRON, taper=(0.8, 0.8), bevel=0.11)
     # The mask in two halves meeting in a ridge down its middle, each turned back a little, framed in gold.
     for s in (-1, 1):
         half = MASK_HALF if s > 0 else [(-x, y) for x, y in reversed(MASK_HALF)]
         side = pivot(h, 'mask', (0, 0, 0.27), (0, s * 0.24, 0))
         prism(side, [(x * 1.07, y * 1.05 + 0.004) for x, y in half], 0.035, (0, 0, -0.012), GOLD, bevel=0.008)
-        m = prism(side, half, 0.05, (0, 0, 0.0), dark, bevel=0.01)
-        cut(m, box(side, (0.15, 0.05, 0.12), (s * 0.125, 0.04, 0.0), dark, rot=(0, 0, s * 0.36), bevel=0))
+        m = prism(side, half, 0.05, (0, 0, 0.0), IRON_DK, bevel=0.01)
+        cut(m, box(side, (0.15, 0.05, 0.12), (s * 0.125, 0.04, 0.0), IRON_DK, rot=(0, 0, s * 0.36), bevel=0))
         box(side, (0.16, 0.06, 0.024), (s * 0.125, 0.04, 0.0), EMBER_EYE, emissive=EMBER_EYE, strength=2.2,
             rot=(0, 0, s * 0.36), bevel=0)                                        # embers in the slit, before the gold
-        beam(side, (s * 0.25, 0.16, 0.03), (s * 0.02, 0.095, 0.035), 0.07, dark, d=0.05, w1=0.05)       # the brow
-        beam(side, (s * 0.24, -0.04, 0.025), (s * 0.08, -0.15, 0.03), 0.045, dark, d=0.035, w1=0.03)    # the cheekbone
-    beam(h, (0, 0.1, 0.305), (0, -0.08, 0.315), 0.06, dark, d=0.045, w1=0.035, d1=0.03)             # the nose ridge
+        beam(side, (s * 0.25, 0.16, 0.03), (s * 0.02, 0.095, 0.035), 0.07, IRON_DK, d=0.05, w1=0.05)     # the brow
+        beam(side, (s * 0.24, -0.04, 0.025), (s * 0.08, -0.15, 0.03), 0.045, IRON_DK, d=0.035, w1=0.03)  # cheekbone
+    beam(h, (0, 0.1, 0.305), (0, -0.08, 0.315), 0.06, IRON_DK, d=0.045, w1=0.035, d1=0.03)           # nose ridge
     for x in (-0.06, 0.0, 0.06):   # a grille of dark slots over the mouth
         box(h, (0.028, 0.07, 0.02), (x, -0.165, 0.297 - abs(x) * 0.25), 0x141216, bevel=0)
     for s in (-1, 1):   # dark horns out of the casque's temples, gold collars round their roots
@@ -294,7 +293,10 @@ def mantle(fig):
                     **MANTLE_STAND)
     cape = cloth.place(body, m['shell'], ROBE)
     runs = m['edges']
-    hem = next(i for i, (kind, _) in enumerate(runs) if kind == 'hem')
+    hems = [i for i, (kind, _) in enumerate(runs) if kind == 'hem']
+    if len(hems) != 1:
+        raise RuntimeError(f'the mantle\'s open edge should have one hem, not {len(hems)}: is its cage right?')
+    hem = hems[0]
     edge = []
     for _, path in runs[hem + 1:] + runs[:hem]:
         edge += path[1:] if edge else path            # each run starts where the one before it ends

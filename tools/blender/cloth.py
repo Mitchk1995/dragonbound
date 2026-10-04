@@ -6,8 +6,8 @@ game's chunky faceted look (Decimate) and given its thickness (Solidify); rolled
 edges, the cloth cut back to meet them and whatever it lies on (clear()).
 
 Everything is fixed (frames, quality, stiffness, the cage), so a re-export gives the same cloth; drape() keeps each
-result for the rest of the Blender session, so a script that builds the same character many times (the fit and clip
-audits) simulates it once.
+result while this module stays loaded (reloading it, as cult.py does when it is itself reloaded, starts afresh), so a
+script that builds the same character many times (the fit and clip audits) simulates it once.
 
 Coordinates are three.js (Y up, +Z forward), as in every model script; the simulation runs in its own scene in
 Blender's frame (Z up) and its result comes back in three.js coordinates.
@@ -175,13 +175,14 @@ def drape(name, rows, pins, boxes=(), blobs=(), frames=120, levels=2, cloth=None
     cc.use_collision, cc.distance_min, cc.collision_quality = True, 0.01, 4
     cc.use_self_collision = False
     c.point_cache.frame_start, c.point_cache.frame_end = 1, frames
-    # Which open edge each stretch of the garment's border lies along: its front (the cage's first column, mirrored),
-    # its hem (the first row) or its top (the last row); and each point's mirror image. The simulation keeps the points
-    # in order, so these follow.
+    # The garment as it starts, before the simulation moves it.
     c.show_viewport = False
     scene.frame_set(1)
     pre = bpy.data.meshes.new_from_object(o.evaluated_get(bpy.context.evaluated_depsgraph_get()))
     c.show_viewport = True
+    # Which open edge each stretch of the garment's border lies along: its front (the cage's first column, mirrored),
+    # its hem (the first row) or its top (the last row); and each point's mirror image. The simulation keeps the points
+    # in order, so these follow.
     mirrored = lambda pts: [Vector((-v.x, v.y, v.z)) for v in reversed(pts)] + pts
     lines = {k: mirrored([to_blender(p) for p in pts]) for k, pts in
              (('front', [r[0] for r in rows]), ('hem', rows[0]), ('top', rows[-1]))}
@@ -277,12 +278,13 @@ def binding(parent, path, surface, color, width=0.065, proud=0.022, thick=0.03, 
             ease=6, cloth=None, against=(), reach=0.08):
     """A rolled binding over a cloth edge, in one piece: along `path` (points on the open edge of `surface`, the
     simulated cloth (drape()'s 'sim', its faces turned outward), in order: drape()'s edge runs, joined; laid every
-    `step`, then `smooth` passes of averaging round off its corners, its ends kept) it lies `width` onto the outside,
-    stands `proud` off it, rolls over the edge and tucks back under the inside (`thick` in from the outside), so the
-    edge reads as a sewn hem; its inner side steps down into the cloth. It is one cross-section swept along the edge,
-    turning as the cloth turns there, its turn eased along the edge over `ease` passes, so where the cloth twists
-    quickly (a lapel rising into a collar) the binding turns smoothly. Its outside faces away from the line up through
-    the wearer's middle (x = z = 0), even where the cloth folds back on itself.
+    `step`, then `smooth` passes of averaging round off its corners, its ends kept, the points laid back onto the cloth
+    before the last pass) it lies `width` onto the outside, stands `proud` off it, rolls over the edge and tucks back
+    under the inside (`thick` in from the outside), so the edge reads as a sewn hem; its inner side steps down into the
+    cloth. It is one cross-section swept along the edge, turning as the cloth turns there, its turn eased along the edge
+    over `ease` passes, so where the cloth twists quickly (a lapel rising into a collar) the binding turns smoothly. Its
+    outside faces away from the line up through the wearer's middle (x = z = 0), even where the cloth folds back on
+    itself.
     Given the cloth's part (`cloth`, as place() makes it), the binding cuts the cloth back to itself (clear()), and from
     the solids `against` it (what the cloth rests on or under) in the same cut: whatever of the cloth lies inside the
     binding, or over it or past the edge it runs along (up to `reach` out), is cut away, so the cloth ends under the
@@ -433,12 +435,16 @@ def _tidy(me, share=0.05):
     bmesh.ops.delete(bm, geom=[e for e in bm.edges if not e.link_faces], context='EDGES')
     # The cut's many-sided faces split into triangles here, where a concave one is split properly; then any triangle
     # with a corner lying on its opposite edge (a crack the check would see) is closed: that edge is split at the
-    # corner and welded to it.
+    # corner and welded to it. A repair that only brings the same sliver back is not tried again: a sliver whose sides
+    # all have their two faces leaves the part closed.
     bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='EAR_CLIP')
-    for _ in range(64):
-        crack = next(_cracks(bm), None)
+    key = lambda c: (c[3].co.to_tuple(6), frozenset(v.co.to_tuple(6) for v in c[0].verts))
+    tried = set()
+    for _ in range(len(bm.faces)):
+        crack = next((c for c in _cracks(bm) if key(c) not in tried), None)
         if crack is None:
             break
+        tried.add(key(crack))
         edge, end, t, corner = crack
         _, mid = bmesh.utils.edge_split(edge, end, t)
         bmesh.ops.weld_verts(bm, targetmap={mid: corner})
@@ -449,6 +455,8 @@ def _tidy(me, share=0.05):
             and any(len(e.link_faces) > 2 for e in f.edges)]
     bmesh.ops.delete(bm, geom=fins, context='FACES')
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    if any(len(e.link_faces) != 2 for e in bm.edges):
+        print(f'cloth: {me.name} is left open after tidying (the model check cannot see inside it): check the cut')
     bm.to_mesh(me)
     bm.free()
 
