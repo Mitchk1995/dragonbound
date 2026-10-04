@@ -256,7 +256,7 @@ export const own = {
   color: (name: string) => materialReference(name, 'color') as unknown as V3,
 };
 
-/** GLSL's column-major mat2(a, b, c, d) * p (a turn of the plane, written as the shaders had it). */
+/** A turn of the plane: the column-major 2 × 2 matrix (a, b | c, d) times p. */
 export const rot2 = (p: V2, a: number, b: number, c: number, d: number): V2 => vec2(p.x.mul(a).add(p.y.mul(c)), p.x.mul(b).add(p.y.mul(d)));
 
 /** Where the fragment lies in the geometry's own space, before instancing. */

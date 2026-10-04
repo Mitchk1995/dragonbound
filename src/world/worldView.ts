@@ -80,14 +80,13 @@ function occlusion(shadow: boolean) {
 const FEATHER = 0.7;
 
 /**
- * Shadow-pass mask with the same cut-away (see makeOccludable), for the meshes marked
- * `userData.shadowCut` (occludeAll): false where such a caster is cut away. Other meshes wearing the
- * same material keep their whole shadow.
+ * Shadow-pass mask with the same cut-away (see makeOccludable): false where a caster is cut away.
+ * It belongs to the material, so anything else wearing a cut-away material loses its shadow in the
+ * window too, as it already loses its body there.
  */
 const occludedShadow = (() => {
   const { inside, sd } = occlusion(true);
-  const cut = uniform(0).onObjectUpdate(({ object }) => (object?.userData.shadowCut ? 1 : 0));
-  return cut.lessThan(0.5).or(inside.and(sd.lessThan(-FEATHER)).not());
+  return inside.and(sd.lessThan(-FEATHER)).not();
 })();
 
 /**
@@ -125,10 +124,7 @@ function occludeAll(root: THREE.Object3D) {
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     const mats: THREE.Material[] = Array.isArray(o.material) ? o.material : [o.material];
-    if (o.castShadow && !mats.some((m) => m instanceof NodeMaterial)) {
-      o.userData.shadowCut = true;
-      for (const m of mats) Object.assign(m, { maskShadowNode: occludedShadow });
-    }
+    if (o.castShadow && !mats.some((m) => m instanceof NodeMaterial)) for (const m of mats) Object.assign(m, { maskShadowNode: occludedShadow });
     for (const m of mats) {
       if (seen.has(m) || m instanceof NodeMaterial || m.userData.noOcclude) continue;
       seen.add(m);

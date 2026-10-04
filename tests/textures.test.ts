@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { applyCharPaint, applyGrade, applyGround, applySurface, CHAR_PAINTS, type CharPaint, gradeRow, MODEL_GRADE, patchKeys, prepareCharGeometry, propSurface, setCharPaint, setPaintGain } from '../src/render/surface';
-import { charTexture, groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
+import { charTexture, forgeTexture, groundTexture, surfaceTexture, SURFACES, type SurfaceKind } from '../src/render/textures';
 import { makeOccludable } from '../src/world/worldView';
+import { patchGraph } from './patchGraph';
 
 const px = (t: THREE.Texture) => t.image as { data: Uint8Array; width: number; height: number };
 
@@ -92,40 +93,34 @@ describe('procedural textures', () => {
 });
 
 describe('character painting', () => {
-  const compile = (mat: THREE.Material) => {
-    const lib = THREE.ShaderLib.standard;
-    const shader = { uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader } as any;
-    mat.onBeforeCompile(shader, null as any);
-    return shader;
-  };
-
-  it('one atlas fetch, colour only, composes with the grade', () => {
+  it('the character atlas (and the forge atlas for forged metal), colour only, composes with the grade', () => {
     const mat = new THREE.MeshStandardMaterial();
     applyCharPaint(mat, CHAR_PAINTS.metal);
     applyGrade(mat, MODEL_GRADE, 'root');
     expect(patchKeys(mat)).toEqual(['cpaint:uniform', 'grade:root']);
-    const s = compile(mat);
-    expect(s.fragmentShader.match(/texture2D\(uCharTex/g)).toHaveLength(1);
-    expect(s.fragmentShader).not.toContain('normal = ');
-    expect(s.uniforms.uCharTex.value).toBe(charTexture());
+    const g = patchGraph(mat);
+    // (The forge atlas is fetched only by forged metal, in its own branch.)
+    expect(g.textures).toEqual(new Set([charTexture(), forgeTexture()]));
+    expect(g.hooks.has('normal')).toBe(false);
     // Per-vertex recipes are a separate program.
     const vc = new THREE.MeshStandardMaterial();
     applyCharPaint(vc, 'vertex');
     expect(patchKeys(vc)).toEqual(['cpaint:vertex']);
-    expect(compile(vc).vertexShader).toContain('attribute vec4 aPaintW');
+    expect(patchGraph(vc).attributes).toContain('aPaintW');
+    expect(vc.customProgramCacheKey()).not.toBe(mat.customProgramCacheKey());
   });
 
-  it('setCharPaint and setPaintGain change the uniforms, not the program', () => {
+  it('setCharPaint and setPaintGain change the values, not the program', () => {
     const mat = new THREE.MeshStandardMaterial();
     applyCharPaint(mat, CHAR_PAINTS.metal);
     const key = mat.customProgramCacheKey();
     setCharPaint(mat, CHAR_PAINTS.leather);
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(), mat);
     setPaintGain(mesh, 0.5);
-    const s = compile(mat);
-    expect(s.uniforms.uPaintW.value.x).toBeCloseTo(CHAR_PAINTS.leather.w[0]);
-    expect(s.uniforms.uPaintX.value.x).toBeCloseTo(CHAR_PAINTS.leather.edge);
-    expect(s.uniforms.uCharGain.value).toBe(0.5);
+    const u = (mat as unknown as { patchUniforms: Record<string, { value: { x: number } & number }> }).patchUniforms;
+    expect(u.uPaintW.value.x).toBeCloseTo(CHAR_PAINTS.leather.w[0]);
+    expect(u.uPaintX.value.x).toBeCloseTo(CHAR_PAINTS.leather.edge);
+    expect(u.uCharGain.value).toBe(0.5);
     expect(mat.customProgramCacheKey()).toBe(key);
   });
 
@@ -164,27 +159,17 @@ describe('character painting', () => {
 });
 
 describe('shader patches compose', () => {
-  const compile = (mat: THREE.Material) => {
-    const lib = THREE.ShaderLib.standard;
-    const shader = { uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader } as any;
-    mat.onBeforeCompile(shader, null as any);
-    return shader;
-  };
-
   it('occlusion + surface on one material: both patches applied, distinct cache key', () => {
     const mat = new THREE.MeshStandardMaterial();
     makeOccludable(mat);
     applySurface(mat, 'stone', 'world');
     expect(patchKeys(mat)).toEqual(['occlude', 'surface:world']);
-    expect(mat.customProgramCacheKey()).toBe('occlude|surface:world');
-    const s = compile(mat);
-    // A clean cut-away: a hard discard, never a dither stipple.
-    expect(s.fragmentShader).toContain('if (sd < -feather) discard');
-    expect(s.fragmentShader).not.toMatch(/Bayer/i);
-    expect(s.fragmentShader).toContain('surfSample(surfGrad)');
-    expect(s.fragmentShader).toContain('surfBump(normal');
-    expect(s.uniforms.uSurfTex.value).toBe(surfaceTexture('stone'));
-    expect(s.uniforms.uOccOn).toBeDefined();
+    expect(mat.customProgramCacheKey()).toBe(`occlude|surface:world[${surfaceTexture('stone').uuid}]`);
+    const g = patchGraph(mat);
+    // A clean cut-away (a discard, then the edge's alpha for alpha-to-coverage), and the bumped surface.
+    expect([...g.hooks]).toEqual(expect.arrayContaining(['discard', 'alpha', 'color', 'roughness', 'normal']));
+    expect(mat.alphaToCoverage).toBe(true);
+    expect(g.textures).toContain(surfaceTexture('stone'));
   });
 
   it('re-applying a surface replaces it instead of stacking (bumped or flat)', () => {
@@ -192,17 +177,15 @@ describe('shader patches compose', () => {
     applySurface(mat, 'stone');
     applySurface(mat, 'cloth');
     expect(patchKeys(mat)).toEqual(['surface:object:flat']);
-    expect(compile(mat).uniforms.uSurfTex.value).toBe(surfaceTexture('cloth'));
+    expect([...patchGraph(mat).textures]).toEqual([surfaceTexture('cloth')]);
   });
 
   it('a surface with no bump samples albedo only and leaves the normal alone', () => {
     const mat = new THREE.MeshStandardMaterial();
     applySurface(mat, 'bark', 'world');
-    const s = compile(mat);
-    expect(s.fragmentShader).toContain('surfSample(surfGrad)');
-    expect(s.fragmentShader).not.toContain('surfBump(normal');
-    // One texture fetch per projection plane instead of three.
-    expect(s.fragmentShader).not.toContain('uv + vec2(SURF_E');
+    const g = patchGraph(mat);
+    expect(g.hooks.has('color')).toBe(true);
+    expect(g.hooks.has('normal')).toBe(false);
   });
 
   it('only rock is bumped; every other kind is quiet', () => {
@@ -219,9 +202,10 @@ describe('shader patches compose', () => {
     applyGrade(mat, MODEL_GRADE, 'root');
     applyGrade(mat, { low: 0.7, from: 0, to: 1 }, 'local');
     expect(patchKeys(mat)).toEqual(['occlude', 'grade:local']);
-    const s = compile(mat);
-    expect(s.vertexShader).toContain('vGrade = transformed.y');
-    expect(s.fragmentShader).toContain('smoothstep(uGradeFrom, uGradeTo, vGrade)');
+    expect(patchGraph(mat).hooks.has('color')).toBe(true);
+    const u = (mat as unknown as { patchUniforms: Record<string, { value: number }> }).patchUniforms;
+    expect(u.uGradeLow.value).toBe(0.7);
+    expect(u.uGradeTo.value).toBe(1);
   });
 
   it('grade row: world position → height fraction of the model root, whatever its transform', () => {
@@ -250,26 +234,21 @@ describe('shader patches compose', () => {
   it('ground patch reads the splat attribute', () => {
     const mat = new THREE.MeshStandardMaterial();
     applyGround(mat);
-    const s = compile(mat);
-    expect(s.vertexShader).toContain('attribute vec4 aSplat');
-    expect(s.fragmentShader).toContain('uGroundTex');
-    expect(s.fragmentShader).not.toMatch(/float (ash|stain)/);
-    // Lair floors get ash drifts and scorch, mine floors mineral stains: distinct programs.
+    const g = patchGraph(mat);
+    expect(g.attributes).toContain('aSplat');
+    expect(g.textures).toContain(groundTexture());
+    // Lair floors get ash drifts and scorch (and glowing crevices), mine floors mineral stains: distinct programs.
     const lair = new THREE.MeshStandardMaterial(), mine = new THREE.MeshStandardMaterial();
     applyGround(lair, 1, 0.55);
     applyGround(mine, 0, 0.3);
-    expect(compile(lair).fragmentShader).toContain('float ash');
-    expect(compile(mine).fragmentShader).toContain('float stain');
+    expect(patchGraph(lair).hooks.has('emissive')).toBe(true);
+    expect(patchGraph(mine).hooks.has('emissive')).toBe(false);
+    expect(patchGraph(lair).nodes.size).toBeGreaterThan(g.nodes.size);
     expect(lair.customProgramCacheKey()).not.toBe(mine.customProgramCacheKey());
-    // Sharpened ground: per-channel colours and a height blend (crisp edges, no smeared colours);
-    // steep faces take the shared painted rock.
+    // Sharpened ground: per-channel colours and a height blend (crisp edges, no smeared colours).
     const sharp = new THREE.MeshStandardMaterial();
     applyGround(sharp, 0, 1, 0x7a6a5a, undefined, false, null, undefined, false, true, true);
-    const ss = compile(sharp);
-    expect(ss.vertexShader).toContain('attribute vec3 aCol3');
-    expect(ss.fragmentShader).toContain('vec4 hk = k + (t - 0.5)');
-    expect(ss.fragmentShader).toContain('float mossK');
-    expect(ss.fragmentShader).toContain('rockPaint(diffuseColor.rgb, vSurfPos, fn, rockK)');
+    expect(patchGraph(sharp).attributes).toContain('aCol3');
     expect(sharp.customProgramCacheKey()).not.toBe(mat.customProgramCacheKey());
   });
 });

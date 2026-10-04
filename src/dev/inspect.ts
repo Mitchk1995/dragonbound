@@ -123,7 +123,6 @@ export async function runInspect(g: Game, suites: string) {
     // `cams:name@ex_ey_ez_lx_ly_lz_span+…`: free cameras over the keep (see camSuite).
     const camArg = suites.split(',').find((s) => s.startsWith('cams:'));
     if (camArg) report.cams = await (await import('./castleInspect')).camSuite(g, shot, camArg.slice(5));
-    for (const t of suites.split(',').filter((t) => t.startsWith('tmpdebug'))) await (await import('./tmpDebug')).tmpDebug(g, shot, t.slice(9));
     if (suites.split(',').includes('perf')) report.perf = await perfSuite(g);
     // The light: the engine test's castle views and the play camera round the island and in every zone (explicit only:
     // `lighting`, `lighting:keep` for the island alone, `lighting:cost` for what each part of the light costs, `lighting:quality` for switching quality mid-session).
@@ -520,9 +519,10 @@ async function perfSuite(g: Game) {
       return list;
     };
     const toggles: [string, () => () => void][] = [
-      ['no shadows', () => {
-        g.sun.castShadow = false;
-        return () => (g.sun.castShadow = true);
+      // (The shadow map stops being drawn; switching castShadow off would leave built programs holding a disposed map.)
+      ['no shadow pass', () => {
+        g.sun.shadow.autoUpdate = false;
+        return () => (g.sun.shadow.autoUpdate = true);
       }],
       ['no bloom', () => {
         g.post.setQuality({ msaa: 4, shade: true, bloom: false });

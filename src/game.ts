@@ -14,7 +14,7 @@ import { Particles } from './fx/particles';
 import { Sfx } from './fx/sfx';
 import { Rig, newAnimState } from './render/anim';
 import { PAL } from './render/kit';
-import { LIGHT_BALANCE, steadyShadows, zoneLighting, type ZoneLighting } from './render/env';
+import { LIGHT_BALANCE, steadyShadowPass, steadyShadows, zoneLighting, type ZoneLighting } from './render/env';
 import { initIcons } from './render/icons3d';
 import { fitSunShadow, hazeFog, SUN_DIR } from './render/light';
 import { installPatchedMaterials } from './render/patch';
@@ -131,6 +131,7 @@ export class Game {
     this.scene.fog = new THREE.Fog(0x2c2630, 38, 85);
     Object.assign(this.scene, { fogNode: hazeFog(this.scene, this.sun) });
     Object.assign(this.sun.shadow, { filterNode: steadyShadows });
+    steadyShadowPass();
     this.scene.add(this.hemi);
     // The shadow camera, its filter and its biases are fitted to the view every frame (see light()).
     this.sun.castShadow = true;

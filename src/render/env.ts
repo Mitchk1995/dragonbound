@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ShadowNode } from 'three/webgpu';
 import { float, Fn, reference, renderGroup, texture, vec2 } from 'three/tsl';
 import type { F, V2, V3 } from './patch';
 import { shareResource } from './resources';
@@ -128,7 +129,7 @@ export const LIGHT_BALANCE = {
 /**
  * The lights for a zone, from its theme: a warm key (the sun) strong enough that its shadows read
  * clearly, a gentler sky light (cool from above) and a warm bounce from the sunlit ground below, and
- * a cool fill from the side away from the sun. The ambient occlusion (shadePass.ts) gives the shade
+ * a cool fill from the side away from the sun. The ambient occlusion (post.ts) gives the shade
  * its depth, so the sky and bounce light fill the shadows with colour instead of washing them out.
  */
 export function zoneLighting(t: LightingTheme): ZoneLighting {
@@ -163,3 +164,26 @@ export const steadyShadows = Fn(({ depthTexture, shadowCoord, shadow }: { depthT
   }
   return sum.div(16);
 });
+
+/**
+ * Keep the shadow pass cheap on the CPU. The pass draws every caster with one shared material that
+ * takes each caster's alpha test in turn, and three.js counts each switch between cut-out casters
+ * (leaves) and solid ones as a new material version, so every caster's draw re-derived its program
+ * key every frame (about 5 ms a frame in the keep). Each caster's draw is built once with its own
+ * alpha test either way, so the shared material takes the value without counting a new version.
+ */
+export function steadyShadowPass() {
+  const proto = ShadowNode.prototype as unknown as { getShadowMaterial(): THREE.Material };
+  const get = proto.getShadowMaterial;
+  proto.getShadowMaterial = function (this: unknown) {
+    const mat = get.call(this) as THREE.Material & { _alphaTest: number; steadyAlphaTest?: boolean };
+    if (!mat.steadyAlphaTest) {
+      mat.steadyAlphaTest = true;
+      Object.defineProperty(mat, 'alphaTest', {
+        get: () => mat._alphaTest,
+        set: (v: number) => (mat._alphaTest = v),
+      });
+    }
+    return mat;
+  };
+}

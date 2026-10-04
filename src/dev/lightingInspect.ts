@@ -164,7 +164,8 @@ export async function lightingSuite(g: Game, shot: (name: string) => Promise<voi
         for (const b of g.zone.view.buildings) b.obj.traverse((o) => { if (o instanceof THREE.Mesh && o.receiveShadow) { l.push(o); o.receiveShadow = false; } });
         return () => l.forEach((o) => (o.receiveShadow = true));
       }],
-      ['no shadows', () => { g.sun.castShadow = false; return () => (g.sun.castShadow = true); }],
+      // (The shadow map stops being drawn; switching castShadow off would leave built programs holding a disposed map.)
+      ['no shadow pass', () => { g.sun.shadow.autoUpdate = false; return () => (g.sun.shadow.autoUpdate = true); }],
       ['no occlusion or grade', () => { g.post.setQuality({ msaa: 4, shade: false, bloom: true }); return () => g.post.setQuality({ msaa: 4, shade: true, bloom: true }); }],
       ['fixed 56 m shadow box', () => {
         const light = game.light;

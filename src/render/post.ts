@@ -74,9 +74,9 @@ export class PostChain {
     if (q.bloom) {
       // (The graded frame drawn once, read by the bloom and the output alike.)
       const graded = q.shade ? rtt(out, null, null, { type: THREE.HalfFloatType, depthBuffer: false }) : out;
-      // Bloom is soft by nature: a quarter of the frame's size looks the same and costs far less.
+      // (Picked up at half size: any smaller and thin bright lines, such as rune inlays, slip between
+      // its samples and lose their glow.)
       const glow = bloom(graded, 0.55, 0.5, 0.95);
-      glow.setResolutionScale(0.25);
       out = (graded as V4).add(glow as unknown as V4);
     }
     this.pipeline.outputNode = out;

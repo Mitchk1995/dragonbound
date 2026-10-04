@@ -30,12 +30,12 @@ describe('portal glimpses', () => {
     const open = makePortal({ dest: 'ruin', color: 0x6ad0c0, name: 'Sunken Ruin', theme: ZONES.ruin.theme }, 0.6)!;
     expect(open.obj.name).toBe('portal-fx');
     const win = open.obj.getObjectByName('portal-window') as THREE.Mesh;
-    expect((win.material as THREE.ShaderMaterial).defines).toMatchObject({ STYLE: GlimpseStyle.Water, OPEN: 1 });
-    expect(open.obj.getObjectsByProperty('type', 'Points').length).toBe(1);
+    expect((win.material as THREE.Material).userData).toMatchObject({ style: GlimpseStyle.Water, open: true });
+    expect(open.obj.getObjectsByProperty('name', 'portal-motes').length).toBe(1);
     const sealed = makePortal({ dest: 'mirefen', color: null, name: 'Mirefen', hint: 'Chapter 2' }, 0.6)!;
     expect(sealed.obj.name).toBe('portal-sealed');
-    expect(((sealed.obj.getObjectByName('portal-window') as THREE.Mesh).material as THREE.ShaderMaterial).defines).toMatchObject({ OPEN: 0 });
-    expect(sealed.obj.getObjectsByProperty('type', 'Points').length).toBe(0);
+    expect(((sealed.obj.getObjectByName('portal-window') as THREE.Mesh).material as THREE.Material).userData).toMatchObject({ open: false });
+    expect(sealed.obj.getObjectsByProperty('name', 'portal-motes').length).toBe(0);
   });
   it('the window turns to face the camera whatever way the platform faces', () => {
     const p = buildProp('portal', { dest: 'mine', color: 0xffb050, name: 'Emberdeep Mine' });
