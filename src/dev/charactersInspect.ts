@@ -112,9 +112,10 @@ export async function charactersSuite(g: Game, shot: Shot) {
 /**
  * The character suites (explicit only): `characters`, the redesigned hero and enemies (charactersSuite); `skirts`, the
  * hero's skirts mid-stride (skirtsInspect.ts); `bow`, the bow in the hero's hands and the goblin's and kobold's hips
- * (bowInspect.ts, its measurements, taken in the running game, returned for the report); and `minifig` or
+ * (bowInspect.ts, its measurements, taken in the running game, returned for the report); `minifig` or
  * `minifig:<tag>`, the goblin and the cultist on the minifigure body every humanoid shares (minifigInspect.ts; the tag
- * names the captures of a run on other models, e.g. the ones they replace).
+ * names the captures of a run on other models, e.g. the ones they replace); and `chartex`, the characters' textures
+ * (textureInspect.ts, then metalInspect.ts); `chartex:metal` captures the metal alone.
  */
 export async function characterSuites(g: Game, shot: Shot, suites: string): Promise<Record<string, unknown>> {
   const list = suites.split(',');
@@ -124,6 +125,8 @@ export async function characterSuites(g: Game, shot: Shot, suites: string): Prom
   if (list.includes('bow')) report.bow = await (await import('./bowInspect')).bowSuite(g, shot);
   const minifig = list.find((s) => s === 'minifig' || s.startsWith('minifig:'));
   if (minifig) await (await import('./minifigInspect')).minifigSuite(g, shot, minifig.slice('minifig:'.length));
+  if (list.includes('chartex')) await (await import('./textureInspect')).textureSuite(g, shot);
+  if (list.includes('chartex') || list.includes('chartex:metal')) await (await import('./metalInspect')).metalSuite(g, shot);
   return report;
 }
 

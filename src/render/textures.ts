@@ -10,8 +10,9 @@ import { mulberry32 } from '../core/rng';
  * (applySurface, kept for callers without a painted kind). World props use paint.ts.
  */
 
+/** (No metal: metal is never textured, owner, October 4; it shines with the metal finish, env.ts.) */
 export type SurfaceKind =
-  | 'metal' | 'cloth' | 'leather' | 'wood' | 'stone' | 'skin' | 'hair' | 'scales'
+  | 'cloth' | 'leather' | 'wood' | 'stone' | 'skin' | 'hair' | 'scales'
   | 'bark' | 'leaves' | 'generic';
 
 interface SurfaceParams {
@@ -28,7 +29,6 @@ interface SurfaceParams {
  * rock gets a (gentle) bump and every albedo swing stays small.
  */
 export const SURFACES: Record<SurfaceKind, SurfaceParams> = {
-  metal: { scale: 1.1, albedo: 0.1, bump: 0 },
   cloth: { scale: 4.5, albedo: 0.1, bump: 0 },
   leather: { scale: 5, albedo: 0.1, bump: 0 },
   wood: { scale: 1.5, albedo: 0.12, bump: 0 },
@@ -119,16 +119,6 @@ function paintSteps(v: number, steps: number, soft = 0.4) {
 }
 
 const GENERATORS: Record<SurfaceKind, () => Gen> = {
-  metal: () => {
-    // Hammered plate: broad shallow dents only. No brushing or scratches: directional streaks read
-    // as wood grain and scratch lines as gashes (metal shine comes from the environment map).
-    const dents = worley(11, 5), soft = fbm(13, 3);
-    return (x, y) => {
-      const [f1] = dents(x, y);
-      const dent = Math.min(1, f1 / 28);
-      return 0.4 + dent * dent * 0.3 + (soft(x, y) - 0.5) * 0.2;
-    };
-  },
   cloth: () => {
     const n = fbm(21, 8);
     return (x, y) => {
@@ -449,75 +439,5 @@ export function charTexture(): THREE.Texture {
   tex.needsUpdate = true;
   tex.name = 'char';
   cache.set('char', shareResource(tex));
-  return tex;
-}
-
-/**
- * Hammered plate: shallow dishes left by the hammer (tileable cells), each lit on its lower
- * inside (it faces up) and shaded under its upper lip, fading out where two dishes meet. 0.5 = flat.
- */
-function hammered(seed: number, cells: number): Gen {
-  const rng = mulberry32(seed);
-  const cell = SIZE / cells;
-  const pts = Array.from({ length: cells * cells }, (_, i) => [((i % cells) + 0.15 + rng() * 0.7) * cell, (Math.floor(i / cells) + 0.15 + rng() * 0.7) * cell, rng()]);
-  return (x, y) => {
-    const px = x + 0.5, py = y + 0.5;
-    const cx = Math.floor(px / cell), cy = Math.floor(py / cell);
-    let f1 = 1e9, f2 = 1e9, ox = 0, oy = 0, tone = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const gx = wrap(cx + dx, cells), gy = wrap(cy + dy, cells);
-      const [qx, qy, t] = pts[gy * cells + gx];
-      const ax = qx + (cx + dx - gx) * cell, ay = qy + (cy + dy - gy) * cell;
-      const d = Math.hypot(px - ax, py - ay);
-      if (d < f1) {
-        f2 = f1;
-        f1 = d;
-        ox = px - ax;
-        oy = py - ay;
-        tone = t;
-      } else if (d < f2) f2 = d;
-    }
-    const R = cell * 0.75;
-    const dish = Math.max(0, 1 - (f1 / R) ** 2);
-    // Concave: the half below the centre faces up (lit), the half above faces down (shaded).
-    const lit = (-oy / R) * dish * 0.5 + (ox / R) * dish * 0.12;
-    // Soft where dishes meet: no outline (hard cell edges read as cracked stone).
-    const blend = sstep(0, 6, f2 - f1);
-    return paintSteps(0.5 + (lit * 0.9 + (tone - 0.5) * 0.1) * blend, 6, 0.75);
-  };
-}
-
-/**
- * Forged-metal atlas (surface.ts applyCharPaint, `forge` recipes): R hammered dishes, G fine
- * horizontal draw-marks (the grain the hammer and file leave along a plate), B broad grime and
- * soot blotches, A fine pitting. 0.5 = the base colour; one fetch.
- */
-export function forgeTexture(): THREE.Texture {
-  const hit = cache.get('forge');
-  if (hit) return hit;
-  const ham = hammered(741, 9);
-  const grain = tileNoise(742, 3, 110), grain2 = tileNoise(743, 7, 46), grainBroad = stretch(fbm(744, 2, 2));
-  const grime = stretch(fbm(745, 3, 4)), pit = stretch(fbm(746, 16, 2));
-  const data = new Uint8Array(SIZE * SIZE * 4);
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const g = 0.5 + (grain(x, y) - 0.5) * 0.55 + (grain2(x, y) - 0.5) * 0.3 + (grainBroad(x, y) - 0.5) * 0.3;
-      const b = paintSteps(grime(x, y), 5, 0.6);
-      const i = (y * SIZE + x) * 4;
-      data[i] = clamp01(ham(x, y)) * 255;
-      data[i + 1] = clamp01(g) * 255;
-      data[i + 2] = clamp01(b) * 255;
-      data[i + 3] = clamp01(pit(x, y)) * 255;
-    }
-  }
-  const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  tex.name = 'forge';
-  cache.set('forge', shareResource(tex));
   return tex;
 }

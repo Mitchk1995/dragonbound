@@ -17,12 +17,18 @@ PI = math.pi
 ROBE = 0x7A1E2E
 ROBE_DK = 0x4C1220
 HOOD_EDGE = 0xA83A4A     # lighter crimson lip round the face opening, so the hood reads in the dark
-GOLD = 0xE2B04A
+GOLD = 0xE2B04A          # the gold of the robes, stoles and bands: cloth
 HORN = 0x2E2220
 POUCH = 0x4A3226
 SKIN = 0xE8C49A
 STAFF = 0x3A2418
 EMBER = 0xFF7A1A
+
+
+def gold_metal():
+    """The cult's gold fittings (buckles, studs, settings, crowns, pauldron rims, staff bands, the mask's frame): metal, so
+    the game polishes them (owner, October 4: every metal smooth and shiny); the robes' gold bands stay cloth."""
+    return metallic(GOLD)
 
 
 def hood_fn(rows, e=3.0):
@@ -84,7 +90,7 @@ def staff_shaft(w, length, bands, low=0.35):
     box(w, (0.09, length, 0.09), (0, length / 2 - low, 0), STAFF, taper=(0.85, 0.85), bevel=0.018)
     box(w, (0.12, 0.27, 0.12), (0, 0.015, 0), POUCH, bevel=0.02)                            # grip wrap
     for y in bands:
-        box(w, (0.12, 0.05, 0.12), (0, y, 0), GOLD, bevel=0.012)
+        box(w, (0.12, 0.05, 0.12), (0, y, 0), gold_metal(), bevel=0.012)
 
 
 # The priest's LEGO hands (_common.clip_hand); his staff runs up through the right one, on a sock_handR empty in the
@@ -247,7 +253,7 @@ def iron_mask(fig):
     for s in (-1, 1):
         half = MASK_HALF if s > 0 else [(-x, y) for x, y in reversed(MASK_HALF)]
         side = pivot(h, 'mask', (0, 0, 0.27), (0, s * 0.24, 0))
-        prism(side, [(x * 1.07, y * 1.05 + 0.004) for x, y in half], 0.035, (0, 0, -0.012), GOLD, bevel=0.008)
+        prism(side, [(x * 1.07, y * 1.05 + 0.004) for x, y in half], 0.035, (0, 0, -0.012), gold_metal(), bevel=0.008)
         m = prism(side, half, 0.05, (0, 0, 0.0), IRON_DK, bevel=0.01)
         cut(m, box(side, (0.15, 0.05, 0.12), (s * 0.125, 0.04, 0.0), IRON_DK, rot=(0, 0, s * 0.36), bevel=0))
         box(side, (0.16, 0.06, 0.024), (s * 0.125, 0.04, 0.0), EMBER_EYE, emissive=EMBER_EYE, strength=2.2,
@@ -260,7 +266,7 @@ def iron_mask(fig):
     for s in (-1, 1):   # dark horns out of the casque's temples, gold collars round their roots
         curve = [Vector((s * x, y, z)) for x, y, z in MASK_HORN]
         tube(h, curve, HORN_R, HORN)
-        ring(h, 0.085, 0.045, 0.07, (s * 0.205, 0.185, 0.02), GOLD, rot=rot_to(curve[2] - curve[0]), seg=8)
+        ring(h, 0.085, 0.045, 0.07, (s * 0.205, 0.185, 0.02), gold_metal(), rot=rot_to(curve[2] - curve[0]), seg=8)
     by_colour(union(casque, *[o for o in h.children_recursive if o.type == 'MESH' and o is not casque], colours=True))
 
 
@@ -317,10 +323,10 @@ def cultist():
     # with an ember stone down the outside of each upper arm.
     for S, s in (('L', 1), ('R', -1)):
         pad = pivot(fig['sock_shoulder' + S], 'pad', (s * 0.08, 0.0, 0), (0, 0, -s * 0.26))
-        box(pad, (0.42, 0.12, 0.48), (0, -0.02, 0), GOLD, bevel=0.03)
+        box(pad, (0.42, 0.12, 0.48), (0, -0.02, 0), gold_metal(), bevel=0.03)
         box(pad, (0.34, 0.1, 0.4), (0, 0.035, 0), ROBE, bevel=0.025)
         arm = fig['arm' + S]
-        box(arm, (0.06, 0.24, 0.4), (s * 0.158, -0.08, 0), GOLD, rot=(0, 0, -s * 0.1), bevel=0.02)
+        box(arm, (0.06, 0.24, 0.4), (s * 0.158, -0.08, 0), gold_metal(), rot=(0, 0, -s * 0.1), bevel=0.02)
         box(arm, (0.065, 0.17, 0.32), (s * 0.159, -0.08, 0), ROBE, rot=(0, 0, -s * 0.1), bevel=0)
         box(arm, (0.06, 0.08, 0.08), (s * 0.19, -0.075, 0), EMBER, emissive=EMBER, strength=3, rot=(0, 0, -s * 0.1), bevel=0.012)
         # Sleeves widening to the wrist under a gold cuff.
@@ -329,12 +335,12 @@ def cultist():
         box(c, (0.25, 0.05, 0.275), (0, 0.17, 0), GOLD, bevel=0)
     # The belt's buckle and the pouches on both hips.
     belt = fig['sock_belt']
-    box(belt, (0.16, 0.15, 0.03), (0, 0, 0.24), GOLD, bevel=0.012)
+    box(belt, (0.16, 0.15, 0.03), (0, 0, 0.24), gold_metal(), bevel=0.012)
     box(belt, (0.08, 0.07, 0.034), (0, 0, 0.243), ROBE_DK, bevel=0)
     for s in (-1, 1):
         box(belt, (0.15, 0.17, 0.12), (s * 0.27, -0.07, 0.285), POUCH, bevel=0.03)
         box(belt, (0.16, 0.06, 0.13), (s * 0.27, 0.0, 0.288), POUCH, rot=(0.15, 0, 0), bevel=0.012)
-        box(belt, (0.04, 0.04, 0.02), (s * 0.27, -0.04, 0.35), GOLD, bevel=0)
+        box(belt, (0.04, 0.04, 0.02), (s * 0.27, -0.04, 0.35), gold_metal(), bevel=0)
     # A strap across the back, from under the mantle at the left shoulder down to the belt at the right hip, buckled.
     body = fig.body
     y0 = HIP
@@ -347,7 +353,7 @@ def cultist():
     ribbon(body, pts, ns, 0.07, 0.025, POUCH)
     p, _ = torso_surface(y0 + 0.33, 0.2 + (-0.22 - 0.2) * 0.5, -1, lift=0.03, y0=y0)
     turn = -math.atan2(0.42, 0.54)
-    box(body, (0.1, 0.1, 0.02), tuple(p), GOLD, rot=(0, 0, turn), bevel=0.01)
+    box(body, (0.1, 0.1, 0.02), tuple(p), gold_metal(), rot=(0, 0, turn), bevel=0.01)
     box(body, (0.045, 0.045, 0.024), tuple(p), POUCH, rot=(0, 0, turn), bevel=0)
     # The robe: two tiers flaring to the ground, a gold band at each hem, a dark step underfoot; the stoles on it.
     skirt = fig['sock_skirt']
@@ -363,7 +369,7 @@ def cultist():
     w = pivot(fig['sock_handR'], 'staffbody')
     staff_shaft(w, 2.25, (1.08,), low=1.1)
     beam(w, (0, -1.08, 0), (0, -1.17, 0), 0.1, 'black', w1=0.02)                       # butt cap
-    box(w, (0.16, 0.08, 0.16), (0, 1.15, 0), GOLD, bevel=0.015)                         # socket
+    box(w, (0.16, 0.08, 0.16), (0, 1.15, 0), gold_metal(), bevel=0.015)                 # socket
     for k in (-1, 1):   # two iron prongs curling up and in round the gem
         box(w, (0.05, 0.22, 0.06), (k * 0.11, 1.28, 0), HORN, rot=(0, 0, -k * 0.45), bevel=0.012)
         box(w, (0.045, 0.2, 0.055), (k * 0.12, 1.46, 0), HORN, rot=(0, 0, k * 0.55), bevel=0.012)
@@ -396,34 +402,34 @@ def priest():
     lo = pivot(body, 'stole', (0, 1.13, 0.345), (-0.14, 0, 0))
     box(lo, (0.22, 0.98, 0.05), (0, -0.49, 0), GOLD, bevel=0.012)
     prism(lo, [(-0.11, 0.0), (0.0, -0.1), (0.11, 0.0)], 0.05, (0, -0.98, 0), GOLD)
-    box(st, (0.11, 0.11, 0.04), (0, -0.2, 0.035), GOLD, rot=(0, 0, PI / 4), bevel=0.012)
+    box(st, (0.11, 0.11, 0.04), (0, -0.2, 0.035), gold_metal(), rot=(0, 0, PI / 4), bevel=0.012)
     facet_gem(st, 0.06, (0, -0.2, 0.055), EMBER, emissive=EMBER, strength=5)
     bk = pivot(body, 'stole', (0, 1.12, -0.345), (0.14, PI, 0))
     gold_framed(bk, (0.3, 1.0, 0.05), (0, -0.5, 0), ROBE_DK)
     # Harness straps from the shoulders to the belt behind, gold buckles where they meet it.
     for s in (-1, 1):
         box(body, (0.08, 0.72, 0.03), (s * 0.2, 1.62, -0.322), 0x3A2418, bevel=0.008)
-        box(body, (0.1, 0.07, 0.03), (s * 0.2, 1.28, -0.34), GOLD, bevel=0.01)
+        box(body, (0.1, 0.07, 0.03), (s * 0.2, 1.28, -0.34), gold_metal(), bevel=0.01)
         box(body, (0.08, 0.06, 0.66), (s * 0.2, 2.0, 0), 0x3A2418, bevel=0.008)               # over the shoulder
     for s in (-1, 1):
         box(body, (0.17, 0.19, 0.13), (s * 0.3, 1.11, 0.33), POUCH, bevel=0.03)
         box(body, (0.18, 0.07, 0.14), (s * 0.3, 1.19, 0.335), POUCH, rot=(0.15, 0, 0), bevel=0.012)
-        box(body, (0.045, 0.045, 0.02), (s * 0.3, 1.15, 0.405), GOLD, bevel=0.006)
+        box(body, (0.045, 0.045, 0.02), (s * 0.3, 1.15, 0.405), gold_metal(), bevel=0.006)
     head = pivot(body, 'head', (0, 2.0, 0))
     cowl(head, PRIEST_HOOD, 4 / 8)
     # Gold collar round the mantle with an ember gem; the crown band across the brow with a gold diamond, a gold band
     # up the hood's front to its peak, and great dark horns sweeping out and up from the band.
-    box(head, (0.5, 0.08, 0.1), (0, -0.04, 0.33), GOLD, bevel=0.02)
-    box(head, (0.12, 0.12, 0.04), (0, -0.04, 0.39), GOLD, rot=(0, 0, PI / 4), bevel=0.012)
+    box(head, (0.5, 0.08, 0.1), (0, -0.04, 0.33), gold_metal(), bevel=0.02)
+    box(head, (0.12, 0.12, 0.04), (0, -0.04, 0.39), gold_metal(), rot=(0, 0, PI / 4), bevel=0.012)
     facet_gem(head, 0.05, (0, -0.04, 0.41), EMBER, emissive=EMBER, strength=5)
-    box(head, (0.62, 0.09, 0.07), (0, 0.48, 0.3), GOLD, bevel=0.02)
+    box(head, (0.62, 0.09, 0.07), (0, 0.48, 0.3), gold_metal(), bevel=0.02)
     for s in (-1, 1):
-        box(head, (0.07, 0.09, 0.4), (s * 0.3, 0.48, 0.1), GOLD, rot=(0, -s * 0.08, 0), bevel=0.02)
-    box(head, (0.16, 0.16, 0.05), (0, 0.5, 0.345), GOLD, rot=(0, 0, PI / 4), bevel=0.02)
-    beam(head, (0, 0.55, 0.32), (0, 0.73, 0.18), 0.09, GOLD, d=0.04, bevel=0.01)
-    beam(head, (0, 0.73, 0.18), (0, 0.93, 0.03), 0.08, GOLD, w1=0.05, d=0.04, bevel=0.01)
+        box(head, (0.07, 0.09, 0.4), (s * 0.3, 0.48, 0.1), gold_metal(), rot=(0, -s * 0.08, 0), bevel=0.02)
+    box(head, (0.16, 0.16, 0.05), (0, 0.5, 0.345), gold_metal(), rot=(0, 0, PI / 4), bevel=0.02)
+    beam(head, (0, 0.55, 0.32), (0, 0.73, 0.18), 0.09, gold_metal(), d=0.04, bevel=0.01)
+    beam(head, (0, 0.73, 0.18), (0, 0.93, 0.03), 0.08, gold_metal(), w1=0.05, d=0.04, bevel=0.01)
     for s in (-1, 1):
-        box(head, (0.11, 0.12, 0.14), (s * 0.31, 0.5, 0.05), GOLD, bevel=0.02)
+        box(head, (0.11, 0.12, 0.14), (s * 0.31, 0.5, 0.05), gold_metal(), bevel=0.02)
         curved_horn(head, s, (s * 0.33, 0.52, 0.04), ((0.12, 0.08, -0.02), (0.2, 0.24, -0.05), (0.18, 0.42, -0.07),
                                                        (0.12, 0.54, -0.07)), 0.12)
     # Long sleeves hanging against the robe's sides (and swinging past them), bending at the elbow. Authored straight;
@@ -437,9 +443,9 @@ def priest():
         box(e, (0.35, 0.07, 0.36), (0, elb - 0.49, 0), GOLD, bevel=0.015)
         box(e, (0.33, 0.06, 0.34), (0, elb - 0.555, 0), ROBE, bevel=0.015)
         # Stepped pauldron: a gold-rimmed crimson block over a second step down the arm.
-        box(a, (0.42, 0.17, 0.46), (s * 0.05, 0.04, 0), GOLD, rot=(0, 0, -s * 0.26), bevel=0.03)
+        box(a, (0.42, 0.17, 0.46), (s * 0.05, 0.04, 0), gold_metal(), rot=(0, 0, -s * 0.26), bevel=0.03)
         box(a, (0.38, 0.19, 0.42), (s * 0.05, 0.055, 0), ROBE, rot=(0, 0, -s * 0.26), bevel=0.03)
-        box(a, (0.32, 0.12, 0.44), (s * 0.1, -0.1, 0), GOLD, rot=(0, 0, -s * 0.2), bevel=0.025)
+        box(a, (0.32, 0.12, 0.44), (s * 0.1, -0.1, 0), gold_metal(), rot=(0, 0, -s * 0.2), bevel=0.025)
         box(a, (0.28, 0.13, 0.4), (s * 0.1, -0.09, 0), ROBE, rot=(0, 0, -s * 0.2), bevel=0.025)
         if s < 0:
             # As the cultist's: the staff upright through the hand (carried upright by the game, raised in the cast),
@@ -448,9 +454,9 @@ def priest():
             w = pivot(pivot(h, 'sock_handR', (0, -PRIEST_HAND['outer'], 0), (PI / 2, 0, 0)), 'staffbody')
             top = -0.37                     # the staff's head, lowered so it stands no taller now the hand holds it higher
             staff_shaft(w, 2.78, (-0.23, 1.55 + top, 1.7 + top), low=1.25)
-            box(w, (0.13, 0.16, 0.13), (0, -1.27, 0), GOLD, bevel=0.02)                         # gold foot
-            box(w, (0.17, 0.1, 0.17), (0, 1.84 + top, 0), GOLD, bevel=0.02)                     # socket
-            box(w, (0.11, 0.06, 0.11), (0, 1.91 + top, 0), GOLD, bevel=0.012)
+            box(w, (0.13, 0.16, 0.13), (0, -1.27, 0), gold_metal(), bevel=0.02)                 # gold foot
+            box(w, (0.17, 0.1, 0.17), (0, 1.84 + top, 0), gold_metal(), bevel=0.02)             # socket
+            box(w, (0.11, 0.06, 0.11), (0, 1.91 + top, 0), gold_metal(), bevel=0.012)
             for k in (-1, 1):   # two dark prongs curving out and back in round the crystal
                 box(w, (0.06, 0.22, 0.07), (k * 0.13, 1.98 + top, 0), HORN, rot=(0, 0, -k * 0.55), bevel=0.014)
                 box(w, (0.055, 0.22, 0.065), (k * 0.19, 2.17 + top, 0), HORN, rot=(0, 0, k * 0.15), bevel=0.014)

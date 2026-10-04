@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MeshBasicNodeMaterial, MeshLambertNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, type Node, type NodeBuilder, type Renderer, type TextureNode } from 'three/webgpu';
-import { cameraViewMatrix, float, Fn, negateOnBackSide, normalViewGeometry, diffuseColor, instancedBufferAttribute, mat3, mat4, materialEmissive, materialReference, materialRoughness, modelNormalMatrix, modelWorldMatrix, normalGeometry, normalLocal, OnBeforeFrameUpdate, positionGeometry, positionLocal, positionPrevious, positionWorld, texture, varying, vec2, vec3 } from 'three/tsl';
+import { cameraViewMatrix, float, Fn, negateOnBackSide, normalViewGeometry, diffuseColor, instancedBufferAttribute, mat3, mat4, materialEmissive, materialMetalness, materialReference, materialRoughness, modelNormalMatrix, modelWorldMatrix, normalGeometry, normalLocal, OnBeforeFrameUpdate, positionGeometry, positionLocal, positionPrevious, positionWorld, texture, varying, vec2, vec3 } from 'three/tsl';
 import { freeInstanceBuffersWithMeshes } from './instanceBuffers';
 
 /**
@@ -37,9 +37,17 @@ export interface PatchHooks {
   /** The surface alpha, after the alpha test. */
   alpha?(a: F): F;
   roughness?(r: F): F;
+  metalness?(m: F): F;
   /** The shading normal, in view space. */
   normal?(n: V3): V3;
   emissive?(e: V3): V3;
+  /** The ambient occlusion the ambient light is shaded by (1: none). */
+  ao?(a: F): F;
+  /**
+   * The environment the surface reflects (and is lit by): the material's own (its `envMap`), or null; return a node
+   * of radiance by direction (a PMREM texture node, scaled as it should count) or null for none.
+   */
+  env?(e: Node | null): Node | null;
   /** The outgoing light (rgb), after lighting and emission, before the fog. */
   output?(l: V3): V3;
 }
@@ -274,7 +282,7 @@ export function objectPosition(builder: NodeBuilder): V3 {
 // ─── The patched node materials ─────────────────────────────────────────────
 
 type NodeMaterialClass = typeof MeshBasicNodeMaterial;
-type Hook = 'position' | 'color' | 'alpha' | 'roughness' | 'normal' | 'emissive' | 'output';
+type Hook = 'position' | 'color' | 'alpha' | 'roughness' | 'metalness' | 'normal' | 'emissive' | 'ao' | 'env' | 'output';
 
 /** A node material class that runs its plain material's patches (see the hooks above). */
 function patchedClass(Base: NodeMaterialClass) {
@@ -319,6 +327,8 @@ function patchedClass(Base: NodeMaterialClass) {
     override setupVariants(builder: NodeBuilder) {
       const self = this as unknown as { roughnessNode: F | null };
       if (this.has('roughness')) self.roughnessNode = this.run('roughness', self.roughnessNode ?? (materialRoughness as F));
+      const metal = this as unknown as { metalnessNode: F | null };
+      if (this.has('metalness')) metal.metalnessNode = this.run('metalness', metal.metalnessNode ?? (materialMetalness as F));
       super.setupVariants(builder);
     }
 
@@ -327,6 +337,21 @@ function patchedClass(Base: NodeMaterialClass) {
       // The hooks start from the geometry's normal (flat, or smooth and turned to face the eye on a
       // back face), as the material's own would be without a normal map.
       return this.run('normal', Fn((builder: NodeBuilder) => ((builder as NodeBuilder & { isFlatShading(): boolean }).isFlatShading() ? normalViewGeometry : negateOnBackSide(normalViewGeometry)))().toVar() as V3);
+    }
+
+    override setupAmbientOcclusion(builder: NodeBuilder) {
+      const self = this as unknown as { aoNode: F | null };
+      if (this.has('ao')) self.aoNode = this.run('ao', self.aoNode ?? float(1));
+      return super.setupAmbientOcclusion(builder);
+    }
+
+    override setupEnvironment(builder: NodeBuilder) {
+      if (this.has('env')) {
+        const self = this as unknown as { envNode: Node | null; envMap: THREE.Texture | null };
+        // (The node twin is made afresh for each build, so its env node is set for this build only.)
+        self.envNode = this.run('env', self.envNode ?? (self.envMap ? (materialReference('envMap', 'texture') as Node) : null));
+      }
+      return super.setupEnvironment(builder);
     }
 
     override setupLighting(builder: NodeBuilder) {

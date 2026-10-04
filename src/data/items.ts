@@ -14,7 +14,7 @@ export interface Palette {
   glow?: boolean;
   /** Forged metal: the role parts get a metallic finish that reflects light (smithed tiers). */
   metal?: boolean;
-  /** Surface roughness of forged metal parts (default METAL_FINISH): dull iron is rougher than polished steel. */
+  /** Surface roughness of forged metal parts (default env.ts POLISH): all polished, steel the brightest. */
   rough?: number;
 }
 
@@ -63,9 +63,9 @@ export interface Tier {
 
 export const TIERS: Record<TierId, Tier> = {
   bronze: { id: 'bronze', name: 'Bronze', palette: { main: 0xb4743a, trim: 0xe3a45a, dark: 0x6a4020 }, req: 1, smith: 1, xpPerBar: 12.5, bar: 'bronze_bar', minIlvl: 1 },
-  iron: { id: 'iron', name: 'Iron', palette: { main: 0x60646a, trim: 0x8e9399, dark: 0x35373b, rough: 0.5 }, req: 10, smith: 15, xpPerBar: 25, bar: 'iron_bar', minIlvl: 4 },
-  steel: { id: 'steel', name: 'Steel', palette: { main: 0x6f7e93, trim: 0xadb9c8, dark: 0x2c3440, rough: 0.28 }, req: 20, smith: 30, xpPerBar: 37.5, bar: 'steel_bar', minIlvl: 9 },
-  ember: { id: 'ember', name: 'Emberforged', palette: { main: 0x544e57, trim: 0xff7a1a, dark: 0x5a1a16, glow: true, rough: 0.42 }, req: 30, smith: 40, xpPerBar: 60, bar: 'ember_bar', minIlvl: 15 },
+  iron: { id: 'iron', name: 'Iron', palette: { main: 0x60646a, trim: 0x8e9399, dark: 0x35373b, rough: 0.26 }, req: 10, smith: 15, xpPerBar: 25, bar: 'iron_bar', minIlvl: 4 },
+  steel: { id: 'steel', name: 'Steel', palette: { main: 0x6f7e93, trim: 0xadb9c8, dark: 0x2c3440, rough: 0.18 }, req: 20, smith: 30, xpPerBar: 37.5, bar: 'steel_bar', minIlvl: 9 },
+  ember: { id: 'ember', name: 'Emberforged', palette: { main: 0x544e57, trim: 0xff7a1a, dark: 0x5a1a16, glow: true, rough: 0.26 }, req: 30, smith: 40, xpPerBar: 60, bar: 'ember_bar', minIlvl: 15 },
 };
 export const TIER_ORDER: TierId[] = ['bronze', 'iron', 'steel', 'ember'];
 

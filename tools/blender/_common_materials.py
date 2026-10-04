@@ -19,13 +19,15 @@ def hex_rgba(h):
     return tuple(srgb_to_linear(((h >> s) & 255) / 255) for s in (16, 8, 0)) + (1.0,)
 
 
-def mat(color, emissive=None, strength=2.0, double_sided=False, metal=False):
-    """Fixed-colour material. `metal` marks forged metal: the game gives it the shiny metal finish."""
-    key = f'db_{color:06x}_{emissive or 0:06x}_{strength}_{int(double_sided)}' + ('_metal' if metal else '')
+def mat(color, emissive=None, strength=2.0, double_sided=False, metal=False, kind=None):
+    """Fixed-colour material; `metal` marks forged metal and `kind` names its painted surface in the game."""
+    key = f'db_{color:06x}_{emissive or 0:06x}_{strength}_{int(double_sided)}' + ('_metal' if metal else '') + (f'_{kind}' if kind else '')
     m = bpy.data.materials.get(key)
     if m:
         return m
     m = bpy.data.materials.new(key)
+    if kind:
+        m['db_kind'] = kind
     m.use_nodes = True
     m.use_backface_culling = not double_sided
     bsdf = m.node_tree.nodes.get('Principled BSDF')
@@ -87,9 +89,11 @@ R = _Roles()
 
 
 def resolve_mat(color, emissive=None, strength=2.0, double_sided=False):
-    """Colour spec -> material. Accepts a PAL key, a hex int, 'ROLE:<name>' or a bpy Material."""
+    """Colour spec -> material. Accepts a PAL key, a hex int, 'ROLE:<name>', a bpy Material or (colour, kind)."""
     if isinstance(color, bpy.types.Material):
         return color
+    if isinstance(color, tuple):
+        return mat(c(color[0]), c(emissive) if emissive is not None else None, strength, double_sided, kind=color[1])
     if isinstance(color, str) and color.startswith('ROLE:'):
         return role(color[5:])
     return mat(c(color), c(emissive) if emissive is not None else None, strength, double_sided)

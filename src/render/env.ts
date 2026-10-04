@@ -19,20 +19,20 @@ const W = 128, H = 64;
 const TOP = [1.35, 1.2, 0.98], HORIZON = [0.3, 0.3, 0.32], GROUND = [0.035, 0.03, 0.03];
 
 /** Softboxes: direction (up-front-left key, back-right rim), angular radius, colour × intensity. */
-const SOFTBOXES = [
+export const SOFTBOXES = [
   { dir: new THREE.Vector3(-0.45, 0.72, 0.53).normalize(), radius: 0.32, color: [3.2, 3.0, 2.7] },
   { dir: new THREE.Vector3(0.75, 0.3, -0.59).normalize(), radius: 0.24, color: [1.3, 1.5, 1.8] },
 ];
 
-const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
-const smooth = (a: number, b: number, x: number) => {
+export const mixRGB = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
+export const smooth = (a: number, b: number, x: number) => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
 
 /** Linear HDR radiance seen along a (unit) direction. */
 export function studioRadiance(d: THREE.Vector3): [number, number, number] {
-  const c = d.y >= 0 ? mix(HORIZON, TOP, Math.pow(d.y, 0.6)) : mix(HORIZON, GROUND, smooth(0, 0.35, -d.y));
+  const c = d.y >= 0 ? mixRGB(HORIZON, TOP, Math.pow(d.y, 0.6)) : mixRGB(HORIZON, GROUND, smooth(0, 0.35, -d.y));
   for (const b of SOFTBOXES) {
     const a = Math.acos(Math.max(-1, Math.min(1, d.dot(b.dir))));
     const k = smooth(b.radius, b.radius * 0.7, a);
@@ -41,11 +41,11 @@ export function studioRadiance(d: THREE.Vector3): [number, number, number] {
   return [c[0], c[1], c[2]];
 }
 
-let env: THREE.DataTexture | null = null;
-
-/** The shared studio environment (built once). */
-export function studioEnv(): THREE.DataTexture {
-  if (env) return env;
+/**
+ * An HDR equirectangular environment of `radiance` (linear, along a unit direction), built once per caller and
+ * shared: it belongs to no renderer.
+ */
+export function equirectEnv(radiance: (d: THREE.Vector3) => [number, number, number]): THREE.DataTexture {
   const data = new Uint16Array(W * H * 4);
   const d = new THREE.Vector3();
   for (let y = 0; y < H; y++) {
@@ -54,13 +54,13 @@ export function studioEnv(): THREE.DataTexture {
     for (let x = 0; x < W; x++) {
       const lon = ((x + 0.5) / W - 0.5) * Math.PI * 2;
       d.set(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon));
-      const c = studioRadiance(d);
+      const c = radiance(d);
       const i = (y * W + x) * 4;
       for (let k = 0; k < 3; k++) data[i + k] = THREE.DataUtils.toHalfFloat(c[k]);
       data[i + 3] = THREE.DataUtils.toHalfFloat(1);
     }
   }
-  env = shareResource(new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.HalfFloatType));
+  const env = shareResource(new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.HalfFloatType));
   env.mapping = THREE.EquirectangularReflectionMapping;
   env.colorSpace = THREE.LinearSRGBColorSpace;
   env.magFilter = env.minFilter = THREE.LinearFilter;
@@ -68,9 +68,17 @@ export function studioEnv(): THREE.DataTexture {
   return env;
 }
 
+let env: THREE.DataTexture | null = null;
+
+/** The shared studio environment (built once). */
+export function studioEnv(): THREE.DataTexture {
+  return (env ??= equirectEnv(studioRadiance));
+}
+
 /**
  * How forged metal parts reflect. Rough enough that the softboxes spread into soft sheens rather
- * than pinpoints (bright specks would trip the bloom threshold and sparkle).
+ * than pinpoints (bright specks would trip the bloom threshold and sparkle). Characters' and gear's
+ * metal is polished instead (polish.ts).
  */
 export const METAL_FINISH = {
   metal: { metalness: 0.85, roughness: 0.34, envMapIntensity: 1 },

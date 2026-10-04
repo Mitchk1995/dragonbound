@@ -125,7 +125,7 @@ def body_chain(S):
 
 
 STITCH = 0xD8C8A0
-BRASS = 0xB08A48
+BRASS = (0xB08A48, 'gold')
 
 
 def stitches(f, pts, color=STITCH, pitch=0.045, ln=0.024, t=0.008, z=0.002):

@@ -6,6 +6,7 @@ import { buildGear, gearLook, joinCuffs, makeModel } from './registry';
 import { buildMaterialModel } from './materialModels';
 import { installPatchedMaterials } from './patch';
 import { setPaintGain } from './surface';
+import { setSurfaceGain } from './charBake';
 
 /** Painted albedo contrast in icons, relative to the game. */
 export const ICON_PAINT_GAIN = 0.75;
@@ -148,6 +149,7 @@ export function iconSubject(item: Item): { holder: THREE.Object3D; half: number;
   }
   // A 72px slot shows the painted albedo much larger than the game does: soften it a little.
   setPaintGain(holder, ICON_PAINT_GAIN);
+  setSurfaceGain(holder, ICON_PAINT_GAIN);
   const box = silhouetteBox(subjects ?? [holder]);
   holder.position.sub(box.getCenter(new THREE.Vector3()));
   const size = box.getSize(new THREE.Vector3());

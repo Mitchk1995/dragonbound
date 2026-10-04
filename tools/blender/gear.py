@@ -40,7 +40,7 @@ from mathutils import Vector
 
 PI = math.pi
 WOOD = 0x6B4426
-STRING = 0xE8DDC4
+STRING = (0xE8DDC4, 'plain')
 SLIT = 0x0C0A0A
 
 # Where each socket sits on the base hero (world, three.js coords) -- only used so a gear file

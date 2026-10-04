@@ -51,7 +51,7 @@ faces, and wherever a wall's outline shows the stones (tops, corners, arches, to
 proud of the face, so the stones clearly stand out from the play camera. Round towers are laid in flat stones, one flat
 face per stone with each course turned half a stone, so they are very slightly many-sided, never smooth cylinders. The
 castle is being moved to this finish now: until it lands, the old painted stone is not a defect in other work. A few accents of real material:
-- forged metal;
+- smooth, polished metal that mirrors the sky, never a bumpy texture on any metal (owner, October 4; ART_NAMES.md);
 - clear glass with a cool tint that you can genuinely see into;
 - running water.
 

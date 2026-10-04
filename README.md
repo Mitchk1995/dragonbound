@@ -47,6 +47,7 @@ npm run review -- castle --base  # labelled before/after review sheets of an are
 - `src/ui/`: HUD, panels, title and character creation, tooltip, stone and iron kit, SVG icons.
 - `tools/blender/`: every model is a script; see [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
 - `tools/bark_textures.py`: turns sourced bark images into the grown trees' tileable bark maps in `public/textures/bark/` (sources listed in its `LICENSES.md`).
+- `tools/char_textures.py`: turns sourced material paintings into the characters' painted material library in `public/textures/characters/`; `tools/blender/bake.py` gives every finished model its UVs and baked map (see [docs/ART_FINISH.md](docs/ART_FINISH.md)).
 - `tools/kit_textures.py`: turns sourced painted surfaces and plant sprays into the building kit's texture strips and plant atlas in `public/textures/kit/` (sources listed in its `LICENSES.md`).
 
 ## Docs
@@ -62,6 +63,7 @@ npm run review -- castle --base  # labelled before/after review sheets of an are
 | [concepts/](docs/concepts/) | Concept sheets (made with Codex image generation) that models are built from. |
 | [ART_CONTRACT.md](docs/ART_CONTRACT.md) | The look every visual job starts from, and how Blender scripts build models for the game. |
 | [ART_NAMES.md](docs/ART_NAMES.md) | What each model file holds and the names the game reads from it: rig parts, sockets and materials. |
+| [ART_FINISH.md](docs/ART_FINISH.md) | How a model's surface is made: its UVs, its baked map and the painted materials the game lays over them. |
 | [history/](docs/history/) | Finished plans (Chapter 1 among them), superseded decisions and the Codex/Claude review log. Read for context, not direction. |
 
 Review Room source: `C:\Users\kroen\.codex\visualizations\2026\10\04\01a10891-c3ee-7383-bd7d-55f5f51abe6f\dragonbound-review`; Sites project `appgprj_6ac2b79a1de08191a58d0b3599c07c30`. [Export saved reviews and history as JSON](https://dragonbound-review.maxcrit.chatgpt.site/api/reviews?export=1).

@@ -88,15 +88,5 @@ export function prepareCharGeometry(src: THREE.BufferGeometry, rest: THREE.Matri
   geo.setAttribute('aRest', new THREE.BufferAttribute(P, 3));
   geo.setAttribute('aFace', new THREE.BufferAttribute(face, 4));
   geo.setAttribute('aRestN', new THREE.BufferAttribute(fn, 3));
-  // A random tone per authored part (each plate is its own part until parts merge), keyed to
-  // where it sits, so every copy of a model paints each plate the same.
-  let cx = 0, cy = 0, cz = 0;
-  for (let i = 0; i < n; i++) {
-    cx += P[i * 3];
-    cy += P[i * 3 + 1];
-    cz += P[i * 3 + 2];
-  }
-  const k = n ? Math.sin((cx / n) * 127.1 + (cy / n) * 311.7 + (cz / n) * 74.7) * 43758.5453 : 0;
-  geo.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(k - Math.floor(k)), 1));
   return geo;
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { abs, attribute, clamp, dot, float, If, max, min, mix, normalize, select, sign, smoothstep, step, vec3 } from 'three/tsl';
-import { charTexture, forgeTexture } from './textures';
+import { charTexture } from './textures';
 import { addPatch, packAttributes, type F, type V3, type V4 } from './patch';
 
 // ─── Characters, creatures and gear: painted albedo ─────────────────────────
@@ -15,10 +15,9 @@ import { addPatch, packAttributes, type F, type V3, type V4 } from './patch';
  *   downward faces the shade.
  * - `moss`: tints up-facing, lighter patches moss green (stone).
  * - `scale`: pattern size multiplier (scales are finer than leather blotches).
- * - `forge`: forged metal (0..1, from the forge atlas): hammered dishes and fine draw-marks,
- *   a bright worn lip on every edge and bevel, soot and grime settling along the foot of each
- *   plate (where it meets the plate below) and in blotches, and a tone of its own per plate;
- *   the sheen varies with it (grime dull, worn edges polished).
+ * Metal (`metal`, `darkMetal`, `gilt`) takes no pattern at all: smooth, a bright lip on every edge
+ * and bevel and the light from above (owner, October 4: never a bumpy texture on any metal); it
+ * shines with its polish (polish.ts).
  */
 export interface CharPaint {
   w: [number, number, number, number];
@@ -26,14 +25,16 @@ export interface CharPaint {
   grad: number;
   moss?: number;
   scale?: number;
-  forge?: number;
 }
 
 /** The recipes, large-scale and low-to-medium contrast: readable from the gameplay camera, never noisy. */
 export const CHAR_PAINTS = {
-  metal: { w: [0.03, 0.05, 0, 0], edge: 0.3, grad: 0.16, forge: 1 },
+  metal: { w: [0, 0, 0, 0], edge: 0.3, grad: 0.16 },
+  // Gold trim on robes and hoods (the cultist's, the priest's, the Warden's): cloth, painted as gold.
   trim: { w: [0, 0.06, 0, 0], edge: 0.22, grad: 0.14 },
-  darkMetal: { w: [0.03, 0.05, 0, 0], edge: 0.3, grad: 0.12, forge: 0.8 },
+  // Gilt metal (the dragons' harness fittings).
+  gilt: { w: [0, 0, 0, 0], edge: 0.22, grad: 0.14 },
+  darkMetal: { w: [0, 0, 0, 0], edge: 0.3, grad: 0.12 },
   leather: { w: [0.2, 0, 0, 0], edge: -0.12, grad: 0.08 },
   cloth: { w: [0.05, 0, 0.34, 0], edge: 0.05, grad: 0.14 },
   skin: { w: [0.05, 0, 0, 0], edge: 0, grad: 0.04 },
@@ -60,36 +61,31 @@ const CHAR_EDGE = 0.03;
 const paintVec = (p: CharPaint) => ({
   w: new THREE.Vector4(...p.w),
   x: new THREE.Vector4(p.edge, p.grad, p.moss ?? 0, p.scale ?? 1),
-  y: new THREE.Vector4(p.forge ?? 0, 0, 0, 0),
 });
 
 /**
  * Pack a prepared model geometry's painted-shader attributes (prepareCharGeometry, paintAttributes)
  * into one vertex buffer, once its parts are merged (see packAttributes).
  */
-export const packCharAttributes = (geo: THREE.BufferGeometry) => packAttributes(geo, ['aRest', 'aRestN', 'aFace', 'aPart', 'aPaintW', 'aPaintX', 'aPaintY']);
+export const packCharAttributes = (geo: THREE.BufferGeometry) => packAttributes(geo, ['aRest', 'aRestN', 'aFace', 'aPaintW', 'aPaintX', 'aPolish']);
 
 /** Per-vertex recipe attributes for merged parts that mix several recipes in one material. */
 export function paintAttributes(geo: THREE.BufferGeometry, p: CharPaint | null) {
   const n = geo.attributes.position.count;
-  const w = new Float32Array(n * 4), x = new Float32Array(n * 4), y = new Float32Array(n * 4);
+  const w = new Float32Array(n * 4), x = new Float32Array(n * 4);
   if (p) {
-    const { w: pw, x: px, y: py } = paintVec(p);
+    const { w: pw, x: px } = paintVec(p);
     for (let i = 0; i < n; i++) {
       pw.toArray(w, i * 4);
       px.toArray(x, i * 4);
-      py.toArray(y, i * 4);
     }
   }
   geo.setAttribute('aPaintW', new THREE.BufferAttribute(w, 4));
   geo.setAttribute('aPaintX', new THREE.BufferAttribute(x, 4));
-  geo.setAttribute('aPaintY', new THREE.BufferAttribute(y, 4));
 }
 
 interface CharUniforms {
   uCharTex: { value: THREE.Texture };
-  uForgeTex: { value: THREE.Texture };
-  uPaintY: { value: THREE.Vector4 };
   uCharScale: { value: number };
   uCharEdgeW: { value: number };
   uCharGain: { value: number };
@@ -110,8 +106,6 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
   const init = paintVec(per ? { w: [0, 0, 0, 0], edge: 0, grad: 0 } : paint);
   const uniforms: CharUniforms = {
     uCharTex: { value: charTexture() },
-    uForgeTex: { value: forgeTexture() },
-    uPaintY: { value: init.y },
     uCharScale: { value: 1 / (CHAR_TILE * size) },
     uCharEdgeW: { value: CHAR_EDGE * size },
     uCharGain: { value: 1 },
@@ -127,9 +121,7 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
       const rest = attribute('aRest', 'vec3') as V3, face = attribute('aFace', 'vec4') as V4;
       const pw = per ? (attribute('aPaintW', 'vec4') as V4) : u.v4('uPaintW');
       const px = per ? (attribute('aPaintX', 'vec4') as V4) : u.v4('uPaintX');
-      const py = per ? (attribute('aPaintY', 'vec4') as V4) : u.v4('uPaintY');
       const gain = u.f('uCharGain'), edgeW = u.f('uCharEdgeW');
-      let rough: F = float(0);
       return {
         color(c0) {
           const c = c0.toVar();
@@ -152,30 +144,12 @@ export function applyCharPaint(mat: THREE.Material, paint: CharPaint | 'vertex',
           const gy = faceOk.mul(face.y.div(max(face.w, 1e-6)).sub(0.5));
           const grad = mix(sign(rn.y).mul(0.5), gy, side);
           c.mulAssign(clamp(cv.add(px.x.mul(edge)).add(px.y.mul(grad)).mul(gain).add(1), 0.35, 1.8));
-          const forge = py.x;
-          const cpRough = float(0).toVar();
-          If(forge.greaterThan(0), () => {
-            // Forged metal: hammered dishes and draw-marks, a polished worn lip on every edge,
-            // soot settling along each plate's foot and in blotches, a tone per plate.
-            const ft = u.tex('uForgeTex').sample(cuv).sub(0.5).toVar();
-            const footD = mix(1, face.y, side.mul(faceOk));
-            const foot = float(1).sub(smoothstep(0, 0.09, footD)).mul(side).add(step(rn.y, -0.6).mul(0.5));
-            const grime = clamp(foot.mul(ft.b.add(0.75)).add(smoothstep(0.05, 0.4, ft.b).mul(0.6)), 0, 1).toVar();
-            const part = attribute('aPart', 'float') as F;
-            const tone = part.mul(7.13).fract().sub(0.5).mul(0.2);
-            const f = ft.r.mul(0.42).add(ft.g.mul(0.14)).add(ft.a.mul(0.05)).add(tone).add(edge.mul(0.32)).sub(grime.mul(0.36));
-            c.mulAssign(clamp(f.mul(forge).mul(gain).add(1), 0.35, 1.8));
-            c.assign(mix(c, vec3(dot(c, vec3(0.3, 0.55, 0.15))), grime.mul(forge).mul(0.35).mul(gain)));
-            cpRough.assign(grime.mul(0.3).sub(edge.mul(0.12)).add(ft.r.mul(0.25)).add(ft.a.mul(0.15)).mul(forge).mul(gain));
-          });
           If(px.z.greaterThan(0), () => {
             const moss = smoothstep(0.1, 0.24, ct.r.add(rn.y.mul(0.3)).sub(0.12)).mul(px.z).mul(gain);
             c.assign(mix(c, vec3(0.13, 0.22, 0.05).mul(ct.r.add(0.8)), moss.mul(0.6)));
           });
-          rough = cpRough;
           return c;
         },
-        roughness: (r) => clamp(r.add(rough), 0.05, 1),
       };
     },
   });
@@ -188,7 +162,6 @@ export function setCharPaint(mat: THREE.Material, paint: CharPaint) {
   const v = paintVec(paint);
   u.uPaintW.value.copy(v.w);
   u.uPaintX.value.copy(v.x);
-  u.uPaintY.value.copy(v.y);
 }
 
 /** Scale every painted material's contrast under `root` (item icons paint a little softer). */

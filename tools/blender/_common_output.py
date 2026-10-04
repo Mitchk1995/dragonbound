@@ -16,13 +16,23 @@ def tri_count(scene=None):
 
 
 def export(scene_name, file_name):
+    """Export a scene to public/models/<file_name>; a model in bake.BAKED first gets the bake finish (bake.py): UVs,
+    weighted normals and its baked map beside the .glb. Material kinds (mat `kind`) go out as glTF extras."""
+    import importlib
+    import bake
+    import bake_uv
+    importlib.reload(bake_uv)
+    importlib.reload(bake)
     os.makedirs(OUT_DIR, exist_ok=True)
     path = os.path.join(OUT_DIR, file_name)
     scene = bpy.data.scenes[scene_name]
+    baked = bake.takes_finish(file_name)
+    if baked:
+        bake.finish(scene, path)
     with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
         bpy.ops.export_scene.gltf(
             filepath=path, export_format='GLB', use_active_scene=True, export_yup=True,
-            export_apply=True, export_materials='EXPORT', export_extras=False,
+            export_apply=True, export_materials='EXPORT', export_extras=True, export_tangents=baked,
             export_animations=False, export_cameras=False, export_lights=False,
         )
     return path

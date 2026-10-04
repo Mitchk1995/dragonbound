@@ -35,7 +35,7 @@ hole (0.655 below the shoulder) while the arm hangs straight, each riding its ow
 ## Role materials (recoloured at runtime)
 Name materials exactly: `ROLE_skin`, `ROLE_hair`, `ROLE_cloth`, `ROLE_clothDark`, `ROLE_cloth2`, `ROLE_leather`,
 `ROLE_metal`, `ROLE_trim`, `ROLE_dark`, `ROLE_glow` (emissive, takes trim colour).
-Any other material keeps its authored colour.
+Any other material keeps its authored colour (its painted material: ART_FINISH.md).
 
 ## Gear: `gear_<model>.glb`
 The file contains one or more empties named after sockets (`sock_chest`, `sock_shoulderL`, …); their children are
@@ -51,7 +51,7 @@ file serves every tier (bronze / iron / steel / emberforged / leather / wood pal
 | `staff` | `sock_handR` | the staff along +Y through the hand (`staff_frame`), its grip in the hole; the game carries it upright, forearm forward; orb/gem uses `ROLE_trim` + `ROLE_glow` |
 | `helm_open` | `sock_head` | boxy open-faced helm (box bowl, rim band, nasal bar); face visible; hides hair |
 | `helm_full` | `sock_head` | plain cube-over-cube great helm (`gear.py` `great_helm`): shell, top block, a low `ROLE_cloth` crest and a T visor cut right through a face plate standing proud of the shell (`slotted_plate`: a real recess with a lit lower lip, over a dark lining); no rivets, bands or ridges. Every heavy tier wears it (Emberforged adds a crimson crest, horns and a thin ember line in the slit); hides hair and beard |
-| `body_chain` | `sock_chest`, `sock_hips`, `sock_shoulderL/R`, `sock_upperL/R` | box mail shirt with a short skirt (on the hips), fine staggered rows of flat links (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
+| `body_chain` | `sock_chest`, `sock_hips`, `sock_shoulderL/R`, `sock_upperL/R` | box mail shirt with a short skirt (on the hips), its rings the mail texture (no studs), block mail shoulder caps, mail sleeves down to the gauntlets |
 | `body_plate` | `sock_chest`, `sock_hips`, `sock_shoulderL/R`, `sock_upperL/R` | a few bold blocks, like a toy knight readable at ~100px: chest block over a waist block, belt, gorget, one slab tasset per thigh and one accent (a plain `ROLE_cloth` tabard dyed like the wearer's tunic); block pauldron caps and a plain rerebrace down each upper arm (same as plate set `p`). No lames, ridges, straps, rivets or trim bands |
 | `body_leather` | `sock_chest`, `sock_hips`, `sock_shoulderL/R`, `sock_upperL/R` | leather jerkin: stitched panels over a `ROLE_dark` underlayer, collar, chest strap, belt, skirt flaps, stud-rimmed shoulder caps, leather sleeves |
 | `gloves` | `sock_handL`, `sock_gloveR`, `sock_cuffL/R` | the hand's LEGO C a size up (`gear.py` `GLOVE`, `GAUNTLET`) on the hand sockets, its open cuff on the forearm sockets, both authored round the hole's centre (off the hero they are joined again: `registry.ts` `joinCuffs`) |
@@ -65,10 +65,12 @@ arm pivot), so they ride the upper arm exactly, never fan away from it and stay 
 `block_pauldron`, `arm_box`); anything on the forearm (vambraces) hangs on `sock_cuffL` / `sock_cuffR`.
 Keep shoulder caps only a little wider than the arm.
 
-Forged metal is textured by the game, not by extra geometry: `ROLE_metal` / `ROLE_dark` of forged palettes (and
-`metallic()` unique parts) get the painted forge recipe (`charPaint.ts` `forge`, `textures.ts` `forgeTexture`): soft
-hammer marks and draw-marks, a lighter worn lip on every edge and bevel, grime along each plate's foot and a tone of
-its own per plate. Keep plate shapes plain; never add ridges or rivet rows to make metal read as metal.
+**Metal is smooth, shiny metal** (owner, October 4: "idk why you would put a bumpy texture on steel and any metal at all
+ever... the weird lumpy stuff has to go completely and just be shiny metal"). Every metal surface of every character,
+piece of gear and weapon is polished: no hammer marks, dents, grain, noise or draw-marks, in its paint, its texture, a
+normal or bump map or its bake. It mirrors a bright sky and catches a clean highlight where a bevel meets the light
+(`polish.ts`); each tier keeps its colour, with a little tone plate to plate. Other surfaces are textured, not modelled
+([ART_FINISH.md](ART_FINISH.md)). Keep plate shapes plain; never add ridges or rivet rows to make metal read as metal.
 
 Tier plate (full helm, platebody, gauntlets, boots) comes from `tools/blender/plate_variants.py` as
 `gear_<model>_<set>.glb`, one set per design (`items.ts` `PLATE_STYLE`): `p` for bronze / iron / steel (one design,
