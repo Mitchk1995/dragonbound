@@ -46,7 +46,9 @@ export const SUN_GLINT = vec3(0.25, 0.5, -0.83).normalize();
  */
 export function mirrorUV(texMat: Node<'mat4'>, world: V3, off: V2): V2 {
   const rc = texMat.mul(vec4(world, 1)) as V4;
-  return rc.xy.div(rc.w).add(off);
+  const q = rc.xy.div(rc.w).add(off);
+  // (The picture's rows run top-down as the renderer stores it; the projection counts up.)
+  return vec2(q.x, q.y.oneMinus());
 }
 
 /**
