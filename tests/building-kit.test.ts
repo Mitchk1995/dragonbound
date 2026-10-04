@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { KitBuild, type Placed } from '../src/world/kit/build';
 import { overlap, placeClaim, turn, inside, type Claim, type Hull, type P3 } from '../src/world/kit/claims';
 import { ELEMENTS, stoneEl, windowEl } from '../src/world/kit/elements';
+import { fireEl } from '../src/world/kit/elementsRoom';
 import { buildBakery, DOOR, H, HOUSE, STAIR, standsIn, type Cut } from '../src/world/kit/house';
 import { OVEN, RISE, treadTop } from '../src/world/kit/houseInside';
 import { APEX, CHIMNEY_TOP, plane } from '../src/world/kit/houseRoof';
@@ -453,6 +454,30 @@ describe('drawing the kit', () => {
       twos.getMatrixAt(k * 2 + 1, m);
       expect(scale.setFromMatrixScale(m).length()).toBeCloseTo(Math.sqrt(3), 5);
     }
+    v.dispose();
+  });
+
+  it('burns a fire as the painted flame every fire in the game burns: a card where the fire stands in each copy, hidden with its fire', () => {
+    const fire = new KitBuild(), el = fireEl(2, 1, 18);
+    fire.place(el, 5, 2, 3, 0x6b4a33, { rot: 1 });
+    expect(el.parts.some((p) => p.look === 'glow' && p.color === 0xff6c1e)).toBe(false);
+    // (One copy turned a quarter and moved: where the cards stand then depends on the order the placement and the copy apply.)
+    const turned = [new THREE.Matrix4(), new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(20, 0, 4)];
+    const v = new KitView(fire, turned), cards = v.group.getObjectByName('flames')!.children as THREE.Mesh[];
+    expect(cards.map((c) => c.name)).toEqual(['flame', 'flame']);
+    expect(cards[1].material).toBe(cards[0].material);
+    // Each stands on the embers of the fire as the view draws it in that copy (its logs' instance).
+    const logs = batchOf(v, el.id), m = new THREE.Matrix4();
+    cards.forEach((c, k) => {
+      logs.getMatrixAt(k, m);
+      const f = el.flames![0];
+      expect(c.position.distanceTo(new THREE.Vector3(f.x * U, f.y * U, f.z * U).applyMatrix4(m))).toBeLessThan(1e-6);
+    });
+    expect(cards[0].position.distanceTo(cards[1].position)).toBeGreaterThan(1);
+    const lit = v.stats().calls;
+    v.setVisible(() => false);
+    expect(cards.some((c) => c.visible)).toBe(false);
+    expect(v.stats().calls).toBe(lit - 2);
     v.dispose();
   });
 

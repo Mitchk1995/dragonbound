@@ -27,7 +27,7 @@ export { Studio, fit } from './inspectStudio';
  * uitext (the menus' tinted lettering, see uiTextInspect.ts), characters (the redesigned hero and enemies, see
  * charactersInspect.ts; skirts: the hero's skirts mid-stride; bow: the bow in his hands, measured; minifig: the shared
  * minifigure body, see minifigInspect.ts), lighting (the light in the engine test's views and every zone, see lightingInspect.ts), lightfx (the
- * lighting effects one at a time, see lightFxInspect.ts), dragons (the drakeling and Cinderwing, see dragonInspect.ts).
+ * lighting effects one at a time, see lightFxInspect.ts), dragons (see dragonInspect.ts), vfx (the effects, see vfxInspect.ts).
  * Castle plans and rooms: castle. The castle's bailey, yards, approach and gardens: bailey (the castle
  * rock's views alone: bailey:rock; named views only: bailey:fountain-close+falls; named views plus three
  * orbits round each: bailey-angles:hall-door+landing).
@@ -145,6 +145,8 @@ export async function runInspect(g: Game, suites: string) {
     if (suites.split(',').includes('font')) report.font = await (await import('./fontInspect')).fontSuite(g, shot);
     // The menus' tinted lettering: inventory card, equipment, shop, title, and what it costs (explicit only: `uitext`).
     if (suites.split(',').includes('uitext')) report.uitext = await (await import('./uiTextInspect')).uiTextSuite(g, shot);
+    const vfxArg = suites.split(',').find((s) => s === 'vfx' || s.startsWith('vfx:')); // the effects, or some families: vfx:hits+boss (vfxInspect.ts)
+    if (vfxArg) report.vfx = await (await import('./vfxInspect')).vfxSuite(g, shot, vfxArg.slice(4).split('+').filter(Boolean));
   } catch (e) {
     errors.push(`inspect aborted: ${(e as Error).stack ?? e}`);
   }

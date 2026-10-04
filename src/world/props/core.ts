@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { fireCard } from '../../fx/fire';
 import { chamferBox, hash01, rockBlock, slabBlock } from '../../render/blocks';
-import { ModelKit, PAL, type V3 } from '../../render/kit';
+import { ModelKit, type V3 } from '../../render/kit';
 import { BLOCKS, PAINT_OF } from './palette';
 
 /**
@@ -106,17 +107,13 @@ export function masonry(k: ModelKit, p: Obj, s: WallSpec) {
   }
 }
 
-/** A flickering flame at (x, y, z) of `g`; returns its per-frame animation. */
-export function flame(k: ModelKit, g: Obj, x: number, y: number, z: number, s = 1) {
-  // Flames are effects: soft faceted tongues are fine here.
-  const a = k.cone(g, 0.3 * s, 0.7 * s, [x, y + 0.35 * s, z], PAL.fire, undefined, 5, PAL.fire);
-  const b = k.cone(g, 0.18 * s, 0.5 * s, [x, y + 0.35 * s, z], PAL.ember, undefined, 5, PAL.ember);
-  a.name = b.name = 'flame'; // animated: never merged
-  return (t: number) => {
-    const f = 1 + Math.sin(t * 13 + x) * 0.1 + Math.sin(t * 7.3 + z) * 0.08;
-    a.scale.set(1, f, 1);
-    b.scale.set(1, 2 - f, 1);
-  };
+/**
+ * A burning flame standing at (x, y, z) of `g`, `s` its size: a painted flame flipbook facing the camera
+ * (fx/fire.ts). Returns its per-frame animation: the flame breathing a little, as its light flickers.
+ */
+export function flame(_k: ModelKit, g: Obj, x: number, y: number, z: number, s = 1) {
+  const card = fireCard(g, x, y, z, s);
+  return (t: number) => card.scale.setScalar(s * (1 + Math.sin(t * 9 + x * 3 + z) * 0.05));
 }
 
 /** A point light `y` above the prop's foot. */

@@ -3,7 +3,6 @@ import type { AbilityDef } from './data/abilities';
 import { COMBAT_TUNING } from './data/tuning';
 import type { Enemy } from './entities/enemy';
 import type { Game } from './game';
-import { PAL } from './render/kit';
 
 export interface Aim {
   x: number;
@@ -51,7 +50,7 @@ export function castAbility(g: Game, def: AbilityDef, aim: Aim) {
           p.anim.attack = -1;
           g.sfx.play('slam');
           g.shake(0.45, 0.35);
-          g.fx.dustRing(p.x, p.z, 3);
+          g.fx.slam(p.x, p.z, 3);
           for (const e of g.combat.enemiesInRadius(p.x, p.z, 3)) g.combat.hitEnemy(e, def.mult, { kb: KB.leap, fromX: p.x, fromZ: p.z });
         },
       };
@@ -64,7 +63,7 @@ export function castAbility(g: Game, def: AbilityDef, aim: Aim) {
         p.warCryT = 6;
         g.prog.recomputeStats();
         g.sfx.play('warcry');
-        g.fx.dustRing(p.x, p.z, 4, 0xff5a3a);
+        g.fx.warCry(p.x, p.z, 4);
         g.announce('War Cry!', 'buff');
       });
       break;
@@ -99,7 +98,7 @@ export function castAbility(g: Game, def: AbilityDef, aim: Aim) {
       };
       p.stop();
       g.sfx.play('roll');
-      g.particles.burst(p.pos.clone().setY(0.2), { count: 10, color: [0x9a8666, 0x7a6a50], speed: 3, up: 1, life: 0.4 });
+      g.fx.dust(p.x, p.z);
       break;
     }
 
@@ -120,8 +119,7 @@ export function castAbility(g: Game, def: AbilityDef, aim: Aim) {
     case 'frost_nova':
       g.combat.playerAction(cast('frost_nova'), 'cast', () => {
         g.sfx.play('frost');
-        g.fx.dustRing(p.x, p.z, 4.2, PAL.frost);
-        g.glow.burst(p.pos.clone().setY(0.5), { count: 40, color: [PAL.frost, 0xffffff], speed: 10, up: 1, life: 0.5, gravity: 0, size: 0.18 });
+        g.fx.frostNova(p.x, p.z, 4.2);
         for (const e of g.combat.enemiesInRadius(p.x, p.z, 4.2)) {
           g.combat.hitEnemy(e, def.mult, { kb: KB.nova, fromX: p.x, fromZ: p.z });
           e.slow(0.5, 3);

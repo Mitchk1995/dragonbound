@@ -1,6 +1,6 @@
 import * as THREE from 'three';
+import { missileLook } from '../fx/missiles';
 import { shareResource } from '../render/resources';
-import { PAL } from '../render/kit';
 import type { Enemy } from './enemy';
 
 export type ProjectileKind = 'arrow' | 'bolt' | 'fireball' | 'rock';
@@ -26,19 +26,16 @@ const geos: Partial<Record<ProjectileKind, THREE.BufferGeometry>> = {};
 const mats: Partial<Record<ProjectileKind, THREE.Material>> = {};
 
 function visual(kind: ProjectileKind): THREE.Mesh {
+  // Spells are painted flames and lightning (fx/missiles.ts), laid along their flight.
+  if (kind === 'bolt' || kind === 'fireball') {
+    const look = missileLook(kind);
+    return new THREE.Mesh(look.geometry, look.material);
+  }
   if (!geos[kind]) {
     switch (kind) {
       case 'arrow':
         geos[kind] = new THREE.BoxGeometry(0.06, 0.06, 0.8);
         mats[kind] = new THREE.MeshBasicMaterial({ color: 0xf0e0c0 });
-        break;
-      case 'bolt':
-        geos[kind] = new THREE.IcosahedronGeometry(0.22, 0);
-        mats[kind] = new THREE.MeshBasicMaterial({ color: PAL.arcane });
-        break;
-      case 'fireball':
-        geos[kind] = new THREE.IcosahedronGeometry(0.4, 0);
-        mats[kind] = new THREE.MeshBasicMaterial({ color: PAL.fire });
         break;
       case 'rock':
         geos[kind] = new THREE.DodecahedronGeometry(0.16, 0);
@@ -77,7 +74,7 @@ export class Projectile {
     this.mesh.position.x += this.o.dirX * d;
     this.mesh.position.z += this.o.dirZ * d;
     this.traveled += d;
-    if (this.o.kind !== 'arrow') this.mesh.rotation.x += dt * 10;
+    if (this.o.kind === 'rock') this.mesh.rotation.x += dt * 10;
     if (this.o.kind === 'rock') this.mesh.position.y = 1.0 + Math.sin((this.traveled / this.o.range) * Math.PI) * 0.8;
     if (this.traveled >= this.o.range) this.dead = true;
   }

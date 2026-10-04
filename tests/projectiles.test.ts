@@ -16,7 +16,7 @@ function fixture(kind: 'fireball' | 'arrow', range = 2) {
     projectiles: [projectile], group, enemies: [] as any[],
     layout: { w: 20, h: 20, cells: new Uint8Array(400) },
   };
-  const fx = { fireBurst: vi.fn() };
+  const fx = { fireBurst: vi.fn(), trail: vi.fn() };
   const game = {
     zone, player: { x: 0, z: 0, radius: 0.45, dead: false },
     glow: { spawn: vi.fn() }, fx, sfx: { play: vi.fn() }, shake: vi.fn(),
@@ -28,7 +28,7 @@ describe('projectile explosions', () => {
   it('explodes a fireball once when it reaches maximum range in open ground', () => {
     const { combat, projectile, zone, fx } = fixture('fireball');
     combat.updateProjectiles(0.2);
-    expect(fx.fireBurst).toHaveBeenCalledExactlyOnceWith(projectile.x, projectile.z, 2.6);
+    expect(fx.fireBurst).toHaveBeenCalledExactlyOnceWith(projectile.x, projectile.z, 2.6, false);
     expect(zone.projectiles).toHaveLength(0);
     expect(projectile.mesh.parent).toBeNull();
     combat.updateProjectiles(0.2);
@@ -42,11 +42,11 @@ describe('projectile explosions', () => {
     expect(zone.projectiles).toHaveLength(1);
   });
 
-  it('explodes once on hitting a wall before maximum range', () => {
+  it('explodes once on hitting a wall before maximum range, its fire drawn out in front of the wall', () => {
     const { combat, zone, fx } = fixture('fireball', 10);
     zone.layout.cells[4 * 20 + 5] = Cell.Wall;
     combat.updateProjectiles(0.1);
-    expect(fx.fireBurst).toHaveBeenCalledTimes(1);
+    expect(fx.fireBurst).toHaveBeenCalledExactlyOnceWith(expect.any(Number), expect.any(Number), 2.6, true);
     expect(zone.projectiles).toHaveLength(0);
   });
 

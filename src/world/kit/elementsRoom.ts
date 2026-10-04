@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { boxClaim, type Box, type Claim } from './claims';
 import { def, type ElementDef, type Look, type Part } from './elements';
 import { arc, box, cylinder, join, prism, ring, turned, type Mesh3, type V2 } from './mesh';
-import { CELL_U, half, PLAY, STEP_U } from './scale';
+import { CELL_U, half, PLAY, STEP_U, U } from './scale';
 import { barrel, candle, cob, flame, longLoaf, rug, sack } from './shapes/furniture';
 import { lampPost, lanternGlass, pot } from './shapes/details';
 import { plantCards, type Plant } from './shapes/plants';
@@ -22,7 +22,7 @@ const round = (r: number, hU: number, y0 = 0): Claim => boxClaim(-r, y0, -r, r, 
 const FURNISH = {
   iron: 0x34322f, bread: 0xc58a46, crust: 0x9c5c2c, linen: 0xe9e1cd, blanket: 0x56677e, wool: 0x8e4436, border: 0xab8a55,
   sack: 0xd5c49c, earth: 0x4a3626, wax: 0xf0e6c8, soot: 0x2c2420, lampGlow: 0xffd27a,
-  flameGlow: 0xff6c1e, flameCore: 0xffbf4a, ember: 0xd2400e, charred: 0x2b1d14,
+  flameGlow: 0xff6c1e, ember: 0xd2400e, charred: 0x2b1d14,
 } as const;
 
 // ─── Furniture ──────────────────────────────────────────────────────────────
@@ -229,29 +229,23 @@ const log = (x: number, y: number, z: number, len: number, r: number, yaw: numbe
   new THREE.Matrix4().makeTranslation(x, y, z).multiply(new THREE.Matrix4().makeRotationY(yaw)).multiply(new THREE.Matrix4().makeRotationZ(-Math.PI / 2)).multiply(new THREE.Matrix4().makeTranslation(0, -len / 2, 0)),
 );
 
-/** Tongues of flame standing at (x, y, z): [x, z, r, hU, lean, yaw], each flattened across the fire. */
-const tongues = (y: number, list: number[][]) =>
-  join(...list.map(([x, z, r, hU, lean, yaw]) => flame(r, hU, lean, yaw, 0.6).moved(new THREE.Matrix4().makeTranslation(x, y, z))));
-
 /**
  * A fire of split logs in an oven's mouth, `w` × `d` cells and `hU` tall: two charred logs side by
  * side on a bed of glowing embers and a third laid across them, end-on to the room, each resting on
- * what is under it; tongues of flame licking up between them, yellow low down where they burn
- * hottest and orange where they reach.
+ * what is under it; the painted flame every fire in the game burns (fx/fire.ts) licking up from the
+ * embers between them.
  */
 export const fireEl = (w: number, d: number, hU: number) => def({
   id: `fire${w}x${d}x${hU}`, name: 'Fire', w, d, h: hU / STEP_U, kind: 'detail', claims: [boxClaim(-half(w) + 7, 0, -half(d) + 2.5, half(w) - 7, hU, half(d) - 2.5)],
   parts: [
-    // (Set back, so the flames' yellow heart burns in front of the top log's end.)
     part(() => join(...[[0, 3.2, -2.6, 0], [0, 3.2, 2.6, 0], [0, 8.2, -2.6, Math.PI / 2]].map(([x, y, z, a], i) => log(x, y, z, i === 2 ? 7.5 : 19, 2.5, a).tag(i + 1))), 'oak', { color: FURNISH.charred, grain: 'box' }),
     part(() => join(
       box(-half(w) + 9, 0, -half(d) + 4, half(w) - 9, 0.7, half(d) - 4, 0.3),
       ...[[-10.5, -2.6], [-10.5, 2.4], [10.5, -2.4], [10.5, 2.6]].map(([x, z], i) => box(-0.6, 0, -0.5, 0.6, 1, 0.5, 0.3).moved(new THREE.Matrix4().makeRotationY(i * 0.83).setPosition(x, 0.7, z))),
     ), 'glow', { color: FURNISH.ember }),
-    // (The hot yellow tongues stand in front of the taller orange ones, so they show as the fire's heart.)
-    part(() => tongues(1.2, [[-6.5, -1.2, 3.4, hU - 6, 2.4, 0.2], [-2, -1.6, 3.8, hU - 3, -1.8, 0], [2.8, -1, 3.6, hU - 4.5, 2.2, 0.3], [7, -1.4, 3, hU - 8, -2.2, 0]]), 'glow', { color: FURNISH.flameGlow }),
-    part(() => tongues(1, [[-4, 2.4, 2.4, 7.5, 1.2, 0], [0.8, 2.8, 2.7, 9, -1.1, 0], [5, 2.4, 2.2, 6.5, 1, 0]]), 'glow', { color: FURNISH.flameCore }),
   ],
+  // (Its card about half again the fire's height: the painted flame fills the lower part of its card.)
+  flames: [{ x: 0, y: 1, z: 0, s: hU * U * 1.2, broad: true }],
 });
 
 // ─── The street ─────────────────────────────────────────────────────────────

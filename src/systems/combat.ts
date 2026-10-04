@@ -7,6 +7,7 @@ import { abilityFor, type AbilityKey } from '../data/abilities';
 import { Enemy, type PackState } from '../entities/enemy';
 import { ATTACK_ANIM } from '../entities/player';
 import { Projectile, type ProjectileKind } from '../entities/projectile';
+import { missileLook } from '../fx/missiles';
 import { Telegraph, shapeContains, type Shape } from '../fx/telegraph';
 import type { Game } from '../game';
 import { rollDrops } from '../loot/drops';
@@ -23,6 +24,8 @@ export interface HitOpts {
   forceCrit?: boolean;
   /** A damage-over-time tick (Rain of Arrows): no hitstop, no flinch. */
   tick?: boolean;
+  /** Landed by an arrow: it thuds in with a hit of its own. */
+  arrow?: boolean;
 }
 
 export interface Hazard {
@@ -110,7 +113,7 @@ export class Combat {
       const dirA = target && !target.dead ? Math.atan2(target.z - p.z, target.x - p.x) : p.dirAngle;
       if (st.style === 'melee') {
         g.sfx.play('swing', 0.8, 0.9 + Math.random() * 0.2);
-        g.fx.arc(p.x, p.z, dirA, st.range + 0.6, Math.PI * 0.6, 0xffffff);
+        g.fx.arc(p.x, p.z, dirA, st.range + 0.6, Math.PI * 0.6, 0xffffff, 0.55);
         const hits = this.enemiesInCone(p.x, p.z, dirA, st.range + 0.5, Math.PI * 0.6);
         if (target && !target.dead && !hits.includes(target) && swingConnects(p.distTo(target), st.range, target.radius)) hits.push(target);
         for (const e of hits) this.hitEnemy(e, 1, { kb: COMBAT_TUNING.knockback.melee, fromX: p.x, fromZ: p.z });
@@ -189,11 +192,7 @@ export class Combat {
     const g = this.g, p = g.player;
     for (const pr of this.z.projectiles) {
       pr.step(dt);
-      if (pr.o.kind === 'fireball') {
-        g.glow.spawn(pr.x, pr.mesh.position.y, pr.z, Math.random() - 0.5, 0.5, Math.random() - 0.5, 0.35, 0.22, Math.random() < 0.5 ? PAL.fire : PAL.ember, 0, 1);
-      } else if (pr.o.kind === 'bolt') {
-        g.glow.spawn(pr.x, pr.mesh.position.y, pr.z, 0, 0, 0, 0.2, 0.12, PAL.arcane, 0, 0);
-      }
+      g.fx.trail(pr.o.kind, pr.x, pr.mesh.position.y, pr.z);
       if (pr.o.owner === 'player') {
         for (const e of this.z.enemies) {
           if (e.dead || e.untargetable || pr.hit.has(e)) continue;
@@ -204,7 +203,8 @@ export class Combat {
               pr.dead = true;
               break;
             }
-            this.hitEnemy(e, pr.o.dmg, { kb: pr.o.kind === 'arrow' ? COMBAT_TUNING.knockback.arrow : COMBAT_TUNING.knockback.bolt, fromX: pr.x - pr.o.dirX, fromZ: pr.z - pr.o.dirZ, forceCrit: pr.o.crit });
+            const arrow = pr.o.kind === 'arrow';
+            this.hitEnemy(e, pr.o.dmg, { kb: arrow ? COMBAT_TUNING.knockback.arrow : COMBAT_TUNING.knockback.bolt, fromX: pr.x - pr.o.dirX, fromZ: pr.z - pr.o.dirZ, forceCrit: pr.o.crit, arrow });
             if (pr.pierceLeft-- <= 0) {
               pr.dead = true;
               break;
@@ -219,7 +219,7 @@ export class Combat {
       }
       // Projectiles fly over trees and rocks but are stopped by cliffs and walls.
       if (!pr.dead && this.isSolid(pr.x, pr.z)) {
-        if (pr.o.aoe) this.explode(pr.x, pr.z, pr.o.aoe, pr.o.dmg);
+        if (pr.o.aoe) this.explode(pr.x, pr.z, pr.o.aoe, pr.o.dmg, true);
         pr.dead = true;
       }
     }
@@ -237,10 +237,11 @@ export class Combat {
     return c === Cell.Cliff || c === Cell.Wall;
   }
 
-  private explode(x: number, z: number, r: number, mult: number) {
+  /** `onWall`: it burst against a wall or cliff (its fire is drawn out in front of it). */
+  private explode(x: number, z: number, r: number, mult: number, onWall = false) {
     this.g.sfx.play('explode', 0.7);
     this.g.shake(0.25, 0.25);
-    this.g.fx.fireBurst(x, z, r);
+    this.g.fx.fireBurst(x, z, r, onWall);
     for (const e of this.enemiesInRadius(x, z, r)) this.hitEnemy(e, mult, { kb: COMBAT_TUNING.knockback.explosion, fromX: x, fromZ: z });
   }
 
@@ -255,7 +256,8 @@ export class Combat {
     g.prog.combatXp((e.def.xp * dealt) / e.maxHp);
     if (st.lifeOnHit) g.player.hp = Math.min(st.maxHp, g.player.hp + st.lifeOnHit);
 
-    e.flash(1);
+    // A brief pale tint, never a white-out: the creature stays in plain sight as it is struck.
+    e.flash(o.tick ? 0.3 : hit.crit ? 0.45 : 0.4);
     if (e.def.behavior !== 'boss') e.anim.hurt = 1;
     if (o.kb && o.fromX !== undefined && o.fromZ !== undefined) e.knockback(o.fromX, o.fromZ, o.kb * (hit.crit ? T.knockback.critMult : 1));
     // Hit recovery: a heavy blow (or a crit on a regular enemy) makes it flinch and lose its attack.
@@ -263,12 +265,10 @@ export class Combat {
     if (heavy && !o.tick && e.hp > 0 && e.def.behavior !== 'boss') e.stagger(g, T.stagger.secs);
     if (!o.tick) g.hitstop(hit.crit ? T.hitstopCrit : T.hitstop);
     g.text.damage(hit.amount, e.x, e.model.height, e.z, hit.crit ? 'crit' : 'dmg');
-    const blood = e.def.model === 'goblin' ? 0x5a8a2a : e.def.model === 'cultist' || e.def.model === 'priest' ? 0x5a1a2c : 0xb02a1a;
-    g.particles.burst(new THREE.Vector3(e.x, e.model.height * 0.5, e.z), { count: hit.crit ? 10 : 5, color: [blood, 0x3a1a10], speed: 3.5, up: 3, life: 0.5, size: 0.12 });
+    g.fx.hit(e, hit.crit, o.fromX ?? g.player.x, o.fromZ ?? g.player.z, o.tick ? 'tick' : o.arrow ? 'arrow' : 'blow');
     if (hit.crit) {
       g.sfx.play('crit', 0.9, 0.9 + Math.random() * 0.2);
       g.shake(0.18, 0.15);
-      g.glow.burst(new THREE.Vector3(e.x, e.model.height * 0.6, e.z), { count: 8, color: [0xffffff, 0xffe070], speed: 7, up: 2, life: 0.25, gravity: 0, size: 0.1 });
     } else {
       g.sfx.play('hit', 0.6, 0.9 + Math.random() * 0.25);
     }
@@ -332,9 +332,7 @@ export class Combat {
     e.anim.special = -1;
     e.path = [];
     g.sfx.play('enemyDie', 0.8, 0.8 + Math.random() * 0.4);
-    const pos = new THREE.Vector3(e.x, e.model.height * 0.5, e.z);
-    g.particles.burst(pos, { count: 18, color: [0x3a3030, 0x6a5a50], speed: 5, up: 4, life: 0.8, size: 0.16 });
-    g.glow.burst(pos, { count: 10, color: [PAL.ember, PAL.fire], speed: 3, up: 3, life: 0.6, gravity: 1, size: 0.1 });
+    g.fx.death(e);
     if (g.player.cmd.kind === 'attack' && g.player.cmd.target === e) g.player.stop();
 
     const s = g.save;
@@ -428,7 +426,7 @@ export class Combat {
         for (let i = 0; i < count; i++) {
           const a = dir + (Math.random() - 0.5) * angle * 0.9;
           const sp = 12 + Math.random() * 6;
-          g.glow.spawn(h.x, 1.4, h.z, Math.cos(a) * sp, (Math.random() - 0.3) * 2, Math.sin(a) * sp, (r / sp) * (0.8 + Math.random() * 0.3), 0.3 + Math.random() * 0.3, [PAL.fire, PAL.ember, 0xff3a0a][i % 3], 0, 0.3);
+          g.glow.spawn(h.x, 1.4, h.z, Math.cos(a) * sp, (Math.random() - 0.3) * 2, Math.sin(a) * sp, (r / sp) * (0.8 + Math.random() * 0.3), 0.3 + Math.random() * 0.3, [PAL.fire, PAL.ember, 0xff3a0a][i % 3], 0, 0.3, 'flame');
         }
       }
       if (h.tickT <= 0) {
@@ -441,19 +439,11 @@ export class Combat {
 
   meteor(x: number, z: number, source: Enemy) {
     const g = this.g;
-    // A burning basalt rock: dark faces with a molten glow (lit, so it reads as a solid lump rather
-    // than a flat disc), a hot additive halo for bloom, spinning as it falls.
-    const rock = new THREE.Group();
-    rock.add(new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.55, 0),
-      new THREE.MeshStandardMaterial({ color: 0x2a1a14, emissive: 0xff4a10, emissiveIntensity: 0.9, roughness: 0.8, flatShading: true }),
-    ));
-    const halo = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.85, 1),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(PAL.fire).multiplyScalar(1.2), transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }),
-    );
-    rock.add(halo);
-    rock.position.set(x, 14, z);
+    // A great painted ball of fire falling straight down (its card laid along the fall), shedding flames.
+    const look = missileLook('meteor');
+    const ball = new THREE.Mesh(look.geometry, look.material);
+    ball.rotation.x = Math.PI / 2;
+    ball.position.set(x, 14, z);
     const dur = COMBAT_TUNING.boss.meteor;
     this.telegraph(x, z, { kind: 'circle', r: 1.7 }, dur, () => {
       g.fx.fireBurst(x, z, 1.7);
@@ -464,13 +454,11 @@ export class Combat {
     // Trail emission follows the effect's age (180 particles/s): the same density at any frame
     // rate, and nothing while paused.
     let emitted = 0;
-    g.fx.add(rock, dur, (f) => {
-      rock.position.y = 0.3 + 14 * f;
-      rock.rotation.set(f * 9, f * 6, 0);
-      halo.scale.setScalar(0.9 + Math.sin(f * 40) * 0.1);
+    g.fx.add(ball, dur, (f) => {
+      ball.position.y = 0.3 + 14 * f;
       const due = Math.floor((1 - f) * dur * METEOR_TRAIL_RATE + 1e-6);
       for (let k = emitted; k < due; k++) {
-        g.glow.spawn(rock.position.x + (Math.random() - 0.5) * 0.5, rock.position.y + 0.3, rock.position.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.6, 3 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.22 + Math.random() * 0.2, k % 3 ? PAL.ember : PAL.fire, 0, 0.5);
+        g.glow.spawn(ball.position.x + (Math.random() - 0.5) * 0.5, ball.position.y + 0.3, ball.position.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.6, 3 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0.35 + Math.random() * 0.2, 0.22 + Math.random() * 0.2, k % 3 ? PAL.ember : PAL.fire, 0, 0.5, 'flame');
       }
       emitted = Math.max(emitted, due);
     });

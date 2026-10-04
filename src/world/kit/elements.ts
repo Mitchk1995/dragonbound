@@ -53,6 +53,20 @@ export interface ElementDef {
   /** The space it fills (element-local, kit units), for the overlap checks. */
   claims: Claim[];
   parts: Part[];
+  /** Painted flames burning on it (a fire's), drawn as the game's flame cards (view.ts). */
+  flames?: Flame[];
+}
+
+/**
+ * A painted flame standing at (x, y, z) (element-local, kit units): the game's looping flame card of
+ * scale `s` (fx/fire.ts), a fire's broad flames if `broad`. Light, not a solid: never claimed or checked.
+ */
+export interface Flame {
+  x: number;
+  y: number;
+  z: number;
+  s: number;
+  broad?: boolean;
 }
 
 export const ELEMENTS: Record<string, ElementDef> = {};

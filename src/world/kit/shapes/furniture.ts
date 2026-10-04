@@ -45,23 +45,11 @@ export const sack = (r: number, hU: number) => turned([
 /** A candle in a dish: [wax, dish]. */
 export const candle = (): [Mesh3, Mesh3] => [cylinder(1.6, 6, 0.4, 10, [0, 0.8, 0]), cylinder(3.4, 0.8, 0.3, 14)];
 
-/**
- * A flame: a tongue of fire `hU` tall and `r` thick at its widest, `flat` as deep as it is wide, its
- * tip licking `lean` U aside (toward +x turned `yaw` radians about the vertical) in a curve.
- */
-export function flame(r: number, hU: number, lean = 0, yaw = 0, flat = 1): Mesh3 {
-  const m = turned([
-    { r: 0, y: 0 }, { r: r * 0.85, y: hU * 0.08, smooth: true }, { r: r, y: hU * 0.22, smooth: true }, { r: r * 0.92, y: hU * 0.36, smooth: true },
-    { r: r * 0.66, y: hU * 0.55, smooth: true }, { r: r * 0.36, y: hU * 0.74, smooth: true }, { r: r * 0.12, y: hU * 0.9, smooth: true }, { r: 0, y: hU },
-  ], 12, [0, 0, 0], [1, flat]);
-  const cx = Math.cos(yaw), cz = Math.sin(yaw);
-  for (let i = 0; i < m.pos.length; i += 3) {
-    const t = m.pos[i + 1] / hU, off = lean * t * t;
-    m.pos[i] += off * cx;
-    m.pos[i + 2] += off * cz;
-  }
-  return m;
-}
+/** A candle's flame: a tongue of fire `hU` tall and `r` thick at its widest. */
+export const flame = (r: number, hU: number): Mesh3 => turned([
+  { r: 0, y: 0 }, { r: r * 0.85, y: hU * 0.08, smooth: true }, { r: r, y: hU * 0.22, smooth: true }, { r: r * 0.92, y: hU * 0.36, smooth: true },
+  { r: r * 0.66, y: hU * 0.55, smooth: true }, { r: r * 0.36, y: hU * 0.74, smooth: true }, { r: r * 0.12, y: hU * 0.9, smooth: true }, { r: 0, y: hU },
+], 12);
 
 /** A rug `w` × `d` cells, a hair thick: its field, and the border woven round it, one band. Returns [field, border]. */
 export function rug(w: number, d: number): [Mesh3, Mesh3] {

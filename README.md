@@ -44,10 +44,12 @@ npm run review -- castle --base  # labelled before/after review sheets of an are
 - `src/world/`: zone runtime (one fresh instance per portal trip), layouts, nav grid, world view, props.
 - `src/world/kit/`: the building kit buildings are built from (pieces on one grid at the hero's scale: dressed stone, timber, plaster, tiles, openings, furniture; placing, running bond, textured instanced drawing) and the first hub-town house, the bakery.
 - `src/render/`: model registry (GLB loading, gear attachment, role recolouring), rig animation, 3D item icons.
+- `src/fx/`: what effects are made of (painted flipbook cards and particles, slashes, rings and lightning, fires, spells in flight), telegraphs and sound; `src/systems/fx.ts` builds each effect in the game from them.
 - `src/ui/`: HUD, panels, title and character creation, tooltip, stone and iron kit, SVG icons.
 - `tools/blender/`: every model is a script; see [docs/ART_CONTRACT.md](docs/ART_CONTRACT.md).
 - `tools/bark_textures.py`: turns sourced bark images into the grown trees' tileable bark maps in `public/textures/bark/` (sources listed in its `LICENSES.md`).
 - `tools/kit_textures.py`: turns sourced painted surfaces and plant sprays into the building kit's texture strips and plant atlas in `public/textures/kit/` (sources listed in its `LICENSES.md`).
+- `tools/blender/vfx.py`: packs the library's painted effect sheets into the effects' textures in `public/textures/fx/` (sources listed in its `LICENSES.md`).
 
 ## Docs
 
